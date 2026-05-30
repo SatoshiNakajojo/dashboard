@@ -39,7 +39,7 @@ const { useState, useEffect, useRef, useCallback, useMemo } = React;
    ════════════════════════════════════════════════════════════════════════ */
 const CF_WORKER_URL = "https://blue-firefly-2075watchlist-api.john-creusot.workers.dev"; // ton worker (sans slash final)
 const CF_AUTH_KEY   = "watchlist";                                                       // = AUTH_KEY défini dans Cloudflare
-const APP_VERSION   = "v1.0";
+const APP_VERSION   = "v1.01";
 
 /* ─── THÈME (repris de l'app d'origine — dark financier) ─────────────────── */
 const C = {
@@ -101,12 +101,28 @@ function writeLocal(state){
 }
 
 /* ─── Helpers worker ─────────────────────────────────────────────────────── */
-function cf(path, opts){
-  return fetch(CF_WORKER_URL + path, {
-    headers: { "X-Auth-Key": CF_AUTH_KEY, ...(opts && opts.headers || {}) },
-    signal: AbortSignal.timeout((opts && opts.timeout) || 12000),
-    ...(opts || {}),
-  }).then(r => r.json());
+async function cf(path, opts){
+  let res;
+  try {
+    res = await fetch(CF_WORKER_URL + path, {
+      headers: { "X-Auth-Key": CF_AUTH_KEY, ...(opts && opts.headers || {}) },
+      signal: AbortSignal.timeout((opts && opts.timeout) || 12000),
+      ...(opts || {}),
+    });
+  } catch(e){
+    // réseau / timeout / DNS / CORS
+    const reason = e.name === "TimeoutError" ? "délai dépassé" : (e.message || e.name);
+    throw new Error("Worker injoignable (" + reason + ") · " + path);
+  }
+  const txt = await res.text();
+  let body;
+  try { body = JSON.parse(txt); } catch(e){ body = { _raw: (txt||"").slice(0,300) }; }
+  if(body && typeof body === "object"){ body._status = res.status; body._path = path; }
+  // Erreur HTTP sans champ error explicite (ex: 404, 500 bruts)
+  if(!res.ok && body && !body.error){
+    body.error = "HTTP " + res.status + (body._raw ? " · " + body._raw : "");
+  }
+  return body;
 }
 
 /* ─── Formatage ──────────────────────────────────────────────────────────── */
@@ -152,7 +168,7 @@ function TickerSearch({ onSelect }){
     setLoading(true); setError(null);
     cf("/search?q=" + encodeURIComponent(q2), { timeout:8000 })
       .then(data => {
-        if(data.error) throw new Error(data.error);
+        if(data.error) throw new Error(data.error + " (HTTP " + (data._status||"?") + " · " + (data._path||"/search") + ")");
         setResults(data.quotes || []);
         if((data.quotes || []).length === 0) setError("Aucun résultat pour « " + q2 + " »");
       })
@@ -730,6 +746,115 @@ function WatchRow({ item, quote, eur, usdEur, onClick, onRemove }){
 }
 
 /* ════════════════════════════════════════════════════════════════════════
+   DIAGNOSTIC — teste /ping et /search, explique précisément l'erreur (v1.01)
+   ════════════════════════════════════════════════════════════════════════ */
+function DiagnosticPanel({ onClose }){
+  const [running, setRunning] = useState(true);
+  const [ping, setPing]   = useState(null);   // {status, body, err}
+  const [srch, setSrch]   = useState(null);   // {status, body, err}
+
+  const keyMask = CF_AUTH_KEY
+    ? (CF_AUTH_KEY.length <= 2 ? "•".repeat(CF_AUTH_KEY.length)
+        : CF_AUTH_KEY[0] + "•".repeat(Math.max(1,CF_AUTH_KEY.length-2)) + CF_AUTH_KEY[CF_AUTH_KEY.length-1])
+    : "(vide !)";
+
+  const run = useCallback(async ()=>{
+    setRunning(true); setPing(null); setSrch(null);
+    // 1) /ping — SANS auth (diagnostic pur)
+    try {
+      const r = await fetch(CF_WORKER_URL + "/ping", { signal: AbortSignal.timeout(8000) });
+      const b = await r.json().catch(()=>({}));
+      setPing({ status:r.status, body:b });
+    } catch(e){ setPing({ err: e.name === "TimeoutError" ? "délai dépassé" : (e.message||e.name) }); }
+    // 2) /search?q=AAPL — AVEC auth
+    try {
+      const r = await fetch(CF_WORKER_URL + "/search?q=AAPL", {
+        headers:{ "X-Auth-Key": CF_AUTH_KEY }, signal: AbortSignal.timeout(8000) });
+      const b = await r.json().catch(()=>({}));
+      setSrch({ status:r.status, body:b });
+    } catch(e){ setSrch({ err: e.name === "TimeoutError" ? "délai dépassé" : (e.message||e.name) }); }
+    setRunning(false);
+  }, []);
+  useEffect(()=>{ run(); }, [run]);
+
+  // Verdict
+  let verdict = null, vColor = C.text2;
+  if(!running){
+    if(ping && ping.err){ verdict = "Le Worker ne répond pas. Vérifie l'URL (CF_WORKER_URL) — elle doit finir par .workers.dev, sans slash, et exister."; vColor = C.red; }
+    else if(ping && ping.body && ping.body.hasAuth === false){ verdict = "AUTH_KEY n'est PAS défini sur le Worker déployé. Cloudflare → ton Worker → Settings → Variables and Secrets → Add → Type « Secret », nom AUTH_KEY, valeur = « watchlist » → puis Deploy."; vColor = C.orange; }
+    else if(srch && srch.status === 401){ verdict = "AUTH_KEY existe côté Worker mais ne correspond PAS à la clé de l'app. Les deux doivent être STRICTEMENT identiques (sans espace, même casse) : CF_AUTH_KEY dans index.html = AUTH_KEY dans Cloudflare. Corrige l'un des deux, puis redéploie / réuploade."; vColor = C.orange; }
+    else if(srch && srch.status === 200){ verdict = "Tout fonctionne ✓ — l'authentification passe et la recherche répond."; vColor = C.green; }
+    else if(srch && srch.body && srch.body.error){ verdict = "Réponse inattendue : " + srch.body.error; vColor = C.orange; }
+    if(ping && ping.body && ping.body.hasKV === false){
+      verdict = (verdict ? verdict + "  " : "") + "⚠ Le binding KV (GDB_KV) manque : la recherche peut marcher, mais l'enregistrement de la watchlist échouera. Ajoute-le dans Settings → Bindings.";
+      if(vColor === C.green) vColor = C.orange;
+    }
+  }
+
+  const Row = ({label, children}) => (
+    <div style={{display:"flex", justifyContent:"space-between", gap:10, padding:"6px 0",
+      borderBottom:`1px solid ${C.border}`, fontSize:12}}>
+      <span style={{color:C.text3}}>{label}</span>
+      <span style={{color:C.text, fontWeight:600, textAlign:"right", wordBreak:"break-all"}}>{children}</span>
+    </div>
+  );
+  const Bool = ({v}) => <span style={{color: v===true?C.green:(v===false?C.red:C.text3), fontWeight:800}}>{v===true?"✓ oui":(v===false?"✗ non":"?")}</span>;
+
+  return (
+    <div onClick={onClose} style={{position:"fixed", inset:0, zIndex:1100,
+      background:"rgba(0,0,0,0.8)", display:"flex", alignItems:"flex-end"}}>
+      <div onClick={e=>e.stopPropagation()} style={{width:"100%", maxWidth:480, margin:"0 auto",
+        background:C.bg0, borderRadius:"20px 20px 0 0", padding:"18px 18px 28px", maxHeight:"92vh", overflowY:"auto"}}>
+        <div style={{display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14}}>
+          <span style={{fontSize:17, fontWeight:900}}>🩺 Diagnostic</span>
+          <button onClick={onClose} style={{background:"transparent", border:"none", color:C.gray, fontSize:21, cursor:"pointer"}}>✕</button>
+        </div>
+
+        {/* Verdict */}
+        <div style={{background:vColor+"15", border:`1px solid ${vColor}55`, borderRadius:12,
+          padding:"12px 14px", marginBottom:16, fontSize:13, color:vColor, lineHeight:1.5, fontWeight:600}}>
+          {running ? <span className="pulse">Tests en cours…</span> : (verdict || "—")}
+        </div>
+
+        {/* Config */}
+        <div style={{fontSize:10, fontWeight:700, color:C.gray, textTransform:"uppercase", letterSpacing:0.5, marginBottom:4}}>Configuration de l'app</div>
+        <Row label="Worker URL">{CF_WORKER_URL}</Row>
+        <Row label="Clé app (CF_AUTH_KEY)">{keyMask} <span style={{color:C.text3, fontWeight:400}}>({CF_AUTH_KEY.length} car.)</span></Row>
+
+        {/* /ping */}
+        <div style={{fontSize:10, fontWeight:700, color:C.gray, textTransform:"uppercase", letterSpacing:0.5, margin:"14px 0 4px"}}>Test /ping (sans clé)</div>
+        {ping == null ? <div style={{fontSize:12, color:C.text3}} className="pulse">…</div> : ping.err ? (
+          <Row label="Résultat"><span style={{color:C.red}}>{ping.err}</span></Row>
+        ) : (<>
+          <Row label="HTTP">{ping.status}</Row>
+          <Row label="KV branché (hasKV)"><Bool v={ping.body && ping.body.hasKV}/></Row>
+          <Row label="AUTH_KEY défini (hasAuth)"><Bool v={ping.body && ping.body.hasAuth}/></Row>
+        </>)}
+
+        {/* /search */}
+        <div style={{fontSize:10, fontWeight:700, color:C.gray, textTransform:"uppercase", letterSpacing:0.5, margin:"14px 0 4px"}}>Test /search?q=AAPL (avec clé)</div>
+        {srch == null ? <div style={{fontSize:12, color:C.text3}} className="pulse">…</div> : srch.err ? (
+          <Row label="Résultat"><span style={{color:C.red}}>{srch.err}</span></Row>
+        ) : (<>
+          <Row label="HTTP">{srch.status === 200
+            ? <span style={{color:C.green}}>200 OK</span>
+            : <span style={{color:C.red}}>{srch.status}</span>}</Row>
+          <Row label="Réponse">{srch.body && srch.body.error
+            ? <span style={{color:C.red}}>{srch.body.error}</span>
+            : <span style={{color:C.green}}>{((srch.body && srch.body.quotes)||[]).length} résultat(s)</span>}</Row>
+        </>)}
+
+        <button onClick={run} disabled={running} style={{width:"100%", marginTop:18, padding:"12px",
+          borderRadius:11, background:C.teal, border:"none", color:"#001018", fontSize:14, fontWeight:800,
+          cursor:running?"default":"pointer", opacity:running?0.5:1}}>
+          {running ? "Test…" : "↻ Relancer le diagnostic"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ════════════════════════════════════════════════════════════════════════
    APP
    ════════════════════════════════════════════════════════════════════════ */
 function App(){
@@ -740,6 +865,7 @@ function App(){
   const [usdEur, setUsdEur] = useState(()=> (readLocal() && readLocal().usdEur) || 0.92);
   const [refreshing, setRefreshing] = useState(false);
   const [booted, setBooted] = useState(false);
+  const [showDiag, setShowDiag] = useState(false);
 
   // Persiste à chaque changement d'items
   const persist = useCallback((nextItems)=>{
@@ -849,6 +975,9 @@ function App(){
             <div style={{fontSize:10, color:C.gray, fontFamily:"monospace"}}>{APP_VERSION} · {items.length} suivi{items.length>1?"s":""}</div>
           </div>
           <div style={{display:"flex", gap:8}}>
+            <button onClick={()=>setShowDiag(true)} title="Diagnostic" style={{width:38, height:38, borderRadius:10,
+              border:`1.5px solid ${C.border2}`, background:C.bg2, color:C.purple, fontSize:16, cursor:"pointer"}}>
+              🩺</button>
             <button onClick={()=>setEur(e=>!e)} style={{width:38, height:38, borderRadius:10,
               border:`1.5px solid ${eur?C.green:C.border2}`, background:C.bg2,
               color:eur?C.green:C.gold, fontSize:15, fontWeight:800, cursor:"pointer"}}>
@@ -886,6 +1015,8 @@ function App(){
         Données via Worker Cloudflare · Yahoo Finance · CoinGecko<br/>
         {CF_WORKER_URL.replace("https://","")}
       </div>
+
+      {showDiag && <DiagnosticPanel onClose={()=>setShowDiag(false)}/>}
 
       {/* FICHE */}
       {sheet && (
