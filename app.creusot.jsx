@@ -661,7 +661,7 @@ function applyPrices(prices, usdEur, effSrc){
 }
 
 // Date locale UTC+11 (Nouvelle-Calédonie)
-const APP_VERSION = "v1.07";
+const APP_VERSION = "v1.08";
 const CRYPTO_FULLNAMES = {BTC:"Bitcoin",ETH:"Ethereum",SOL:"Solana",BNB:"BNB",XRP:"XRP",ADA:"Cardano",DOGE:"Dogecoin",DOT:"Polkadot",AVAX:"Avalanche",LINK:"Chainlink",UNI:"Uniswap",LTC:"Litecoin",ATOM:"Cosmos",HYPE:"Hyperliquid",MATIC:"Polygon"};
 const NC_OFFSET_MS = 11 * 60 * 60 * 1000;
 const todayNC = () => {
@@ -4784,14 +4784,16 @@ function PageGDB({chartData,hidden,EFF,eur,liveGSB,liveGDBS,liveBench,liveGC,liv
             for(let i=arr.length-1;i>=0;i--) if(typeof arr[i]==="number") return arr[i];
             return null;
           };
-          // PNL latent en USD (somme des items)
-          const gcPnl = (src.crypto.items||[]).reduce((s,x)=>s+(x.pnl||0),0);
-          const gsPnl = (src.stocks.items||[]).filter(x=>x.cat!=="Cash").reduce((s,x)=>s+(x.pnl||0),0);
-          // % "depuis création" = PNL / investi (cohérent avec le PNL affiché)
-          const gcInv = (src.crypto.items||[]).reduce((s,x)=>s+(x.pa||0)*(x.qty||0),0);
-          const gsInv = (src.stocks.items||[]).filter(x=>x.cat!=="Cash").reduce((s,x)=>s+(x.pa||0)*(x.qty||0),0);
-          const gcAll = gcInv>0 ? gcPnl/gcInv : null;
-          const gsAll = gsInv>0 ? gsPnl/gsInv : null;
+          // v1.08 — base = investi RÉEL (flux cumulés saisis), pas PRU×qté
+          const eurUsd2 = 1/(src.usdEur||0.92);
+          const sumInv = (OBJ) => { let t=0; Object.keys(OBJ).forEach(y=>{ (OBJ[y].inv||[]).forEach(v=>{ if(typeof v==="number") t+=v; }); }); return t; };
+          const gcInvUSD = sumInv(CRYPTO_MONTHLY) * eurUsd2;   // flux en € -> $
+          const gsInvUSD = sumInv(STOCKS_MONTHLY) * eurUsd2;
+          // P&L = valeur actuelle du fonds (live) - investi réel
+          const gcPnl = Math.round(gcFonds - gcInvUSD);
+          const gsPnl = Math.round(gsFonds - gsInvUSD);
+          const gcAll = gcInvUSD>0 ? gcPnl/gcInvUSD : null;
+          const gsAll = gsInvUSD>0 ? gsPnl/gsInvUSD : null;
           const cP = perf24h.loading ? {} : (perf24h.crypto||{});
           const sP = perf24h.loading ? {} : (perf24h.stocks||{});
           return (<>
@@ -4829,11 +4831,13 @@ function PageGDB({chartData,hidden,EFF,eur,liveGSB,liveGDBS,liveBench,liveGC,liv
         const _secs = buildSections(src);
         const homeUSD = _secs.reduce((s,sec)=>s+(sec.totalUSD||0),0);
         const homeVal = eur ? Math.round(homeUSD*usdEurNow) : Math.round(homeUSD);
-        // Performance = P&L total latent / investi total (cohérent avec les cartes)
-        const investedUSD = (src.crypto.items||[]).reduce((s,x)=>s+(x.pa||0)*(x.qty||0),0)
-          + (src.stocks.items||[]).filter(x=>x.cat!=="Cash").reduce((s,x)=>s+(x.pa||0)*(x.qty||0),0);
-        const pnlUSD = (src.crypto.items||[]).reduce((s,x)=>s+(x.pnl||0),0)
-          + (src.stocks.items||[]).filter(x=>x.cat!=="Cash").reduce((s,x)=>s+(x.pnl||0),0);
+        // Performance = P&L total / investi RÉEL (flux cumulés crypto+actions)
+        const eurUsd3 = 1/(src.usdEur||0.92);
+        const sumInvG = (OBJ) => { let t=0; Object.keys(OBJ).forEach(y=>{ (OBJ[y].inv||[]).forEach(v=>{ if(typeof v==="number") t+=v; }); }); return t; };
+        const investedUSD = (sumInvG(CRYPTO_MONTHLY)+sumInvG(STOCKS_MONTHLY)) * eurUsd3;
+        const stocksOnlyUSD = (src.stocks.items||[]).filter(x=>x.cat!=="Cash").reduce((s,x)=>s+(x.val||0),0);
+        const fundsUSD = (src.crypto.total||0) + stocksOnlyUSD;
+        const pnlUSD = fundsUSD - investedUSD;
         const totPerf = investedUSD>0 ? pnlUSD/investedUSD : null;
         const ticks=[0, Math.floor(pts.length/3), Math.floor(2*pts.length/3), pts.length-1].filter((v,i,a)=>a.indexOf(v)===i);
         return (
