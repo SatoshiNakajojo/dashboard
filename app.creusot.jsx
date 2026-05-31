@@ -661,7 +661,7 @@ function applyPrices(prices, usdEur, effSrc){
 }
 
 // Date locale UTC+11 (Nouvelle-Calédonie)
-const APP_VERSION = "v1.06";
+const APP_VERSION = "v1.07";
 const CRYPTO_FULLNAMES = {BTC:"Bitcoin",ETH:"Ethereum",SOL:"Solana",BNB:"BNB",XRP:"XRP",ADA:"Cardano",DOGE:"Dogecoin",DOT:"Polkadot",AVAX:"Avalanche",LINK:"Chainlink",UNI:"Uniswap",LTC:"Litecoin",ATOM:"Cosmos",HYPE:"Hyperliquid",MATIC:"Polygon"};
 const NC_OFFSET_MS = 11 * 60 * 60 * 1000;
 const todayNC = () => {
@@ -4698,7 +4698,9 @@ function PageGDB({chartData,hidden,EFF,eur,liveGSB,liveGDBS,liveBench,liveGC,liv
   const gcQty   = GDB_C_NB_PARTS;
   const gcFonds = Math.round(src.crypto.total);
   const gsQty   = GDB_S_NB_PARTS;
-  const gsFonds = Math.round(gdbSfondsUSD || (src.stocks.items.filter(x=>x.cat!=="Cash").reduce((s,x)=>s+x.val,0) + (src.stocks.items.find(x=>x.t==="EURO")?.val||0)));
+  // v1.06 — valeur du fonds Actions = actions seules (hors Cash Dip), pour rester
+  // cohérent avec le P&L et la perf sur investi (qui excluent déjà le cash).
+  const gsFonds = Math.round((src.stocks.items||[]).filter(x=>x.cat!=="Cash").reduce((s,x)=>s+(x.val||0),0));
 
 
   const bench = (()=>{
