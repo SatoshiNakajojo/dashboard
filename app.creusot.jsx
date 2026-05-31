@@ -494,7 +494,9 @@ function applyPrices(prices, usdEur, effSrc){
     }
     const currentLive = item.live || 1;
     const variation = Math.abs(newLive - currentLive) / currentLive;
-    if(variation > 0.5){
+    // Garde-fou anti-aberration : ignoré au 1er chargement (live === pa, pas encore de prix réel)
+    const isSeed = (item.live === item.pa);
+    if(!isSeed && variation > 0.5){
       console.warn(`Prix aberrant pour ${item.t}: ${newLive} vs ${currentLive} — ignoré`);
       return item;
     }
@@ -505,15 +507,17 @@ function applyPrices(prices, usdEur, effSrc){
     return {...item, live: newLive, val: newVal, pnl: newPnl, pct: newPct};
   });
   const stocksTotal = stocksItems.reduce((s,x)=>s+x.val, 0);
-  /* BTC — quantité depuis src live */
-  const btcSrc  = src.crypto.items[0];
+  /* Crypto — TOUS les items (BTC, ETH, …), quantités depuis src live */
+  const cryptoItems = src.crypto.items.map(c=>{
+    const cl = prices[c.t] || c.live;
+    const cVal = Math.round(c.qty * cl);
+    const cInv = (c.pa || cl) * c.qty;
+    const cPnl = Math.round(cVal - cInv);
+    return {...c, live:cl, val:cVal, pnl:cPnl, pct: cInv>0 ? cPnl/cInv : 0};
+  });
+  const cryptoTotal = cryptoItems.reduce((s,x)=>s+x.val, 0);
+  const btcSrc  = src.crypto.items[0] || {pa:0,qty:0,live:0};
   const btcLive = prices.BTC || btcSrc.live;
-  const btcQty  = btcSrc.qty;
-  const btcPa   = btcSrc.pa;
-  const btcVal  = Math.round(btcQty * btcLive);
-  const btcPnl  = Math.round(btcVal - btcPa * btcQty);
-  const cryptoItems = [{...btcSrc, live:btcLive, val:btcVal, pnl:btcPnl, pct:btcPnl/(btcPa*btcQty)}];
-  const cryptoTotal = btcVal;
 
   /* GDB.C et GDB.S */
   const tmpEFF = {
@@ -566,7 +570,8 @@ function applyPrices(prices, usdEur, effSrc){
 }
 
 // Date locale UTC+11 (Nouvelle-Calédonie)
-const APP_VERSION = "v23.08";
+const APP_VERSION = "v1.02";
+const CRYPTO_FULLNAMES = {BTC:"Bitcoin",ETH:"Ethereum",SOL:"Solana",BNB:"BNB",XRP:"XRP",ADA:"Cardano",DOGE:"Dogecoin",DOT:"Polkadot",AVAX:"Avalanche",LINK:"Chainlink",UNI:"Uniswap",LTC:"Litecoin",ATOM:"Cosmos",HYPE:"Hyperliquid",MATIC:"Polygon"};
 const NC_OFFSET_MS = 11 * 60 * 60 * 1000;
 const todayNC = () => {
   const nc = new Date(Date.now() + NC_OFFSET_MS);
@@ -2429,8 +2434,8 @@ function GdbCompareChart({eur, setEur, EFF, tf, setTF, onSparkData, chartData, l
             {fmtDate(hDate)}
           </div>
           {[
-            {color:C.orange, label:"GDB.C", val:fmtGdb(hGc), sub:hGcB!=null?`base ${hGcB.toFixed(1)}`:null},
-            {color:C.blue,   label:"GDB.S", val:fmtGdb(hGs), sub:hGsB!=null?`base ${hGsB.toFixed(1)}`:null},
+            {color:C.orange, label:"CGIC", val:fmtGdb(hGc), sub:hGcB!=null?`base ${hGcB.toFixed(1)}`:null},
+            {color:C.blue,   label:"CGIS", val:fmtGdb(hGs), sub:hGsB!=null?`base ${hGsB.toFixed(1)}`:null},
             {color:C.green,  label:"Portefeuille", val:hPortAbs!=null?`${cur}${fmtK(hPortAbs)}`:null, sub:hPortB!=null?`base ${hPortB.toFixed(1)}`:null},
           ].filter(x=>x.val).map((x,i)=>(
             <div key={i} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
@@ -2519,7 +2524,7 @@ function GdbCompareChart({eur, setEur, EFF, tf, setTF, onSparkData, chartData, l
         padding:"12px 16px", flexShrink:0,
         background:C.bg1, borderBottom:`1px solid ${C.border}`,
       }}>
-        <span style={{fontSize:14, fontWeight:800, color:C.btc}}>GDB.C · GDB.S · Patrimoine</span>
+        <span style={{fontSize:14, fontWeight:800, color:C.btc}}>CGIC · CGIS · Patrimoine</span>
         <button onClick={()=>setFull(false)} style={{
           background:C.bg2, border:`1px solid ${C.border}`,
           borderRadius:8, padding:"6px 14px",
@@ -2637,8 +2642,8 @@ function PerfStrip({eur, EFF}){
   const gsPrice = eur ? (_gsT * (EFF||CURRENT).usdEur).toFixed(2) : _gsT.toFixed(2);
   const gcCur = eur ? "€" : "$";
   const gdb = [
-    { label:"GDB.C", price:gcPrice, d:_gcPerf(1), w:_gcPerf(7), m:_gcPerf(30), color:C.orange },
-    { label:"GDB.S", price:gsPrice, d:_gsPerf(1), w:_gsPerf(7), m:_gsPerf(30), color:C.blue },
+    { label:"CGIC", price:gcPrice, d:_gcPerf(1), w:_gcPerf(7), m:_gcPerf(30), color:C.orange },
+    { label:"CGIS", price:gsPrice, d:_gsPerf(1), w:_gsPerf(7), m:_gsPerf(30), color:C.blue },
   ];
   return(
     <div style={{marginTop:10,marginBottom:10}}>
@@ -3074,8 +3079,8 @@ function buildSections(L){
       totalEUR: Math.round(cryptoUSD * usdEur),
       pct: pct(cryptoUSD),
       items: src.crypto.items.map(x=>({
-        ticker: x.t, icon: TICKER_ICONS[x.t]||"₿", label:"Bitcoin",
-        detail: `${x.qty} BTC · $${x.live.toLocaleString("fr-FR")}`,
+        ticker: x.t, icon: TICKER_ICONS[x.t]||"₿", label:(CRYPTO_FULLNAMES[x.t]||x.t),
+        detail: `${x.qty} ${x.t} · $${x.live.toLocaleString("fr-FR")}`,
         valUSD: x.val, valEUR: Math.round(x.val*usdEur),
         pnl: x.pnl, pct: x.pct,
         pa: x.pa, live: x.live,
@@ -3447,8 +3452,8 @@ function PageOverview({chartData,onSnapshot,eur,setEur,hidden,setHidden,EFF,refr
           return parseFloat((_gsNow2/r[1]-1).toFixed(4));
         };
         const gdb = [
-          { label:"GDB.C", price:gcPrice, d:_gcPerf(1), w:_gcPerf(7), m:_gcPerf(30), color:C.orange },
-          { label:"GDB.S", price:gsPrice, d:_gsPerf(1), w:_gsPerf(7), m:_gsPerf(30), color:C.blue },
+          { label:"CGIC", price:gcPrice, d:_gcPerf(1), w:_gcPerf(7), m:_gcPerf(30), color:C.orange },
+          { label:"CGIS", price:gsPrice, d:_gsPerf(1), w:_gsPerf(7), m:_gsPerf(30), color:C.blue },
         ];
         return(
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:7,marginBottom:10}}>
@@ -4337,8 +4342,8 @@ function GdbCompareChartGDB({onTFChange, liveGSB, liveGDBS, liveBench, liveGC}){
   /* Tooltip data au hover */
   const hDate = hi!=null ? dates[hi] : null;
   const SERIES = [
-    {vals:gcB,  col:"#F7931A", lbl:"GDB.C"},
-    {vals:gsB,  col:"#EF4444", lbl:"GDB.S"},
+    {vals:gcB,  col:"#F7931A", lbl:"CGIC"},
+    {vals:gsB,  col:"#EF4444", lbl:"CGIS"},
     {vals:btcB, col:"#FBBF24", lbl:"BTC"},
     {vals:ethB, col:"#1E40AF", lbl:"ETH"},
     {vals:nqB,  col:"#10B981", lbl:"Nasdaq"},
@@ -4442,7 +4447,7 @@ function GdbCompareChartGDB({onTFChange, liveGSB, liveGDBS, liveBench, liveGC}){
       display:"flex",flexDirection:"column",
     }}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 16px",background:C.bg1,borderBottom:`1px solid ${C.border}`,flexShrink:0}}>
-        <span style={{fontSize:13,fontWeight:800,color:C.btc}}>GDB.C · GDB.S · Benchmarks</span>
+        <span style={{fontSize:13,fontWeight:800,color:C.btc}}>CGIC · CGIS · Benchmarks</span>
         <button onClick={()=>setFull(false)} style={{background:C.bg2,border:`1px solid ${C.border}`,borderRadius:8,padding:"6px 14px",color:C.text,fontSize:12,fontWeight:700,cursor:"pointer"}}>✕</button>
       </div>
       <div style={{flex:1,overflowY:"auto",padding:"12px 16px"}}>{chartBody}</div>
@@ -4669,8 +4674,8 @@ function PageGDB({chartData,hidden,EFF,eur,liveGSB,liveGDBS,liveBench,liveGC,liv
     };
 
     return [
-      {n:"GDB.C",  v:pGC(),  ic:"₿",  color:C.btc},
-      {n:"GDB.S",  v:pGS(),  ic:"📈", color:C.red},
+      {n:"CGIC",  v:pGC(),  ic:"₿",  color:C.btc},
+      {n:"CGIS",  v:pGS(),  ic:"📈", color:C.red},
       {n:"Bitcoin",v:pDB(2), ic:"🟠", color:"#F7931A"},
       {n:"S&P 500",v:pDB(3), ic:"🇺🇸",color:"#6B7280"},
       {n:"Nasdaq", v:pDB(4), ic:"🖥",  color:"#10B981"},
@@ -5543,7 +5548,7 @@ function SnapshotModal({onSave, onClose, EFF}){
 
               {/* GDB.C / GDB.S */}
               <div style={{display:"flex",justifyContent:"space-between",fontSize:11}}>
-                <span style={{color:C.text2}}>GDB.C / GDB.S</span>
+                <span style={{color:C.text2}}>CGIC / CGIS</span>
                 <span style={{color:C.text2,fontWeight:700}}>
                   <span style={{color:C.orange||C.btc}}>${(saved.gc||0).toFixed(2)}</span>
                   {" / "}
@@ -5657,7 +5662,7 @@ function SnapshotModal({onSave, onClose, EFF}){
 /* ═══════════════════════════════════════════════════════════
    ROOT APP
 ═══════════════════════════════════════════════════════════ */
-const TABS=["Home","Portfolio","Stats","GDB","Data"];
+const TABS=["Home","Portfolio","Stats","CGI","Data"];
 const ICONS=["◎","◑","▲","◈","⬡"];
 
 /* ── Global API keys (from Power Query in Excel) ── */
@@ -5682,8 +5687,8 @@ function CloudKeyList({data, onRefresh}){
     {key:"gdb_snapshots", label:"Snapshots journaliers (objets)"},
     {key:"gdb_txns",      label:"Transactions"},
     {key:"gdb_dd",        label:"DD (historique quotidien)"},
-    {key:"gdb_gdbs",      label:"GDBS (GDB.C et GDB.S)"},
-    {key:"gdb_gc",        label:"GC_FULL (GDB.C historique)"},
+    {key:"gdb_gdbs",      label:"CGIS (CGIC et CGIS)"},
+    {key:"gdb_gc",        label:"GC_FULL (CGIC historique)"},
     {key:"gdb_gsb",       label:"GS_B100_EXT"},
     {key:"gdb_cm",        label:"CRYPTO_MONTHLY"},
     {key:"gdb_sm",        label:"STOCKS_MONTHLY"},
@@ -5910,7 +5915,7 @@ function PageData({EFF, hidden, txns, chartData, liveDD, liveGDBS, liveGC, liveG
       rows: _DD.slice().reverse().map(function(r){return[r[0],fmt(r[1]),fmt(r[2]),fmt(r[3]),fmtF(r[4],4),fmtF(r[5],6)];}),
     },
     "GDBS": {
-      label:"GDBS — Cours GDB.C et GDB.S",
+      label:"CGIS — Cours CGIC et CGIS",
       desc:"Cours journaliers depuis aout 2025 ("+_GDBS.length+" points)",
       headers:["Date","GDB.S $","GDB.C $"],
       rows: _GDBS.slice().reverse().map(function(r){return[r[0],fmtF(r[1],4),fmtF(r[2],4)];}),
@@ -6335,8 +6340,15 @@ function App(){
     finally{ setRefreshing(false); }
   },[]);
 
-  // Merge live prices into effective CURRENT data
-  // EFF = live est la source unique de vérité
+  // v1.02 — rafraîchissement automatique des cours au premier chargement
+  const didAutoRefresh = useRef(false);
+  useEffect(()=>{
+    if(didAutoRefresh.current) return;
+    didAutoRefresh.current = true;
+    const t = setTimeout(()=>{ handleRefresh(); }, 600);
+    return ()=>clearTimeout(t);
+  },[handleRefresh]);
+
   const EFF = live || CURRENT;
 
   const liveProps = {eur, setEur, hidden, setHidden, EFF, refreshing, handleRefresh, refreshedAt, refreshErr, fromSnapshot: live?._fromSnapshot||null, gistSync, liveDD, liveGDBS, liveGC, liveGSB, liveCM};
@@ -7116,7 +7128,7 @@ function App(){
             </div>
             <div style={{display:"flex",justifyContent:"space-between",fontSize:10,color:C.gray,paddingTop:8,borderTop:`1px solid ${C.border}`}}>
               <span>📅 {localData?.date||"—"}</span>
-              <span>GDB.S ${localData?.gdbS||"—"} · GDB.C ${localData?.gdbC||"—"}</span>
+              <span>CGIS ${localData?.gdbS||"—"} · CGIC ${localData?.gdbC||"—"}</span>
             </div>
           </div>
 
@@ -7152,7 +7164,7 @@ function App(){
               </div>
               <div style={{display:"flex",justifyContent:"space-between",fontSize:10,color:C.gray,paddingTop:8,borderTop:`1px solid ${C.border}`}}>
                 <span>📅 {kvData_snap?.date||"—"}</span>
-                <span>GDB.S ${kvData_snap?.gdbS||"—"} · GDB.C ${kvData_snap?.gdbC||"—"}</span>
+                <span>CGIS ${kvData_snap?.gdbS||"—"} · CGIC ${kvData_snap?.gdbC||"—"}</span>
               </div>
             </div>
           )}
@@ -7199,7 +7211,7 @@ function App(){
         {/* Centre : CREUSOT GLOBAL INVESTMENTS + version */}
         <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
           <div style={{display:"flex",alignItems:"center",gap:6}}>
-            <span style={{fontSize:17,fontWeight:900,color:C.btc,letterSpacing:.3,whiteSpace:"nowrap"}}>CREUSOT GLOBAL INVESTMENTS</span>
+            <span style={{fontSize:13,fontWeight:900,color:C.btc,letterSpacing:.2,whiteSpace:"nowrap"}}>CREUSOT GLOBAL INVESTMENTS</span>
             {gistSync===true  && <span onClick={()=>setShowGistDiag(true)} title="Cloudflare KV — connecté" style={{fontSize:10,color:C.green,cursor:"pointer"}}>☁︎</span>}
             {gistSync===false && <span onClick={()=>setShowGistDiag(true)} title="Erreur connexion" style={{fontSize:10,color:C.red,cursor:"pointer"}}>✗</span>}
             {gistSync===null  && <span style={{fontSize:10,color:C.gray}}>·</span>}
@@ -7281,7 +7293,7 @@ function App(){
         fontSize:8,letterSpacing:.6,color:C.text3,opacity:.45,
         fontFamily:C.font||"system-ui",whiteSpace:"nowrap",
       }}>
-        VibeCoded by CryptoFlo · Claude Sonnet 4.6
+        VibeCode by Nakajojo · Claude Sonnet 4.6
       </div>
       {/* Toast refresh — visible depuis tous les onglets */}
       {refreshErr&&typeof refreshErr==="object"&&(
