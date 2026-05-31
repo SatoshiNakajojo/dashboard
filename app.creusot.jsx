@@ -248,6 +248,49 @@ async function fetchCoinGecko(){
   };
 }
 
+/* v1.03 — Perf 24h pondérée par portefeuille, calculée depuis les prix live.
+   Pour chaque actif : variation 24h = (price - prevClose)/prevClose, fournie par
+   le Worker (/yahoo renvoie prevClose+pct1d ; CoinGecko renvoie pct1d).
+   Perf portefeuille = Σ(val_i × pct24h_i) / Σ(val_i). */
+async function fetchPerf24h(src){
+  const out = { crypto:null, stocks:null, errors:[] };
+  const usdEur = src.usdEur || 0.92;
+  // --- Crypto via CoinGecko (pct 24h direct) ---
+  try{
+    const ids = (src.crypto.items||[]).map(x=>CG_MAP[x.t]).filter(Boolean);
+    if(ids.length){
+      const u = "https://api.coingecko.com/api/v3/simple/price?ids="+ids.join(",")+"&vs_currencies=usd&include_24hr_change=true";
+      const r = await fetch(u,{signal:AbortSignal.timeout(8000)});
+      const d = await r.json();
+      let num=0, den=0;
+      for(const it of src.crypto.items){
+        const id = CG_MAP[it.t]; if(!id||!d[id]) continue;
+        const pct = (d[id].usd_24h_change ?? 0)/100;
+        num += (it.val||0)*pct; den += (it.val||0);
+      }
+      if(den>0) out.crypto = num/den;
+    }
+  }catch(e){ out.errors.push("crypto24h"); }
+  // --- Stocks via Worker /yahoo (prevClose) ---
+  try{
+    const items = (src.stocks.items||[]).filter(x=>x.cat!=="Cash");
+    let num=0, den=0;
+    await Promise.all(items.map(async it=>{
+      const sym = YF_MAP[it.t]||it.t;
+      try{
+        const r = await fetch(`${CF_WORKER_URL}/yahoo?symbol=${encodeURIComponent(sym)}`,{
+          headers:{"X-Auth-Key":CF_AUTH_KEY}, signal:AbortSignal.timeout(9000)});
+        const d = await r.json();
+        const pct = (d && d.pct1d!=null) ? d.pct1d
+                  : (d && d.price && d.prevClose) ? (d.price-d.prevClose)/d.prevClose : null;
+        if(pct!=null){ num += (it.val||0)*pct; den += (it.val||0); }
+      }catch(e){}
+    }));
+    if(den>0) out.stocks = num/den;
+  }catch(e){ out.errors.push("stocks24h"); }
+  return out;
+}
+
 /* Fetch all prices and return a prices object */
 /* ═══════════════════════════════════════════════════════════
    APPLY TRADE  v9
@@ -570,7 +613,7 @@ function applyPrices(prices, usdEur, effSrc){
 }
 
 // Date locale UTC+11 (Nouvelle-Calédonie)
-const APP_VERSION = "v1.02";
+const APP_VERSION = "v1.03";
 const CRYPTO_FULLNAMES = {BTC:"Bitcoin",ETH:"Ethereum",SOL:"Solana",BNB:"BNB",XRP:"XRP",ADA:"Cardano",DOGE:"Dogecoin",DOT:"Polkadot",AVAX:"Avalanche",LINK:"Chainlink",UNI:"Uniswap",LTC:"Litecoin",ATOM:"Cosmos",HYPE:"Hyperliquid",MATIC:"Polygon"};
 const NC_OFFSET_MS = 11 * 60 * 60 * 1000;
 const todayNC = () => {
@@ -2498,8 +2541,8 @@ function GdbCompareChart({eur, setEur, EFF, tf, setTF, onSparkData, chartData, l
       {/* Legend */}
       <div style={{ display: "flex", gap: 14, justifyContent: "center", marginTop: 2, paddingTop: 4, borderTop: `1px solid ${C.border}` }}>
         {[
-          { color: C.orange, label: `GDB.C ${eur?"€"+(gcLive*src.usdEur).toFixed(2):"$"+gcLive.toFixed(2)}` },
-          { color: C.blue,   label: `GDB.S ${eur?"€"+(gsLive*src.usdEur).toFixed(2):"$"+gsLive.toFixed(2)}` },
+          { color: C.orange, label: `CGIC ${eur?"€"+(gcLive*src.usdEur).toFixed(2):"$"+gcLive.toFixed(2)}` },
+          { color: C.blue,   label: `CGIS ${eur?"€"+(gsLive*src.usdEur).toFixed(2):"$"+gsLive.toFixed(2)}` },
           { color: C.green,  label: `Patrimoine ${cur}${fmtK(portToday)}` },
         ].map((l, i) => (
           <div key={i} style={{ display: "flex", alignItems: "center", gap: 4 }}>
@@ -3440,7 +3483,7 @@ function PageOverview({chartData,onSnapshot,eur,setEur,hidden,setHidden,EFF,refr
       })()}
 
       {/* ── GDB Comparison Chart ── */}
-      <SH label="GDB.C · GDB.S · Patrimoine total" color={C.gray}/>
+      <SH label="CGIC · CGIS · Patrimoine total" color={C.gray}/>
       <GdbCompareChart eur={eur} setEur={setEur} EFF={EFF} tf={chartTF} setTF={setChartTF} onSparkData={setSparkData} chartData={chartData} liveDD={liveDD} liveGDBS={liveGDBS} liveGC={liveGC}/>
 
       {/* ── Taux EUR/USD ── */}
@@ -4520,6 +4563,17 @@ function PageGDB({chartData,hidden,EFF,eur,liveGSB,liveGDBS,liveBench,liveGC,liv
   const _GDBS = liveGDBS || GDBS;
   const _DD   = liveDD   || DD;
 
+  // v1.03 — Perf 24h réelle (pondérée), calculée depuis les prix live
+  const [perf24h, setPerf24h] = useState({crypto:null, stocks:null, loading:true});
+  useEffect(()=>{
+    let alive=true;
+    setPerf24h(p=>({...p, loading:true}));
+    fetchPerf24h(src).then(r=>{ if(alive) setPerf24h({crypto:r.crypto, stocks:r.stocks, loading:false}); })
+      .catch(()=>{ if(alive) setPerf24h({crypto:null, stocks:null, loading:false}); });
+    return ()=>{ alive=false; };
+  // recalcul quand les valeurs live changent
+  }, [src.crypto?.total, src.stocks?.total]);
+
   // Prix actuels GDB.C et GDB.S
   const {gdbC: gcToday, gdbS: gsToday_calc} = calcGdbPrices(src);
   const gdbs2026 = _GDBS.filter(r=>r[0]>='2026-01-01');
@@ -4645,11 +4699,41 @@ function PageGDB({chartData,hidden,EFF,eur,liveGSB,liveGDBS,liveBench,liveGC,liv
 
   return(
     <div>
+      {/* v1.03 — Performance 24h (réelle, pondérée par portefeuille) */}
+      {(()=>{
+        const Cell = (lbl, v, accent) => {
+          const has = typeof v === "number";
+          const col = !has ? C.gray : v>=0 ? C.green : C.red;
+          return (
+            <div style={{flex:1, background:C.bg1, border:`1px solid ${C.border}`, borderRadius:12,
+              padding:"12px 14px", display:"flex", flexDirection:"column", gap:4}}>
+              <div style={{display:"flex", alignItems:"center", gap:6}}>
+                <span style={{width:8,height:8,borderRadius:4,background:accent,display:"inline-block"}}/>
+                <span style={{fontSize:11, fontWeight:700, color:C.text2, letterSpacing:.3}}>{lbl}</span>
+              </div>
+              <span style={{fontSize:22, fontWeight:900, color:col, letterSpacing:-.5}}>
+                {perf24h.loading ? <span className="pulse" style={{color:C.text3}}>…</span>
+                 : !has ? "—" : (v>=0?"+":"")+(v*100).toFixed(2)+"%"}
+              </span>
+            </div>
+          );
+        };
+        return (
+          <div style={{marginBottom:10}}>
+            <div style={{fontSize:10, fontWeight:700, color:C.gray, textTransform:"uppercase",
+              letterSpacing:.6, marginBottom:6, paddingLeft:2}}>Performance 24 h</div>
+            <div style={{display:"flex", gap:8}}>
+              {Cell("Crypto", perf24h.crypto, C.btc)}
+              {Cell("Actions", perf24h.stocks, C.blue)}
+            </div>
+          </div>
+        );
+      })()}
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:4}}>
-        <FondCard label="GDB.C — CRYPTO" cours={gcToday} qty={gcQty} fonds={gcFonds} color={C.btc} hidden={hidden}
+        <FondCard label="CGIC — CRYPTO" cours={gcToday} qty={gcQty} fonds={gcFonds} color={C.btc} hidden={hidden}
           eur={eur} usdEur={src.usdEur} perfAllTime={gcPerfAllTime}
           perfs={[["1J",gcPerf(d1)],["1S",gcPerf(d7)],["1M",gcPerf(d30)],["YTD",gcPerf(dytd)],["ALL",gcPerfAllTime]]}/>
-        <FondCard label="GDB.S — ACTIONS" cours={gsToday} qty={gsQty} fonds={gsFonds} color={C.blue} hidden={hidden}
+        <FondCard label="CGIS — ACTIONS" cours={gsToday} qty={gsQty} fonds={gsFonds} color={C.blue} hidden={hidden}
           eur={eur} usdEur={src.usdEur} perfAllTime={gsPerfAllTime}
           perfs={[["1J",gsPerf(d1)],["1S",gsPerf(d7)],["1M",gsPerf(d30)],["YTD",gsYTD],["1Y*",gsYTD]]}/>
       </div>
@@ -5593,8 +5677,8 @@ function SnapshotModal({onSave, onClose, EFF}){
                 ["Actions €",     "€"+Math.round(preview.total_actions_eur).toLocaleString("fr-FR"), C.blue],
                 ["Banque €",      "€"+Math.round(preview.banque_eur).toLocaleString("fr-FR"), C.green],
                 ["Immo €",        "€"+Math.round(preview.immo_eur).toLocaleString("fr-FR"), C.gray],
-                ["GDB.C $",       "$"+preview.gdbc_usd.toFixed(2), C.orange],
-                ["GDB.S $",       "$"+preview.gdbs_usd.toFixed(2), C.blue],
+                ["CGIC $",       "$"+preview.gdbc_usd.toFixed(2), C.orange],
+                ["CGIS $",       "$"+preview.gdbs_usd.toFixed(2), C.blue],
                 ["$/€",           preview.cours_usd_eur.toFixed(4), C.gray],
                 ["% Crypto",      (preview.pct_crypto*100).toFixed(1)+"%", C.btc],
                 ["% Actions",     (preview.pct_actions*100).toFixed(1)+"%", C.blue],
@@ -5880,13 +5964,13 @@ function PageData({EFF, hidden, txns, chartData, liveDD, liveGDBS, liveGC, liveG
       rows: _GDBS.slice().reverse().map(function(r){return[r[0],fmtF(r[1],4),fmtF(r[2],4)];}),
     },
     "GC_FULL": {
-      label:"GC_FULL — Historique GDB.C",
+      label:"GC_FULL — Historique CGIC",
       desc:"Cours GDB.C depuis 2020 ("+_GC.length+" points)",
       headers:["Date","GDB.C $"],
       rows: _GC.slice().reverse().map(function(r){return[r[0],fmtF(r[1],4)];}),
     },
     "GS_B100": {
-      label:"GS_B100 — GDB.S base 100",
+      label:"GS_B100 — CGIS base 100",
       desc:"GDB.S rebase 100 au 1er jan 2026 ("+_GSB.length+" points)",
       headers:["Date","GDB.S base100"],
       rows: _GSB.slice().reverse().map(function(r){return[r[0],fmtF(r[1],3)];}),
@@ -7167,14 +7251,15 @@ function App(){
           }}>💵</button>
         </div>
 
-        {/* Centre : CREUSOT GLOBAL INVESTMENTS + version */}
-        <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
+        {/* Centre : CREUSOT / GLOBAL INVESTMENTS + version (3 lignes) */}
+        <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:1}}>
           <div style={{display:"flex",alignItems:"center",gap:6}}>
-            <span style={{fontSize:13,fontWeight:900,color:C.btc,letterSpacing:.2,whiteSpace:"nowrap"}}>CREUSOT GLOBAL INVESTMENTS</span>
+            <span style={{fontSize:15,fontWeight:900,color:C.btc,letterSpacing:1,whiteSpace:"nowrap",lineHeight:1.05}}>CREUSOT</span>
             {gistSync===true  && <span onClick={()=>setShowGistDiag(true)} title="Cloudflare KV — connecté" style={{fontSize:10,color:C.green,cursor:"pointer"}}>☁︎</span>}
             {gistSync===false && <span onClick={()=>setShowGistDiag(true)} title="Erreur connexion" style={{fontSize:10,color:C.red,cursor:"pointer"}}>✗</span>}
             {gistSync===null  && <span style={{fontSize:10,color:C.gray}}>·</span>}
           </div>
+          <span style={{fontSize:11,fontWeight:800,color:C.btc,letterSpacing:.6,whiteSpace:"nowrap",lineHeight:1.05}}>GLOBAL INVESTMENTS</span>
           <span style={{fontSize:9,fontWeight:700,color:C.btc,opacity:.8,fontFamily:"monospace",letterSpacing:.5}}>{APP_VERSION}</span>
         </div>
 
