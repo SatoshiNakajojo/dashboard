@@ -661,7 +661,7 @@ function applyPrices(prices, usdEur, effSrc){
 }
 
 // Date locale UTC+11 (Nouvelle-Calédonie)
-const APP_VERSION = "v1.09";
+const APP_VERSION = "v1.10";
 const CRYPTO_FULLNAMES = {BTC:"Bitcoin",ETH:"Ethereum",SOL:"Solana",BNB:"BNB",XRP:"XRP",ADA:"Cardano",DOGE:"Dogecoin",DOT:"Polkadot",AVAX:"Avalanche",LINK:"Chainlink",UNI:"Uniswap",LTC:"Litecoin",ATOM:"Cosmos",HYPE:"Hyperliquid",MATIC:"Polygon"};
 const NC_OFFSET_MS = 11 * 60 * 60 * 1000;
 const todayNC = () => {
@@ -4905,19 +4905,6 @@ function PageGDB({chartData,hidden,EFF,eur,liveGSB,liveGDBS,liveBench,liveGC,liv
           </div>
         );
       })()}
-            <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{display:"block",overflow:"visible"}}>
-              <defs><linearGradient id="totg" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor={col} stopOpacity="0.28"/>
-                <stop offset="100%" stopColor={col} stopOpacity="0"/>
-              </linearGradient></defs>
-              <polygon points={`${PL},${H-PB} ${line} ${X(vals.length-1)},${H-PB}`} fill="url(#totg)"/>
-              <polyline points={line} fill="none" stroke={col} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round"/>
-              <circle cx={X(vals.length-1)} cy={Y(vals[vals.length-1])} r="3.5" fill={col}/>
-              {ticks.map((ti,i)=>(<text key={i} x={X(ti)} y={H-6} textAnchor="middle" fill={C.text3} fontSize="8">{pts[ti].lbl}</text>))}
-            </svg>
-          </div>
-        );
-      })()}
 
       <SH label="Benchmark" color={C.gray}/>
       <div style={{display:"flex",gap:4,background:C.bg1,borderRadius:10,padding:3,marginBottom:8}}>
@@ -7313,12 +7300,7 @@ function App(){
 
   if(!ready)return(
     <div style={{background:C.bg,minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:0,fontFamily:"-apple-system,sans-serif"}}>
-      <style>{`
-        @keyframes cgiPulse{0%,100%{transform:scale(1);box-shadow:0 0 0 0 ${C.btc}55}50%{transform:scale(1.08);box-shadow:0 0 40px 8px ${C.btc}33}}
-        @keyframes cgiFadeUp{0%{opacity:0;transform:translateY(8px)}100%{opacity:1;transform:translateY(0)}}
-        @keyframes cgiBar{0%{transform:translateX(-100%)}100%{transform:translateX(220%)}}
-        @keyframes cgiGlow{0%,100%{opacity:.45}50%{opacity:1}}
-      `}</style>
+      <style>{"@keyframes cgiPulse{0%,100%{transform:scale(1);box-shadow:0 0 0 0 rgba(247,147,26,0.33)}50%{transform:scale(1.08);box-shadow:0 0 40px 8px rgba(247,147,26,0.2)}}@keyframes cgiFadeUp{0%{opacity:0;transform:translateY(8px)}100%{opacity:1;transform:translateY(0)}}@keyframes cgiBar{0%{transform:translateX(-100%)}100%{transform:translateX(220%)}}@keyframes cgiGlow{0%,100%{opacity:.45}50%{opacity:1}}"}</style>
       {/* Logo Bitcoin pulsant */}
       <div style={{width:96,height:96,borderRadius:"50%",background:`radial-gradient(circle at 35% 30%, ${C.btc}, #B8690A)`,
         display:"flex",alignItems:"center",justifyContent:"center",animation:"cgiPulse 1.8s ease-in-out infinite",marginBottom:28}}>
