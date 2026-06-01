@@ -661,7 +661,7 @@ function applyPrices(prices, usdEur, effSrc){
 }
 
 // Date locale UTC+11 (Nouvelle-Calédonie)
-const APP_VERSION = "v1.08";
+const APP_VERSION = "v1.09";
 const CRYPTO_FULLNAMES = {BTC:"Bitcoin",ETH:"Ethereum",SOL:"Solana",BNB:"BNB",XRP:"XRP",ADA:"Cardano",DOGE:"Dogecoin",DOT:"Polkadot",AVAX:"Avalanche",LINK:"Chainlink",UNI:"Uniswap",LTC:"Litecoin",ATOM:"Cosmos",HYPE:"Hyperliquid",MATIC:"Polygon"};
 const NC_OFFSET_MS = 11 * 60 * 60 * 1000;
 const todayNC = () => {
@@ -2385,10 +2385,18 @@ function GdbCompareChart({eur, setEur, EFF, tf, setTF, onSparkData, chartData, l
 
   // PORT_B100 étendu avec le point live
   // ── Portfolio : utilise _DD directement (col 2 = total hors immo €)
-  const dd_last = _DD[_DD.length-1]?.[0] || "2026-01-01";
+  const _ddFromTM = (()=>{
+    const MM=['01','02','03','04','05','06','07','08','09','10','11','12'];
+    const rows=[];
+    Object.keys(TOTAL_MONTHLY).sort().forEach(y=>{
+      (TOTAL_MONTHLY[y].eom||[]).forEach((v,i)=>{ if(typeof v==="number") rows.push([`${y}-${MM[i]}-15`, null, v, null, null, src.usdEur]); });
+    });
+    return rows.length ? rows : _DD;
+  })();
+  const dd_last = _ddFromTM[_ddFromTM.length-1]?.[0] || "2026-01-01";
   const dd_ext = today > dd_last
-    ? [..._DD, [today, null, portTodayEUR, null, null]]
-    : _DD.map(r=>r[0]===today ? [today, r[1], portTodayEUR, r[3], r[4]] : r);
+    ? [..._ddFromTM, [today, null, portTodayEUR, null, null, src.usdEur]]
+    : _ddFromTM.map(r=>r[0]===today ? [today, r[1], portTodayEUR, r[3], r[4], r[5]] : r);
 
   const gSlice = gdbs_ext.filter(r => r[0] >= cut && r[0] <= today);
   const ddSlice = dd_ext.filter(r => r[0] >= cut && r[0] <= today && r[2] != null);
@@ -4631,6 +4639,8 @@ function PageGDB({chartData,hidden,EFF,eur,liveGSB,liveGDBS,liveBench,liveGC,liv
 
   // v1.05 — Benchmarks marché en live
   const [benchLive, setBenchLive] = useState(null);
+  // v1.09 — sélecteur de période du graphe Performance totale
+  const [chartTF, setChartTF] = useState("ALL");
   useEffect(()=>{
     let alive=true;
     fetchBenchmarks().then(b=>{ if(alive) setBenchLive(b); }).catch(()=>{});
@@ -4808,38 +4818,65 @@ function PageGDB({chartData,hidden,EFF,eur,liveGSB,liveGDBS,liveBench,liveGC,liv
       </div>
 
       <SH label="Performance totale — Crypto + Actions" color={C.gray}/>
+      <div style={{display:"flex",gap:4,background:C.bg1,borderRadius:10,padding:3,marginBottom:8}}>
+        {[["1J","Jour"],["1S","Semaine"],["1M","Mois"],["1A","Année"],["ALL","Création"]].map(([k,lbl])=>(
+          <button key={k} onClick={()=>setChartTF(k)} style={{flex:1,padding:"6px 0",borderRadius:7,
+            fontSize:10.5,fontWeight:700,border:"none",cursor:"pointer",
+            background:chartTF===k?C.teal:"transparent",color:chartTF===k?"#001018":C.gray}}>{lbl}</button>
+        ))}
+      </div>
       {(()=>{
-        // v1.05 — courbe de valeur totale mensuelle (TOTAL_MONTHLY), crypto+stocks
+        // Données mensuelles (TOTAL_MONTHLY) — granularité mensuelle uniquement
         const TM = TOTAL_MONTHLY;
         const MM=['JAN','FEV','MAR','AVR','MAI','JUI','JUL','AOU','SEP','OCT','NOV','DEC'];
-        const pts=[];
+        const allPts=[];
         Object.keys(TM).sort().forEach(y=>{
-          (TM[y].eom||[]).forEach((v,i)=>{ if(typeof v==="number") pts.push({lbl:MM[i]+" "+y.slice(2), v, y, i}); });
+          (TM[y].eom||[]).forEach((v,i)=>{ if(typeof v==="number") allPts.push({lbl:MM[i]+" "+y.slice(2), v, pct:(TM[y].pct||[])[i]}); });
         });
-        if(pts.length<2) return <div style={{...crd(), color:C.gray, fontSize:12, textAlign:"center", padding:"24px"}}>Données insuffisantes</div>;
-        const conv = v => eur ? v : Math.round(v / usdEurNow); // données stockées en €
-        const vals = pts.map(p=>conv(p.v));
-        const W=340,H=150,PL=8,PR=8,PT=10,PB=22;
-        const min=Math.min(...vals), max=Math.max(...vals), rng=(max-min)||1;
-        const X=i=>PL+(i/(vals.length-1))*(W-PL-PR);
-        const Y=v=>PT+(1-(v-min)/rng)*(H-PT-PB);
-        const line=vals.map((v,i)=>`${X(i)},${Y(v)}`).join(" ");
-        const up = vals[vals.length-1]>=vals[0];
-        const col = up?C.green:C.red;
-        const cur = eur?"€":"$";
-        // Valeur totale = identique à HOME (somme buildSections, live, cash inclus)
+        if(allPts.length<2) return <div style={{...crd(), color:C.gray, fontSize:12, textAlign:"center", padding:"24px"}}>Données insuffisantes</div>;
+
+        // Fenêtre de courbe selon la période choisie
+        const sliceN = chartTF==="1A" ? 12 : (chartTF==="1M"||chartTF==="1S"||chartTF==="1J") ? 6 : allPts.length;
+        const pts = allPts.slice(Math.max(0, allPts.length - sliceN));
+
+        // Valeur totale = identique à HOME (live, cash inclus)
         const _secs = buildSections(src);
         const homeUSD = _secs.reduce((s,sec)=>s+(sec.totalUSD||0),0);
         const homeVal = eur ? Math.round(homeUSD*usdEurNow) : Math.round(homeUSD);
-        // Performance = P&L total / investi RÉEL (flux cumulés crypto+actions)
+        const cur = eur?"€":"$";
+
+        // Performance affichée selon la période
         const eurUsd3 = 1/(src.usdEur||0.92);
         const sumInvG = (OBJ) => { let t=0; Object.keys(OBJ).forEach(y=>{ (OBJ[y].inv||[]).forEach(v=>{ if(typeof v==="number") t+=v; }); }); return t; };
         const investedUSD = (sumInvG(CRYPTO_MONTHLY)+sumInvG(STOCKS_MONTHLY)) * eurUsd3;
         const stocksOnlyUSD = (src.stocks.items||[]).filter(x=>x.cat!=="Cash").reduce((s,x)=>s+(x.val||0),0);
         const fundsUSD = (src.crypto.total||0) + stocksOnlyUSD;
-        const pnlUSD = fundsUSD - investedUSD;
-        const totPerf = investedUSD>0 ? pnlUSD/investedUSD : null;
+        // perf live totale pondérée (jour/semaine/mois) à partir de perf24h
+        const cw = (perf24h.crypto||{}), sw = (perf24h.stocks||{});
+        const cVal=(src.crypto.total||0), sVal=stocksOnlyUSD, den=cVal+sVal;
+        const blend = key => den>0 && cw[key]!=null && sw[key]!=null ? (cVal*cw[key]+sVal*sw[key])/den : (cw[key]??sw[key]??null);
+        const compoundMonths = (n) => { // perf composée des n derniers mois (pct mensuels), exclut les flux
+          const arr=allPts.map(p=>p.pct).filter(v=>typeof v==="number");
+          const slice = n? arr.slice(Math.max(0,arr.length-n)) : arr;
+          if(!slice.length) return null; let c=1; slice.forEach(p=>c*=(1+p)); return c-1;
+        };
+        let perf=null, perfLbl="";
+        if(chartTF==="1J"){ perf=blend("d"); perfLbl="sur 24 h"; }
+        else if(chartTF==="1S"){ perf=blend("w"); perfLbl="sur 7 jours"; }
+        else if(chartTF==="1M"){ perf=(blend("m")!=null?blend("m"):compoundMonths(1)); perfLbl="sur 30 jours"; }
+        else if(chartTF==="1A"){ perf=compoundMonths(12); perfLbl="sur 1 an"; }
+        else { perf=investedUSD>0?(fundsUSD-investedUSD)/investedUSD:null; perfLbl="P&L / investi"; }
+
+        const conv = v => eur ? v : Math.round(v / usdEurNow);
+        const vals = pts.map(p=>conv(p.v));
+        const W=340,H=150,PL=8,PR=8,PT=10,PB=22;
+        const min=Math.min(...vals), max=Math.max(...vals), rng=(max-min)||1;
+        const X=i=>PL+(i/(vals.length-1||1))*(W-PL-PR);
+        const Y=v=>PT+(1-(v-min)/rng)*(H-PT-PB);
+        const line=vals.map((v,i)=>`${X(i)},${Y(v)}`).join(" ");
+        const col = (perf!=null?perf>=0:vals[vals.length-1]>=vals[0]) ? C.green : C.red;
         const ticks=[0, Math.floor(pts.length/3), Math.floor(2*pts.length/3), pts.length-1].filter((v,i,a)=>a.indexOf(v)===i);
+        const shortTF = (chartTF==="1J"||chartTF==="1S");
         return (
           <div style={crd()}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:8}}>
@@ -4848,10 +4885,26 @@ function PageGDB({chartData,hidden,EFF,eur,liveGSB,liveGDBS,liveBench,liveGC,liv
                 <div style={{fontSize:20,fontWeight:900,color:C.text}}>{cur}{fmtK(homeVal)}</div>
               </div>
               <div style={{textAlign:"right"}}>
-                <div style={{fontSize:8,color:C.gray,textTransform:"uppercase",letterSpacing:1}}>P&L latent</div>
-                <div style={{fontSize:15,fontWeight:800,color:totPerf!=null&&totPerf>=0?C.green:C.red}}>{totPerf!=null?fmtP(totPerf):"—"}</div>
+                <div style={{fontSize:8,color:C.gray,textTransform:"uppercase",letterSpacing:1}}>{perfLbl}</div>
+                <div style={{fontSize:15,fontWeight:800,color:perf!=null&&perf>=0?C.green:C.red}}>{perf!=null?fmtP(perf):"—"}</div>
               </div>
             </div>
+            <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{display:"block",overflow:"visible"}}>
+              <defs><linearGradient id="totg" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor={col} stopOpacity="0.28"/>
+                <stop offset="100%" stopColor={col} stopOpacity="0"/>
+              </linearGradient></defs>
+              <polygon points={`${PL},${H-PB} ${line} ${X(vals.length-1)},${H-PB}`} fill="url(#totg)"/>
+              <polyline points={line} fill="none" stroke={col} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round"/>
+              <circle cx={X(vals.length-1)} cy={Y(vals[vals.length-1])} r="3.5" fill={col}/>
+              {ticks.map((ti,i)=>(<text key={i} x={X(ti)} y={H-6} textAnchor="middle" fill={C.text3} fontSize="8">{pts[ti].lbl}</text>))}
+            </svg>
+            {shortTF && <div style={{fontSize:8,color:C.text3,textAlign:"center",marginTop:4}}>
+              Perf {chartTF==="1J"?"24 h":"7 j"} en direct · courbe en valeur mensuelle (historique suivi au mois)
+            </div>}
+          </div>
+        );
+      })()}
             <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{display:"block",overflow:"visible"}}>
               <defs><linearGradient id="totg" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="0%" stopColor={col} stopOpacity="0.28"/>
@@ -6515,14 +6568,15 @@ function App(){
     finally{ setRefreshing(false); }
   },[]);
 
-  // v1.02 — rafraîchissement automatique des cours au premier chargement
+  // v1.09 — rafraîchissement automatique des cours dès l'entrée dans l'app
   const didAutoRefresh = useRef(false);
   useEffect(()=>{
     if(didAutoRefresh.current) return;
+    if(startScreen || !ready) return;            // attendre l'entrée réelle dans l'app
     didAutoRefresh.current = true;
-    const t = setTimeout(()=>{ handleRefresh(); }, 600);
+    const t = setTimeout(()=>{ handleRefresh(); }, 400);
     return ()=>clearTimeout(t);
-  },[handleRefresh]);
+  },[startScreen, ready, handleRefresh]);
 
   const EFF = live || CURRENT;
 
@@ -7258,10 +7312,30 @@ function App(){
   },[txns]);
 
   if(!ready)return(
-    <div style={{background:C.bg,minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:12}}>
-      <div style={{fontSize:40}}>₿</div>
-      <div style={{color:C.btc,fontWeight:800,fontSize:18}}>CREUSOT GLOBAL INVESTMENTS</div>
-      <div style={{color:C.gray,fontSize:12}}>Chargement...</div>
+    <div style={{background:C.bg,minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:0,fontFamily:"-apple-system,sans-serif"}}>
+      <style>{`
+        @keyframes cgiPulse{0%,100%{transform:scale(1);box-shadow:0 0 0 0 ${C.btc}55}50%{transform:scale(1.08);box-shadow:0 0 40px 8px ${C.btc}33}}
+        @keyframes cgiFadeUp{0%{opacity:0;transform:translateY(8px)}100%{opacity:1;transform:translateY(0)}}
+        @keyframes cgiBar{0%{transform:translateX(-100%)}100%{transform:translateX(220%)}}
+        @keyframes cgiGlow{0%,100%{opacity:.45}50%{opacity:1}}
+      `}</style>
+      {/* Logo Bitcoin pulsant */}
+      <div style={{width:96,height:96,borderRadius:"50%",background:`radial-gradient(circle at 35% 30%, ${C.btc}, #B8690A)`,
+        display:"flex",alignItems:"center",justifyContent:"center",animation:"cgiPulse 1.8s ease-in-out infinite",marginBottom:28}}>
+        <span style={{fontSize:54,fontWeight:900,color:"#fff",lineHeight:1}}>₿</span>
+      </div>
+      {/* Titre */}
+      <div style={{animation:"cgiFadeUp .6s ease-out both",textAlign:"center"}}>
+        <div style={{fontSize:22,fontWeight:900,color:C.btc,letterSpacing:3,lineHeight:1.1}}>CREUSOT</div>
+        <div style={{fontSize:15,fontWeight:800,color:C.btc,letterSpacing:2,lineHeight:1.4,opacity:.9}}>GLOBAL INVESTMENTS</div>
+      </div>
+      {/* Barre de chargement */}
+      <div style={{width:140,height:3,background:C.bg3,borderRadius:2,overflow:"hidden",marginTop:30,position:"relative"}}>
+        <div style={{position:"absolute",left:0,top:0,height:"100%",width:"45%",borderRadius:2,
+          background:`linear-gradient(90deg,transparent,${C.btc},transparent)`,animation:"cgiBar 1.2s ease-in-out infinite"}}/>
+      </div>
+      <div style={{color:C.gray,fontSize:10,letterSpacing:2,marginTop:14,animation:"cgiGlow 1.6s ease-in-out infinite"}}>CHARGEMENT…</div>
+      <div style={{position:"absolute",bottom:24,fontSize:9,color:C.text3,fontFamily:"monospace"}}>{APP_VERSION}</div>
     </div>
   );
 
