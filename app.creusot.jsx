@@ -661,7 +661,7 @@ function applyPrices(prices, usdEur, effSrc){
 }
 
 // Date locale UTC+11 (Nouvelle-Calédonie)
-const APP_VERSION = "v1.10";
+const APP_VERSION = "v1.11";
 const CRYPTO_FULLNAMES = {BTC:"Bitcoin",ETH:"Ethereum",SOL:"Solana",BNB:"BNB",XRP:"XRP",ADA:"Cardano",DOGE:"Dogecoin",DOT:"Polkadot",AVAX:"Avalanche",LINK:"Chainlink",UNI:"Uniswap",LTC:"Litecoin",ATOM:"Cosmos",HYPE:"Hyperliquid",MATIC:"Polygon"};
 const NC_OFFSET_MS = 11 * 60 * 60 * 1000;
 const todayNC = () => {
@@ -5571,88 +5571,114 @@ function SnapshotModal({onSave, onClose, EFF}){
   /* Dérivation automatique de toutes les colonnes Chart */
   const derive = (s) => {
     const usdEur = s.usdEur;
+    const eurUsd2 = 1 / usdEur;
+
+    // ── Valeurs du portefeuille (live, depuis EFF) ──────────────────
     const cryptoEUR  = Math.round(s.crypto.total * usdEur);
-    const actionsEUR = Math.round(s.stocks.items.filter(x=>x.cat!=="Cash Matelas").reduce((sum,x)=>sum+(x.val||0),0) * usdEur);
-    const stableEUR  = Math.round((s.stocks.items.filter(x=>x.cat==="Cash").reduce((sum,x)=>sum+(x.val||0),0)) * usdEur);
+    // Actions : exclure le Cash Dip (cat="Cash") — uniquement les vrais titres
+    const actionsEUR = Math.round(
+      s.stocks.items.filter(x=>x.cat!=="Cash" && x.cat!=="Cash Matelas")
+        .reduce((sum,x)=>sum+(x.val||0),0) * usdEur
+    );
+    const cashDipEUR = Math.round(
+      s.stocks.items.filter(x=>x.cat==="Cash")
+        .reduce((sum,x)=>sum+(x.val||0),0) * usdEur
+    );
     const banqueEUR  = s.bank.totalEUR;
-    const immoEUR    = 167000;  // fixe — bien immobilier
-    const totalHorsImmo = cryptoEUR + actionsEUR + banqueEUR; // total portefeuille hors immo
-    const totalEUR   = totalHorsImmo; // c'est ce qu'on inscrit dans DD col "Total EUR"
-    const btcItem    = s.crypto.items[0];
-    const btcPrice   = btcItem.live;
 
-    // P&L réel = valeur portefeuille crypto € - capital investi converti en €
-    const investiEUR = Math.round(94064 * usdEur);  // col E en €
-    const pnlReel    = cryptoEUR - investiEUR;
+    // ── Investi réel (flux cumulés saisis dans l'Excel) ────────────
+    const sumFlux = (OBJ) => {
+      let t=0;
+      Object.keys(OBJ).forEach(y=>{
+        (OBJ[y].inv||[]).forEach(v=>{ if(typeof v==="number") t+=v; });
+      });
+      return t;
+    };
+    const investiCryptoEUR = sumFlux(CRYPTO_MONTHLY);   // €
+    const investiStocksEUR = sumFlux(STOCKS_MONTHLY);   // €
+    const investiTotalEUR  = investiCryptoEUR + investiStocksEUR;
 
-    // GDB.S cours en €/$ (depuis CURRENT hardcoded si pas live)
-    const gdbsEUR = (src.gdbS||CURRENT.gdbS) * usdEur;
-    const gdbsUSD = src.gdbS||CURRENT.gdbS;
-    const gdbcUSD = src.gdbC||CURRENT.gdbC;
+    // ── P&L ────────────────────────────────────────────────────────
+    // Crypto : valeur live – investi réel
+    const pnlCryptoEUR  = cryptoEUR  - investiCryptoEUR;
+    // Actions (hors cash) : valeur live – investi réel
+    const pnlActionsEUR = actionsEUR - investiStocksEUR;
+    const pnlTotalEUR   = pnlCryptoEUR + pnlActionsEUR;
 
-    // Stocks prices
-    const sp500  = s.stocks.items.find(x=>x.t==="QQQ")?.live || 663.88;
-    const nasdaq = s.stocks.items.find(x=>x.t==="QQQ")?.live || 663.88; // proxy
-    const msci   = s.stocks.items.find(x=>x.t==="URTH")?.live || 199.92;
-    // ETH : priorité au prix live fetchés, stockés dans EFF comme résultat du dernier refresh
-    const ethPrice = src._ethLive || src._lastETH || null;
+    // ── Total portefeuille (sans immo — non applicable) ────────────
+    const totalEUR      = cryptoEUR + actionsEUR + cashDipEUR + banqueEUR;
+    const totalHorsImmo = totalEUR; // pas d'immo
 
-    // % allocations
-    const pctCrypto  = totalEUR > 0 ? cryptoEUR / totalEUR : 0;
-    const pctStable  = totalEUR > 0 ? stableEUR / totalEUR : 0;
-    const pctBanque  = totalEUR > 0 ? banqueEUR / totalEUR : 0;
-    const pctImmo    = 0; // immo non inclus dans le total portefeuille
-    const pctActions = totalEUR > 0 ? actionsEUR / totalEUR : 0;
+    // ── Prix live des actifs crypto détenus ────────────────────────
+    const btcItem  = s.crypto.items.find(x=>x.t==="BTC");
+    const ethItem  = s.crypto.items.find(x=>x.t==="ETH");
+    const btcPrice = btcItem?.live || null;
+    const ethPrice = ethItem?.live || s._ethLive || null;
+
+    // ── Indices ────────────────────────────────────────────────────
+    const sp500  = s.stocks.items.find(x=>x.t==="QQQ")?.live   || null;
+    const nasdaq = sp500; // proxy
+    const msci   = s.stocks.items.find(x=>x.t==="URTH")?.live  || null;
+
+    // ── Cours indices internes (CGIC / CGIS) ──────────────────────
+    const gdbcUSD = s.gdbC || CURRENT.gdbC;
+    const gdbsUSD = s.gdbS || CURRENT.gdbS;
+    const gdbsEUR = gdbsUSD * usdEur;
+
+    // ── % allocations (base = totalEUR) ───────────────────────────
+    const pct = (v) => totalEUR > 0 ? +(v/totalEUR).toFixed(4) : 0;
 
     return {
-      // Core
-      date:     today(),
-      // Col C-K
-      wallet_crypto: cryptoEUR,
-      pnl:          pnlReel,
-      investi:      94064,
-      cours_usd_eur: parseFloat(usdEur.toFixed(6)),
-      crypto_eur:   cryptoEUR,
-      stable_eur:   stableEUR,
-      banque_eur:   banqueEUR,
-      immo_eur:     immoEUR,
-      total_eur:    totalEUR,
-      // Col L-O
-      pct_crypto:   pctCrypto,
-      pct_stable:   pctStable,
-      pct_banque:   pctBanque,
-      pct_immo:     pctImmo,
-      // Col P-R (GDB.S)
-      nb_actions_gdbs: CURRENT.gdbS ? Math.round(CURRENT.totalUSD / CURRENT.gdbS) : 0,
-      cours_gdbs_usd: gdbsUSD,
-      var_gdbs:     0,
-      // Col S-Y (cryptos individuelles)
-      eth:  ethPrice,
-      pct_eth: 0,
-      sol:  86.15,
-      doge: 0.098196,
-      btc:  btcPrice,
-      pct_btc: 0,
-      tao:  247.48,
-      // Col Z-AE (indices)
-      sp500:    sp500,
-      pct_sp500:   0,
-      nasdaq:   nasdaq,
-      pct_nasdaq:  0,
-      msci:     msci,
-      pct_msci: 0,
-      // Col AF-AN (GDB.C / GDB.S détail)
-      gdbc_usd:     gdbcUSD,
-      var_gdbc:     0,
-      total_actions_eur: actionsEUR,
-      pct_actions:  pctActions,
-      investi_gdbs_eur: CURRENT.gdbS * CURRENT.stocks.items.filter(x=>x.cat!=="Cash").length * 1000,
-      nb_actions_gdbs2: 11942,
-      gdbs_eur:     gdbsEUR,
-      gdbs_usd:     gdbsUSD,
-      var_gdbs2:    0,
-      // Col AO
+      date:           today(),
+      // Core portfolio
+      wallet_crypto:  cryptoEUR,
+      pnl:            pnlTotalEUR,          // P&L TOTAL crypto+actions
+      investi:        investiTotalEUR,       // investi réel total (€)
+      investi_crypto: investiCryptoEUR,     // investi crypto (€)
+      investi_stocks: investiStocksEUR,     // investi actions (€)
+      cours_usd_eur:  parseFloat(usdEur.toFixed(6)),
+      crypto_eur:     cryptoEUR,
+      stable_eur:     cashDipEUR,           // Cash Dip (IBKR + KuCoin)
+      banque_eur:     banqueEUR,            // Cash Matelas
+      immo_eur:       0,                    // pas d'immo
+      total_eur:      totalEUR,
       total_hors_immo: totalHorsImmo,
+      // % allocations
+      pct_crypto:     pct(cryptoEUR),
+      pct_stable:     pct(cashDipEUR),
+      pct_banque:     pct(banqueEUR),
+      pct_actions:    pct(actionsEUR),
+      pct_immo:       0,
+      // Prix actifs crypto détenus
+      btc:   btcPrice,
+      eth:   ethPrice,
+      sol:   null,       // pas dans ce portefeuille
+      doge:  null,
+      tao:   null,
+      // Indices
+      sp500:  sp500,
+      nasdaq: nasdaq,
+      msci:   msci,
+      // Indices internes CGIC / CGIS
+      gdbc_usd:  gdbcUSD,
+      gdbs_usd:  gdbsUSD,
+      gdbs_eur:  gdbsEUR,
+      // Actions
+      total_actions_eur: actionsEUR,
+      // Snapshots compat fields (GDB legacy)
+      w:    cryptoEUR,
+      t:    totalEUR,
+      b:    btcPrice,
+      gs:   gdbsUSD,
+      gc:   gdbcUSD,
+      ao:   totalHorsImmo,
+      act:  actionsEUR,
+      nb_actions_gdbs: 0,
+      nb_actions_gdbs2: 0,
+      var_gdbs: 0, var_gdbc: 0, var_gdbs2: 0,
+      cours_gdbs_usd: gdbsUSD,
+      investi_gdbs_eur: 0,
+      pct_eth: 0, pct_btc: 0, pct_sp500: 0, pct_nasdaq: 0, pct_msci: 0,
     };
   };
 
@@ -5700,7 +5726,11 @@ function SnapshotModal({onSave, onClose, EFF}){
       // ── Détail complet du portfolio au moment du snapshot ──────────────
       _portfolio: {
         date: dateInput,
-        totalUSD: Math.round(src.crypto.items.reduce((s,x)=>s+x.val,0) + src.stocks.items.reduce((s,x)=>s+x.val,0) + Math.round(src.bank.totalEUR*(src.eurUsd||1.173))),
+        totalUSD: Math.round(
+          src.crypto.items.reduce((s,x)=>s+(x.val||0),0)
+          + src.stocks.items.filter(x=>x.cat!=="Cash Matelas").reduce((s,x)=>s+(x.val||0),0)
+          + Math.round(src.bank.totalEUR*(src.eurUsd||1/src.usdEur))
+        ),
         totalEUR: src.totalEUR,
         usdEur: preview.cours_usd_eur || src.usdEur,
         crypto: {
@@ -5841,20 +5871,20 @@ function SnapshotModal({onSave, onClose, EFF}){
             </div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:4}}>
               {[
-                ["Wallet Crypto", "€"+Math.round(preview.wallet_crypto).toLocaleString("fr-FR"), C.btc],
-                ["Total €",       "€"+Math.round(preview.total_eur).toLocaleString("fr-FR"), C.blue],
-                ["Total hors immo","€"+Math.round(preview.total_hors_immo).toLocaleString("fr-FR"), C.blue],
-                ["BTC",           "$"+Math.round(preview.btc).toLocaleString("fr-FR"), C.gold],
                 ["Crypto €",      "€"+Math.round(preview.crypto_eur).toLocaleString("fr-FR"), C.btc],
                 ["Actions €",     "€"+Math.round(preview.total_actions_eur).toLocaleString("fr-FR"), C.blue],
-                ["Banque €",      "€"+Math.round(preview.banque_eur).toLocaleString("fr-FR"), C.green],
-                ["Immo €",        "€"+Math.round(preview.immo_eur).toLocaleString("fr-FR"), C.gray],
-                ["CGIC $",       "$"+preview.gdbc_usd.toFixed(2), C.orange],
-                ["CGIS $",       "$"+preview.gdbs_usd.toFixed(2), C.blue],
+                ["Cash Dip €",    "€"+Math.round(preview.stable_eur).toLocaleString("fr-FR"), C.green],
+                ["Banque €",      "€"+Math.round(preview.banque_eur).toLocaleString("fr-FR"), C.gray],
+                ["Total €",       "€"+Math.round(preview.total_eur).toLocaleString("fr-FR"), C.blue],
+                ["BTC $",         preview.btc?"$"+Math.round(preview.btc).toLocaleString("fr-FR"):"—", C.gold],
+                ["ETH $",         preview.eth?"$"+preview.eth.toFixed(2):"—", C.blue],
+                ["CGIC $",        "$"+(preview.gdbc_usd||0).toFixed(2), C.orange],
+                ["CGIS $",        "$"+(preview.gdbs_usd||0).toFixed(2), C.blue],
                 ["$/€",           preview.cours_usd_eur.toFixed(4), C.gray],
+                ["Investi réel €","€"+Math.round(preview.investi).toLocaleString("fr-FR"), C.gray],
                 ["% Crypto",      (preview.pct_crypto*100).toFixed(1)+"%", C.btc],
                 ["% Actions",     (preview.pct_actions*100).toFixed(1)+"%", C.blue],
-                ["P&L auto",      (preview.pnl>=0?"+":"")+Math.round(preview.pnl).toLocaleString("fr-FR")+"€", preview.pnl>=0?C.green:C.red],
+                ["P&L total €",   (preview.pnl>=0?"+":"")+Math.round(preview.pnl).toLocaleString("fr-FR")+"€", preview.pnl>=0?C.green:C.red],
               ].map(([l,v,c],i)=>(
                 <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"3px 0",borderBottom:`1px solid ${C.border}`}}>
                   <span style={{fontSize:9,color:C.gray}}>{l}</span>
