@@ -109,7 +109,12 @@ function cumulFundParts(invArr){
       else if(m.fonds === "CGIC") C += m.shares;
     }
   });
-  return { S: Math.round(S*1e6)/1e6, C: Math.round(C*1e6)/1e6 };
+  // v1.0 CGI — si aucune transaction de parts trouvée, garder les valeurs calibrées du seed
+  // (John est seul investisseur, pas de transactions de parts enregistrées)
+  return {
+    S: S > 0 ? Math.round(S*1e6)/1e6 : FUND_PARTS.S,
+    C: C > 0 ? Math.round(C*1e6)/1e6 : FUND_PARTS.C,
+  };
 }
 function calcGdbPrices(src){
   // v23.21 — KuCoin appartient au fonds CGIC (et non CGIS). Un transfert
@@ -120,10 +125,13 @@ function calcGdbPrices(src){
   const gdbSfondsUSD = src.stocks.items
     .filter(x=>x.t!=="KUCOIN")
     .reduce((s,x)=>s+x.val, 0);
-  const gdbS = parseFloat((gdbSfondsUSD / FUND_PARTS.S).toFixed(4));
+  // v1.0 CGI — protection contre division par zéro (pas de transactions de parts)
+  const safeS = FUND_PARTS.S > 0 ? FUND_PARTS.S : 1;
+  const safeC = FUND_PARTS.C > 0 ? FUND_PARTS.C : 1;
+  const gdbS = parseFloat((gdbSfondsUSD / safeS).toFixed(4));
   // GDB.C = crypto + KuCoin
   const gdbCfondsUSD = src.crypto.total + kucoinUSD;
-  const gdbC = parseFloat((gdbCfondsUSD / FUND_PARTS.C).toFixed(4));
+  const gdbC = parseFloat((gdbCfondsUSD / safeC).toFixed(4));
   return {gdbS, gdbC, gdbSfondsUSD, gdbCfondsUSD};
 }
 
