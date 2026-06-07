@@ -696,7 +696,7 @@ function applyPrices(prices, usdEur, effSrc){
 }
 
 // Date locale UTC+11 (Nouvelle-Calédonie)
-const APP_VERSION = "v2.08";
+const APP_VERSION = "v3.02";
 const NC_OFFSET_MS = 11 * 60 * 60 * 1000;
 const todayNC = () => {
   const nc = new Date(Date.now() + NC_OFFSET_MS);
@@ -6620,18 +6620,57 @@ function PageWatchlist({ EFF, hidden }){
     setExpanded(function(p){var n={...p};n[id]=!n[id];return n;});
   }
 
-  // ── News ──────────────────────────────────────────────────────────────────
+  // ── Analyse IA : une news valide-t-elle des conditions ? ─────────────────
+  async function analyzeNewsConditions(ticker, newsItems, conditions){
+    var conds=conditions.filter(function(c){return c.text&&c.text.trim();});
+    if(!conds.length||!newsItems.length) return {};
+    var newsLetters="ABCDEFGHIJ";
+    var newsLines=newsItems.map(function(n,i){return "["+newsLetters[i]+"] "+n.title;}).join("\n");
+    var condLines=conds.map(function(c,i){return (i+1)+". "+c.text;}).join("\n");
+    var prompt="Tu es un analyste financier expert. Ticker: "+ticker+"\n\n"+
+      "Conditions d'investissement à valider:\n"+condLines+"\n\n"+
+      "News récentes:\n"+newsLines+"\n\n"+
+      "Pour chaque news [A],[B],[C]... indique quelles conditions (numéros 1,2,3...) elle valide ou supporte directement.\n"+
+      "RÉPONDS UNIQUEMENT en JSON compact, ex: {\"A\":[1,3],\"B\":[],\"C\":[2]}";
+    try{
+      var resp=await fetch("https://api.anthropic.com/v1/messages",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({
+          model:"claude-sonnet-4-20250514",
+          max_tokens:300,
+          messages:[{role:"user",content:prompt}]
+        })
+      });
+      var d=await resp.json();
+      var text=(d.content&&d.content[0]&&d.content[0].text)||"{}";
+      var clean=text.replace(/```json|```/g,"").trim();
+      var result=JSON.parse(clean);
+      // Mapper lettre → condition IDs
+      var out={};
+      newsItems.forEach(function(n,i){
+        var letter=newsLetters[i];
+        var condNums=result[letter]||[];
+        out[i]=condNums.map(function(num){return conds[num-1]&&conds[num-1].id;}).filter(Boolean);
+      });
+      return out; // { newsIndex → [conditionId, ...] }
+    }catch(e){
+      console.warn("[watchlist] AI analysis failed:",e.message);
+      return {};
+    }
+  }
+
+  // ── Fetch news + analyse IA des conditions ────────────────────────────────
   function fetchNews(){
     setNewsLoading(true); setNewsPanel(true);
-    // Tickers: portfolio + watchlist favs + watchlist all (max 8)
     var portTickers=[];
     var src=EFF||{};
     if(src.stocks&&src.stocks.items) portTickers=src.stocks.items.filter(function(x){return x.cat!=="Cash"&&x.cat!=="Cash Matelas";}).map(function(x){return x.t;});
     if(src.crypto&&src.crypto.items) portTickers=portTickers.concat(src.crypto.items.map(function(x){return x.t;}));
-    // Watchlist favs first, then others
     var wlFavs=list.filter(function(e){return e.fav;}).map(function(e){return e.ticker;});
     var wlAll=list.map(function(e){return e.ticker;});
     var allTickers=[...new Set([...wlFavs,...portTickers,...wlAll])].slice(0,10);
+
     Promise.all(allTickers.map(function(t){
       var sym=YF_MAP[t]||t;
       return fetch(CF_WORKER_URL+"/yahoo-chart?symbol="+encodeURIComponent(sym)+"&interval=1d&range=5d&no_logo=1",{
@@ -6639,19 +6678,73 @@ function PageWatchlist({ EFF, hidden }){
       }).then(function(r){return r.json();})
         .then(function(d){return{ticker:t,news:(d.news||[]).slice(0,5)};})
         .catch(function(){return{ticker:t,news:[]};});
-    })).then(function(results){
-      // Flatten + sort by time, attach ticker + score info
+    })).then(async function(results){
+      // ── Analyse IA pour les tickers favoris avec des conditions ────────────
+      var updatedList=[...list];
+      var analysisMap={}; // ticker → { newsIndex → [condIds] }
+
+      var favResults=results.filter(function(r){
+        var e=list.find(function(x){return x.ticker===r.ticker&&x.fav;});
+        return e&&(e.conditions||[]).some(function(c){return c.text;})&&r.news.length>0;
+      });
+
+      await Promise.all(favResults.map(async function(r){
+        var entry=list.find(function(x){return x.ticker===r.ticker;});
+        if(!entry) return;
+        var aiResult=await analyzeNewsConditions(r.ticker,r.news,entry.conditions||[]);
+        analysisMap[r.ticker]=aiResult;
+        // Auto-valider les conditions détectées
+        var conditionsUpdated=false;
+        var newConds=(entry.conditions||[]).map(function(c){
+          var wasValidated=Object.values(aiResult).some(function(condIds){return condIds.indexOf(c.id)>=0;});
+          if(wasValidated&&!c.validated){
+            conditionsUpdated=true;
+            // Trouver la news source
+            var sourceIdx=Object.keys(aiResult).find(function(k){return (aiResult[k]||[]).indexOf(c.id)>=0;});
+            var sourceNews=sourceIdx!=null?r.news[parseInt(sourceIdx)]:null;
+            return {...c,validated:true,autoValidated:true,
+              validatedBy:sourceNews?{title:sourceNews.title,url:sourceNews.url,time:sourceNews.time}:null};
+          }
+          return c;
+        });
+        if(conditionsUpdated){
+          var newScore=newConds.filter(function(c){return c.validated;}).length;
+          updatedList=updatedList.map(function(x){
+            return x.id===entry.id?{...x,conditions:newConds,score:newScore}:x;
+          });
+        }
+      }));
+
+      // Persister si des conditions ont été auto-validées
+      if(updatedList!==list){
+        persist(updatedList);
+      }
+
+      // ── Construire la liste de news enrichie ───────────────────────────────
       var flat=[];
       results.forEach(function(r){
-        var isFav=list.some(function(e){return e.ticker===r.ticker&&e.fav;});
-        var score=0; var entry=list.find(function(e){return e.ticker===r.ticker;});
-        if(entry) score=getScore(entry);
-        r.news.forEach(function(n){flat.push({...n,ticker:r.ticker,isFav:isFav,score:score});});
+        var entry=list.find(function(e){return e.ticker===r.ticker;});
+        var isFav=!!(entry&&entry.fav);
+        var score=entry?getScore(entry):0;
+        var tickerAnalysis=analysisMap[r.ticker]||{};
+        r.news.forEach(function(n,ni){
+          var validatedCondIds=tickerAnalysis[ni]||[];
+          var validatedTexts=[];
+          if(entry&&validatedCondIds.length){
+            validatedTexts=(entry.conditions||[])
+              .filter(function(c){return validatedCondIds.indexOf(c.id)>=0;})
+              .map(function(c){return c.text;});
+          }
+          flat.push({...n,ticker:r.ticker,isFav:isFav,score:score,
+            validatedConditions:validatedTexts,hasAiValidation:validatedTexts.length>0});
+        });
       });
+
       flat.sort(function(a,b){
-        // Priorité: score favori desc, puis date desc
         var favDiff=(b.isFav?1:0)-(a.isFav?1:0);
         if(favDiff!==0) return favDiff;
+        var aiDiff=(b.hasAiValidation?1:0)-(a.hasAiValidation?1:0);
+        if(aiDiff!==0) return aiDiff;
         var sdiff=b.score-a.score;
         if(sdiff!==0) return sdiff;
         return (b.time||0)-(a.time||0);
@@ -6840,12 +6933,23 @@ function PageWatchlist({ EFF, hidden }){
                 React.createElement("div",{style:{fontSize:10,color:grayC,marginBottom:4,fontWeight:600}},"CATALYSEURS "+score+"/"+condTotal+" validés"),
                 React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:3}},
                   (e.conditions||[]).filter(function(c){return c.text;}).map(function(c){
-                    return React.createElement("div",{key:c.id,
-                      onClick:function(){toggleCondition(e.id,c.id);},
-                      style:{display:"flex",alignItems:"flex-start",gap:6,cursor:"pointer",padding:"3px 6px",borderRadius:6,
-                        background:c.validated?greenC+"15":C.bg,border:"1px solid "+(c.validated?greenC+"44":borderC)}},
-                      React.createElement("span",{style:{fontSize:12,color:c.validated?greenC:grayC,flexShrink:0,marginTop:1}},c.validated?"✓":"○"),
-                      React.createElement("span",{style:{fontSize:11,color:c.validated?textC:grayC,lineHeight:1.4}},c.text)
+                    return React.createElement("div",{key:c.id,style:{borderRadius:6,overflow:"hidden"}},
+                      React.createElement("div",{
+                        onClick:function(){toggleCondition(e.id,c.id);},
+                        style:{display:"flex",alignItems:"flex-start",gap:6,cursor:"pointer",padding:"3px 6px",
+                          background:c.validated?greenC+"15":C.bg,border:"1px solid "+(c.validated?greenC+"44":borderC)}},
+                        React.createElement("span",{style:{fontSize:12,color:c.validated?greenC:grayC,flexShrink:0,marginTop:1}},c.validated?"✓":"○"),
+                        React.createElement("span",{style:{fontSize:11,color:c.validated?textC:grayC,lineHeight:1.4,flex:1}},c.text),
+                        c.autoValidated&&React.createElement("span",{style:{fontSize:9,color:greenC,flexShrink:0,marginTop:2,fontWeight:700}},"🤖")
+                      ),
+                      c.autoValidated&&c.validatedBy&&React.createElement("a",{
+                        href:c.validatedBy.url,target:"_blank",rel:"noopener",
+                        onClick:function(ev){ev.stopPropagation();},
+                        style:{display:"block",fontSize:9,color:blueC,padding:"2px 6px 3px 24px",
+                          background:greenC+"08",borderTop:"1px solid "+greenC+"22",
+                          textDecoration:"none",lineHeight:1.3,overflow:"hidden",
+                          textOverflow:"ellipsis",whiteSpace:"nowrap"}
+                      },"↗ "+c.validatedBy.title)
                     );
                   })
                 )
@@ -6886,23 +6990,32 @@ function PageWatchlist({ EFF, hidden }){
           React.createElement("button",{onClick:function(){setNewsPanel(false);},style:{background:"none",border:"none",color:grayC,fontSize:20,cursor:"pointer"}},"×")
         ),
         React.createElement("div",{style:{overflowY:"auto",flex:1,padding:"0 12px 16px"}},
-          newsLoading?React.createElement("div",{style:{textAlign:"center",padding:40,color:grayC}},"Chargement des news...")
+          newsLoading?React.createElement("div",{style:{textAlign:"center",padding:40,color:grayC}},
+            React.createElement("div",{style:{marginBottom:8,fontSize:14}},"⟳ Chargement..."),
+            React.createElement("div",{style:{fontSize:11,color:grayC}},"Analyse IA des conditions en cours 🤖"))
           :news.length===0?React.createElement("div",{style:{textAlign:"center",padding:40,color:grayC}},"Aucune news trouvée.")
           :news.map(function(n,i){
             var timeStr=n.time?new Date(n.time).toLocaleDateString("fr-FR",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}):"";
             return React.createElement("a",{key:i,href:n.url,target:"_blank",rel:"noopener",style:{display:"block",textDecoration:"none",marginBottom:8}},
-              React.createElement("div",{style:{background:cardBg,border:"1px solid "+borderC,borderRadius:10,padding:"10px 12px"}},
-                React.createElement("div",{style:{display:"flex",alignItems:"center",gap:6,marginBottom:4}},
+              React.createElement("div",{style:{background:n.hasAiValidation?blueC+"12":cardBg,border:"1px solid "+(n.hasAiValidation?blueC+"55":borderC),borderRadius:10,padding:"10px 12px"}},
+                React.createElement("div",{style:{display:"flex",alignItems:"center",gap:6,marginBottom:4,flexWrap:"wrap"}},
                   React.createElement("span",{style:{fontSize:9,background:n.isFav?orangeC+"22":blueC+"22",border:"1px solid "+(n.isFav?orangeC:blueC)+"44",borderRadius:4,padding:"1px 6px",color:n.isFav?orangeC:blueC,fontWeight:700}},
                     (n.isFav?"★ ":"")+n.ticker+(n.score>0?" 🔥".repeat(Math.min(n.score,3)):"")),
+                  n.hasAiValidation&&React.createElement("span",{style:{fontSize:9,background:greenC+"22",border:"1px solid "+greenC+"44",borderRadius:4,padding:"1px 6px",color:greenC,fontWeight:700}},"🤖 IA"),
                   React.createElement("span",{style:{fontSize:9,color:grayC}},n.publisher),
                   React.createElement("span",{style:{fontSize:9,color:grayC,marginLeft:"auto"}},timeStr)
                 ),
-                React.createElement("div",{style:{fontSize:12,color:textC,lineHeight:1.4}},n.title)
+                React.createElement("div",{style:{fontSize:12,color:textC,lineHeight:1.4,marginBottom:(n.validatedConditions&&n.validatedConditions.length)?6:0}},n.title),
+                (n.validatedConditions&&n.validatedConditions.length>0)&&React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:2}},
+                  (n.validatedConditions||[]).map(function(ct,ci){
+                    return React.createElement("div",{key:ci,style:{fontSize:10,color:greenC,display:"flex",alignItems:"flex-start",gap:4}},
+                      React.createElement("span",{style:{flexShrink:0}},"✓"),
+                      React.createElement("span",{style:{fontStyle:"italic",lineHeight:1.3}},ct));
+                  })
+                )
               )
             );
           })
-        )
       )
     ),
 
@@ -7004,8 +7117,9 @@ function PageWatchlist({ EFF, hidden }){
           modal==="add"?"Ajouter à la watchlist":"Enregistrer")
       )
     )
-  );
+  ));
 }
+
 // ── FIN PageWatchlist v2 ──────────────────────────────────────────────────────
 
 
