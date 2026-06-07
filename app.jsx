@@ -6145,8 +6145,8 @@ function SnapshotModal({onSave, onClose, EFF}){
 /* ═══════════════════════════════════════════════════════════
    ROOT APP
 ═══════════════════════════════════════════════════════════ */
-const TABS=["Home","Portfolio","Stats","CGI","Data","Legend"];
-const ICONS=["◎","◑","▲","◈","⬡","♛"];
+const TABS=["Home","Portfolio","Stats","CGI","Data","Legend","Suivi"];
+const ICONS=["◎","◑","▲","◈","⬡","♛","◉"];
 
 /* ── Global API keys (from Power Query in Excel) ── */
 
@@ -6519,6 +6519,310 @@ function TradeDetailModal({trade, kind, onClose, liveIbkrAnnex}){
     </div>
   );
 }
+// ══════════════════════════════════════════════════════════════════════════════
+// PAGE WATCHLIST — CGI v2.07
+// Liste de suivi : tickers + thèses + alertes + prix live
+// Stocké dans cgi_watchlist (KV + localStorage)
+// ══════════════════════════════════════════════════════════════════════════════
+
+function PageWatchlist({ EFF, hidden }){
+  // C est accessible globalement dans le module
+  const[list, setList]         = useState([]);
+  const[prices, setPrices]     = useState({});
+  const[loading, setLoading]   = useState(false);
+  const[modal, setModal]       = useState(null);    // null | "add" | entry{}
+  const[editForm, setEditForm] = useState({});
+  const[expanded, setExpanded] = useState({});      // id → bool (thèse visible)
+  const[saving, setSaving]     = useState(false);
+  const[filter, setFilter]     = useState("all");   // all | alerte | fav
+
+  // ── Chargement initial ────────────────────────────────────────────────────
+  useEffect(function(){
+    var stored = lsv9Get('cgi_watchlist');
+    if(stored && Array.isArray(stored) && stored.length > 0){
+      setList(stored);
+    } else {
+      fetch(CF_WORKER_URL+"/read",{headers:{"X-Auth-Key":CF_AUTH_KEY},signal:AbortSignal.timeout(8000)})
+        .then(function(r){ return r.json(); })
+        .then(function(d){ if(d.cgi_watchlist && d.cgi_watchlist.length) setList(d.cgi_watchlist); })
+        .catch(function(){});
+    }
+  },[]);
+
+  // ── Fetch prix live pour tous les tickers ─────────────────────────────────
+  useEffect(function(){
+    if(list.length === 0) return;
+    setLoading(true);
+    Promise.all(list.map(function(e){
+      var sym = YF_MAP[e.ticker] || e.ticker;
+      return fetchYahooCF(sym).then(function(p){ return [e.ticker, p]; }).catch(function(){ return [e.ticker, null]; });
+    })).then(function(results){
+      var pm = {};
+      results.forEach(function(pair){ if(pair[1] != null) pm[pair[0]] = pair[1]; });
+      setPrices(pm);
+      setLoading(false);
+    });
+  },[list.length]);
+
+  // ── Sauvegarder ──────────────────────────────────────────────────────────
+  function persist(newList){
+    setList(newList);
+    lsv9Set('cgi_watchlist', newList);
+    setSaving(true);
+    var r = saveBase('cgi_watchlist', newList);
+    if(r && typeof r.then === 'function') r.then(function(){ setSaving(false); });
+    else setSaving(false);
+  }
+
+  // ── Refresh prix ──────────────────────────────────────────────────────────
+  function refreshPrices(){
+    setLoading(true);
+    Promise.all(list.map(function(e){
+      var sym = YF_MAP[e.ticker] || e.ticker;
+      return fetchYahooCF(sym).then(function(p){ return [e.ticker, p]; }).catch(function(){ return [e.ticker, null]; });
+    })).then(function(results){
+      var pm = {};
+      results.forEach(function(pair){ if(pair[1] != null) pm[pair[0]] = pair[1]; });
+      setPrices(pm);
+      setLoading(false);
+    });
+  }
+
+  // ── Modal helpers ────────────────────────────────────────────────────────
+  function openAdd(){
+    setEditForm({ticker:"",name:"",cat:"Picking",thesis:"",targetPrice:"",alertBelow:"",fav:false});
+    setModal("add");
+  }
+  function openEdit(e){
+    setEditForm({...e, targetPrice:e.targetPrice||"", alertBelow:e.alertBelow||""});
+    setModal("edit");
+  }
+  function closeModal(){ setModal(null); setEditForm({}); }
+
+  function submitForm(){
+    if(!editForm.ticker || !editForm.ticker.trim()) return;
+    var entry = {
+      id: modal==="edit" ? editForm.id : ("wl_"+Date.now()),
+      ticker: editForm.ticker.trim().toUpperCase(),
+      name:   editForm.name.trim() || editForm.ticker.trim().toUpperCase(),
+      cat:    editForm.cat || "Picking",
+      thesis: editForm.thesis || "",
+      targetPrice: editForm.targetPrice ? parseFloat(editForm.targetPrice) : null,
+      alertBelow:  editForm.alertBelow  ? parseFloat(editForm.alertBelow)  : null,
+      fav:    !!editForm.fav,
+      addedAt: editForm.addedAt || new Date().toISOString().slice(0,10),
+    };
+    var newList = modal==="edit"
+      ? list.map(function(x){ return x.id===entry.id ? entry : x; })
+      : [...list, entry];
+    persist(newList);
+    closeModal();
+  }
+
+  function deleteEntry(id){
+    if(!window.confirm("Supprimer cette entrée de la watchlist ?")) return;
+    persist(list.filter(function(x){ return x.id!==id; }));
+  }
+
+  function toggleFav(id){
+    persist(list.map(function(x){ return x.id===id ? {...x, fav:!x.fav} : x; }));
+  }
+
+  function toggleExpanded(id){
+    setExpanded(function(prev){ var n={...prev}; n[id]=!n[id]; return n; });
+  }
+
+  // ── Filtres ───────────────────────────────────────────────────────────────
+  var displayed = list.filter(function(e){
+    if(filter==="fav") return e.fav;
+    if(filter==="alerte"){
+      var p=prices[e.ticker];
+      return p && e.alertBelow && p <= e.alertBelow;
+    }
+    return true;
+  });
+  var alertCount = list.filter(function(e){ var p=prices[e.ticker]; return p&&e.alertBelow&&p<=e.alertBelow; }).length;
+
+  var cardBg=C.bg2, borderC=C.border, textC=C.text, grayC=C.gray;
+  var greenC=C.green, redC=C.red, blueC=C.blue, orangeC=C.btc;
+
+  // ── Render ────────────────────────────────────────────────────────────────
+  return React.createElement("div", {style:{padding:"0 0 80px 0", fontFamily:C.font||"system-ui,sans-serif"}},
+
+    // Header
+    React.createElement("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"16px 16px 8px"}},
+      React.createElement("div",null,
+        React.createElement("div",{style:{fontSize:22,fontWeight:900,color:textC}},"Suivi de marché"),
+        React.createElement("div",{style:{fontSize:11,color:grayC}},list.length+" ticker"+(list.length>1?"s":"")+(saving?" · Sauvegarde...":" · Cloudflare KV sync"))
+      ),
+      React.createElement("div",{style:{display:"flex",gap:8}},
+        React.createElement("button",{onClick:refreshPrices,disabled:loading,style:{background:cardBg,border:"1px solid "+borderC,borderRadius:8,padding:"6px 12px",color:blueC,fontSize:11,fontWeight:700,cursor:"pointer"}},
+          loading?"⟳":"⟳ Refresh"),
+        React.createElement("button",{onClick:openAdd,style:{background:orangeC,border:"none",borderRadius:8,padding:"6px 14px",color:"#000",fontSize:12,fontWeight:800,cursor:"pointer"}},
+          "+ Ajouter")
+      )
+    ),
+
+    // Filtres
+    React.createElement("div",{style:{display:"flex",gap:6,padding:"0 16px 12px",overflowX:"auto"}},
+      ["all","fav","alerte"].map(function(f){
+        var labels={"all":"Tous ("+list.length+")","fav":"★ Favoris","alerte":"🔔 Alertes"+(alertCount?" ("+alertCount+")":"")};
+        var active=filter===f;
+        return React.createElement("button",{key:f,onClick:function(){setFilter(f);},style:{
+          background:active?(f==="alerte"?redC:orangeC):cardBg,
+          border:"1px solid "+(active?(f==="alerte"?redC:orangeC):borderC),
+          borderRadius:16,padding:"4px 12px",color:active?"#000":grayC,
+          fontSize:11,fontWeight:active?700:500,cursor:"pointer",whiteSpace:"nowrap"
+        }},labels[f]);
+      })
+    ),
+
+    // Liste
+    displayed.length===0
+      ? React.createElement("div",{style:{textAlign:"center",padding:"40px 16px",color:grayC}},
+          list.length===0 ? "Aucun ticker dans la watchlist. Clique sur + Ajouter." : "Aucun résultat pour ce filtre.")
+      : React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:8,padding:"0 12px"}},
+          displayed.map(function(e){
+            var price    = prices[e.ticker];
+            var prevClose= null;
+            var change   = null;
+            var changePct= null;
+            // Prix via YF map
+            var sym = YF_MAP[e.ticker]||e.ticker;
+            var hasTarget= e.targetPrice && price;
+            var atTarget = hasTarget && price >= e.targetPrice * 0.97;
+            var hasAlert = e.alertBelow && price;
+            var inAlert  = hasAlert && price <= e.alertBelow;
+
+            return React.createElement("div",{key:e.id,style:{
+              background:inAlert ? redC+"18" : cardBg,
+              border:"1px solid "+(inAlert?redC:atTarget?greenC:borderC),
+              borderRadius:12,padding:"12px 14px",cursor:"pointer",
+            }},
+              // Row 1: ticker + price + actions
+              React.createElement("div",{style:{display:"flex",alignItems:"flex-start",justifyContent:"space-between"}},
+                React.createElement("div",{style:{flex:1}},
+                  React.createElement("div",{style:{display:"flex",alignItems:"center",gap:8}},
+                    React.createElement("span",{style:{fontSize:16,fontWeight:900,color:textC}},e.ticker),
+                    React.createElement("span",{style:{fontSize:9,background:borderC,borderRadius:4,padding:"2px 6px",color:grayC}},e.cat),
+                    e.fav && React.createElement("span",{style:{color:orangeC,fontSize:12}},"★"),
+                    inAlert && React.createElement("span",{style:{fontSize:11,color:redC,fontWeight:700}},"🔔 ALERTE"),
+                    atTarget && React.createElement("span",{style:{fontSize:11,color:greenC,fontWeight:700}},"✓ CIBLE"),
+                  ),
+                  React.createElement("div",{style:{fontSize:11,color:grayC,marginTop:2}},e.name)
+                ),
+                React.createElement("div",{style:{textAlign:"right"}},
+                  price!=null
+                    ? React.createElement("div",{style:{fontSize:18,fontWeight:800,color:textC}},
+                        (e.currency==="EUR"?"€":"$")+price.toLocaleString("fr-FR",{maximumFractionDigits:2}))
+                    : React.createElement("div",{style:{fontSize:13,color:grayC}},loading?"...":"—")
+                )
+              ),
+
+              // Row 2: targets + alerts
+              (e.targetPrice || e.alertBelow) && React.createElement("div",{style:{display:"flex",gap:12,marginTop:8}},
+                e.targetPrice && React.createElement("div",{style:{fontSize:10,color:grayC}},
+                  "🎯 Cible : ",React.createElement("span",{style:{color:greenC,fontWeight:700}},"$"+e.targetPrice)),
+                e.alertBelow && React.createElement("div",{style:{fontSize:10,color:grayC}},
+                  "🔔 Alerte si < ",React.createElement("span",{style:{color:redC,fontWeight:700}},"$"+e.alertBelow))
+              ),
+
+              // Row 3: thèse (collapsible)
+              e.thesis && React.createElement("div",{style:{marginTop:8}},
+                React.createElement("div",{onClick:function(){toggleExpanded(e.id);},style:{
+                  fontSize:10,color:blueC,cursor:"pointer",fontWeight:600,marginBottom:expanded[e.id]?4:0
+                }},expanded[e.id]?"▼ Thèse":"▶ Thèse"),
+                expanded[e.id] && React.createElement("div",{style:{
+                  fontSize:12,color:grayC,lineHeight:1.5,padding:"6px 8px",
+                  background:C.bg||"#0F1115",borderRadius:6,borderLeft:"3px solid "+blueC
+                }},e.thesis)
+              ),
+
+              // Row 4: actions
+              React.createElement("div",{style:{display:"flex",gap:8,marginTop:10}},
+                React.createElement("button",{onClick:function(){toggleFav(e.id);},style:{
+                  background:"none",border:"1px solid "+borderC,borderRadius:6,padding:"3px 8px",
+                  color:e.fav?orangeC:grayC,fontSize:11,cursor:"pointer"
+                }},e.fav?"★ Favori":"☆ Favori"),
+                React.createElement("button",{onClick:function(){openEdit(e);},style:{
+                  background:"none",border:"1px solid "+borderC,borderRadius:6,padding:"3px 8px",
+                  color:blueC,fontSize:11,cursor:"pointer"
+                }},"✏️ Éditer"),
+                React.createElement("button",{onClick:function(){deleteEntry(e.id);},style:{
+                  background:"none",border:"1px solid "+redC+"44",borderRadius:6,padding:"3px 8px",
+                  color:redC,fontSize:11,cursor:"pointer"
+                }},"🗑")
+              )
+            );
+          })
+        ),
+
+    // ── MODAL Add/Edit ────────────────────────────────────────────────────────
+    modal && React.createElement("div",{
+      style:{position:"fixed",inset:0,background:"#000C",zIndex:9999,display:"flex",alignItems:"flex-end",justifyContent:"center"},
+      onClick:function(ev){if(ev.target===ev.currentTarget)closeModal();}
+    },
+      React.createElement("div",{style:{
+        background:C.bg||"#0F1115",border:"1px solid "+borderC,borderRadius:"16px 16px 0 0",
+        width:"100%",maxWidth:480,padding:20,maxHeight:"85vh",overflowY:"auto"
+      }},
+        React.createElement("div",{style:{display:"flex",justifyContent:"space-between",marginBottom:16}},
+          React.createElement("span",{style:{fontSize:16,fontWeight:800,color:textC}},
+            modal==="add"?"Ajouter un ticker":"Modifier "+editForm.ticker),
+          React.createElement("button",{onClick:closeModal,style:{background:"none",border:"none",color:grayC,fontSize:20,cursor:"pointer"}},"×")
+        ),
+
+        // Champs du formulaire
+        [
+          {label:"Ticker *",key:"ticker",ph:"ex: AAPL, BTC, PLTR"},
+          {label:"Nom",key:"name",ph:"ex: Apple Inc."},
+          {label:"Catégorie",key:"cat",type:"select",options:["Crypto","Indices","Picking","Or","Cash Dip","Cash Matelas"]},
+          {label:"Prix cible ($)",key:"targetPrice",ph:"ex: 250",type:"number"},
+          {label:"Alerte si prix < ($)",key:"alertBelow",ph:"ex: 180",type:"number"},
+          {label:"Thèse d'investissement",key:"thesis",ph:"Pourquoi ce titre ? Catalyseurs, risques...",type:"textarea"},
+        ].map(function(f){
+          return React.createElement("div",{key:f.key,style:{marginBottom:12}},
+            React.createElement("label",{style:{display:"block",fontSize:11,color:grayC,marginBottom:4}},f.label),
+            f.type==="select"
+              ? React.createElement("select",{
+                  value:editForm[f.key]||"",
+                  onChange:function(ev){setEditForm(function(p){var n={...p};n[f.key]=ev.target.value;return n;});},
+                  style:{width:"100%",background:cardBg,border:"1px solid "+borderC,borderRadius:8,padding:"8px 10px",color:textC,fontSize:13}
+                }, f.options.map(function(o){return React.createElement("option",{key:o,value:o},o);}))
+              : f.type==="textarea"
+              ? React.createElement("textarea",{
+                  value:editForm[f.key]||"",rows:4,
+                  placeholder:f.ph,
+                  onChange:function(ev){setEditForm(function(p){var n={...p};n[f.key]=ev.target.value;return n;});},
+                  style:{width:"100%",background:cardBg,border:"1px solid "+borderC,borderRadius:8,padding:"8px 10px",color:textC,fontSize:13,resize:"vertical",boxSizing:"border-box"}
+                })
+              : React.createElement("input",{
+                  type:f.type||"text",value:editForm[f.key]||"",
+                  placeholder:f.ph,
+                  onChange:function(ev){setEditForm(function(p){var n={...p};n[f.key]=ev.target.value;return n;});},
+                  style:{width:"100%",background:cardBg,border:"1px solid "+borderC,borderRadius:8,padding:"8px 10px",color:textC,fontSize:13,boxSizing:"border-box"}
+                })
+          );
+        }),
+
+        // Favori checkbox
+        React.createElement("div",{style:{display:"flex",alignItems:"center",gap:8,marginBottom:16}},
+          React.createElement("input",{type:"checkbox",id:"favCb",checked:!!editForm.fav,
+            onChange:function(ev){setEditForm(function(p){return{...p,fav:ev.target.checked};})}}),
+          React.createElement("label",{htmlFor:"favCb",style:{fontSize:13,color:textC,cursor:"pointer"}},"★ Marquer comme favori")
+        ),
+
+        // Bouton submit
+        React.createElement("button",{onClick:submitForm,style:{
+          width:"100%",background:orangeC,border:"none",borderRadius:10,padding:"12px",
+          color:"#000",fontSize:14,fontWeight:800,cursor:"pointer"
+        }},modal==="add"?"Ajouter à la watchlist":"Enregistrer les modifications")
+      )
+    )
+  );
+}
+
+
 function PageLegend(
 {txns, liveFutures, hidden, eur, EFF, liveIbkrAnnex}){
   const [board,setBoard]=useState("spot");
@@ -8417,6 +8721,7 @@ function App(){
         {tab===1 && <PageAllocation hidden={hidden} EFF={EFF} eur={eur} setEur={setEur} iconDbVersion={iconDbVersion} bumpIconDb={bumpIconDb}/>}
         {tab===2 && <PageStats chartData={chartData} hidden={hidden} EFF={EFF} eur={eur} liveDD={liveDD} src={EFF||CURRENT} liveInv={liveInv}/>}
         {tab===3 && <PageGDB chartData={chartData} hidden={hidden} EFF={EFF} eur={eur} liveGSB={liveGSB} liveGDBS={liveGDBS} liveBench={liveBench} liveGC={gcEff} liveDD={liveDD} liveInv={liveInv}/>}
+        {tab===6 && <PageWatchlist EFF={EFF} hidden={hidden}/>}
         {tab===5 && <PageLegend txns={txns} liveFutures={liveFutures} hidden={hidden} eur={eur} EFF={EFF} liveIbkrAnnex={liveIbkrAnnex}/>}
         {tab===4 && <PageData EFF={EFF} hidden={hidden} txns={txns} chartData={chartData} kvRefreshTick={kvRefreshTick}
           liveDD={liveDD} liveGDBS={liveGDBS} liveGC={gcEff} liveGSB={liveGSB}
