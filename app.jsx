@@ -691,7 +691,7 @@ function applyPrices(prices, usdEur, effSrc){
 }
 
 // Date locale UTC+11 (Nouvelle-Calédonie)
-const APP_VERSION = "v2.06";
+const APP_VERSION = "v2.06b";
 const NC_OFFSET_MS = 11 * 60 * 60 * 1000;
 const todayNC = () => {
   const nc = new Date(Date.now() + NC_OFFSET_MS);
@@ -6661,7 +6661,21 @@ function PageData(
           return d;
         });
       })
-      .then(function(d){ setCloudData(d); setCloudLoading(false); })
+      .then(function(d){
+        setCloudData(d);
+        setCloudLoading(false);
+        // v2.06 — si KV vide (race condition avec boot), retry automatique dans 5s (max 3 fois)
+        var hasData = d && Object.keys(d).some(function(k){ return k[0]!=='_' && d[k]!=null; });
+        if(!hasData){
+          var retryCount = (window.__cgiKvRetry||0);
+          if(retryCount < 3){
+            window.__cgiKvRetry = retryCount + 1;
+            setTimeout(function(){ setCloudData(null); setCloudLoading(false); }, 5000);
+          }
+        } else {
+          window.__cgiKvRetry = 0; // reset sur succès
+        }
+      })
       .catch(function(e){ setCloudError(e.message); setCloudLoading(false); });
   }
 
@@ -6952,7 +6966,7 @@ function PageData(
             </div>
             <button onClick={()=>{ setCloudData(null); setCloudLoading(false); }} style={{background:C.bg2,border:"1px solid "+C.border,borderRadius:8,padding:"5px 12px",color:C.teal,fontSize:11,fontWeight:700,cursor:"pointer"}}>Actualiser</button>
           </div>
-          {cloudLoading && <div style={{textAlign:"center",padding:"30px 0",color:C.gray,fontSize:13}}>Chargement...</div>}
+          {cloudLoading && <div style={{textAlign:"center",padding:"30px 0",color:C.gray,fontSize:13}}>Chargement (peut prendre jusqu'à 10s)...</div>}
           {cloudError  && <div style={{background:C.red+"15",border:"1px solid "+C.red+"44",borderRadius:8,padding:"12px",color:C.red,fontSize:11}}>Erreur : {cloudError}</div>}
           {cloudData && !cloudLoading && <CloudKeyList data={cloudData} onRefresh={doLoadCloud}/>}
         </div>
@@ -7665,7 +7679,7 @@ function App(){
 
       setReady(true);
       // v2.06 — forcer un refresh DATA KV 4s après le boot (saveBase async terminés)
-      setTimeout(function(){ setKvRefreshTick(function(k){ return k+1; }); }, 4000);
+      setTimeout(function(){ setKvRefreshTick(function(k){ return k+1; }); }, 2500);
     })();
   },[]);
 
@@ -8219,7 +8233,7 @@ function App(){
     <div style={{background:C.bg,minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:12}}>
       <div style={{fontSize:40}}>₿</div>
       <div style={{color:C.btc,fontWeight:800,fontSize:18}}>CREUSOT GLOBAL INVESTMENTS</div>
-      <div style={{color:C.gray,fontSize:12}}>Chargement...</div>
+      <div style={{color:C.gray,fontSize:12}}>Chargement (peut prendre jusqu'à 10s)...</div>
     </div>
   );
 
