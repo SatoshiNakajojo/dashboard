@@ -696,7 +696,7 @@ function applyPrices(prices, usdEur, effSrc){
 }
 
 // Date locale UTC+11 (Nouvelle-Calédonie)
-const APP_VERSION = "v3.02";
+const APP_VERSION = "v3.03";
 const NC_OFFSET_MS = 11 * 60 * 60 * 1000;
 const todayNC = () => {
   const nc = new Date(Date.now() + NC_OFFSET_MS);
@@ -6549,6 +6549,23 @@ function PageWatchlist({ EFF, hidden }){
   // ── Chargement ─────────────────────────────────────────────────────────────
   // v3.02 — clé localStorage dédiée (hors cgi_v1 pour éviter quota exceeded)
   var WL_LS_KEY = 'cgi_watchlist_direct';
+  // ── TickerAvatar : logo circulaire (lettre + couleur par catégorie) ──────
+  function TickerAvatar(e, price){
+    var cat=e.cat||"Picking";
+    var colors={Crypto:orangeC,Indices:blueC,Picking:C.teal||"#14B8A6",Or:C.gold||"#F59E0B","Cash Dip":grayC,"Cash Matelas":grayC};
+    var bg=colors[cat]||blueC;
+    var letters=(e.ticker||"?").slice(0,2).toUpperCase();
+    // Symboles spéciaux pour crypto connues
+    var symbols={BTC:"₿",ETH:"Ξ",SOL:"◎",BNB:"⬡",ADA:"₳",XRP:"✕",DOGE:"Ð",IBIT:"₿"};
+    var sym=symbols[e.ticker]||letters;
+    var pct=price&&e.prices_prev?((price-e.prices_prev)/e.prices_prev*100):null;
+    return React.createElement("div",{style:{
+      width:40,height:40,borderRadius:"50%",background:bg+"22",
+      border:"2px solid "+bg,display:"flex",alignItems:"center",
+      justifyContent:"center",flexShrink:0,fontSize:sym.length>1?13:18,
+      fontWeight:900,color:bg,userSelect:"none"
+    }},sym);
+  }
   function wlLoad(){ try{ var r=JSON.parse(localStorage.getItem(WL_LS_KEY)||'[]'); return Array.isArray(r)?r:[]; }catch(e){return[];} }
   function wlSave(nl){ try{ localStorage.setItem(WL_LS_KEY,JSON.stringify(nl)); }catch(e){ console.warn('[wl] localStorage save failed:',e.message); } }
 
@@ -6862,7 +6879,7 @@ function PageWatchlist({ EFF, hidden }){
   var inputStyle={width:"100%",background:C.bg,border:"1px solid "+borderC,borderRadius:8,padding:"8px 10px",color:textC,fontSize:13,boxSizing:"border-box"};
   var labelStyle={display:"block",fontSize:11,color:grayC,marginBottom:4};
 
-  return React.createElement(React.Fragment,null,React.createElement("div",{style:{padding:"0 0 80px",fontFamily:C.font||"system-ui,sans-serif"}},
+  return React.createElement("div",{style:{padding:"0 0 80px",fontFamily:C.font||"system-ui,sans-serif"}},
 
     // ── Header ──────────────────────────────────────────────────────────────
     React.createElement("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"16px 16px 8px"}},
@@ -6908,8 +6925,9 @@ function PageWatchlist({ EFF, hidden }){
               border:"1px solid "+(inAlert?redC:atBuyZone?greenC:e.fav?blueC+"66":borderC),
               borderRadius:12,padding:"12px 14px"
             }},
-              // Row 1: info principale
-              React.createElement("div",{style:{display:"flex",alignItems:"flex-start",justifyContent:"space-between"}},
+              // Row 1: info principale avec logo
+              React.createElement("div",{style:{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:10}},
+                TickerAvatar(e, prices[e.ticker]),
                 React.createElement("div",{style:{flex:1}},
                   React.createElement("div",{style:{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}},
                     e.fav&&React.createElement("span",{style:{color:orangeC,fontSize:14}},"★"),
@@ -6987,13 +7005,12 @@ function PageWatchlist({ EFF, hidden }){
           })
         ),
 
-  ), // fin du div principal — panels en dehors pour position:fixed correct
 
     // ══════════════════════════════════════════════════════════
-    // PANEL NEWS (hors du div principal → position:fixed fonctionne)
+    // PANEL NEWS — via createPortal (garantit position:fixed)
     // ══════════════════════════════════════════════════════════
-    newsPanel&&React.createElement("div",{
-      style:{position:"fixed",inset:0,background:"#000C",zIndex:9998,display:"flex",alignItems:"flex-end"},
+    newsPanel&&ReactDOM.createPortal(React.createElement("div",{
+      style:{position:"fixed",top:0,left:0,right:0,bottom:0,background:"#000C",zIndex:9998,display:"flex",alignItems:"flex-end"},
       onClick:function(ev){if(ev.target===ev.currentTarget)setNewsPanel(false);}
     },
       React.createElement("div",{style:{background:bgC,border:"1px solid "+borderC,borderRadius:"16px 16px 0 0",width:"100%",maxWidth:520,margin:"0 auto",maxHeight:"85vh",display:"flex",flexDirection:"column"}},
@@ -7029,13 +7046,13 @@ function PageWatchlist({ EFF, hidden }){
             );
           })
       )
-    ),
+    )),document.body),
 
     // ══════════════════════════════════════════════════════════
     // MODAL Add/Edit — FORMULAIRE COMPLET
     // ══════════════════════════════════════════════════════════
-    modal&&React.createElement("div",{
-      style:{position:"fixed",inset:0,background:"#000C",zIndex:9999,display:"flex",alignItems:"flex-end",justifyContent:"center"},
+    modal&&ReactDOM.createPortal(React.createElement("div",{
+      style:{position:"fixed",top:0,left:0,right:0,bottom:0,background:"#000C",zIndex:9999,display:"flex",alignItems:"flex-end",justifyContent:"center"},
       onClick:function(ev){if(ev.target===ev.currentTarget)closeModal();}
     },
       React.createElement("div",{style:{background:bgC,border:"1px solid "+borderC,borderRadius:"16px 16px 0 0",width:"100%",maxWidth:500,padding:20,maxHeight:"92vh",overflowY:"auto"}},
@@ -7127,9 +7144,10 @@ function PageWatchlist({ EFF, hidden }){
         // Submit
         React.createElement("button",{onClick:submitForm,style:{width:"100%",background:orangeC,border:"none",borderRadius:10,padding:"12px",color:"#000",fontSize:14,fontWeight:800,cursor:"pointer"}},
           modal==="add"?"Ajouter à la watchlist":"Enregistrer")
-      )
-    )
-  ));
+      )   
+    )      
+  ,document.body)
+  );
 }
 
 // ── FIN PageWatchlist v2 ──────────────────────────────────────────────────────
