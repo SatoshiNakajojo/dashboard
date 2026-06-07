@@ -2608,7 +2608,7 @@ function GdbCompareChart({eur, setEur, EFF, tf, setTF, onSparkData, chartData, l
             {color:C.blue,   label:"CGIS", val:fmtGdb(hGs), sub:hGsB!=null?`base ${hGsB.toFixed(1)}`:null},
             {color:C.green,  label:"Portefeuille", val:hPortAbs!=null?`${cur}${fmtK(hPortAbs)}`:null, sub:hPortB!=null?`base ${hPortB.toFixed(1)}`:null},
           ].filter(x=>x.val).map((x,i)=>(
-            <div key={i} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
+            <div key={i} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:2,flex:1,minWidth:0}}>
               <div style={{display:"flex",alignItems:"center",gap:5}}>
                 <div style={{width:8,height:8,borderRadius:2,background:x.color}}/>
                 <span style={{fontSize:10,color:C.text2}}>{x.label}</span>
@@ -3686,7 +3686,7 @@ function PageOverview({chartData,onSnapshot,eur,setEur,hidden,setHidden,EFF,refr
       })()}
 
       {/* ── GDB Comparison Chart ── */}
-      <SH label="GDB.C · GDB.S · Patrimoine total" color={C.gray}/>
+      <SH label="CGIC · CGIS · Patrimoine total" color={C.gray}/>
       <GdbCompareChart eur={eur} setEur={setEur} EFF={EFF} tf={chartTF} setTF={setChartTF} onSparkData={setSparkData} chartData={chartData} liveDD={liveDD} liveGDBS={liveGDBS} liveGC={liveGC}/>
 
       {/* ── Taux EUR/USD ── */}
@@ -6684,7 +6684,7 @@ function PageData(
     "GDBS": {
       label:"GDBS — Cours CGIC et GDB.S",
       desc:"Cours journaliers depuis aout 2025 ("+_GDBS.length+" points)",
-      headers:["Date","GDB.S $","GDB.C $"],
+      headers:["Date","CGIS $","CGIC $"],
       rows: _GDBS.slice().reverse().map(function(r){return[r[0],fmtF(r[1],4),fmtF(r[2],4)];}),
     },
     "GC_FULL": {
@@ -6781,7 +6781,7 @@ function PageData(
     },
     "INV": {
       label:"INV — Investissements (parts fonds)",
-      desc:"Mouvements de parts dans les fonds GDB.C / GDB.S ("+_INV.length+" lignes)",
+      desc:"Mouvements de parts dans les fonds CGIC / CGIS ("+_INV.length+" lignes)",
       headers:["Date","Fonds","Investisseur","Sens","Parts","Cours €","Montant €"],
       rows: _INV.slice().sort(function(a,b){return (b.date||"").localeCompare(a.date||"");}).map(function(m){
         return[m.date, m.fonds, m.holder, m.io, fmtF(m.shares,2), fmtF(m.vps,2), fmt(Math.round(m.montant))];
@@ -7262,7 +7262,10 @@ function App(){
       const kv=kvData_snap.raw;
       // Fusionner la base hardcodée avec les données KV pour combler les trous
       if(kv.cgi_dd)    setLiveDD(_mergeArrays(DD, kv.cgi_dd));
-      if(kv.cgi_gdbs)  setLiveGDBS(_mergeArrays(GDBS, kv.cgi_gdbs));
+      if(kv.cgi_gdbs){
+        var _gdbsRaw = _mergeArrays(GDBS, kv.cgi_gdbs);
+        setLiveGDBS(_gdbsRaw.filter(function(p){ return Array.isArray(p) && isFinite(p[1]) && isFinite(p[2]); }));
+      }
       if(kv.cgi_gc)    setLiveGC(_mergeArrays(GC_FULL, kv.cgi_gc));
       if(kv.cgi_gsb)   setLiveGSB(_mergeArrays(GS_B100_EXT, kv.cgi_gsb));
       if(kv.cgi_cm)    setLiveCM(unionMonthlyByYear(CRYPTO_MONTHLY, kv.cgi_cm));
@@ -7423,7 +7426,10 @@ function App(){
             if(mergedDD.length > kvDDlen){ saveBase('cgi_dd', mergedDD); console.info("[dd] re-push KV : "+(mergedDD.length-kvDDlen)+" date(s) locale(s)"); }
 
             const mergedGDBS = unionSeriesByDate(unionSeriesByDate(GDBS, lsv9Get('cgi_gdbs')), kvGDBS);
-            setLiveGDBS(mergedGDBS);
+            // v1.0 CGI — purger les entrées Infinity/NaN dans GDBS
+      var cleanedGDBS = mergedGDBS.filter(function(p){ return Array.isArray(p) && isFinite(p[1]) && isFinite(p[2]); });
+      if(cleanedGDBS.length === 0) cleanedGDBS = [[todayNC(), CURRENT.gdbS||100, CURRENT.gdbC||100]];
+      setLiveGDBS(cleanedGDBS);
             lsv9Set('cgi_gdbs', mergedGDBS);
             const kvGlen = (kvGDBS&&kvGDBS.length)||0;
             if(mergedGDBS.length > kvGlen){ saveBase('cgi_gdbs', mergedGDBS); console.info("[gdbs] re-push KV : "+(mergedGDBS.length-kvGlen)+" date(s) locale(s)"); }
@@ -8325,9 +8331,9 @@ function App(){
         </div>
 
         {/* Centre : CREUSOT GLOBAL INVESTMENTS + version */}
-        <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
+        <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:2,flex:1,minWidth:0}}>
           <div style={{display:"flex",alignItems:"center",gap:6}}>
-            <span style={{fontSize:17,fontWeight:900,color:C.btc,letterSpacing:.3,whiteSpace:"nowrap"}}>CREUSOT GLOBAL INVESTMENTS</span>
+            <span style={{fontSize:12,fontWeight:900,color:C.btc,letterSpacing:.2,whiteSpace:"nowrap"}}>CREUSOT GLOBAL INVESTMENTS</span>
             {gistSync===true  && <span onClick={()=>setShowGistDiag(true)} title="Cloudflare KV — connecté" style={{fontSize:10,color:C.green,cursor:"pointer"}}>☁︎</span>}
             {gistSync===false && <span onClick={()=>setShowGistDiag(true)} title="Erreur connexion" style={{fontSize:10,color:C.red,cursor:"pointer"}}>✗</span>}
             {gistSync===null  && <span style={{fontSize:10,color:C.gray}}>·</span>}
