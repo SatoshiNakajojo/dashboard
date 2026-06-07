@@ -6622,10 +6622,6 @@ function PageData(
 {EFF, hidden, txns, chartData, liveDD, liveGDBS, liveGC, liveGSB, liveCM, liveSM, liveTM, liveBench, liveInv, liveFutures, liveIbkrAnnex, kvRefreshTick}){
   var _DD   = liveDD   || DD;
   var _INV  = liveInv  || INV_SEED_OK;
-  // v2.07 — chargement KV via useEffect (pattern React correct, pas dans le corps)
-  React.useEffect(function(){
-    if(mode==="cloud") doLoadCloud();
-  }, [mode]);
   // v1.0 CGI — force refresh KV après snapshot (kvRefreshTick incrémenté par App)
   React.useEffect(()=>{
     if(kvRefreshTick > 0){ setCloudData(null); setCloudLoading(false); }
@@ -6682,6 +6678,11 @@ function PageData(
     setViewMode(mode);
 
   }
+
+  // v2.07 — charger KV quand l'utilisateur clique sur "Cloudflare KV" (viewMode change)
+  React.useEffect(function(){
+    if(viewMode==="cloud") doLoadCloud();
+  }, [viewMode]);
 
   function getLast(arr){ return (arr && arr.length>0 && arr[arr.length-1]) ? (arr[arr.length-1][0]||"—") : "—"; }
   function fmt(v){ return v!=null ? v.toLocaleString("fr-FR") : "—"; }
