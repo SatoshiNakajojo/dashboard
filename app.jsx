@@ -101,6 +101,11 @@ let FUND_PARTS = { S: 286.94, C: 1047.84 };
 // v25.05 — proprietaire du portefeuille : seul un investissement a son nom debite/credite
 // le Cash Matelas (E1). Les co-investisseurs font grossir le fonds brut sans toucher au Matelas.
 const INV_OWNER = "JOHN";
+// v2.07 — INV_SEED injecté directement (ne dépend plus de seeds.js pour cette donnée critique)
+// Apports et retraits mensuels réels depuis le fichier Excel de John (Jan 2022 → Mar 2026)
+const _INV_SEED_APP = [{"id":"fbc30cf7cb","date":"2022-01-01","fonds":"CGIC","holder":"JOHN","io":"IN","shares":6.49,"montant":649.0,"bank":"LCL","note":"Apport JAN 2022"},{"id":"8a60ccff71","date":"2022-02-01","fonds":"CGIC","holder":"JOHN","io":"IN","shares":6.5,"montant":650.0,"bank":"LCL","note":"Apport FEV 2022"},{"id":"315afd2930","date":"2022-03-01","fonds":"CGIC","holder":"JOHN","io":"IN","shares":6.05,"montant":605.0,"bank":"LCL","note":"Apport MAR 2022"},{"id":"83f402a5da","date":"2022-04-01","fonds":"CGIC","holder":"JOHN","io":"IN","shares":26.0,"montant":2600.0,"bank":"LCL","note":"Apport AVR 2022"},{"id":"98c3136665","date":"2022-05-01","fonds":"CGIC","holder":"JOHN","io":"IN","shares":45.5,"montant":4550.0,"bank":"LCL","note":"Apport MAI 2022"},{"id":"7d03f3cdae","date":"2022-06-01","fonds":"CGIC","holder":"JOHN","io":"IN","shares":35.19,"montant":3519.0,"bank":"LCL","note":"Apport JUI 2022"},{"id":"c2726335b3","date":"2022-07-01","fonds":"CGIC","holder":"JOHN","io":"IN","shares":34.85,"montant":3485.0,"bank":"LCL","note":"Apport JUL 2022"},{"id":"dee9eb0667","date":"2022-08-01","fonds":"CGIC","holder":"JOHN","io":"IN","shares":10.0,"montant":1000.0,"bank":"LCL","note":"Apport AOU 2022"},{"id":"e88a96706b","date":"2022-09-01","fonds":"CGIC","holder":"JOHN","io":"IN","shares":34.5,"montant":3450.0,"bank":"LCL","note":"Apport SEP 2022"},{"id":"95cf83edc5","date":"2022-10-01","fonds":"CGIC","holder":"JOHN","io":"IN","shares":38.07,"montant":3807.0,"bank":"LCL","note":"Apport OCT 2022"},{"id":"c1d8c4d712","date":"2022-11-01","fonds":"CGIC","holder":"JOHN","io":"IN","shares":24.0,"montant":2400.0,"bank":"LCL","note":"Apport NOV 2022"},{"id":"f3492b2ee4","date":"2022-12-01","fonds":"CGIC","holder":"JOHN","io":"IN","shares":17.88,"montant":1788.0,"bank":"LCL","note":"Apport DEC 2022"},{"id":"ff2a003b50","date":"2023-01-01","fonds":"CGIC","holder":"JOHN","io":"IN","shares":18.86,"montant":1886.0,"bank":"LCL","note":"Apport JAN 2023"},{"id":"40bbfd43ea","date":"2023-02-01","fonds":"CGIC","holder":"JOHN","io":"IN","shares":12.87,"montant":1287.0,"bank":"LCL","note":"Apport FEV 2023"},{"id":"7e7caa330a","date":"2023-03-01","fonds":"CGIC","holder":"JOHN","io":"IN","shares":8.71,"montant":871.0,"bank":"LCL","note":"Apport MAR 2023"},{"id":"34ecf9891b","date":"2023-04-01","fonds":"CGIC","holder":"JOHN","io":"IN","shares":10.45,"montant":1045.0,"bank":"LCL","note":"Apport AVR 2023"},{"id":"616ffe9058","date":"2023-05-01","fonds":"CGIC","holder":"JOHN","io":"IN","shares":1.0,"montant":100.0,"bank":"LCL","note":"Apport MAI 2023"},{"id":"1998666a0b","date":"2023-06-01","fonds":"CGIC","holder":"JOHN","io":"IN","shares":1.0,"montant":100.0,"bank":"LCL","note":"Apport JUI 2023"},{"id":"bc0f565da3","date":"2023-10-01","fonds":"CGIC","holder":"JOHN","io":"IN","shares":7.5,"montant":750.0,"bank":"LCL","note":"Apport OCT 2023"},{"id":"f1910608af","date":"2023-11-01","fonds":"CGIC","holder":"JOHN","io":"IN","shares":6.0,"montant":600.0,"bank":"LCL","note":"Apport NOV 2023"},{"id":"ae3e761a6b","date":"2023-12-01","fonds":"CGIC","holder":"JOHN","io":"IN","shares":7.0,"montant":700.0,"bank":"LCL","note":"Apport DEC 2023"},{"id":"b8c4cb3eae","date":"2024-01-01","fonds":"CGIC","holder":"JOHN","io":"IN","shares":46.36,"montant":4636.0,"bank":"LCL","note":"Apport JAN 2024"},{"id":"126b084aec","date":"2024-02-01","fonds":"CGIC","holder":"JOHN","io":"IN","shares":22.13,"montant":2213.0,"bank":"LCL","note":"Apport FEV 2024"},{"id":"96af9cf984","date":"2024-03-01","fonds":"CGIC","holder":"JOHN","io":"IN","shares":20.96,"montant":2096.0,"bank":"LCL","note":"Apport MAR 2024"},{"id":"e135e2ce63","date":"2024-05-01","fonds":"CGIC","holder":"JOHN","io":"IN","shares":8.0,"montant":800.0,"bank":"LCL","note":"Apport MAI 2024"},{"id":"3fd956e970","date":"2024-06-01","fonds":"CGIC","holder":"JOHN","io":"IN","shares":38.69,"montant":3869.0,"bank":"LCL","note":"Apport JUI 2024"},{"id":"a02f36ea23","date":"2024-07-01","fonds":"CGIC","holder":"JOHN","io":"IN","shares":15.88,"montant":1588.0,"bank":"LCL","note":"Apport JUL 2024"},{"id":"affb7edf7c","date":"2024-08-01","fonds":"CGIC","holder":"JOHN","io":"IN","shares":18.43,"montant":1843.0,"bank":"LCL","note":"Apport AOU 2024"},{"id":"bb8e90b3f9","date":"2024-09-01","fonds":"CGIC","holder":"JOHN","io":"IN","shares":47.79,"montant":4779.0,"bank":"LCL","note":"Apport SEP 2024"},{"id":"49a83f3548","date":"2024-10-01","fonds":"CGIC","holder":"JOHN","io":"IN","shares":20.48,"montant":2048.0,"bank":"LCL","note":"Apport OCT 2024"},{"id":"3c41cee072","date":"2024-11-01","fonds":"CGIC","holder":"JOHN","io":"IN","shares":59.64,"montant":5964.0,"bank":"LCL","note":"Apport NOV 2024"},{"id":"5cd2d1d134","date":"2024-12-01","fonds":"CGIC","holder":"JOHN","io":"IN","shares":65.99,"montant":6599.0,"bank":"LCL","note":"Apport DEC 2024"},{"id":"453636aedb","date":"2025-01-01","fonds":"CGIC","holder":"JOHN","io":"IN","shares":5.8,"montant":580.0,"bank":"LCL","note":"Apport JAN 2025"},{"id":"b31e7f2838","date":"2025-01-01","fonds":"CGIS","holder":"JOHN","io":"IN","shares":20.5,"montant":2050.0,"bank":"IBKR","note":"Apport JAN 2025"},{"id":"82c3488631","date":"2025-02-01","fonds":"CGIC","holder":"JOHN","io":"IN","shares":5.7,"montant":570.0,"bank":"LCL","note":"Apport FEV 2025"},{"id":"02612733e9","date":"2025-03-01","fonds":"CGIC","holder":"JOHN","io":"IN","shares":17.85,"montant":1785.0,"bank":"LCL","note":"Apport MAR 2025"},{"id":"57695a8b76","date":"2025-03-01","fonds":"CGIS","holder":"JOHN","io":"IN","shares":79.5,"montant":7950.0,"bank":"IBKR","note":"Apport MAR 2025"},{"id":"6d7ee53bf9","date":"2025-04-01","fonds":"CGIC","holder":"JOHN","io":"IN","shares":10.5,"montant":1050.0,"bank":"LCL","note":"Apport AVR 2025"},{"id":"f635686729","date":"2025-05-01","fonds":"CGIC","holder":"JOHN","io":"IN","shares":11.7,"montant":1170.0,"bank":"LCL","note":"Apport MAI 2025"},{"id":"a1413abe2d","date":"2025-05-01","fonds":"CGIS","holder":"JOHN","io":"IN","shares":30.0,"montant":3000.0,"bank":"IBKR","note":"Apport MAI 2025"},{"id":"f91cceecaf","date":"2025-06-01","fonds":"CGIC","holder":"JOHN","io":"IN","shares":12.5,"montant":1250.0,"bank":"LCL","note":"Apport JUI 2025"},{"id":"9d2ce9c4a5","date":"2025-07-01","fonds":"CGIC","holder":"JOHN","io":"IN","shares":11.95,"montant":1195.0,"bank":"LCL","note":"Apport JUL 2025"},{"id":"8fd676b0ce","date":"2025-08-01","fonds":"CGIC","holder":"JOHN","io":"IN","shares":30.2,"montant":3020.0,"bank":"LCL","note":"Apport AOU 2025"},{"id":"32614b0217","date":"2025-09-01","fonds":"CGIC","holder":"JOHN","io":"IN","shares":7.5,"montant":750.0,"bank":"LCL","note":"Apport SEP 2025"},{"id":"0585d45492","date":"2025-10-01","fonds":"CGIC","holder":"JOHN","io":"OUT","shares":18.0,"montant":1800.0,"bank":"LCL","note":"Retrait OCT 2025"},{"id":"9032bc931e","date":"2025-10-01","fonds":"CGIS","holder":"JOHN","io":"IN","shares":41.0,"montant":4100.0,"bank":"IBKR","note":"Apport OCT 2025"},{"id":"b73b170897","date":"2025-11-01","fonds":"CGIC","holder":"JOHN","io":"IN","shares":29.0,"montant":2900.0,"bank":"LCL","note":"Apport NOV 2025"},{"id":"7a99891f41","date":"2025-12-01","fonds":"CGIC","holder":"JOHN","io":"IN","shares":115.5,"montant":11550.0,"bank":"LCL","note":"Apport DEC 2025"},{"id":"441d91cad3","date":"2026-01-01","fonds":"CGIC","holder":"JOHN","io":"IN","shares":17.0,"montant":1700.0,"bank":"LCL","note":"Apport JAN 2026"},{"id":"2f322bea44","date":"2026-01-01","fonds":"CGIS","holder":"JOHN","io":"IN","shares":10.0,"montant":1000.0,"bank":"IBKR","note":"Apport JAN 2026"},{"id":"a16316a61b","date":"2026-02-01","fonds":"CGIC","holder":"JOHN","io":"IN","shares":42.0,"montant":4200.0,"bank":"LCL","note":"Apport FEV 2026"},{"id":"d8a53afcdc","date":"2026-03-01","fonds":"CGIC","holder":"JOHN","io":"IN","shares":11.0,"montant":1100.0,"bank":"LCL","note":"Apport MAR 2026"}];
+// Override si seeds.js a une version ancienne (< 40 entrées)
+var INV_SEED_OK; try{ INV_SEED_OK = (typeof INV_SEED_OK !== 'undefined' && INV_SEED_OK.length >= 40) ? INV_SEED_OK : _INV_SEED_APP; } catch(e){ INV_SEED_OK = _INV_SEED_APP; }
 function cumulFundParts(invArr){
   let S = 0, C = 0;
   (invArr || []).forEach(function(m){
@@ -691,7 +696,7 @@ function applyPrices(prices, usdEur, effSrc){
 }
 
 // Date locale UTC+11 (Nouvelle-Calédonie)
-const APP_VERSION = "v2.06b";
+const APP_VERSION = "v2.07";
 const NC_OFFSET_MS = 11 * 60 * 60 * 1000;
 const todayNC = () => {
   const nc = new Date(Date.now() + NC_OFFSET_MS);
@@ -4117,7 +4122,7 @@ function PageStats({chartData, hidden=false, EFF, eur=false, liveDD, src, liveIn
 
   // ── Taux USD/EUR historique par date (lit liveDD ou DD global) ────────────
   const _DD_ST = liveDD || DD;
-  const _INV_ST = liveInv || INV_SEED;
+  const _INV_ST = liveInv || INV_SEED_OK;
   // Retourne le taux usdEur <= dateStr, ou taux actuel par défaut
   const usdEurAtDate = dateStr => {
     const row = _DD_ST.reduceRight((a,r)=>a!=null?a:(r[0]<=dateStr&&r[5]?r:null),null);
@@ -4843,7 +4848,7 @@ function FondDetailModal({fond, EFF, liveInv, liveDD, liveGC, eur, onClose}){
   const usdEur = src.usdEur||0.86;
   const cours$ = isC ? src.gdbC : src.gdbS;
   const coursEur = cours$ * usdEur;
-  const inv = (liveInv||INV_SEED).filter(function(m){return m.fonds===fond;});
+  const inv = (liveInv||INV_SEED_OK).filter(function(m){return m.fonds===fond;});
   // Detention par investisseur (parts nettes)
   const byH = {}; inv.forEach(function(m){ byH[m.holder]=(byH[m.holder]||0)+(m.shares||0); });
   const totalParts = Object.keys(byH).reduce(function(a,h){return a+byH[h];},0);
@@ -6616,7 +6621,11 @@ function PageLegend(
 function PageData(
 {EFF, hidden, txns, chartData, liveDD, liveGDBS, liveGC, liveGSB, liveCM, liveSM, liveTM, liveBench, liveInv, liveFutures, liveIbkrAnnex, kvRefreshTick}){
   var _DD   = liveDD   || DD;
-  var _INV  = liveInv  || INV_SEED;
+  var _INV  = liveInv  || INV_SEED_OK;
+  // v2.07 — chargement KV via useEffect (pattern React correct, pas dans le corps)
+  React.useEffect(function(){
+    if(mode==="cloud") doLoadCloud();
+  }, [mode]);
   // v1.0 CGI — force refresh KV après snapshot (kvRefreshTick incrémenté par App)
   React.useEffect(()=>{
     if(kvRefreshTick > 0){ setCloudData(null); setCloudLoading(false); }
@@ -6664,26 +6673,14 @@ function PageData(
       .then(function(d){
         setCloudData(d);
         setCloudLoading(false);
-        // v2.06 — si KV vide (race condition avec boot), retry automatique dans 5s (max 3 fois)
-        var hasData = d && Object.keys(d).some(function(k){ return k[0]!=='_' && d[k]!=null; });
-        if(!hasData){
-          var retryCount = (window.__cgiKvRetry||0);
-          if(retryCount < 3){
-            window.__cgiKvRetry = retryCount + 1;
-            setTimeout(function(){ setCloudData(null); setCloudLoading(false); }, 5000);
-          }
-        } else {
-          window.__cgiKvRetry = 0; // reset sur succès
-        }
+
       })
       .catch(function(e){ setCloudError(e.message); setCloudLoading(false); });
   }
 
   function handleViewMode(mode){
     setViewMode(mode);
-    // v2.06 — doLoadCloud si: pas encore chargé OU cloudData entièrement vide (boot race)
-    var _kvHasData = cloudData && Object.keys(cloudData).some(function(k){ return cloudData[k]!=null; });
-    if(mode==="cloud" && !_kvHasData && !cloudLoading) doLoadCloud();
+
   }
 
   function getLast(arr){ return (arr && arr.length>0 && arr[arr.length-1]) ? (arr[arr.length-1][0]||"—") : "—"; }
@@ -6964,7 +6961,7 @@ function PageData(
               <div style={{fontSize:11,color:C.gray}}>Données stockées dans Cloudflare KV</div>
               <div style={{fontSize:10,fontWeight:700,color:C.btc}}>16 bases</div>
             </div>
-            <button onClick={()=>{ setCloudData(null); setCloudLoading(false); }} style={{background:C.bg2,border:"1px solid "+C.border,borderRadius:8,padding:"5px 12px",color:C.teal,fontSize:11,fontWeight:700,cursor:"pointer"}}>Actualiser</button>
+            <button onClick={doLoadCloud} style={{background:C.bg2,border:"1px solid "+C.border,borderRadius:8,padding:"5px 12px",color:C.teal,fontSize:11,fontWeight:700,cursor:"pointer"}}>Actualiser</button>
           </div>
           {cloudLoading && <div style={{textAlign:"center",padding:"30px 0",color:C.gray,fontSize:13}}>Chargement (peut prendre jusqu'à 10s)...</div>}
           {cloudError  && <div style={{background:C.red+"15",border:"1px solid "+C.red+"44",borderRadius:8,padding:"12px",color:C.red,fontSize:11}}>Erreur : {cloudError}</div>}
@@ -6987,7 +6984,7 @@ function recomputeGcFromDB(gcArr, ddArr, invArr){
   const dd = (Array.isArray(ddArr) && ddArr.length) ? ddArr : DD;
   const ce = {}, ue = {};
   dd.forEach(function(r){ ce[r[0]] = r[1]; ue[r[0]] = r[5]; });
-  const movs = ((Array.isArray(invArr) && invArr.length) ? invArr : INV_SEED)
+  const movs = ((Array.isArray(invArr) && invArr.length) ? invArr : INV_SEED_OK)
     .filter(function(m){ return m && m.fonds === "CGIC"; })
     .slice().sort(function(a,b){ return (a.date||"").localeCompare(b.date||""); });
   function cumC(d){ var s=0; for(var i=0;i<movs.length;i++){ if(movs[i].date<=d) s+=movs[i].shares; else break; } return s; }
@@ -7011,7 +7008,7 @@ function App(){
   const[liveCM,setLiveCM]=useState(CRYPTO_MONTHLY);
   const[liveSM,setLiveSM]=useState(STOCKS_MONTHLY);
   const[liveTM,setLiveTM]=useState(TOTAL_MONTHLY);
-  const[liveInv,setLiveInv]=useState(INV_SEED);
+  const[liveInv,setLiveInv]=useState(INV_SEED_OK);
   const[kvRefreshTick,setKvRefreshTick]=useState(0);
   const[liveFutures,setLiveFutures]=useState(SEED_FUTURES);
   const[liveIbkrAnnex,setLiveIbkrAnnex]=useState(SEED_IBKR_ANNEX);
@@ -7293,7 +7290,7 @@ function App(){
       if(kv.cgi_cm)    setLiveCM(unionMonthlyByYear(CRYPTO_MONTHLY, kv.cgi_cm));
       if(kv.cgi_sm)    setLiveSM(unionMonthlyByYear(STOCKS_MONTHLY, kv.cgi_sm));
       if(kv.cgi_tm)    setLiveTM(unionMonthlyByYear(TOTAL_MONTHLY, kv.cgi_tm));
-      if(kv.cgi_inv)   { const _mi=unionTxnsById(INV_SEED, kv.cgi_inv); setLiveInv(_mi); FUND_PARTS=cumulFundParts(_mi); }
+      if(kv.cgi_inv)   { const _mi=unionTxnsById(INV_SEED_OK, kv.cgi_inv); setLiveInv(_mi); FUND_PARTS=cumulFundParts(_mi); }
       if(kv.cgi_futures)    setLiveFutures(unionTxnsById(SEED_FUTURES, kv.cgi_futures));
       if(kv.cgi_ibkr_annex) setLiveIbkrAnnex(unionTxnsById(SEED_IBKR_ANNEX, kv.cgi_ibkr_annex));
       if(kv.cgi_bench) setLiveBench(_mergeArrays(BENCH_IDX, kv.cgi_bench));
@@ -7328,7 +7325,7 @@ function App(){
       const lvGDBS = lsv9Get('cgi_gdbs');
       const lvGC   = lsv9Get('cgi_gc');
       const lvGSB  = lsv9Get('cgi_gsb');
-      const lvInv  = lsv9Get('cgi_inv'); if(lvInv){ const _mi2=unionTxnsById(INV_SEED, lvInv); setLiveInv(_mi2); FUND_PARTS=cumulFundParts(_mi2); }
+      const lvInv  = lsv9Get('cgi_inv'); if(lvInv){ const _mi2=unionTxnsById(INV_SEED_OK, lvInv); setLiveInv(_mi2); FUND_PARTS=cumulFundParts(_mi2); }
       const lvFut = lsv9Get('cgi_futures'); if(lvFut){ setLiveFutures(unionTxnsById(SEED_FUTURES, lvFut)); }
       const lvAnx = lsv9Get('cgi_ibkr_annex'); if(lvAnx){ setLiveIbkrAnnex(unionTxnsById(SEED_IBKR_ANNEX, lvAnx)); }
       if(lvDD)   setLiveDD(_mergeArrays(DD, lvDD));
@@ -7496,7 +7493,7 @@ function App(){
           // Recupere un mouvement offline (local, pas en KV) ET un mouvement dun autre appareil.
           try{
             const kvInv = Array.isArray(kvData.cgi_inv) ? kvData.cgi_inv : [];
-            const localInv = lsv9Get('cgi_inv') || INV_SEED;
+            const localInv = lsv9Get('cgi_inv') || INV_SEED_OK;
             const mergedInv = unionTxnsById(localInv, kvInv);
             FUND_PARTS = cumulFundParts(mergedInv);   // v25.01 — parts live = cumul DB
             if(mergedInv.length !== localInv.length || mergedInv.length !== kvInv.length){
@@ -8077,7 +8074,7 @@ function App(){
     // 1. Ligne DB (montant signe comme le seed : negatif pour OUT)
     const row={ id:uid(), date:inv.date, fonds:inv.fonds, holder:inv.holder, io:inv.io,
       shares:parseFloat(sharesSigned.toFixed(6)), vps:parseFloat(coursEur.toFixed(6)), montant:parseFloat((sign*montantEUR).toFixed(2)) };
-    const newInv=[...(liveInv||INV_SEED), row];
+    const newInv=[...(liveInv||INV_SEED_OK), row];
     // 2. FUND_PARTS sync (avant setLive : calcGdbPrices lira la nouvelle valeur)
     FUND_PARTS=cumulFundParts(newInv);
     // 3. Positions
