@@ -696,7 +696,7 @@ function applyPrices(prices, usdEur, effSrc){
 }
 
 // Date locale UTC+11 (Nouvelle-Calédonie)
-const APP_VERSION = "v2.07";
+const APP_VERSION = "v2.08";
 const NC_OFFSET_MS = 11 * 60 * 60 * 1000;
 const todayNC = () => {
   const nc = new Date(Date.now() + NC_OFFSET_MS);
@@ -6525,302 +6525,488 @@ function TradeDetailModal({trade, kind, onClose, liveIbkrAnnex}){
 // Stocké dans cgi_watchlist (KV + localStorage)
 // ══════════════════════════════════════════════════════════════════════════════
 
+// ══════════════════════════════════════════════════════════════════════════════
+// PAGE WATCHLIST v2 — CGI
+// Suivi de marché : thèses structurées + scoring + alertes + news
+// ══════════════════════════════════════════════════════════════════════════════
 function PageWatchlist({ EFF, hidden }){
-  // C est accessible globalement dans le module
-  const[list, setList]         = useState([]);
-  const[prices, setPrices]     = useState({});
-  const[loading, setLoading]   = useState(false);
-  const[modal, setModal]       = useState(null);    // null | "add" | entry{}
-  const[editForm, setEditForm] = useState({});
-  const[expanded, setExpanded] = useState({});      // id → bool (thèse visible)
-  const[saving, setSaving]     = useState(false);
-  const[filter, setFilter]     = useState("all");   // all | alerte | fav
+  var cardBg=C.bg2, borderC=C.border, textC=C.text, grayC=C.gray;
+  var greenC=C.green, redC=C.red, blueC=C.blue, orangeC=C.btc;
+  var bgC=C.bg||"#07080D";
 
-  // ── Chargement initial ────────────────────────────────────────────────────
+  const[list,setList]         = useState([]);
+  const[prices,setPrices]     = useState({});
+  const[loading,setLoading]   = useState(false);
+  const[modal,setModal]       = useState(null);   // null|"add"|entry
+  const[editForm,setEditForm] = useState({});
+  const[expanded,setExpanded] = useState({});
+  const[filter,setFilter]     = useState("all");  // all|fav|alerte
+  const[saving,setSaving]     = useState(false);
+  const[newsPanel,setNewsPanel]= useState(false);
+  const[news,setNews]         = useState([]);
+  const[newsLoading,setNewsLoading]=useState(false);
+
+  // ── Chargement ─────────────────────────────────────────────────────────────
   useEffect(function(){
-    var stored = lsv9Get('cgi_watchlist');
-    if(stored && Array.isArray(stored) && stored.length > 0){
-      setList(stored);
-    } else {
+    var stored=lsv9Get('cgi_watchlist');
+    if(stored&&Array.isArray(stored)&&stored.length) setList(stored);
+    else {
       fetch(CF_WORKER_URL+"/read",{headers:{"X-Auth-Key":CF_AUTH_KEY},signal:AbortSignal.timeout(8000)})
-        .then(function(r){ return r.json(); })
-        .then(function(d){ if(d.cgi_watchlist && d.cgi_watchlist.length) setList(d.cgi_watchlist); })
+        .then(function(r){return r.json();})
+        .then(function(d){if(d.cgi_watchlist&&d.cgi_watchlist.length)setList(d.cgi_watchlist);})
         .catch(function(){});
     }
   },[]);
 
-  // ── Fetch prix live pour tous les tickers ─────────────────────────────────
+  // ── Prix live ─────────────────────────────────────────────────────────────
   useEffect(function(){
-    if(list.length === 0) return;
+    if(!list.length) return;
     setLoading(true);
     Promise.all(list.map(function(e){
-      var sym = YF_MAP[e.ticker] || e.ticker;
-      return fetchYahooCF(sym).then(function(p){ return [e.ticker, p]; }).catch(function(){ return [e.ticker, null]; });
-    })).then(function(results){
-      var pm = {};
-      results.forEach(function(pair){ if(pair[1] != null) pm[pair[0]] = pair[1]; });
-      setPrices(pm);
-      setLoading(false);
+      var sym=YF_MAP[e.ticker]||e.ticker;
+      return fetchYahooCF(sym).then(function(p){return[e.ticker,p];}).catch(function(){return[e.ticker,null];});
+    })).then(function(res){
+      var pm={}; res.forEach(function(r){if(r[1]!=null)pm[r[0]]=r[1];}); setPrices(pm); setLoading(false);
     });
   },[list.length]);
 
-  // ── Sauvegarder ──────────────────────────────────────────────────────────
-  function persist(newList){
-    setList(newList);
-    lsv9Set('cgi_watchlist', newList);
-    setSaving(true);
-    var r = saveBase('cgi_watchlist', newList);
-    if(r && typeof r.then === 'function') r.then(function(){ setSaving(false); });
-    else setSaving(false);
+  // ── Persist ───────────────────────────────────────────────────────────────
+  function persist(nl){
+    setList(nl); lsv9Set('cgi_watchlist',nl); setSaving(true);
+    var r=saveBase('cgi_watchlist',nl);
+    if(r&&typeof r.then==='function') r.then(function(){setSaving(false);}); else setSaving(false);
   }
 
-  // ── Refresh prix ──────────────────────────────────────────────────────────
   function refreshPrices(){
     setLoading(true);
     Promise.all(list.map(function(e){
-      var sym = YF_MAP[e.ticker] || e.ticker;
-      return fetchYahooCF(sym).then(function(p){ return [e.ticker, p]; }).catch(function(){ return [e.ticker, null]; });
-    })).then(function(results){
-      var pm = {};
-      results.forEach(function(pair){ if(pair[1] != null) pm[pair[0]] = pair[1]; });
-      setPrices(pm);
-      setLoading(false);
+      var sym=YF_MAP[e.ticker]||e.ticker;
+      return fetchYahooCF(sym).then(function(p){return[e.ticker,p];}).catch(function(){return[e.ticker,null];});
+    })).then(function(res){
+      var pm={}; res.forEach(function(r){if(r[1]!=null)pm[r[0]]=r[1];}); setPrices(pm); setLoading(false);
     });
   }
 
-  // ── Modal helpers ────────────────────────────────────────────────────────
-  function openAdd(){
-    setEditForm({ticker:"",name:"",cat:"Picking",thesis:"",targetPrice:"",alertBelow:"",fav:false});
-    setModal("add");
-  }
-  function openEdit(e){
-    setEditForm({...e, targetPrice:e.targetPrice||"", alertBelow:e.alertBelow||""});
-    setModal("edit");
-  }
-  function closeModal(){ setModal(null); setEditForm({}); }
-
-  function submitForm(){
-    if(!editForm.ticker || !editForm.ticker.trim()) return;
-    var entry = {
-      id: modal==="edit" ? editForm.id : ("wl_"+Date.now()),
-      ticker: editForm.ticker.trim().toUpperCase(),
-      name:   editForm.name.trim() || editForm.ticker.trim().toUpperCase(),
-      cat:    editForm.cat || "Picking",
-      thesis: editForm.thesis || "",
-      targetPrice: editForm.targetPrice ? parseFloat(editForm.targetPrice) : null,
-      alertBelow:  editForm.alertBelow  ? parseFloat(editForm.alertBelow)  : null,
-      fav:    !!editForm.fav,
-      addedAt: editForm.addedAt || new Date().toISOString().slice(0,10),
-    };
-    var newList = modal==="edit"
-      ? list.map(function(x){ return x.id===entry.id ? entry : x; })
-      : [...list, entry];
-    persist(newList);
-    closeModal();
+  // ── Score ─────────────────────────────────────────────────────────────────
+  function getScore(e){ return (e.conditions||[]).filter(function(c){return c.validated;}).length; }
+  function scoreEmoji(s,total){
+    if(total===0) return "";
+    if(s===0) return "❄️";
+    if(s===total) return "🚀";
+    if(s>=3) return "🔥🔥";
+    if(s>=1) return "🔥";
+    return "❄️";
   }
 
-  function deleteEntry(id){
-    if(!window.confirm("Supprimer cette entrée de la watchlist ?")) return;
-    persist(list.filter(function(x){ return x.id!==id; }));
+  // ── Toggle condition validée ──────────────────────────────────────────────
+  function toggleCondition(entryId,condId){
+    persist(list.map(function(e){
+      if(e.id!==entryId) return e;
+      var conds=(e.conditions||[]).map(function(c){
+        return c.id===condId?{...c,validated:!c.validated}:c;
+      });
+      return {...e,conditions:conds,score:conds.filter(function(c){return c.validated;}).length};
+    }));
   }
 
   function toggleFav(id){
-    persist(list.map(function(x){ return x.id===id ? {...x, fav:!x.fav} : x; }));
+    persist(list.map(function(x){return x.id===id?{...x,fav:!x.fav}:x;}));
   }
-
+  function deleteEntry(id){
+    if(!window.confirm("Supprimer ?")) return;
+    persist(list.filter(function(x){return x.id!==id;}));
+  }
   function toggleExpanded(id){
-    setExpanded(function(prev){ var n={...prev}; n[id]=!n[id]; return n; });
+    setExpanded(function(p){var n={...p};n[id]=!n[id];return n;});
   }
 
-  // ── Filtres ───────────────────────────────────────────────────────────────
-  var displayed = list.filter(function(e){
+  // ── News ──────────────────────────────────────────────────────────────────
+  function fetchNews(){
+    setNewsLoading(true); setNewsPanel(true);
+    // Tickers: portfolio + watchlist favs + watchlist all (max 8)
+    var portTickers=[];
+    var src=EFF||{};
+    if(src.stocks&&src.stocks.items) portTickers=src.stocks.items.filter(function(x){return x.cat!=="Cash"&&x.cat!=="Cash Matelas";}).map(function(x){return x.t;});
+    if(src.crypto&&src.crypto.items) portTickers=portTickers.concat(src.crypto.items.map(function(x){return x.t;}));
+    // Watchlist favs first, then others
+    var wlFavs=list.filter(function(e){return e.fav;}).map(function(e){return e.ticker;});
+    var wlAll=list.map(function(e){return e.ticker;});
+    var allTickers=[...new Set([...wlFavs,...portTickers,...wlAll])].slice(0,10);
+    Promise.all(allTickers.map(function(t){
+      var sym=YF_MAP[t]||t;
+      return fetch(CF_WORKER_URL+"/yahoo-chart?symbol="+encodeURIComponent(sym)+"&interval=1d&range=5d&no_logo=1",{
+        headers:{"X-Auth-Key":CF_AUTH_KEY},signal:AbortSignal.timeout(12000)
+      }).then(function(r){return r.json();})
+        .then(function(d){return{ticker:t,news:(d.news||[]).slice(0,5)};})
+        .catch(function(){return{ticker:t,news:[]};});
+    })).then(function(results){
+      // Flatten + sort by time, attach ticker + score info
+      var flat=[];
+      results.forEach(function(r){
+        var isFav=list.some(function(e){return e.ticker===r.ticker&&e.fav;});
+        var score=0; var entry=list.find(function(e){return e.ticker===r.ticker;});
+        if(entry) score=getScore(entry);
+        r.news.forEach(function(n){flat.push({...n,ticker:r.ticker,isFav:isFav,score:score});});
+      });
+      flat.sort(function(a,b){
+        // Priorité: score favori desc, puis date desc
+        var favDiff=(b.isFav?1:0)-(a.isFav?1:0);
+        if(favDiff!==0) return favDiff;
+        var sdiff=b.score-a.score;
+        if(sdiff!==0) return sdiff;
+        return (b.time||0)-(a.time||0);
+      });
+      setNews(flat); setNewsLoading(false);
+    });
+  }
+
+  // ── Modal ─────────────────────────────────────────────────────────────────
+  function openAdd(){
+    setEditForm({ticker:"",name:"",cat:"Picking",fav:false,description:"",domain:"Tech",
+      buyZoneLow:"",buyZoneHigh:"",alertBuy:"",alertSell:"",
+      sellTargets:[{price:"",note:""}],
+      conditions:[{id:1,text:"",validated:false},{id:2,text:"",validated:false},{id:3,text:"",validated:false}],
+      risks:""});
+    setModal("add");
+  }
+  function openEdit(e){
+    var st=(e.sellTargets&&e.sellTargets.length)?e.sellTargets:[{price:"",note:""}];
+    var conds=(e.conditions&&e.conditions.length)?e.conditions:
+      [{id:1,text:"",validated:false},{id:2,text:"",validated:false},{id:3,text:"",validated:false}];
+    setEditForm({...e,
+      buyZoneLow:(e.buyZone&&e.buyZone.low)||"",buyZoneHigh:(e.buyZone&&e.buyZone.high)||"",
+      sellTargets:st,conditions:conds});
+    setModal("edit");
+  }
+  function closeModal(){setModal(null);setEditForm({});}
+
+  function updateCond(idx,field,val){
+    setEditForm(function(p){
+      var conds=[...(p.conditions||[])];
+      conds[idx]={...conds[idx],[field]:val};
+      return{...p,conditions:conds};
+    });
+  }
+  function addCond(){
+    setEditForm(function(p){
+      var conds=[...(p.conditions||[])];
+      if(conds.length>=5) return p;
+      conds.push({id:Date.now(),text:"",validated:false});
+      return{...p,conditions:conds};
+    });
+  }
+  function removeCond(idx){
+    setEditForm(function(p){var c=[...(p.conditions||[])];c.splice(idx,1);return{...p,conditions:c};});
+  }
+  function updateSell(idx,field,val){
+    setEditForm(function(p){
+      var st=[...(p.sellTargets||[])];st[idx]={...st[idx],[field]:val};return{...p,sellTargets:st};
+    });
+  }
+  function addSell(){
+    setEditForm(function(p){
+      var st=[...(p.sellTargets||[])];
+      if(st.length>=4) return p;
+      st.push({price:"",note:""});return{...p,sellTargets:st};
+    });
+  }
+  function removeSell(idx){
+    setEditForm(function(p){var st=[...(p.sellTargets||[])];st.splice(idx,1);return{...p,sellTargets:st};});
+  }
+
+  function submitForm(){
+    if(!editForm.ticker||!editForm.ticker.trim()) return;
+    var conds=(editForm.conditions||[]).filter(function(c){return c.text&&c.text.trim();});
+    var sells=(editForm.sellTargets||[]).filter(function(s){return s.price;}).map(function(s){return{price:parseFloat(s.price),note:s.note||""};});
+    var entry={
+      id:modal==="edit"?editForm.id:("wl_"+Date.now()),
+      ticker:editForm.ticker.trim().toUpperCase(),
+      name:editForm.name.trim()||editForm.ticker.trim().toUpperCase(),
+      cat:editForm.cat||"Picking",
+      fav:!!editForm.fav,
+      addedAt:editForm.addedAt||new Date().toISOString().slice(0,10),
+      description:editForm.description||"",
+      domain:editForm.domain||"",
+      buyZone:(editForm.buyZoneLow||editForm.buyZoneHigh)?{low:parseFloat(editForm.buyZoneLow)||null,high:parseFloat(editForm.buyZoneHigh)||null}:null,
+      alertBuy:editForm.alertBuy?parseFloat(editForm.alertBuy):null,
+      alertSell:editForm.alertSell?parseFloat(editForm.alertSell):null,
+      sellTargets:sells,
+      conditions:conds,
+      risks:editForm.risks||"",
+      score:conds.filter(function(c){return c.validated;}).length,
+      // compat legacy
+      targetPrice:sells.length?sells[0].price:null,
+      alertBelow:editForm.alertBuy?parseFloat(editForm.alertBuy):null,
+    };
+    var nl=modal==="edit"?list.map(function(x){return x.id===entry.id?entry:x;}):[...list,entry];
+    persist(nl); closeModal();
+  }
+
+  // ── Sort list ─────────────────────────────────────────────────────────────
+  var sortedList=[...list].sort(function(a,b){
+    // favs first, then by score desc
+    var fa=a.fav?1:0, fb=b.fav?1:0;
+    if(fb!==fa) return fb-fa;
+    return (b.score||0)-(a.score||0);
+  });
+  var alertCount=list.filter(function(e){var p=prices[e.ticker];return p&&e.alertBelow&&p<=e.alertBelow;}).length;
+  var displayed=sortedList.filter(function(e){
     if(filter==="fav") return e.fav;
-    if(filter==="alerte"){
-      var p=prices[e.ticker];
-      return p && e.alertBelow && p <= e.alertBelow;
-    }
+    if(filter==="alerte"){var p=prices[e.ticker];return p&&e.alertBelow&&p<=e.alertBelow;}
     return true;
   });
-  var alertCount = list.filter(function(e){ var p=prices[e.ticker]; return p&&e.alertBelow&&p<=e.alertBelow; }).length;
 
-  var cardBg=C.bg2, borderC=C.border, textC=C.text, grayC=C.gray;
-  var greenC=C.green, redC=C.red, blueC=C.blue, orangeC=C.btc;
+  var inputStyle={width:"100%",background:C.bg,border:"1px solid "+borderC,borderRadius:8,padding:"8px 10px",color:textC,fontSize:13,boxSizing:"border-box"};
+  var labelStyle={display:"block",fontSize:11,color:grayC,marginBottom:4};
 
-  // ── Render ────────────────────────────────────────────────────────────────
-  return React.createElement("div", {style:{padding:"0 0 80px 0", fontFamily:C.font||"system-ui,sans-serif"}},
+  return React.createElement("div",{style:{padding:"0 0 80px",fontFamily:C.font||"system-ui,sans-serif"}},
 
-    // Header
+    // ── Header ──────────────────────────────────────────────────────────────
     React.createElement("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"16px 16px 8px"}},
       React.createElement("div",null,
-        React.createElement("div",{style:{fontSize:22,fontWeight:900,color:textC}},"Suivi de marché"),
-        React.createElement("div",{style:{fontSize:11,color:grayC}},list.length+" ticker"+(list.length>1?"s":"")+(saving?" · Sauvegarde...":" · Cloudflare KV sync"))
+        React.createElement("div",{style:{fontSize:20,fontWeight:900,color:textC}},"Suivi de marché"),
+        React.createElement("div",{style:{fontSize:11,color:grayC}},list.length+" ticker"+(list.length>1?"s":"")+(saving?" · 💾":""))
       ),
-      React.createElement("div",{style:{display:"flex",gap:8}},
-        React.createElement("button",{onClick:refreshPrices,disabled:loading,style:{background:cardBg,border:"1px solid "+borderC,borderRadius:8,padding:"6px 12px",color:blueC,fontSize:11,fontWeight:700,cursor:"pointer"}},
-          loading?"⟳":"⟳ Refresh"),
-        React.createElement("button",{onClick:openAdd,style:{background:orangeC,border:"none",borderRadius:8,padding:"6px 14px",color:"#000",fontSize:12,fontWeight:800,cursor:"pointer"}},
-          "+ Ajouter")
+      React.createElement("div",{style:{display:"flex",gap:6}},
+        React.createElement("button",{onClick:fetchNews,style:{background:cardBg,border:"1px solid "+borderC,borderRadius:8,padding:"6px 10px",color:blueC,fontSize:11,fontWeight:700,cursor:"pointer"}},"📰 News"),
+        React.createElement("button",{onClick:refreshPrices,disabled:loading,style:{background:cardBg,border:"1px solid "+borderC,borderRadius:8,padding:"6px 10px",color:loading?grayC:blueC,fontSize:11,fontWeight:700,cursor:"pointer"}},loading?"⟳ ...":"⟳"),
+        React.createElement("button",{onClick:openAdd,style:{background:orangeC,border:"none",borderRadius:8,padding:"6px 12px",color:"#000",fontSize:12,fontWeight:800,cursor:"pointer"}},"+")
       )
     ),
 
-    // Filtres
+    // ── Filtres ──────────────────────────────────────────────────────────────
     React.createElement("div",{style:{display:"flex",gap:6,padding:"0 16px 12px",overflowX:"auto"}},
-      ["all","fav","alerte"].map(function(f){
-        var labels={"all":"Tous ("+list.length+")","fav":"★ Favoris","alerte":"🔔 Alertes"+(alertCount?" ("+alertCount+")":"")};
-        var active=filter===f;
-        return React.createElement("button",{key:f,onClick:function(){setFilter(f);},style:{
-          background:active?(f==="alerte"?redC:orangeC):cardBg,
-          border:"1px solid "+(active?(f==="alerte"?redC:orangeC):borderC),
+      [["all","Tous ("+list.length+")"],["fav","★ Favoris"],["alerte","🔔"+(alertCount?" "+alertCount:"")]].map(function(f){
+        var active=filter===f[0];
+        return React.createElement("button",{key:f[0],onClick:function(){setFilter(f[0]);},style:{
+          background:active?(f[0]==="alerte"?redC:orangeC):cardBg,
+          border:"1px solid "+(active?(f[0]==="alerte"?redC:orangeC):borderC),
           borderRadius:16,padding:"4px 12px",color:active?"#000":grayC,
           fontSize:11,fontWeight:active?700:500,cursor:"pointer",whiteSpace:"nowrap"
-        }},labels[f]);
+        }},f[1]);
       })
     ),
 
-    // Liste
+    // ── Liste des tickers ─────────────────────────────────────────────────────
     displayed.length===0
       ? React.createElement("div",{style:{textAlign:"center",padding:"40px 16px",color:grayC}},
-          list.length===0 ? "Aucun ticker dans la watchlist. Clique sur + Ajouter." : "Aucun résultat pour ce filtre.")
+          list.length===0?"Aucun ticker. Clique sur + pour commencer.":"Aucun résultat.")
       : React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:8,padding:"0 12px"}},
           displayed.map(function(e){
-            var price    = prices[e.ticker];
-            var prevClose= null;
-            var change   = null;
-            var changePct= null;
-            // Prix via YF map
-            var sym = YF_MAP[e.ticker]||e.ticker;
-            var hasTarget= e.targetPrice && price;
-            var atTarget = hasTarget && price >= e.targetPrice * 0.97;
-            var hasAlert = e.alertBelow && price;
-            var inAlert  = hasAlert && price <= e.alertBelow;
+            var price=prices[e.ticker];
+            var inAlert=price&&e.alertBelow&&price<=e.alertBelow;
+            var score=getScore(e);
+            var condTotal=(e.conditions||[]).filter(function(c){return c.text;}).length;
+            var atBuyZone=price&&e.buyZone&&e.buyZone.low&&price<=e.buyZone.high&&price>=e.buyZone.low;
+            var exp=expanded[e.id];
 
             return React.createElement("div",{key:e.id,style:{
-              background:inAlert ? redC+"18" : cardBg,
-              border:"1px solid "+(inAlert?redC:atTarget?greenC:borderC),
-              borderRadius:12,padding:"12px 14px",cursor:"pointer",
+              background:inAlert?redC+"15":atBuyZone?greenC+"10":cardBg,
+              border:"1px solid "+(inAlert?redC:atBuyZone?greenC:e.fav?blueC+"66":borderC),
+              borderRadius:12,padding:"12px 14px"
             }},
-              // Row 1: ticker + price + actions
+              // Row 1: info principale
               React.createElement("div",{style:{display:"flex",alignItems:"flex-start",justifyContent:"space-between"}},
                 React.createElement("div",{style:{flex:1}},
-                  React.createElement("div",{style:{display:"flex",alignItems:"center",gap:8}},
+                  React.createElement("div",{style:{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}},
+                    e.fav&&React.createElement("span",{style:{color:orangeC,fontSize:14}},"★"),
                     React.createElement("span",{style:{fontSize:16,fontWeight:900,color:textC}},e.ticker),
-                    React.createElement("span",{style:{fontSize:9,background:borderC,borderRadius:4,padding:"2px 6px",color:grayC}},e.cat),
-                    e.fav && React.createElement("span",{style:{color:orangeC,fontSize:12}},"★"),
-                    inAlert && React.createElement("span",{style:{fontSize:11,color:redC,fontWeight:700}},"🔔 ALERTE"),
-                    atTarget && React.createElement("span",{style:{fontSize:11,color:greenC,fontWeight:700}},"✓ CIBLE"),
+                    e.domain&&React.createElement("span",{style:{fontSize:9,background:blueC+"22",border:"1px solid "+blueC+"44",borderRadius:4,padding:"1px 6px",color:blueC}},e.domain),
+                    React.createElement("span",{style:{fontSize:9,background:borderC,borderRadius:4,padding:"1px 6px",color:grayC}},e.cat),
+                    condTotal>0&&React.createElement("span",{style:{fontSize:11,fontWeight:700,color:score===condTotal&&score>0?greenC:score>0?orangeC:grayC}},
+                      scoreEmoji(score,condTotal)+" "+score+"/"+condTotal),
+                    inAlert&&React.createElement("span",{style:{fontSize:11,color:redC,fontWeight:700}},"🔔 ALERTE"),
+                    atBuyZone&&React.createElement("span",{style:{fontSize:11,color:greenC,fontWeight:700}},"✓ ZONE ACHAT")
                   ),
                   React.createElement("div",{style:{fontSize:11,color:grayC,marginTop:2}},e.name)
                 ),
                 React.createElement("div",{style:{textAlign:"right"}},
                   price!=null
-                    ? React.createElement("div",{style:{fontSize:18,fontWeight:800,color:textC}},
-                        (e.currency==="EUR"?"€":"$")+price.toLocaleString("fr-FR",{maximumFractionDigits:2}))
-                    : React.createElement("div",{style:{fontSize:13,color:grayC}},loading?"...":"—")
+                    ? React.createElement("span",{style:{fontSize:17,fontWeight:800,color:textC}},"$"+price.toLocaleString("fr-FR",{maximumFractionDigits:2}))
+                    : React.createElement("span",{style:{fontSize:13,color:grayC}},loading?"...":"—")
                 )
               ),
 
-              // Row 2: targets + alerts
-              (e.targetPrice || e.alertBelow) && React.createElement("div",{style:{display:"flex",gap:12,marginTop:8}},
-                e.targetPrice && React.createElement("div",{style:{fontSize:10,color:grayC}},
-                  "🎯 Cible : ",React.createElement("span",{style:{color:greenC,fontWeight:700}},"$"+e.targetPrice)),
-                e.alertBelow && React.createElement("div",{style:{fontSize:10,color:grayC}},
-                  "🔔 Alerte si < ",React.createElement("span",{style:{color:redC,fontWeight:700}},"$"+e.alertBelow))
+              // Zones prix
+              (e.buyZone||e.alertBuy||e.alertSell||(e.sellTargets&&e.sellTargets.length))&&React.createElement("div",{style:{display:"flex",flexWrap:"wrap",gap:8,marginTop:8}},
+                e.buyZone&&e.buyZone.low&&React.createElement("span",{style:{fontSize:10,color:greenC}},"🟢 Achat: $"+e.buyZone.low+"–$"+e.buyZone.high),
+                e.alertBuy&&React.createElement("span",{style:{fontSize:10,color:greenC}},"⬇️ Alerte achat: $"+e.alertBuy),
+                (e.sellTargets||[]).map(function(st,i){return st.price?React.createElement("span",{key:i,style:{fontSize:10,color:blueC}},"🔵 Cible "+( i+1)+": $"+st.price+(st.note?" ("+st.note+")":"")):null;}),
+                e.alertSell&&React.createElement("span",{style:{fontSize:10,color:orangeC}},"⬆️ Alerte vente: $"+e.alertSell)
               ),
 
-              // Row 3: thèse (collapsible)
-              e.thesis && React.createElement("div",{style:{marginTop:8}},
-                React.createElement("div",{onClick:function(){toggleExpanded(e.id);},style:{
-                  fontSize:10,color:blueC,cursor:"pointer",fontWeight:600,marginBottom:expanded[e.id]?4:0
-                }},expanded[e.id]?"▼ Thèse":"▶ Thèse"),
-                expanded[e.id] && React.createElement("div",{style:{
-                  fontSize:12,color:grayC,lineHeight:1.5,padding:"6px 8px",
-                  background:C.bg||"#0F1115",borderRadius:6,borderLeft:"3px solid "+blueC
-                }},e.thesis)
+              // Conditions scoring
+              e.fav&&condTotal>0&&React.createElement("div",{style:{marginTop:8}},
+                React.createElement("div",{style:{fontSize:10,color:grayC,marginBottom:4,fontWeight:600}},"CATALYSEURS "+score+"/"+condTotal+" validés"),
+                React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:3}},
+                  (e.conditions||[]).filter(function(c){return c.text;}).map(function(c){
+                    return React.createElement("div",{key:c.id,
+                      onClick:function(){toggleCondition(e.id,c.id);},
+                      style:{display:"flex",alignItems:"flex-start",gap:6,cursor:"pointer",padding:"3px 6px",borderRadius:6,
+                        background:c.validated?greenC+"15":C.bg,border:"1px solid "+(c.validated?greenC+"44":borderC)}},
+                      React.createElement("span",{style:{fontSize:12,color:c.validated?greenC:grayC,flexShrink:0,marginTop:1}},c.validated?"✓":"○"),
+                      React.createElement("span",{style:{fontSize:11,color:c.validated?textC:grayC,lineHeight:1.4}},c.text)
+                    );
+                  })
+                )
               ),
 
-              // Row 4: actions
-              React.createElement("div",{style:{display:"flex",gap:8,marginTop:10}},
-                React.createElement("button",{onClick:function(){toggleFav(e.id);},style:{
-                  background:"none",border:"1px solid "+borderC,borderRadius:6,padding:"3px 8px",
-                  color:e.fav?orangeC:grayC,fontSize:11,cursor:"pointer"
-                }},e.fav?"★ Favori":"☆ Favori"),
-                React.createElement("button",{onClick:function(){openEdit(e);},style:{
-                  background:"none",border:"1px solid "+borderC,borderRadius:6,padding:"3px 8px",
-                  color:blueC,fontSize:11,cursor:"pointer"
-                }},"✏️ Éditer"),
-                React.createElement("button",{onClick:function(){deleteEntry(e.id);},style:{
-                  background:"none",border:"1px solid "+redC+"44",borderRadius:6,padding:"3px 8px",
-                  color:redC,fontSize:11,cursor:"pointer"
-                }},"🗑")
+              // Thèse / description (collapsible)
+              (e.description||e.thesis||e.risks)&&React.createElement("div",{style:{marginTop:8}},
+                React.createElement("div",{onClick:function(){toggleExpanded(e.id);},style:{fontSize:10,color:blueC,cursor:"pointer",fontWeight:600}},
+                  exp?"▼ Thèse & risques":"▶ Thèse & risques"),
+                exp&&React.createElement("div",{style:{marginTop:6,display:"flex",flexDirection:"column",gap:6}},
+                  e.description&&React.createElement("div",{style:{fontSize:12,color:grayC,lineHeight:1.4,padding:"6px 8px",background:bgC,borderRadius:6,borderLeft:"3px solid "+blueC}},
+                    React.createElement("span",{style:{color:grayC,fontSize:10,fontWeight:600}},"CONTEXTE "),e.description),
+                  e.risks&&React.createElement("div",{style:{fontSize:12,color:redC+"CC",lineHeight:1.4,padding:"6px 8px",background:redC+"08",borderRadius:6,borderLeft:"3px solid "+redC}},
+                    React.createElement("span",{style:{color:redC,fontSize:10,fontWeight:600}},"RISQUES / INVALIDATION "),e.risks)
+                )
+              ),
+
+              // Actions
+              React.createElement("div",{style:{display:"flex",gap:6,marginTop:10}},
+                React.createElement("button",{onClick:function(){toggleFav(e.id);},style:{background:"none",border:"1px solid "+borderC,borderRadius:6,padding:"3px 8px",color:e.fav?orangeC:grayC,fontSize:11,cursor:"pointer"}},e.fav?"★":"☆"),
+                React.createElement("button",{onClick:function(){openEdit(e);},style:{background:"none",border:"1px solid "+borderC,borderRadius:6,padding:"3px 8px",color:blueC,fontSize:11,cursor:"pointer"}},"✏️ Éditer"),
+                React.createElement("button",{onClick:function(){deleteEntry(e.id);},style:{background:"none",border:"1px solid "+redC+"44",borderRadius:6,padding:"3px 8px",color:redC,fontSize:11,cursor:"pointer"}},"🗑")
               )
             );
           })
         ),
 
-    // ── MODAL Add/Edit ────────────────────────────────────────────────────────
-    modal && React.createElement("div",{
+    // ══════════════════════════════════════════════════════════
+    // PANEL NEWS
+    // ══════════════════════════════════════════════════════════
+    newsPanel&&React.createElement("div",{
+      style:{position:"fixed",inset:0,background:"#000C",zIndex:9998,display:"flex",alignItems:"flex-end"},
+      onClick:function(ev){if(ev.target===ev.currentTarget)setNewsPanel(false);}
+    },
+      React.createElement("div",{style:{background:bgC,border:"1px solid "+borderC,borderRadius:"16px 16px 0 0",width:"100%",maxWidth:520,margin:"0 auto",maxHeight:"85vh",display:"flex",flexDirection:"column"}},
+        React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"16px 16px 8px",flexShrink:0}},
+          React.createElement("span",{style:{fontSize:16,fontWeight:800,color:textC}},"📰 News — Tickers suivis"),
+          React.createElement("button",{onClick:function(){setNewsPanel(false);},style:{background:"none",border:"none",color:grayC,fontSize:20,cursor:"pointer"}},"×")
+        ),
+        React.createElement("div",{style:{overflowY:"auto",flex:1,padding:"0 12px 16px"}},
+          newsLoading?React.createElement("div",{style:{textAlign:"center",padding:40,color:grayC}},"Chargement des news...")
+          :news.length===0?React.createElement("div",{style:{textAlign:"center",padding:40,color:grayC}},"Aucune news trouvée.")
+          :news.map(function(n,i){
+            var timeStr=n.time?new Date(n.time).toLocaleDateString("fr-FR",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}):"";
+            return React.createElement("a",{key:i,href:n.url,target:"_blank",rel:"noopener",style:{display:"block",textDecoration:"none",marginBottom:8}},
+              React.createElement("div",{style:{background:cardBg,border:"1px solid "+borderC,borderRadius:10,padding:"10px 12px"}},
+                React.createElement("div",{style:{display:"flex",alignItems:"center",gap:6,marginBottom:4}},
+                  React.createElement("span",{style:{fontSize:9,background:n.isFav?orangeC+"22":blueC+"22",border:"1px solid "+(n.isFav?orangeC:blueC)+"44",borderRadius:4,padding:"1px 6px",color:n.isFav?orangeC:blueC,fontWeight:700}},
+                    (n.isFav?"★ ":"")+n.ticker+(n.score>0?" 🔥".repeat(Math.min(n.score,3)):"")),
+                  React.createElement("span",{style:{fontSize:9,color:grayC}},n.publisher),
+                  React.createElement("span",{style:{fontSize:9,color:grayC,marginLeft:"auto"}},timeStr)
+                ),
+                React.createElement("div",{style:{fontSize:12,color:textC,lineHeight:1.4}},n.title)
+              )
+            );
+          })
+        )
+      )
+    ),
+
+    // ══════════════════════════════════════════════════════════
+    // MODAL Add/Edit — FORMULAIRE COMPLET
+    // ══════════════════════════════════════════════════════════
+    modal&&React.createElement("div",{
       style:{position:"fixed",inset:0,background:"#000C",zIndex:9999,display:"flex",alignItems:"flex-end",justifyContent:"center"},
       onClick:function(ev){if(ev.target===ev.currentTarget)closeModal();}
     },
-      React.createElement("div",{style:{
-        background:C.bg||"#0F1115",border:"1px solid "+borderC,borderRadius:"16px 16px 0 0",
-        width:"100%",maxWidth:480,padding:20,maxHeight:"85vh",overflowY:"auto"
-      }},
+      React.createElement("div",{style:{background:bgC,border:"1px solid "+borderC,borderRadius:"16px 16px 0 0",width:"100%",maxWidth:500,padding:20,maxHeight:"92vh",overflowY:"auto"}},
+
+        // En-tête modal
         React.createElement("div",{style:{display:"flex",justifyContent:"space-between",marginBottom:16}},
-          React.createElement("span",{style:{fontSize:16,fontWeight:800,color:textC}},
-            modal==="add"?"Ajouter un ticker":"Modifier "+editForm.ticker),
+          React.createElement("span",{style:{fontSize:16,fontWeight:800,color:textC}},modal==="add"?"Ajouter un ticker":"Modifier "+editForm.ticker),
           React.createElement("button",{onClick:closeModal,style:{background:"none",border:"none",color:grayC,fontSize:20,cursor:"pointer"}},"×")
         ),
 
-        // Champs du formulaire
-        [
-          {label:"Ticker *",key:"ticker",ph:"ex: AAPL, BTC, PLTR"},
-          {label:"Nom",key:"name",ph:"ex: Apple Inc."},
-          {label:"Catégorie",key:"cat",type:"select",options:["Crypto","Indices","Picking","Or","Cash Dip","Cash Matelas"]},
-          {label:"Prix cible ($)",key:"targetPrice",ph:"ex: 250",type:"number"},
-          {label:"Alerte si prix < ($)",key:"alertBelow",ph:"ex: 180",type:"number"},
-          {label:"Thèse d'investissement",key:"thesis",ph:"Pourquoi ce titre ? Catalyseurs, risques...",type:"textarea"},
-        ].map(function(f){
-          return React.createElement("div",{key:f.key,style:{marginBottom:12}},
-            React.createElement("label",{style:{display:"block",fontSize:11,color:grayC,marginBottom:4}},f.label),
-            f.type==="select"
-              ? React.createElement("select",{
-                  value:editForm[f.key]||"",
-                  onChange:function(ev){setEditForm(function(p){var n={...p};n[f.key]=ev.target.value;return n;});},
-                  style:{width:"100%",background:cardBg,border:"1px solid "+borderC,borderRadius:8,padding:"8px 10px",color:textC,fontSize:13}
-                }, f.options.map(function(o){return React.createElement("option",{key:o,value:o},o);}))
-              : f.type==="textarea"
-              ? React.createElement("textarea",{
-                  value:editForm[f.key]||"",rows:4,
-                  placeholder:f.ph,
-                  onChange:function(ev){setEditForm(function(p){var n={...p};n[f.key]=ev.target.value;return n;});},
-                  style:{width:"100%",background:cardBg,border:"1px solid "+borderC,borderRadius:8,padding:"8px 10px",color:textC,fontSize:13,resize:"vertical",boxSizing:"border-box"}
-                })
-              : React.createElement("input",{
-                  type:f.type||"text",value:editForm[f.key]||"",
-                  placeholder:f.ph,
-                  onChange:function(ev){setEditForm(function(p){var n={...p};n[f.key]=ev.target.value;return n;});},
-                  style:{width:"100%",background:cardBg,border:"1px solid "+borderC,borderRadius:8,padding:"8px 10px",color:textC,fontSize:13,boxSizing:"border-box"}
-                })
-          );
-        }),
-
-        // Favori checkbox
-        React.createElement("div",{style:{display:"flex",alignItems:"center",gap:8,marginBottom:16}},
-          React.createElement("input",{type:"checkbox",id:"favCb",checked:!!editForm.fav,
-            onChange:function(ev){setEditForm(function(p){return{...p,fav:ev.target.checked};})}}),
-          React.createElement("label",{htmlFor:"favCb",style:{fontSize:13,color:textC,cursor:"pointer"}},"★ Marquer comme favori")
+        // Section: Identité
+        React.createElement("div",{style:{fontSize:11,color:orangeC,fontWeight:700,marginBottom:8,letterSpacing:.5}},"IDENTITÉ"),
+        React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}},
+          React.createElement("div",null,React.createElement("label",{style:labelStyle},"Ticker *"),
+            React.createElement("input",{value:editForm.ticker||"",placeholder:"AAPL",onChange:function(ev){setEditForm(function(p){return{...p,ticker:ev.target.value};});},style:inputStyle})),
+          React.createElement("div",null,React.createElement("label",{style:labelStyle},"Nom"),
+            React.createElement("input",{value:editForm.name||"",placeholder:"Apple Inc.",onChange:function(ev){setEditForm(function(p){return{...p,name:ev.target.value};});},style:inputStyle}))
+        ),
+        React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:16}},
+          React.createElement("div",null,React.createElement("label",{style:labelStyle},"Catégorie"),
+            React.createElement("select",{value:editForm.cat||"Picking",onChange:function(ev){setEditForm(function(p){return{...p,cat:ev.target.value};});},style:inputStyle},
+              ["Crypto","Indices","Picking","Or","Cash Dip","Cash Matelas"].map(function(o){return React.createElement("option",{key:o,value:o},o);}))),
+          React.createElement("div",null,React.createElement("label",{style:labelStyle},"Domaine"),
+            React.createElement("select",{value:editForm.domain||"Tech",onChange:function(ev){setEditForm(function(p){return{...p,domain:ev.target.value};});},style:inputStyle},
+              ["IA","Défense","Tech","Santé","Énergie","Finance","Matières premières","Consommation","Immobilier","Crypto","Indices","Or","Autre"].map(function(o){return React.createElement("option",{key:o,value:o},o);})))
         ),
 
-        // Bouton submit
-        React.createElement("button",{onClick:submitForm,style:{
-          width:"100%",background:orangeC,border:"none",borderRadius:10,padding:"12px",
-          color:"#000",fontSize:14,fontWeight:800,cursor:"pointer"
-        }},modal==="add"?"Ajouter à la watchlist":"Enregistrer les modifications")
+        // Section: Contexte
+        React.createElement("div",{style:{fontSize:11,color:orangeC,fontWeight:700,marginBottom:8,letterSpacing:.5}},"CONTEXTE / DESCRIPTIF"),
+        React.createElement("textarea",{value:editForm.description||"",rows:3,placeholder:"Décris le contexte actuel de l'entreprise, son positionnement...",onChange:function(ev){setEditForm(function(p){return{...p,description:ev.target.value};});},style:{...inputStyle,resize:"vertical",marginBottom:16}}),
+
+        // Section: Zones de prix
+        React.createElement("div",{style:{fontSize:11,color:orangeC,fontWeight:700,marginBottom:8,letterSpacing:.5}},"ZONES DE PRIX"),
+        React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}},
+          React.createElement("div",null,React.createElement("label",{style:labelStyle},"Zone achat — min $"),
+            React.createElement("input",{type:"number",value:editForm.buyZoneLow||"",placeholder:"ex: 800",onChange:function(ev){setEditForm(function(p){return{...p,buyZoneLow:ev.target.value};});},style:inputStyle})),
+          React.createElement("div",null,React.createElement("label",{style:labelStyle},"Zone achat — max $"),
+            React.createElement("input",{type:"number",value:editForm.buyZoneHigh||"",placeholder:"ex: 850",onChange:function(ev){setEditForm(function(p){return{...p,buyZoneHigh:ev.target.value};});},style:inputStyle}))
+        ),
+        React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}},
+          React.createElement("div",null,React.createElement("label",{style:labelStyle},"🔔 Alerte achat < $"),
+            React.createElement("input",{type:"number",value:editForm.alertBuy||"",placeholder:"ex: 785",onChange:function(ev){setEditForm(function(p){return{...p,alertBuy:ev.target.value};});},style:inputStyle})),
+          React.createElement("div",null,React.createElement("label",{style:labelStyle},"🔔 Alerte vente > $"),
+            React.createElement("input",{type:"number",value:editForm.alertSell||"",placeholder:"ex: 1150",onChange:function(ev){setEditForm(function(p){return{...p,alertSell:ev.target.value};});},style:inputStyle}))
+        ),
+
+        // Cibles de vente multiples
+        React.createElement("div",{style:{marginBottom:16}},
+          React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}},
+            React.createElement("label",{style:{...labelStyle,marginBottom:0}},"Objectifs de vente"),
+            (editForm.sellTargets||[]).length<4&&React.createElement("button",{onClick:addSell,style:{background:"none",border:"1px solid "+borderC,borderRadius:6,padding:"2px 8px",color:blueC,fontSize:10,cursor:"pointer"}},"+")
+          ),
+          React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:6}},
+            (editForm.sellTargets||[]).map(function(st,i){
+              return React.createElement("div",{key:i,style:{display:"flex",gap:6,alignItems:"center"}},
+                React.createElement("input",{type:"number",value:st.price||"",placeholder:"Prix $",onChange:function(ev){updateSell(i,"price",ev.target.value);},style:{...inputStyle,width:90,flex:"0 0 90px"}}),
+                React.createElement("input",{value:st.note||"",placeholder:"Note (ex: Résistance AT)",onChange:function(ev){updateSell(i,"note",ev.target.value);},style:{...inputStyle,flex:1}}),
+                React.createElement("button",{onClick:function(){removeSell(i);},style:{background:"none",border:"none",color:redC,fontSize:14,cursor:"pointer",padding:"0 4px"}},"×")
+              );
+            })
+          )
+        ),
+
+        // Section: Catalyseurs
+        React.createElement("div",{style:{fontSize:11,color:orangeC,fontWeight:700,marginBottom:8,letterSpacing:.5}},"CATALYSEURS / CONDITIONS (scoring)"),
+        React.createElement("div",{style:{fontSize:10,color:grayC,marginBottom:8}},"Coche les conditions validées → le ticker monte dans la liste"),
+        React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:6,marginBottom:8}},
+          (editForm.conditions||[]).map(function(c,i){
+            return React.createElement("div",{key:c.id||i,style:{display:"flex",gap:8,alignItems:"center"}},
+              React.createElement("input",{type:"checkbox",checked:!!c.validated,onChange:function(ev){updateCond(i,"validated",ev.target.checked);},style:{flexShrink:0}}),
+              React.createElement("input",{value:c.text||"",placeholder:"Ex: Croisement moyennes mobiles, RSI survendu...",onChange:function(ev){updateCond(i,"text",ev.target.value);},style:{...inputStyle,flex:1}}),
+              React.createElement("button",{onClick:function(){removeCond(i);},style:{background:"none",border:"none",color:redC,fontSize:14,cursor:"pointer",padding:"0 4px"}},"×")
+            );
+          })
+        ),
+        (editForm.conditions||[]).length<5&&React.createElement("button",{onClick:addCond,style:{background:"none",border:"1px solid "+borderC,borderRadius:6,padding:"4px 12px",color:blueC,fontSize:11,cursor:"pointer",marginBottom:16}},
+          "+ Ajouter un catalyseur"),
+
+        // Section: Risques
+        React.createElement("div",{style:{fontSize:11,color:redC,fontWeight:700,marginBottom:8,letterSpacing:.5}},"RISQUES / INVALIDATION DE LA THÈSE"),
+        React.createElement("textarea",{value:editForm.risks||"",rows:3,placeholder:"Dans quel cas la thèse devient invalide ? Ex: Perte de part de marché, concurrence d'OpenAI, margin compression...",onChange:function(ev){setEditForm(function(p){return{...p,risks:ev.target.value};});},style:{...inputStyle,resize:"vertical",marginBottom:12}}),
+
+        // Favori
+        React.createElement("div",{style:{display:"flex",alignItems:"center",gap:8,marginBottom:16}},
+          React.createElement("input",{type:"checkbox",id:"favCbW",checked:!!editForm.fav,onChange:function(ev){setEditForm(function(p){return{...p,fav:ev.target.checked};});}}),
+          React.createElement("label",{htmlFor:"favCbW",style:{fontSize:13,color:textC,cursor:"pointer"}},"★ Marquer comme favori (affichage prioritaire)")
+        ),
+
+        // Submit
+        React.createElement("button",{onClick:submitForm,style:{width:"100%",background:orangeC,border:"none",borderRadius:10,padding:"12px",color:"#000",fontSize:14,fontWeight:800,cursor:"pointer"}},
+          modal==="add"?"Ajouter à la watchlist":"Enregistrer")
       )
     )
   );
 }
+// ── FIN PageWatchlist v2 ──────────────────────────────────────────────────────
 
 
 function PageLegend(
