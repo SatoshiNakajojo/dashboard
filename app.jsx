@@ -6547,15 +6547,23 @@ function PageWatchlist({ EFF, hidden }){
   const[newsLoading,setNewsLoading]=useState(false);
 
   // ── Chargement ─────────────────────────────────────────────────────────────
+  // v3.02 — clé localStorage dédiée (hors cgi_v1 pour éviter quota exceeded)
+  var WL_LS_KEY = 'cgi_watchlist_direct';
+  function wlLoad(){ try{ var r=JSON.parse(localStorage.getItem(WL_LS_KEY)||'[]'); return Array.isArray(r)?r:[]; }catch(e){return[];} }
+  function wlSave(nl){ try{ localStorage.setItem(WL_LS_KEY,JSON.stringify(nl)); }catch(e){ console.warn('[wl] localStorage save failed:',e.message); } }
+
   useEffect(function(){
-    var stored=lsv9Get('cgi_watchlist');
-    if(stored&&Array.isArray(stored)&&stored.length) setList(stored);
-    else {
-      fetch(CF_WORKER_URL+"/read",{headers:{"X-Auth-Key":CF_AUTH_KEY},signal:AbortSignal.timeout(8000)})
-        .then(function(r){return r.json();})
-        .then(function(d){if(d.cgi_watchlist&&d.cgi_watchlist.length)setList(d.cgi_watchlist);})
-        .catch(function(){});
-    }
+    // 1. Essayer localStorage dédié
+    var stored = wlLoad();
+    if(stored.length){ setList(stored); return; }
+    // 2. Fallback : essayer lsv9 (migration depuis ancienne version)
+    var v9stored = lsv9Get('cgi_watchlist');
+    if(v9stored&&Array.isArray(v9stored)&&v9stored.length){ setList(v9stored); wlSave(v9stored); return; }
+    // 3. Fallback : KV
+    fetch(CF_WORKER_URL+"/read",{headers:{"X-Auth-Key":CF_AUTH_KEY},signal:AbortSignal.timeout(8000)})
+      .then(function(r){return r.json();})
+      .then(function(d){if(d.cgi_watchlist&&Array.isArray(d.cgi_watchlist)&&d.cgi_watchlist.length){ setList(d.cgi_watchlist); wlSave(d.cgi_watchlist); }})
+      .catch(function(){});
   },[]);
 
   // ── Prix live ─────────────────────────────────────────────────────────────
@@ -6572,8 +6580,10 @@ function PageWatchlist({ EFF, hidden }){
 
   // ── Persist ───────────────────────────────────────────────────────────────
   function persist(nl){
-    setList(nl); lsv9Set('cgi_watchlist',nl); setSaving(true);
-    var r=saveBase('cgi_watchlist',nl);
+    setList(nl);
+    wlSave(nl);                         // localStorage dédié (sync, fiable)
+    setSaving(true);
+    var r=saveBase('cgi_watchlist',nl); // KV async (best-effort)
     if(r&&typeof r.then==='function') r.then(function(){setSaving(false);}); else setSaving(false);
   }
 
@@ -6852,7 +6862,7 @@ function PageWatchlist({ EFF, hidden }){
   var inputStyle={width:"100%",background:C.bg,border:"1px solid "+borderC,borderRadius:8,padding:"8px 10px",color:textC,fontSize:13,boxSizing:"border-box"};
   var labelStyle={display:"block",fontSize:11,color:grayC,marginBottom:4};
 
-  return React.createElement("div",{style:{padding:"0 0 80px",fontFamily:C.font||"system-ui,sans-serif"}},
+  return React.createElement(React.Fragment,null,React.createElement("div",{style:{padding:"0 0 80px",fontFamily:C.font||"system-ui,sans-serif"}},
 
     // ── Header ──────────────────────────────────────────────────────────────
     React.createElement("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"16px 16px 8px"}},
@@ -6977,8 +6987,10 @@ function PageWatchlist({ EFF, hidden }){
           })
         ),
 
+  ), // fin du div principal — panels en dehors pour position:fixed correct
+
     // ══════════════════════════════════════════════════════════
-    // PANEL NEWS
+    // PANEL NEWS (hors du div principal → position:fixed fonctionne)
     // ══════════════════════════════════════════════════════════
     newsPanel&&React.createElement("div",{
       style:{position:"fixed",inset:0,background:"#000C",zIndex:9998,display:"flex",alignItems:"flex-end"},
