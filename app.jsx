@@ -6614,11 +6614,13 @@ function PageLegend(
   );
 }
 function PageData(
-{EFF, hidden, txns, chartData, liveDD, liveGDBS, liveGC, liveGSB, liveCM, liveSM, liveTM, liveBench, liveInv, liveFutures, liveIbkrAnnex}){
+{EFF, hidden, txns, chartData, liveDD, liveGDBS, liveGC, liveGSB, liveCM, liveSM, liveTM, liveBench, liveInv, liveFutures, liveIbkrAnnex, kvRefreshTick}){
   var _DD   = liveDD   || DD;
   var _INV  = liveInv  || INV_SEED;
-  // v1.0 CGI — enregistrer le refresh KV pour pouvoir l'appeler depuis App()
-  React.useEffect(()=>{ window.__cgiKvRefresh = doLoadCloud; return ()=>{ delete window.__cgiKvRefresh; }; });
+  // v1.0 CGI — force refresh KV après snapshot (kvRefreshTick incrémenté par App)
+  React.useEffect(()=>{
+    if(kvRefreshTick > 0){ setCloudData(null); setCloudLoading(false); }
+  }, [kvRefreshTick]);
   var _FUT  = liveFutures || SEED_FUTURES;
   var _ANX  = liveIbkrAnnex || SEED_IBKR_ANNEX;
   var _GDBS = liveGDBS || GDBS;
@@ -6646,6 +6648,7 @@ function PageData(
   var src = EFF || CURRENT;
 
   function doLoadCloud(){
+    window.__cgiKvRefresh = doLoadCloud; // toujours pointer vers version fraîche
     setCloudLoading(true);
     setCloudError(null);
     fetch(CF_WORKER_URL+"/read", {
@@ -6664,7 +6667,7 @@ function PageData(
 
   function handleViewMode(mode){
     setViewMode(mode);
-    if(mode==="cloud" && !cloudLoading) doLoadCloud(); // v1.0 CGI: toujours refresh à l'ouverture
+    if(mode==="cloud" && !cloudData && !cloudLoading) doLoadCloud();
   }
 
   function getLast(arr){ return (arr && arr.length>0 && arr[arr.length-1]) ? (arr[arr.length-1][0]||"—") : "—"; }
@@ -6993,6 +6996,7 @@ function App(){
   const[liveSM,setLiveSM]=useState(STOCKS_MONTHLY);
   const[liveTM,setLiveTM]=useState(TOTAL_MONTHLY);
   const[liveInv,setLiveInv]=useState(INV_SEED);
+  const[kvRefreshTick,setKvRefreshTick]=useState(0);
   const[liveFutures,setLiveFutures]=useState(SEED_FUTURES);
   const[liveIbkrAnnex,setLiveIbkrAnnex]=useState(SEED_IBKR_ANNEX);
   // v25.02 Phase 2b — cours CGIC effectif : points post-Chart recalcules sur le cumul DB.
@@ -8018,7 +8022,7 @@ function App(){
     }
 
     setSnapResult(prev=>({...prev, pendingUpload:false, uploadLog, uploadErrors, uploadDone:true}));
-      if(typeof window!=="undefined" && window.__cgiKvRefresh) window.__cgiKvRefresh();
+      setKvRefreshTick(k=>k+1);
   },[snapResult, txns, EFF]);
 
   // v23.19 — Snapshot unifié : dès qu'un snapshot est calculé (addSnap → pendingUpload),
@@ -8398,7 +8402,7 @@ function App(){
         {tab===2 && <PageStats chartData={chartData} hidden={hidden} EFF={EFF} eur={eur} liveDD={liveDD} src={EFF||CURRENT} liveInv={liveInv}/>}
         {tab===3 && <PageGDB chartData={chartData} hidden={hidden} EFF={EFF} eur={eur} liveGSB={liveGSB} liveGDBS={liveGDBS} liveBench={liveBench} liveGC={gcEff} liveDD={liveDD} liveInv={liveInv}/>}
         {tab===5 && <PageLegend txns={txns} liveFutures={liveFutures} hidden={hidden} eur={eur} EFF={EFF} liveIbkrAnnex={liveIbkrAnnex}/>}
-        {tab===4 && <PageData EFF={EFF} hidden={hidden} txns={txns} chartData={chartData}
+        {tab===4 && <PageData EFF={EFF} hidden={hidden} txns={txns} chartData={chartData} kvRefreshTick={kvRefreshTick}
           liveDD={liveDD} liveGDBS={liveGDBS} liveGC={gcEff} liveGSB={liveGSB}
           liveCM={liveCM} liveSM={liveSM} liveTM={liveTM} liveBench={liveBench} liveInv={liveInv} liveFutures={liveFutures} liveIbkrAnnex={liveIbkrAnnex}/> }
         {/* Buy & Sell accessible via bouton flottant uniquement */}
