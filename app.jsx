@@ -696,7 +696,7 @@ function applyPrices(prices, usdEur, effSrc){
 }
 
 // Date locale UTC+11 (Nouvelle-Calédonie)
-const APP_VERSION = "v4.7";
+const APP_VERSION = "v4.8";
 // v4.5 — fix NICK : NICK.AS n'existe pas chez Yahoo, le bon symbole EUR est NICK.MI (Milan)
 try{ if(typeof YF_MAP!=="undefined" && YF_MAP && YF_MAP.NICK==="NICK.AS"){ YF_MAP.NICK="NICK.MI"; } }catch(e){}
 const NC_OFFSET_MS = 11 * 60 * 60 * 1000;
@@ -7055,6 +7055,104 @@ function BtcIndicators(){
   );
 }
 
+// ══════════════════════════════════════════════════════════════════════════════
+// CGI — FundingView : taux de financement perpétuels (backend /funding)
+// ══════════════════════════════════════════════════════════════════════════════
+function cgiBigUsd(v){ if(v==null||!isFinite(v))return "—"; var a=Math.abs(v); if(a>=1e9)return (v/1e9).toFixed(2)+"B"; if(a>=1e6)return (v/1e6).toFixed(1)+"M"; if(a>=1e3)return (v/1e3).toFixed(0)+"k"; return String(Math.round(v)); }
+
+function FundingView(){
+  const[fund,setFund]=useState(null);
+  const[fundL,setFundL]=useState(false);
+  const[fundE,setFundE]=useState(null);
+  const[fundOpen,setFundOpen]=useState({});
+  function load(noCache){
+    setFundL(true); setFundE(null);
+    fetch(CF_WORKER_URL+"/funding"+(noCache?"?no_cache=1":""),{headers:{"X-Auth-Key":CF_AUTH_KEY},signal:AbortSignal.timeout(25000)})
+      .then(function(r){return r.json();})
+      .then(function(d){ if(d&&d.error){setFundE(String(d.error));} else {setFund(d);} setFundL(false); })
+      .catch(function(e){ setFundE((e&&e.message)||"Erreur réseau"); setFundL(false); });
+  }
+  useEffect(function(){ load(false); },[]);
+
+  if(fundL&&!fund) return React.createElement("div",{style:{textAlign:"center",color:C.text3,fontSize:12,padding:"30px 0"}},"Chargement du funding…");
+  if(fundE&&!fund) return React.createElement("div",{style:{background:C.red+"11",border:"1px solid "+C.red+"44",borderRadius:10,padding:12,color:C.red,fontSize:12}},
+    "Erreur : "+fundE,
+    React.createElement("button",{onClick:function(){load(true);},style:{marginLeft:8,background:"none",border:"1px solid "+C.red+"66",borderRadius:6,color:C.red,fontSize:11,padding:"2px 8px",cursor:"pointer"}},"Réessayer")
+  );
+  if(!fund) return null;
+
+  var aColor=function(a){ return a==null?C.text3:(a>=0?C.green:C.red); };
+  var aTxt=function(a){ return a==null?"—":(a>=0?"+":"")+a.toFixed(2)+"%"; };
+  var tog=function(name){ setFundOpen(function(o){ var n=Object.assign({},o); n[name]=!o[name]; return n; }); };
+
+  var cryptoRow=function(name,d){
+    var apr=d.aggApr!=null?d.aggApr*100:null; var open=!!fundOpen[name];
+    return React.createElement("div",{key:name,style:{background:C.bg1,border:"1px solid "+C.border,borderRadius:10,overflow:"hidden"}},
+      React.createElement("button",{onClick:function(){tog(name);},style:{width:"100%",background:"none",border:"none",cursor:"pointer",padding:"10px 12px",display:"flex",justifyContent:"space-between",alignItems:"center"}},
+        React.createElement("div",{style:{textAlign:"left"}},
+          React.createElement("div",{style:{fontSize:13,fontWeight:800,color:C.text}},name+" ",React.createElement("span",{style:{fontSize:9,color:C.text3}},open?"▾":"▸")),
+          React.createElement("div",{style:{fontSize:9,color:C.text3,marginTop:1}},(d.nPlatforms||0)+" plateformes · OI "+cgiBigUsd(d.totalOiUsd)+" · Vol "+cgiBigUsd(d.totalVolUsd))
+        ),
+        React.createElement("div",{style:{textAlign:"right"}},
+          React.createElement("div",{style:{fontSize:15,fontWeight:800,color:aColor(apr)}},aTxt(apr)),
+          React.createElement("div",{style:{fontSize:8,color:C.text3}},"APR agrégé (pond. OI)")
+        )
+      ),
+      open&&React.createElement("div",{style:{borderTop:"1px solid "+C.border,padding:"4px 12px 8px"}},
+        React.createElement("div",{style:{display:"flex",fontSize:8,color:C.text3,textTransform:"uppercase",letterSpacing:0.4,padding:"4px 0",borderBottom:"1px solid "+C.border+"55"}},
+          React.createElement("span",{style:{flex:1.5}},"Plateforme"),
+          React.createElement("span",{style:{flex:1,textAlign:"right"}},"APR"),
+          React.createElement("span",{style:{flex:1,textAlign:"right"}},"OI"),
+          React.createElement("span",{style:{flex:1,textAlign:"right"}},"Vol 24h")
+        ),
+        (d.platforms||[]).map(function(pl){ var a2=pl.apr!=null?pl.apr*100:null;
+          return React.createElement("div",{key:pl.name,style:{display:"flex",alignItems:"center",fontSize:11,padding:"5px 0",borderBottom:"1px solid "+C.border+"22"}},
+            React.createElement("span",{style:{flex:1.5,color:C.text,fontWeight:600}},pl.name,pl.intervalH?React.createElement("span",{style:{fontSize:8,color:C.text3,fontWeight:400}}," "+pl.intervalH+"h"):null),
+            React.createElement("span",{style:{flex:1,textAlign:"right",fontWeight:700,color:aColor(a2)}},aTxt(a2)),
+            React.createElement("span",{style:{flex:1,textAlign:"right",color:C.text2}},pl.oiUsd!=null?cgiBigUsd(pl.oiUsd):"—"),
+            React.createElement("span",{style:{flex:1,textAlign:"right",color:C.text2}},pl.volUsd!=null?cgiBigUsd(pl.volUsd):"—")
+          );
+        })
+      )
+    );
+  };
+
+  var nb=fund.nq_basis;
+  return React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:6}},
+    cryptoRow("BTC",fund.btc||{}),
+    cryptoRow("ETH",fund.eth||{}),
+    nb&&React.createElement("div",{style:{background:C.bg1,border:"1px solid "+C.border,borderRadius:10,padding:"10px 12px",display:"flex",justifyContent:"space-between",alignItems:"center"}},
+      React.createElement("div",null,
+        React.createElement("div",{style:{fontSize:13,fontWeight:800,color:C.text}},"Nasdaq (NQ)"),
+        React.createElement("div",{style:{fontSize:9,color:C.text3,marginTop:1}},"Basis "+(nb.basisPct>=0?"+":"")+nb.basisPct.toFixed(2)+"% · éch. "+nb.expiry+" ("+nb.daysToExpiry+"j)")
+      ),
+      React.createElement("div",{style:{textAlign:"right"}},
+        React.createElement("div",{style:{fontSize:15,fontWeight:800,color:aColor(nb.annualizedPct)}},aTxt(nb.annualizedPct)),
+        React.createElement("div",{style:{fontSize:8,color:C.text3}},"Basis annualisé")
+      )
+    ),
+    React.createElement("div",{style:{fontSize:8,color:C.text3,textAlign:"right"}},"Bybit + OKX · maj "+(fund.ts?new Date(fund.ts).toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"}):"—"))
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// CGI — MarketDash : conteneur à onglets du dashboard marché
+// ══════════════════════════════════════════════════════════════════════════════
+function MarketDash(){
+  const[tab,setTab]=useState("btc");
+  var tabs=[["btc","₿ Indicateurs"],["funding","💸 Funding"]];
+  return React.createElement("div",null,
+    React.createElement("div",{style:{display:"flex",gap:6,marginBottom:14,overflowX:"auto",paddingBottom:2}},
+      tabs.map(function(t){
+        return React.createElement("button",{key:t[0],onClick:function(){setTab(t[0]);},
+          style:{background:tab===t[0]?C.btc:C.bg1,color:tab===t[0]?"#000":C.text2,border:"1px solid "+(tab===t[0]?C.btc:C.border),borderRadius:8,padding:"6px 14px",fontSize:12,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap",flexShrink:0}},t[1]);
+      })
+    ),
+    tab==="btc"&&React.createElement(BtcIndicators,null),
+    tab==="funding"&&React.createElement(FundingView,null)
+  );
+}
+
 function PageWatchlist({ EFF, hidden }){
   var cardBg=C.bg2, borderC=C.border, textC=C.text, grayC=C.gray;
   var greenC=C.green, redC=C.red, blueC=C.blue, orangeC=C.btc;
@@ -7644,7 +7742,7 @@ function PageWatchlist({ EFF, hidden }){
           React.createElement("button",{onClick:function(){setShowIndic(false);},style:{background:"none",border:"none",color:grayC,fontSize:24,cursor:"pointer",lineHeight:1}},"×")
         ),
         React.createElement("div",{style:{flex:1,overflowY:"auto",padding:"14px 16px 30px"}},
-          React.createElement(BtcIndicators,null)
+          React.createElement(MarketDash,null)
         )
       ),
       document.body
