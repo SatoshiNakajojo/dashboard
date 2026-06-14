@@ -696,7 +696,7 @@ function applyPrices(prices, usdEur, effSrc){
 }
 
 // Date locale UTC+11 (Nouvelle-Calédonie)
-const APP_VERSION = "v4.12";
+const APP_VERSION = "v4.13";
 // v4.5 — fix NICK : NICK.AS n'existe pas chez Yahoo, le bon symbole EUR est NICK.MI (Milan)
 try{ if(typeof YF_MAP!=="undefined" && YF_MAP && YF_MAP.NICK==="NICK.AS"){ YF_MAP.NICK="NICK.MI"; } }catch(e){}
 const NC_OFFSET_MS = 11 * 60 * 60 * 1000;
@@ -6682,6 +6682,11 @@ function LWChart(props){
   var maSeriesRef=useRef([]);
   var ichiSeriesRef=useRef([]);
   var rsiSeriesRef=useRef(null);
+  // Couche de dessin (trendlines + Fibonacci), persistée par symbole
+  var drawModeState=useState(null); var drawMode=drawModeState[0], setDrawMode=drawModeState[1];
+  var drawingsState=useState([]); var drawings=drawingsState[0], setDrawings=drawingsState[1];
+  var pendingState=useState(null); var pending=pendingState[0], setPending=pendingState[1];
+  var drawTickState=useState(0); var drawTick=drawTickState[0], setDrawTick=drawTickState[1];
 
   var containerRef=useRef(null);
   var chartRef=useRef(null);
@@ -6714,7 +6719,9 @@ function LWChart(props){
       if(price!=null) pk.cb(Math.round(price*100)/100);
     };
     chart.subscribeClick(onClick);
-    var onResize=function(){ if(containerRef.current) chart.applyOptions({width:containerRef.current.clientWidth}); };
+    var bump=function(){ setDrawTick(function(x){return (x+1)%1000000;}); };
+    try{ chart.timeScale().subscribeVisibleTimeRangeChange(bump); }catch(e){}
+    var onResize=function(){ if(containerRef.current){ chart.applyOptions({width:containerRef.current.clientWidth}); bump(); } };
     window.addEventListener("resize",onResize);
     return function(){ window.removeEventListener("resize",onResize); try{chart.remove();}catch(e){} chartRef.current=null; seriesRef.current=null; };
   },[]);
@@ -6800,6 +6807,26 @@ function LWChart(props){
 
   var noLib=(typeof window!=="undefined"&&!window.LightweightCharts);
 
+  // Charge les dessins du symbole
+  useEffect(function(){ try{ var raw=localStorage.getItem("cgi_draw_"+symbol); setDrawings(raw?JSON.parse(raw):[]); }catch(e){ setDrawings([]); } setPending(null); setDrawMode(null); },[symbol]);
+  // Redessine après resize/chargement
+  useEffect(function(){ var id=setTimeout(function(){ setDrawTick(function(x){return (x+1)%1000000;}); },60); return function(){clearTimeout(id);}; },[fs,loading]);
+  function saveDraws(arr){ setDrawings(arr); try{ localStorage.setItem("cgi_draw_"+symbol, JSON.stringify(arr)); }catch(e){} }
+  function clearDraws(){ saveDraws([]); setPending(null); setDrawMode(null); }
+  function onDrawClick(e){
+    if(!drawMode) return;
+    var chart=chartRef.current, series=seriesRef.current, cont=containerRef.current; if(!chart||!series||!cont) return;
+    var rect=cont.getBoundingClientRect();
+    var cx=(e.clientX!=null?e.clientX:(e.touches&&e.touches[0]?e.touches[0].clientX:null));
+    var cy=(e.clientY!=null?e.clientY:(e.touches&&e.touches[0]?e.touches[0].clientY:null));
+    if(cx==null||cy==null) return;
+    var x=cx-rect.left, y=cy-rect.top, t=null, p=null;
+    try{ t=chart.timeScale().coordinateToTime(x); p=series.coordinateToPrice(y); }catch(err){}
+    if(t==null||p==null) return;
+    if(!pending){ setPending({t:t,p:p}); }
+    else { saveDraws(drawings.concat([{type:drawMode,t1:pending.t,p1:pending.p,t2:t,p2:p}])); setPending(null); setDrawMode(null); }
+  }
+
   // Plein écran : redimensionne le graphique
   useEffect(function(){
     if(!chartRef.current||!containerRef.current) return;
@@ -6824,11 +6851,41 @@ function LWChart(props){
             style:{background:b[1]?(C2.blue||"#3B82F6"):(C2.bg1||"#11131A"),color:b[1]?"#fff":txt,border:"1px solid "+gridC,borderRadius:6,padding:"3px 9px",fontSize:11,fontWeight:700,cursor:"pointer"}},b[0]);
         })
       ),
+      fs&&React.createElement("div",{style:{display:"flex",gap:5,marginLeft:8,alignItems:"center"}},
+        [["╱ Ligne","trend"],["Fib","fib"]].map(function(b){ var on=drawMode===b[1];
+          return React.createElement("button",{key:b[1],onClick:function(){setDrawMode(on?null:b[1]);setPending(null);},
+            style:{background:on?(C2.btc||"#F7931A"):(C2.bg1||"#11131A"),color:on?"#000":txt,border:"1px solid "+gridC,borderRadius:6,padding:"3px 9px",fontSize:11,fontWeight:700,cursor:"pointer"}},b[0]);
+        }),
+        React.createElement("button",{key:"clr",onClick:clearDraws,style:{background:C2.bg1||"#11131A",color:down,border:"1px solid "+gridC,borderRadius:6,padding:"3px 9px",fontSize:11,fontWeight:700,cursor:"pointer"}},"Effacer"),
+        drawMode&&React.createElement("span",{style:{fontSize:10,color:C2.btc||"#F7931A",fontWeight:700}},pending?"Touche le 2e point":"Touche le 1er point")
+      ),
       React.createElement("button",{onClick:function(){setFs(!fs);},title:"Plein écran",
         style:{marginLeft:"auto",background:C2.bg1||"#11131A",color:txt,border:"1px solid "+gridC,borderRadius:6,padding:"3px 10px",fontSize:13,fontWeight:700,cursor:"pointer"}},fs?"✕":"⤢")
     ),
     noLib&&React.createElement("div",{style:{fontSize:11,color:down,padding:8}},"Librairie graphique non chargée (recharge la page)."),
-    React.createElement("div",{ref:containerRef,style:{width:"100%",height:chartHeight,opacity:loading?0.5:1}}),
+    React.createElement("div",{style:{position:"relative",width:"100%",height:chartHeight}},
+      React.createElement("div",{ref:containerRef,style:{width:"100%",height:chartHeight,opacity:loading?0.5:1}}),
+      (function(){
+        var chart=chartRef.current, series=seriesRef.current; var _t=drawTick;
+        if(!chart||!series) return null;
+        var t2x=function(t){ try{ return chart.timeScale().timeToCoordinate(t); }catch(e){ return null; } };
+        var p2y=function(p){ try{ return series.priceToCoordinate(p); }catch(e){ return null; } };
+        var W=(containerRef.current?containerRef.current.clientWidth:300);
+        var FIBS=[0,0.236,0.382,0.5,0.618,0.786,1];
+        var FIBC=["#9CA3AF","#22C55E","#3B82F6","#EAB308","#A855F7","#F97316","#EF4444"];
+        var els=[];
+        (drawings||[]).forEach(function(d,di){
+          if(d.type==="trend"){
+            var x1=t2x(d.t1),y1=p2y(d.p1),x2=t2x(d.t2),y2=p2y(d.p2);
+            if(x1!=null&&y1!=null&&x2!=null&&y2!=null) els.push(React.createElement("line",{key:"t"+di,x1:x1,y1:y1,x2:x2,y2:y2,stroke:C2.btc||"#F7931A",strokeWidth:1.5}));
+          } else if(d.type==="fib"){
+            FIBS.forEach(function(f,fi){ var price=d.p1+(d.p2-d.p1)*f; var y=p2y(price); if(y!=null){ els.push(React.createElement("line",{key:"f"+di+"_"+fi,x1:0,y1:y,x2:W,y2:y,stroke:FIBC[fi],strokeWidth:0.8,strokeDasharray:"4,3",opacity:0.85})); els.push(React.createElement("text",{key:"ft"+di+"_"+fi,x:3,y:y-2,fill:FIBC[fi],fontSize:8},(f*100).toFixed(1)+"%")); } });
+          }
+        });
+        if(pending){ var px=t2x(pending.t),py=p2y(pending.p); if(px!=null&&py!=null) els.push(React.createElement("circle",{key:"pend",cx:px,cy:py,r:4,fill:C2.btc||"#F7931A"})); }
+        return React.createElement("svg",{width:"100%",height:chartHeight,onClick:onDrawClick,style:{position:"absolute",left:0,top:0,pointerEvents:drawMode?"auto":"none",cursor:drawMode?"crosshair":"default"}},els);
+      })()
+    ),
     err&&React.createElement("div",{style:{fontSize:10,color:down,marginTop:4}},err)
   );
 }
@@ -7240,11 +7297,65 @@ function CongressView(){
   );
 }
 
+// ══════════════════════════════════════════════════════════════════════════════
+// CGI — FlowMap : rotation des capitaux par momentum (backend /market/flows)
+// ══════════════════════════════════════════════════════════════════════════════
+function FlowMap(){
+  const[fl,setFl]=useState(null);const[flL,setFlL]=useState(false);const[flE,setFlE]=useState(null);const[hz,setHz]=useState("m1");
+  function load(nc){ setFlL(true);setFlE(null);
+    fetch(CF_WORKER_URL+"/market/flows"+(nc?"?no_cache=1":""),{headers:{"X-Auth-Key":CF_AUTH_KEY},signal:AbortSignal.timeout(30000)})
+      .then(function(r){return r.json();}).then(function(d){ if(d&&d.error)setFlE(String(d.error)); else setFl(d); setFlL(false); })
+      .catch(function(e){ setFlE((e&&e.message)||"Erreur réseau"); setFlL(false); }); }
+  useEffect(function(){ load(false); },[]);
+  if(flL&&!fl) return React.createElement("div",{style:{textAlign:"center",color:C.text3,fontSize:12,padding:"24px 0"}},"Chargement…");
+  if(flE&&!fl) return React.createElement("div",{style:{background:C.red+"11",border:"1px solid "+C.red+"44",borderRadius:10,padding:12,color:C.red,fontSize:12}},"Erreur : "+flE,React.createElement("button",{onClick:function(){load(true);},style:{marginLeft:8,background:"none",border:"1px solid "+C.red+"66",borderRadius:6,color:C.red,fontSize:11,padding:"2px 8px",cursor:"pointer"}},"Réessayer"));
+  if(!fl) return null;
+  var items=(fl.classes||[]).filter(function(c){ return c.perf && c.perf[hz]!=null; }).slice();
+  items.sort(function(a,b){ return (b.perf[hz]||0)-(a.perf[hz]||0); });
+  var pCol=function(p){ return p==null?C.text3:(p>=0?C.green:C.red); };
+  var pFmt=function(p){ return p==null?"—":(p>=0?"+":"")+p.toFixed(1)+"%"; };
+  var maxAbs=Math.max.apply(null,items.map(function(c){return Math.abs(c.perf[hz]||0);}).concat([1]));
+  var inflow=items.slice(0,2).map(function(c){return c.name;});
+  var outflow=items.slice(-2).map(function(c){return c.name;}).reverse();
+  var hzLabel={w1:"1 semaine",m1:"1 mois",m3:"3 mois"}[hz];
+  return React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:14}},
+    React.createElement("div",{style:{background:C.bg1,border:"1px solid "+C.border,borderRadius:12,padding:"12px 14px"}},
+      React.createElement("div",{style:{fontSize:9,color:C.text3,textTransform:"uppercase",letterSpacing:0.5,marginBottom:6}},"Où va l'argent ("+hzLabel+")"),
+      React.createElement("div",{style:{fontSize:13,color:C.text,lineHeight:1.6}},
+        "Entrées vers ",React.createElement("span",{style:{color:C.green,fontWeight:700}},inflow.join(" & ")),
+        " — sorties de ",React.createElement("span",{style:{color:C.red,fontWeight:700}},outflow.join(" & ")),"."
+      )
+    ),
+    React.createElement("div",{style:{display:"flex",gap:6,background:C.bg2,borderRadius:9,padding:3}},
+      [["w1","1 sem"],["m1","1 mois"],["m3","3 mois"]].map(function(h){
+        return React.createElement("button",{key:h[0],onClick:function(){setHz(h[0]);},style:{flex:1,padding:"6px 0",borderRadius:7,fontSize:11,fontWeight:700,border:"none",cursor:"pointer",background:hz===h[0]?C.btc:"transparent",color:hz===h[0]?"#000":C.gray}},h[1]);
+      })
+    ),
+    React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:6}},
+      items.map(function(c){
+        var v=c.perf[hz]; var w=Math.min(48,Math.abs(v||0)/maxAbs*48);
+        return React.createElement("div",{key:c.symbol,style:{display:"flex",alignItems:"center",gap:8}},
+          React.createElement("span",{style:{fontSize:15,width:22,textAlign:"center",flexShrink:0}},c.emoji),
+          React.createElement("span",{style:{fontSize:12,color:C.text,width:96,flexShrink:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}},c.name),
+          React.createElement("div",{style:{flex:1,height:16,position:"relative",background:C.bg1,borderRadius:4,overflow:"hidden"}},
+            React.createElement("div",{style:{position:"absolute",top:0,bottom:0,left:"50%",width:(v>=0?w:0)+"%",background:C.green+"aa"}}),
+            React.createElement("div",{style:{position:"absolute",top:0,bottom:0,right:"50%",width:(v<0?w:0)+"%",background:C.red+"aa"}}),
+            React.createElement("div",{style:{position:"absolute",top:0,bottom:0,left:"50%",width:1,background:C.border}})
+          ),
+          React.createElement("span",{style:{fontSize:12,fontWeight:700,color:pCol(v),width:56,textAlign:"right",flexShrink:0}},pFmt(v))
+        );
+      })
+    ),
+    React.createElement("div",{style:{fontSize:9,color:C.text3,lineHeight:1.5}},"Momentum relatif (perf. des proxies de classes d'actifs), pas des flux de capitaux réels. Indicatif."),
+    React.createElement("div",{style:{fontSize:8,color:C.text3,textAlign:"right"}},"Yahoo · maj "+(fl.ts?new Date(fl.ts).toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"}):"—"))
+  );
+}
+
 // CGI — MarketDash : conteneur à onglets du dashboard marché
 // ══════════════════════════════════════════════════════════════════════════════
 function MarketDash(){
   const[tab,setTab]=useState("macro");
-  var tabs=[["macro","🌐 Macro"],["btc","₿ Indicateurs"],["movers","📈 Top/Flop"],["funding","💸 Funding"]];
+  var tabs=[["macro","🌐 Macro"],["btc","₿ Indicateurs"],["movers","📈 Top/Flop"],["funding","💸 Funding"],["flows","🌍 Flux"]];
   return React.createElement("div",null,
     React.createElement("div",{style:{display:"flex",gap:6,marginBottom:14,overflowX:"auto",paddingBottom:2}},
       tabs.map(function(t){
@@ -7255,7 +7366,8 @@ function MarketDash(){
     tab==="macro"&&React.createElement(MacroView,null),
     tab==="btc"&&React.createElement(BtcIndicators,null),
     tab==="movers"&&React.createElement(MoversView,null),
-    tab==="funding"&&React.createElement(FundingView,null)
+    tab==="funding"&&React.createElement(FundingView,null),
+    tab==="flows"&&React.createElement(FlowMap,null)
   );
 }
 
