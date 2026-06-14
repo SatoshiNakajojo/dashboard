@@ -696,7 +696,7 @@ function applyPrices(prices, usdEur, effSrc){
 }
 
 // Date locale UTC+11 (Nouvelle-Calédonie)
-const APP_VERSION = "v4.9";
+const APP_VERSION = "v4.10";
 // v4.5 — fix NICK : NICK.AS n'existe pas chez Yahoo, le bon symbole EUR est NICK.MI (Milan)
 try{ if(typeof YF_MAP!=="undefined" && YF_MAP && YF_MAP.NICK==="NICK.AS"){ YF_MAP.NICK="NICK.MI"; } }catch(e){}
 const NC_OFFSET_MS = 11 * 60 * 60 * 1000;
@@ -7239,11 +7239,84 @@ function MacroView(){
   );
 }
 
+// ══════════════════════════════════════════════════════════════════════════════
+// CGI — CongressView : trades du Congrès (backend /market/congress)
+// ══════════════════════════════════════════════════════════════════════════════
+function CongressView(){
+  const[cong,setCong]=useState(null);const[congL,setCongL]=useState(false);const[congE,setCongE]=useState(null);
+  const[congView,setCongView]=useState("trades");const[congOpen,setCongOpen]=useState({});
+  function load(nc){ setCongL(true);setCongE(null);
+    fetch(CF_WORKER_URL+"/market/congress"+(nc?"?no_cache=1":""),{headers:{"X-Auth-Key":CF_AUTH_KEY},signal:AbortSignal.timeout(30000)})
+      .then(function(r){return r.json();}).then(function(d){ if(d&&d.error)setCongE(String(d.error)); else setCong(d); setCongL(false); })
+      .catch(function(e){ setCongE((e&&e.message)||"Erreur réseau"); setCongL(false); }); }
+  useEffect(function(){ load(false); },[]);
+  if(congL&&!cong) return React.createElement("div",{style:{textAlign:"center",color:C.text3,fontSize:12,padding:"24px 0"}},"Chargement…");
+  if(congE&&!cong) return React.createElement("div",{style:{background:C.red+"11",border:"1px solid "+C.red+"44",borderRadius:10,padding:12,color:C.red,fontSize:12}},"Erreur : "+congE,React.createElement("button",{onClick:function(){load(true);},style:{marginLeft:8,background:"none",border:"1px solid "+C.red+"66",borderRadius:6,color:C.red,fontSize:11,padding:"2px 8px",cursor:"pointer"}},"Réessayer"));
+  if(!cong) return null;
+  var members=cong.members||[];
+  var toggle=function(i){ setCongOpen(function(p){ var n=Object.assign({},p); n[i]=!p[i]; return n; }); };
+  var moneyC=function(v){ return v>=1e6?"$"+(v/1e6).toFixed(1)+" M":(v>=1e3?"$"+Math.round(v/1e3)+" k":"$"+Math.round(v)); };
+  var pc=function(p){ return p==="D"?"#4aa3ff":(p==="R"?"#e5484d":C.text3); };
+  var sideCol=function(s){ return s==="buy"?C.green:(s==="sell"?C.red:C.text3); };
+  var sideSym=function(s){ return s==="buy"?"▲":(s==="sell"?"▼":(s==="exch"?"⇄":"•")); };
+  var amtC=function(t){ if(t.amountMid!=null){ var v=t.amountMid; return v>=1e6?"$"+(v/1e6).toFixed(1)+" M":(v>=1e3?"$"+Math.round(v/1e3)+" k":"$"+v); } return t.amount||""; };
+  return React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:9}},
+    React.createElement("div",{style:{display:"flex",gap:6,background:C.bg2,borderRadius:9,padding:3}},
+      [["trades","Trades"],["port","Portefeuille est."]].map(function(v){
+        return React.createElement("button",{key:v[0],onClick:function(){setCongView(v[0]);},style:{flex:1,padding:"6px 0",borderRadius:7,fontSize:11,fontWeight:700,border:"none",cursor:"pointer",background:congView===v[0]?C.btc:"transparent",color:congView===v[0]?"#000":C.gray}},v[1]);
+      })
+    ),
+    React.createElement("div",{style:{fontSize:9,color:C.text3,lineHeight:1.5,marginBottom:2}},congView==="port"?"Portefeuille estimé = net cumulé (achats − ventes) par titre, en $ médians des fourchettes. Estimation indicative.":"Trades déclarés (STOCK Act) — source : House Stock Watcher (Chambre)."),
+    members.map(function(m,mi){
+      var open=!!congOpen[mi]; var tr=m.trades||[];
+      return React.createElement("div",{key:m.label+mi,style:{background:C.bg1,border:"1px solid "+C.border,borderRadius:10,overflow:"hidden",opacity:m.n===0?0.55:1}},
+        React.createElement("div",{onClick:function(){ if(m.n>0) toggle(mi); },style:{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,padding:"10px 12px",cursor:m.n>0?"pointer":"default"}},
+          React.createElement("div",{style:{display:"flex",alignItems:"center",gap:7,minWidth:0}},
+            React.createElement("span",{style:{fontSize:9,fontWeight:800,color:pc(m.party),border:"1px solid "+pc(m.party)+"66",borderRadius:4,padding:"1px 4px",flexShrink:0}},m.party),
+            React.createElement("span",{style:{fontSize:12,fontWeight:700,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}},m.label)
+          ),
+          React.createElement("span",{style:{fontSize:9,color:C.text3,flexShrink:0,textAlign:"right"}},m.n===0?"aucun trade":(congView==="port"?((m.portfolio||[]).length+" pos. · ~"+moneyC(m.portTotal||0)):(m.n+" trades · "+(m.last||""))))
+        ),
+        open&&m.n>0&&React.createElement("div",{style:{borderTop:"1px solid "+C.border,padding:"4px 10px 8px"}},
+          congView==="port"
+            ? ((m.portfolio||[]).length===0
+                ? React.createElement("span",{style:{fontSize:10,color:C.text3}},"Portefeuille estimé indisponible (que des ventes ou tickers inconnus).")
+                : (m.portfolio||[]).map(function(h,hi){ var pf=m.portfolio;
+                    return React.createElement("div",{key:hi,style:{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,padding:"6px 2px",borderBottom:hi<pf.length-1?"1px solid "+C.border+"66":"none"}},
+                      React.createElement("div",{style:{display:"flex",alignItems:"baseline",gap:6,minWidth:0}},
+                        React.createElement("span",{style:{fontSize:10,fontWeight:700,color:C.btc,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:120}},h.ticker),
+                        React.createElement("span",{style:{fontSize:8,color:C.text3}},h.n+" op.")
+                      ),
+                      React.createElement("div",{style:{display:"flex",gap:10,alignItems:"baseline",flexShrink:0}},
+                        React.createElement("span",{style:{fontSize:10,fontWeight:800,color:C.text}},h.weight!=null?h.weight.toFixed(1)+"%":"—"),
+                        React.createElement("span",{style:{fontSize:9,color:C.text3,minWidth:52,textAlign:"right"}},moneyC(h.net))
+                      )
+                    );
+                  }))
+            : tr.map(function(t,ti){
+                return React.createElement("div",{key:ti,style:{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,padding:"6px 2px",borderBottom:ti<tr.length-1?"1px solid "+C.border+"66":"none"}},
+                  React.createElement("div",{style:{display:"flex",alignItems:"baseline",gap:6,minWidth:0}},
+                    React.createElement("span",{style:{fontSize:11,fontWeight:800,color:sideCol(t.side),flexShrink:0}},sideSym(t.side)),
+                    React.createElement("span",{style:{fontSize:10,fontWeight:700,color:t.ticker?C.btc:C.text2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:150}},t.ticker||t.asset)
+                  ),
+                  React.createElement("div",{style:{display:"flex",gap:10,alignItems:"baseline",flexShrink:0}},
+                    React.createElement("span",{style:{fontSize:9,color:C.text2}},amtC(t)),
+                    React.createElement("span",{style:{fontSize:8,color:C.text3,minWidth:62,textAlign:"right"}},t.date)
+                  )
+                );
+              })
+        )
+      );
+    }),
+    React.createElement("div",{style:{fontSize:8,color:C.text3,textAlign:"right"}},"House Stock Watcher · maj "+(cong.ts?new Date(cong.ts).toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"}):"—"))
+  );
+}
+
 // CGI — MarketDash : conteneur à onglets du dashboard marché
 // ══════════════════════════════════════════════════════════════════════════════
 function MarketDash(){
   const[tab,setTab]=useState("macro");
-  var tabs=[["macro","🌐 Macro"],["btc","₿ Indicateurs"],["movers","📈 Top/Flop"],["funding","💸 Funding"]];
+  var tabs=[["macro","🌐 Macro"],["btc","₿ Indicateurs"],["movers","📈 Top/Flop"],["funding","💸 Funding"],["congress","🏛 Congrès"]];
   return React.createElement("div",null,
     React.createElement("div",{style:{display:"flex",gap:6,marginBottom:14,overflowX:"auto",paddingBottom:2}},
       tabs.map(function(t){
@@ -7254,7 +7327,8 @@ function MarketDash(){
     tab==="macro"&&React.createElement(MacroView,null),
     tab==="btc"&&React.createElement(BtcIndicators,null),
     tab==="movers"&&React.createElement(MoversView,null),
-    tab==="funding"&&React.createElement(FundingView,null)
+    tab==="funding"&&React.createElement(FundingView,null),
+    tab==="congress"&&React.createElement(CongressView,null)
   );
 }
 
