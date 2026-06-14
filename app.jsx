@@ -696,9 +696,9 @@ function applyPrices(prices, usdEur, effSrc){
 }
 
 // Date locale UTC+11 (Nouvelle-Calédonie)
-const APP_VERSION = "v4.13";
+const APP_VERSION = "v4.14";
 // v4.5 — fix NICK : NICK.AS n'existe pas chez Yahoo, le bon symbole EUR est NICK.MI (Milan)
-try{ if(typeof YF_MAP!=="undefined" && YF_MAP && YF_MAP.NICK==="NICK.AS"){ YF_MAP.NICK="NICK.MI"; } }catch(e){}
+try{ if(typeof YF_MAP!=="undefined" && YF_MAP){ YF_MAP.NICK="NICK.MI"; } }catch(e){}
 const NC_OFFSET_MS = 11 * 60 * 60 * 1000;
 const todayNC = () => {
   const nc = new Date(Date.now() + NC_OFFSET_MS);
@@ -6817,14 +6817,14 @@ function LWChart(props){
     if(!drawMode) return;
     var chart=chartRef.current, series=seriesRef.current, cont=containerRef.current; if(!chart||!series||!cont) return;
     var rect=cont.getBoundingClientRect();
-    var cx=(e.clientX!=null?e.clientX:(e.touches&&e.touches[0]?e.touches[0].clientX:null));
-    var cy=(e.clientY!=null?e.clientY:(e.touches&&e.touches[0]?e.touches[0].clientY:null));
+    var cx=(e.clientX!=null?e.clientX:(e.touches&&e.touches[0]?e.touches[0].clientX:(e.changedTouches&&e.changedTouches[0]?e.changedTouches[0].clientX:null)));
+    var cy=(e.clientY!=null?e.clientY:(e.touches&&e.touches[0]?e.touches[0].clientY:(e.changedTouches&&e.changedTouches[0]?e.changedTouches[0].clientY:null)));
     if(cx==null||cy==null) return;
-    var x=cx-rect.left, y=cy-rect.top, t=null, p=null;
-    try{ t=chart.timeScale().coordinateToTime(x); p=series.coordinateToPrice(y); }catch(err){}
-    if(t==null||p==null) return;
-    if(!pending){ setPending({t:t,p:p}); }
-    else { saveDraws(drawings.concat([{type:drawMode,t1:pending.t,p1:pending.p,t2:t,p2:p}])); setPending(null); setDrawMode(null); }
+    var x=cx-rect.left, y=cy-rect.top, l=null, p=null;
+    try{ l=chart.timeScale().coordinateToLogical(x); p=series.coordinateToPrice(y); }catch(err){}
+    if(l==null||p==null) return;
+    if(!pending){ setPending({l:l,p:p}); }
+    else { saveDraws(drawings.concat([{type:drawMode,l1:pending.l,p1:pending.p,l2:l,p2:p}])); setPending(null); setDrawMode(null); }
   }
 
   // Plein écran : redimensionne le graphique
@@ -6868,7 +6868,7 @@ function LWChart(props){
       (function(){
         var chart=chartRef.current, series=seriesRef.current; var _t=drawTick;
         if(!chart||!series) return null;
-        var t2x=function(t){ try{ return chart.timeScale().timeToCoordinate(t); }catch(e){ return null; } };
+        var l2x=function(l){ try{ return chart.timeScale().logicalToCoordinate(l); }catch(e){ return null; } };
         var p2y=function(p){ try{ return series.priceToCoordinate(p); }catch(e){ return null; } };
         var W=(containerRef.current?containerRef.current.clientWidth:300);
         var FIBS=[0,0.236,0.382,0.5,0.618,0.786,1];
@@ -6876,14 +6876,14 @@ function LWChart(props){
         var els=[];
         (drawings||[]).forEach(function(d,di){
           if(d.type==="trend"){
-            var x1=t2x(d.t1),y1=p2y(d.p1),x2=t2x(d.t2),y2=p2y(d.p2);
+            var x1=l2x(d.l1),y1=p2y(d.p1),x2=l2x(d.l2),y2=p2y(d.p2);
             if(x1!=null&&y1!=null&&x2!=null&&y2!=null) els.push(React.createElement("line",{key:"t"+di,x1:x1,y1:y1,x2:x2,y2:y2,stroke:C2.btc||"#F7931A",strokeWidth:1.5}));
           } else if(d.type==="fib"){
             FIBS.forEach(function(f,fi){ var price=d.p1+(d.p2-d.p1)*f; var y=p2y(price); if(y!=null){ els.push(React.createElement("line",{key:"f"+di+"_"+fi,x1:0,y1:y,x2:W,y2:y,stroke:FIBC[fi],strokeWidth:0.8,strokeDasharray:"4,3",opacity:0.85})); els.push(React.createElement("text",{key:"ft"+di+"_"+fi,x:3,y:y-2,fill:FIBC[fi],fontSize:8},(f*100).toFixed(1)+"%")); } });
           }
         });
-        if(pending){ var px=t2x(pending.t),py=p2y(pending.p); if(px!=null&&py!=null) els.push(React.createElement("circle",{key:"pend",cx:px,cy:py,r:4,fill:C2.btc||"#F7931A"})); }
-        return React.createElement("svg",{width:"100%",height:chartHeight,onClick:onDrawClick,style:{position:"absolute",left:0,top:0,pointerEvents:drawMode?"auto":"none",cursor:drawMode?"crosshair":"default"}},els);
+        if(pending){ var px=l2x(pending.l),py=p2y(pending.p); if(px!=null&&py!=null) els.push(React.createElement("circle",{key:"pend",cx:px,cy:py,r:5,fill:C2.btc||"#F7931A"})); }
+        return React.createElement("svg",{width:"100%",height:chartHeight,onPointerUp:onDrawClick,style:{position:"absolute",left:0,top:0,pointerEvents:drawMode?"auto":"none",cursor:drawMode?"crosshair":"default",touchAction:drawMode?"none":"auto"}},els);
       })()
     ),
     err&&React.createElement("div",{style:{fontSize:10,color:down,marginTop:4}},err)
@@ -7444,16 +7444,14 @@ function PageWatchlist({ EFF, hidden }){
   function wlSave(nl){ try{ localStorage.setItem(WL_LS_KEY,JSON.stringify(nl)); }catch(e){ console.warn('[wl] localStorage save failed:',e.message); } }
 
   useEffect(function(){
-    // 1. Essayer localStorage dédié
+    // 1. Affichage immédiat depuis le localStorage dédié
     var stored = wlLoad();
-    if(stored.length){ setList(stored); return; }
-    // 2. Fallback : essayer lsv9 (migration depuis ancienne version)
-    var v9stored = lsv9Get('cgi_watchlist');
-    if(v9stored&&Array.isArray(v9stored)&&v9stored.length){ var m9=wlMigrate(v9stored); setList(m9); wlSave(m9); return; }
-    // 3. Fallback : KV
+    if(stored.length){ setList(stored); }
+    else { var v9stored = lsv9Get('cgi_watchlist'); if(v9stored&&Array.isArray(v9stored)&&v9stored.length){ var m9=wlMigrate(v9stored); setList(m9); wlSave(m9); } }
+    // 2. Réconciliation systématique avec le KV (source partagée entre appareils)
     fetch(CF_WORKER_URL+"/read",{headers:{"X-Auth-Key":CF_AUTH_KEY},signal:AbortSignal.timeout(8000)})
       .then(function(r){return r.json();})
-      .then(function(d){if(d.cgi_watchlist&&Array.isArray(d.cgi_watchlist)&&d.cgi_watchlist.length){ var mk=wlMigrate(d.cgi_watchlist); setList(mk); wlSave(mk); }})
+      .then(function(d){ if(d.cgi_watchlist&&Array.isArray(d.cgi_watchlist)&&d.cgi_watchlist.length){ var mk=wlMigrate(d.cgi_watchlist); setList(mk); wlSave(mk); } })
       .catch(function(){});
   },[]);
 
@@ -9075,7 +9073,7 @@ function App(){
           if(dPct!=null) body+="\nJour : "+(dPct>=0?"+":"")+dPct.toFixed(2)+"%";
           if(wPct!=null) body+="\nSemaine : "+(wPct>=0?"+":"")+wPct.toFixed(2)+"%";
           cgiNotifPush({type:"meteo",emoji:(dPct!=null?(dPct>=0?"📈":"📉"):"🌤️"),
-            dedupeKey:"meteo_"+lastDate, title:"Météo patrimoine", body:body});
+            dedupeKey:"meteo_"+lastDate, title:"Météo patrimoine", body:body, telegram:true});
         }
       }
       var closed=(computeClosedTrades(txns||[]).closed)||[];
@@ -9085,7 +9083,7 @@ function App(){
           var up=t.pnlUSD>=0;
           cgiNotifPush({type:"trade",emoji:up?"✅":"❌",dedupeKey:"trade_"+t.ticker+"_"+t.exitDate,
             title:"Trade clôturé : "+t.ticker,
-            body:(up?"+":"")+"$"+Math.round(t.pnlUSD).toLocaleString("fr-FR")+(t.pct!=null?(" ("+(up?"+":"")+t.pct.toFixed(1)+"%)"):"")+" · "+t.exitDate});
+            body:(up?"+":"")+"$"+Math.round(t.pnlUSD).toLocaleString("fr-FR")+(t.pct!=null?(" ("+(up?"+":"")+t.pct.toFixed(1)+"%)"):"")+" · "+t.exitDate, telegram:true});
         }
       }
     }catch(e){}
@@ -9130,6 +9128,7 @@ function App(){
   });
   const[showTheme,setShowTheme]=useState(false);
   const[showSettings,setShowSettings]=useState(false); // LOT1 — panneau réglages
+  const[showAbout,setShowAbout]=useState(false); // v4.14 — page À propos
   const[settingsMsg,setSettingsMsg]=useState("");
   async function forceCronCheck(){
     setSettingsMsg("🔄 Vérification en cours…");
@@ -9372,6 +9371,7 @@ function App(){
       if(kv.cgi_ibkr_annex) setLiveIbkrAnnex(unionTxnsById(SEED_IBKR_ANNEX, kv.cgi_ibkr_annex));
       if(kv.cgi_bench) setLiveBench(_mergeArrays(BENCH_IDX, kv.cgi_bench));
       if(kv.cgi_yfmap&&typeof kv.cgi_yfmap==="object") Object.assign(YF_MAP,kv.cgi_yfmap);
+      try{ YF_MAP.NICK="NICK.MI"; }catch(e){} // v4.5 — garde NICK.MI même après merge KV
       if(kv.cgi_icons&&typeof kv.cgi_icons==="object"){
         // Merger : KV écrase les entrées existantes (KV = vérité cloud)
         // mais on conserve les entrées localStorage qui ne seraient pas dans KV
@@ -10631,9 +10631,49 @@ function App(){
                 <span style={{display:"flex",alignItems:"center",gap:12}}><span style={{fontSize:18}}>{gistSync?"☁︎":"✗"}</span><span style={{fontSize:13,fontWeight:700,color:C.text}}>Connexion Cloudflare KV</span></span>
                 <span style={{fontSize:12,color:gistSync?C.green:C.red}}>{gistSync?"Connecté":"Erreur"}</span>
               </button>
+              <button onClick={()=>{setShowSettings(false);setShowAbout(true);}} style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",padding:"12px 14px",borderRadius:10,border:`1px solid ${C.border}`,background:C.bg,cursor:"pointer"}}>
+                <span style={{display:"flex",alignItems:"center",gap:12}}><span style={{fontSize:18}}>ℹ️</span><span style={{fontSize:13,fontWeight:700,color:C.text}}>À propos</span></span>
+                <span style={{fontSize:12,color:C.gray}}>{APP_VERSION} ›</span>
+              </button>
             </div>
             {settingsMsg&&<div style={{fontSize:11,color:C.green,marginTop:12,textAlign:"center"}}>{settingsMsg}</div>}
             <div style={{fontSize:10,color:C.text3,textAlign:"center",marginTop:16,opacity:.7}}>{APP_VERSION} · source : {chosenSource||"—"}</div>
+          </div>
+        </div>
+      )}
+      {showAbout&&(
+        <div style={{position:"fixed",inset:0,zIndex:500,background:"rgba(0,0,0,.6)",display:"flex",alignItems:"flex-end",justifyContent:"center"}}
+          onClick={()=>setShowAbout(false)}>
+          <div onClick={e=>e.stopPropagation()} style={{background:C.bg1,borderRadius:"20px 20px 0 0",padding:"20px 20px 36px",width:"100%",maxWidth:430,maxHeight:"85vh",overflowY:"auto",border:`1px solid ${C.border}`}}>
+            <div style={{width:36,height:4,borderRadius:2,background:C.border,margin:"0 auto 18px"}}/>
+            <div style={{textAlign:"center",marginBottom:18}}>
+              <div style={{fontSize:30,fontWeight:900,color:C.btc,letterSpacing:1}}>CGI</div>
+              <div style={{fontSize:12,color:C.text2,marginTop:2}}>Creusot Global Investments</div>
+              <div style={{fontSize:11,color:C.gray,marginTop:8}}>Créé par <span style={{fontWeight:700,color:C.text}}>John Creusot</span></div>
+              <div style={{display:"inline-block",marginTop:10,background:C.btc+"22",border:`1px solid ${C.btc}66`,borderRadius:20,padding:"4px 14px",fontSize:13,fontWeight:800,color:C.btc}}>Version {APP_VERSION}</div>
+            </div>
+            <div style={{fontSize:10,fontWeight:800,color:C.text3,textTransform:"uppercase",letterSpacing:.5,marginBottom:10}}>Historique des versions</div>
+            <div style={{display:"flex",flexDirection:"column",gap:10}}>
+              {[
+                ["v4.14","Corrections : dessin (coordonnées logiques), NICK fiabilisé, synchro watchlist multi-appareils, météo Telegram automatique, page À propos."],
+                ["v4.13","Dessin Fibonacci & trendlines (persistés par ticker, partagés Suivi↔Portfolio) + onglet Flux (rotation des capitaux)."],
+                ["v4.12","Indicateurs de tracé : moyennes mobiles, Ichimoku, sous-panneau RSI (plein écran)."],
+                ["v4.11","Graphique Portfolio unifié (un seul chandelier) + mode plein écran."],
+                ["v4.10","Onglet Congrès (retiré ensuite : source gratuite fermée)."],
+                ["v4.9","Onglets Macro (secteurs/taux/VIX/dominance) + Top/Flop (hausses/baisses)."],
+                ["v4.8","Onglet Funding : taux de financement BTC/ETH (Bybit + OKX)."],
+                ["v4.7","Bouton Outils unique + dashboard d'indicateurs BTC (cycle, on-chain, sentiment) à cartes extensibles."],
+                ["v4.5","Logos réels, autocomplétion de tickers, graphique TradingView + zones, édition des transactions, correctif NICK."],
+                ["v4.4","Refonte de la barre du haut : cloche de notifications + réglages, accès direct aux données."],
+                ["v4.0","Conditions de suivi structurées, moteur de validation technique, notifications Telegram, worker cron autonome."],
+              ].map(([v,desc])=>(
+                <div key={v} style={{display:"flex",gap:10}}>
+                  <span style={{fontSize:12,fontWeight:800,color:C.btc,minWidth:42,flexShrink:0}}>{v}</span>
+                  <span style={{fontSize:12,color:C.text2,lineHeight:1.5}}>{desc}</span>
+                </div>
+              ))}
+            </div>
+            <div style={{fontSize:10,color:C.text3,textAlign:"center",marginTop:18,opacity:.7}}>Tableau de bord patrimonial personnel · React + Cloudflare Workers</div>
           </div>
         </div>
       )}
