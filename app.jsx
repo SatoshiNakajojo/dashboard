@@ -696,7 +696,7 @@ function applyPrices(prices, usdEur, effSrc){
 }
 
 // Date locale UTC+11 (Nouvelle-Calédonie)
-const APP_VERSION = "v4.8";
+const APP_VERSION = "v4.9";
 // v4.5 — fix NICK : NICK.AS n'existe pas chez Yahoo, le bon symbole EUR est NICK.MI (Milan)
 try{ if(typeof YF_MAP!=="undefined" && YF_MAP && YF_MAP.NICK==="NICK.AS"){ YF_MAP.NICK="NICK.MI"; } }catch(e){}
 const NC_OFFSET_MS = 11 * 60 * 60 * 1000;
@@ -7136,11 +7136,114 @@ function FundingView(){
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
+// ══════════════════════════════════════════════════════════════════════════════
+// CGI — MoversView : top hausses/baisses (backend /market/movers)
+// ══════════════════════════════════════════════════════════════════════════════
+function cgiPctColor(p){ return p==null?(typeof C!=="undefined"?C.text3:"#888"):(p>=0?(C.green):(C.red)); }
+function cgiPctFmt(p){ return p==null?"—":(p>=0?"+":"")+p.toFixed(2)+"%"; }
+
+function MoversView(){
+  const[mov,setMov]=useState(null);const[movL,setMovL]=useState(false);const[movE,setMovE]=useState(null);
+  function load(nc){ setMovL(true);setMovE(null);
+    fetch(CF_WORKER_URL+"/market/movers"+(nc?"?no_cache=1":""),{headers:{"X-Auth-Key":CF_AUTH_KEY},signal:AbortSignal.timeout(25000)})
+      .then(function(r){return r.json();}).then(function(d){ if(d&&d.error)setMovE(String(d.error)); else setMov(d); setMovL(false); })
+      .catch(function(e){ setMovE((e&&e.message)||"Erreur réseau"); setMovL(false); }); }
+  useEffect(function(){ load(false); },[]);
+  if(movL&&!mov) return React.createElement("div",{style:{textAlign:"center",color:C.text3,fontSize:12,padding:"24px 0"}},"Chargement…");
+  if(movE&&!mov) return React.createElement("div",{style:{background:C.red+"11",border:"1px solid "+C.red+"44",borderRadius:10,padding:12,color:C.red,fontSize:12}},"Erreur : "+movE,React.createElement("button",{onClick:function(){load(true);},style:{marginLeft:8,background:"none",border:"1px solid "+C.red+"66",borderRadius:6,color:C.red,fontSize:11,padding:"2px 8px",cursor:"pointer"}},"Réessayer"));
+  if(!mov) return null;
+  var cr=mov.crypto||{}, st=mov.stocks||{};
+  var mlist=function(items){
+    if(!items||!items.length) return React.createElement("span",{style:{fontSize:9,color:C.text3}},"—");
+    return React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:4}},
+      items.map(function(it,i){
+        return React.createElement("div",{key:it.symbol+i,style:{display:"flex",justifyContent:"space-between",alignItems:"center",gap:6,background:C.bg1,border:"1px solid "+C.border,borderRadius:8,padding:"6px 8px"}},
+          React.createElement("span",{style:{fontSize:11,fontWeight:700,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:80}},it.symbol),
+          React.createElement("span",{style:{fontSize:11,fontWeight:700,color:cgiPctColor(it.pct),flexShrink:0}},cgiPctFmt(it.pct))
+        );
+      })
+    );
+  };
+  var block=function(title,gainers,losers){
+    return React.createElement("div",null,
+      React.createElement("div",{style:{fontSize:9,color:C.text3,textTransform:"uppercase",letterSpacing:0.5,marginBottom:8}},title),
+      React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}},
+        React.createElement("div",null,React.createElement("div",{style:{fontSize:9,fontWeight:700,color:C.green,marginBottom:4}},"▲ Hausses"),mlist(gainers)),
+        React.createElement("div",null,React.createElement("div",{style:{fontSize:9,fontWeight:700,color:C.red,marginBottom:4}},"▼ Baisses"),mlist(losers))
+      )
+    );
+  };
+  return React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:16}},
+    block("Crypto — 24 h",cr.gainers,cr.losers),
+    block("Actions US — jour",st.gainers,st.losers),
+    React.createElement("div",{style:{fontSize:8,color:C.text3,textAlign:"right"}},"CoinGecko + Yahoo · maj "+(mov.ts?new Date(mov.ts).toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"}):"—"))
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// CGI — MacroView : secteurs, taux, VIX, dominance (backend /market/overview)
+// ══════════════════════════════════════════════════════════════════════════════
+function MacroView(){
+  const[mkt,setMkt]=useState(null);const[mktL,setMktL]=useState(false);const[mktE,setMktE]=useState(null);
+  function load(nc){ setMktL(true);setMktE(null);
+    fetch(CF_WORKER_URL+"/market/overview"+(nc?"?no_cache=1":""),{headers:{"X-Auth-Key":CF_AUTH_KEY},signal:AbortSignal.timeout(25000)})
+      .then(function(r){return r.json();}).then(function(d){ if(d&&d.error)setMktE(String(d.error)); else setMkt(d); setMktL(false); })
+      .catch(function(e){ setMktE((e&&e.message)||"Erreur réseau"); setMktL(false); }); }
+  useEffect(function(){ load(false); },[]);
+  if(mktL&&!mkt) return React.createElement("div",{style:{textAlign:"center",color:C.text3,fontSize:12,padding:"24px 0"}},"Chargement…");
+  if(mktE&&!mkt) return React.createElement("div",{style:{background:C.red+"11",border:"1px solid "+C.red+"44",borderRadius:10,padding:12,color:C.red,fontSize:12}},"Erreur : "+mktE,React.createElement("button",{onClick:function(){load(true);},style:{marginLeft:8,background:"none",border:"1px solid "+C.red+"66",borderRadius:6,color:C.red,fontSize:11,padding:"2px 8px",cursor:"pointer"}},"Réessayer"));
+  if(!mkt) return null;
+  var p=mkt.pulse||{}, treas=mkt.treasury||[], sectors=(mkt.sectors||[]).slice().sort(function(a,b){ return (b.pct==null?-999:b.pct)-(a.pct==null?-999:a.pct); });
+  var pulseCard=function(label,val,sub,color){
+    return React.createElement("div",{style:{flex:1,background:C.bg1,border:"1px solid "+C.border,borderRadius:10,padding:"10px 12px"}},
+      React.createElement("div",{style:{fontSize:9,color:C.text3,textTransform:"uppercase",letterSpacing:0.5}},label),
+      React.createElement("div",{style:{fontSize:20,fontWeight:800,color:color||C.text,marginTop:3}},val),
+      sub?React.createElement("div",{style:{fontSize:10,color:C.text2,marginTop:1}},sub):null
+    );
+  };
+  var maxAbs=Math.max.apply(null,sectors.map(function(s){return Math.abs(s.pct||0);}).concat([0.5]));
+  return React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:16}},
+    React.createElement("div",{style:{display:"flex",gap:8}},
+      pulseCard("VIX",p.vix!=null?p.vix.toFixed(1):"—",p.vixPct!=null?cgiPctFmt(p.vixPct):null,p.vix!=null?(p.vix>25?C.red:p.vix<16?C.green:C.text):C.text),
+      pulseCard("Dominance BTC",p.btcDominance!=null?p.btcDominance.toFixed(1)+"%":"—",null,C.btc)
+    ),
+    React.createElement("div",null,
+      React.createElement("div",{style:{fontSize:9,color:C.text3,textTransform:"uppercase",letterSpacing:0.5,marginBottom:8}},"Taux souverains US"),
+      React.createElement("div",{style:{display:"flex",gap:8}},
+        treas.map(function(t){
+          return React.createElement("div",{key:t.symbol,style:{flex:1,background:C.bg1,border:"1px solid "+C.border,borderRadius:10,padding:"8px 10px",textAlign:"center"}},
+            React.createElement("div",{style:{fontSize:9,color:C.text3}},t.label),
+            React.createElement("div",{style:{fontSize:16,fontWeight:800,color:C.text,marginTop:2}},t.price!=null?t.price.toFixed(2)+"%":"—"),
+            React.createElement("div",{style:{fontSize:9,color:cgiPctColor(t.pct),marginTop:1}},t.pct!=null?cgiPctFmt(t.pct):"")
+          );
+        })
+      )
+    ),
+    React.createElement("div",null,
+      React.createElement("div",{style:{fontSize:9,color:C.text3,textTransform:"uppercase",letterSpacing:0.5,marginBottom:8}},"Secteurs S&P 500 — jour"),
+      React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:5}},
+        sectors.map(function(s){
+          var w=Math.min(50,Math.abs(s.pct||0)/maxAbs*50);
+          return React.createElement("div",{key:s.symbol,style:{display:"flex",alignItems:"center",gap:8}},
+            React.createElement("span",{style:{fontSize:11,color:C.text,width:96,flexShrink:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}},s.name),
+            React.createElement("div",{style:{flex:1,height:14,position:"relative",background:C.bg1,borderRadius:4,overflow:"hidden"}},
+              React.createElement("div",{style:{position:"absolute",top:0,bottom:0,left:"50%",width:(s.pct>=0?w:0)+"%",background:C.green+"99"}}),
+              React.createElement("div",{style:{position:"absolute",top:0,bottom:0,right:"50%",width:(s.pct<0?w:0)+"%",background:C.red+"99"}})
+            ),
+            React.createElement("span",{style:{fontSize:11,fontWeight:700,color:cgiPctColor(s.pct),width:56,textAlign:"right",flexShrink:0}},cgiPctFmt(s.pct))
+          );
+        })
+      )
+    ),
+    React.createElement("div",{style:{fontSize:8,color:C.text3,textAlign:"right"}},"Yahoo + CoinGecko · maj "+(mkt.ts?new Date(mkt.ts).toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"}):"—"))
+  );
+}
+
 // CGI — MarketDash : conteneur à onglets du dashboard marché
 // ══════════════════════════════════════════════════════════════════════════════
 function MarketDash(){
-  const[tab,setTab]=useState("btc");
-  var tabs=[["btc","₿ Indicateurs"],["funding","💸 Funding"]];
+  const[tab,setTab]=useState("macro");
+  var tabs=[["macro","🌐 Macro"],["btc","₿ Indicateurs"],["movers","📈 Top/Flop"],["funding","💸 Funding"]];
   return React.createElement("div",null,
     React.createElement("div",{style:{display:"flex",gap:6,marginBottom:14,overflowX:"auto",paddingBottom:2}},
       tabs.map(function(t){
@@ -7148,7 +7251,9 @@ function MarketDash(){
           style:{background:tab===t[0]?C.btc:C.bg1,color:tab===t[0]?"#000":C.text2,border:"1px solid "+(tab===t[0]?C.btc:C.border),borderRadius:8,padding:"6px 14px",fontSize:12,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap",flexShrink:0}},t[1]);
       })
     ),
+    tab==="macro"&&React.createElement(MacroView,null),
     tab==="btc"&&React.createElement(BtcIndicators,null),
+    tab==="movers"&&React.createElement(MoversView,null),
     tab==="funding"&&React.createElement(FundingView,null)
   );
 }
