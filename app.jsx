@@ -696,7 +696,7 @@ function applyPrices(prices, usdEur, effSrc){
 }
 
 // Date locale UTC+11 (Nouvelle-Calédonie)
-const APP_VERSION = "v4.10";
+const APP_VERSION = "v4.11";
 // v4.5 — fix NICK : NICK.AS n'existe pas chez Yahoo, le bon symbole EUR est NICK.MI (Milan)
 try{ if(typeof YF_MAP!=="undefined" && YF_MAP && YF_MAP.NICK==="NICK.AS"){ YF_MAP.NICK="NICK.MI"; } }catch(e){}
 const NC_OFFSET_MS = 11 * 60 * 60 * 1000;
@@ -2115,144 +2115,6 @@ function TickerModal({ ticker, cat="", eur=false, usdEur=0.86, onClose }) {
               </>
             );
           })()}
-
-          {/* Timeframes — 2 rangées */}
-          <div style={{marginBottom:12}}>
-            {[TF_ROW1, TF_ROW2].map((row, ri)=>(
-              <div key={ri} style={{display:"flex",gap:4,background:C.bg1,borderRadius:10,padding:3,marginBottom:ri===0?4:0}}>
-                {row.map((t,i)=>{
-                  const idx = ri*5+i;
-                  return (
-                    <button key={idx} onClick={()=>setTf(idx)} style={{
-                      flex:1,padding:"5px 0",borderRadius:7,fontSize:11,fontWeight:700,
-                      border:"none",cursor:"pointer",
-                      background:tf===idx?C.blue:"transparent",
-                      color:tf===idx?"#fff":C.gray,
-                    }}>{t.label}</button>
-                  );
-                })}
-              </div>
-            ))}
-          </div>
-
-          {/* Chart */}
-          <div style={{background:C.bg1,borderRadius:12,padding:"10px 4px 4px",marginBottom:4}}>
-            {loading && (
-              <div style={{height:H+20,display:"flex",alignItems:"center",justifyContent:"center",color:C.gray,fontSize:12}}>
-                Chargement…
-              </div>
-            )}
-            {err && (
-              <div style={{padding:"12px 16px",background:C.red+"11",borderRadius:8,border:`1px solid ${C.red}44`,marginBottom:4}}>
-                <div style={{fontSize:11,fontWeight:700,color:C.red,marginBottom:4}}>⚠ Erreur de chargement</div>
-                <div style={{fontSize:10,color:C.red+"cc",wordBreak:"break-all"}}>{err}</div>
-                <div style={{display:"flex",gap:8,marginTop:8}}>
-                  <button onClick={()=>fetchChart(tf)} style={{fontSize:10,padding:"4px 12px",borderRadius:6,border:`1px solid ${C.red}`,background:"transparent",color:C.red,cursor:"pointer"}}>
-                    Réessayer
-                  </button>
-                  <button onClick={()=>navigator.clipboard.writeText(err).catch(()=>{})} style={{fontSize:10,padding:"4px 12px",borderRadius:6,border:`1px solid ${C.border}`,background:"transparent",color:C.gray,cursor:"pointer"}}>
-                    📋 Copier
-                  </button>
-                </div>
-              </div>
-            )}
-            {!loading && !err && closes.length > 1 && (()=>{
-              // Crosshair handlers
-              const SVG_W = 320, SVG_H = H + 18;
-              const hitTest = (clientX, svgEl) => {
-                if(!svgEl) return null;
-                const rect = svgEl.getBoundingClientRect();
-                const relX = (clientX - rect.left) / rect.width * SVG_W;
-                const n = closes.length;
-                // Trouver l'index le plus proche
-                let best = 0, bestDist = Infinity;
-                for(let i=0;i<n;i++){
-                  const d = Math.abs(toX(i,n) - relX);
-                  if(d < bestDist){ bestDist=d; best=i; }
-                }
-                return { i:best, x:toX(best,n), y:toY(closes[best]), price:closes[best], ts:candles[best]?.t };
-              };
-              const onSvgTouchMove = e => {
-                e.preventDefault();
-                const ch = hitTest(e.touches[0].clientX, svgRef.current);
-                if(ch) setCrosshair(ch);
-              };
-              const onSvgTouchEnd = () => setCrosshair(null);
-              const onMouseMove = e => {
-                const ch = hitTest(e.clientX, svgRef.current);
-                if(ch) setCrosshair(ch);
-              };
-              const onMouseLeave = () => setCrosshair(null);
-              const ch = crosshair;
-              const gradId = "tcg_"+ticker.replace(/[^a-z0-9]/gi,"_");
-              return (
-                <svg ref={svgRef} width="100%" viewBox={"0 0 "+SVG_W+" "+SVG_H}
-                  style={{display:"block",overflow:"visible",touchAction:"none"}}
-                  onTouchMove={onSvgTouchMove} onTouchEnd={onSvgTouchEnd}
-                  onMouseMove={onMouseMove} onMouseLeave={onMouseLeave}>
-                  <defs>
-                    <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor={lineColor} stopOpacity="0.3"/>
-                      <stop offset="100%" stopColor={lineColor} stopOpacity="0"/>
-                    </linearGradient>
-                  </defs>
-                  <polygon
-                    points={pts+" "+toX(closes.length-1,closes.length)+","+(H-PAD)+" "+PAD+","+(H-PAD)}
-                    fill={"url(#"+gradId+")"}
-                  />
-                  <polyline points={pts} fill="none" stroke={lineColor} strokeWidth="1.8" strokeLinejoin="round" strokeLinecap="round"/>
-                  {/* Labels X */}
-                  {xIdxs.map((ci,i)=>(
-                    <text key={i} x={toX(ci,closes.length)} y={H+15} textAnchor="middle" fill={C.text3} fontSize={7}>
-                      {fmtTs(candles[ci]?.t)}
-                    </text>
-                  ))}
-                  {/* Point dernier prix */}
-                  {!ch && (()=>{
-                    const lx=toX(closes.length-1,closes.length), ly=toY(closes[closes.length-1]);
-                    return <circle cx={lx} cy={ly} r={3} fill={lineColor}/>;
-                  })()}
-                  {/* Crosshair */}
-                  {ch && (<>
-                    {/* Ligne verticale */}
-                    <line x1={ch.x} y1={PAD} x2={ch.x} y2={H-PAD}
-                      stroke={lineColor} strokeWidth={0.8} strokeDasharray="3,2" opacity={0.7}/>
-                    {/* Ligne horizontale */}
-                    <line x1={PAD} y1={ch.y} x2={SVG_W-PAD} y2={ch.y}
-                      stroke={lineColor} strokeWidth={0.8} strokeDasharray="3,2" opacity={0.7}/>
-                    {/* Point */}
-                    <circle cx={ch.x} cy={ch.y} r={4} fill={lineColor} stroke={C.bg0} strokeWidth={1.5}/>
-                    {/* Label prix — axe Y gauche */}
-                    {(()=>{
-                      const priceDisp2 = eur ? ch.price * usdEur : ch.price;
-                      const pLabel = cur + (priceDisp2 >= 100 ? Math.round(priceDisp2).toLocaleString("fr-FR") : priceDisp2.toFixed(2));
-                      const labelY = Math.max(10, Math.min(ch.y + 4, H-4));
-                      return (<>
-                        <rect x={PAD} y={labelY-8} width={pLabel.length*5.5+4} height={11} rx={3}
-                          fill={lineColor} opacity={0.9}/>
-                        <text x={PAD+3} y={labelY+1} fill="#000" fontSize={7.5} fontWeight="700">{pLabel}</text>
-                      </>);
-                    })()}
-                    {/* Label date — axe X bas */}
-                    {ch.ts && (()=>{
-                      const dLabel = fmtTs(ch.ts);
-                      const lx2 = Math.max(20, Math.min(ch.x, SVG_W-24));
-                      return (<>
-                        <rect x={lx2-dLabel.length*3-2} y={H+5} width={dLabel.length*6+4} height={10} rx={3}
-                          fill={lineColor} opacity={0.9}/>
-                        <text x={lx2} y={H+12} textAnchor="middle" fill="#000" fontSize={7} fontWeight="700">{dLabel}</text>
-                      </>);
-                    })()}
-                  </>)}
-                </svg>
-              );
-            })()}
-            {!loading && !err && closes.length <= 1 && (
-              <div style={{height:H+20,display:"flex",alignItems:"center",justifyContent:"center",color:C.gray,fontSize:11}}>
-                Données insuffisantes
-              </div>
-            )}
-          </div>
 
           {/* ── Actualités ── */}
           {sortedNews.length > 0 && (
@@ -6812,6 +6674,7 @@ function LWChart(props){
   var tfState=useState(0); var tfIdx=tfState[0], setTfIdx=tfState[1];
   var loadingState=useState(true); var loading=loadingState[0], setLoading=loadingState[1];
   var errState=useState(null); var err=errState[0], setErr=errState[1];
+  var fsState=useState(false); var fs=fsState[0], setFs=fsState[1];
 
   var containerRef=useRef(null);
   var chartRef=useRef(null);
@@ -6890,17 +6753,29 @@ function LWChart(props){
 
   var noLib=(typeof window!=="undefined"&&!window.LightweightCharts);
 
-  return React.createElement("div",{style:{position:"relative"}},
+  // Plein écran : redimensionne le graphique
+  useEffect(function(){
+    if(!chartRef.current||!containerRef.current) return;
+    var h=fs?Math.max(320,(typeof window!=="undefined"?window.innerHeight:600)-150):height;
+    try{ chartRef.current.applyOptions({width:containerRef.current.clientWidth,height:h}); chartRef.current.timeScale().fitContent(); }catch(e){}
+  },[fs]);
+
+  var chartHeight=fs?Math.max(320,(typeof window!=="undefined"?window.innerHeight:600)-150):height;
+  var wrapStyle=fs?{position:"fixed",inset:0,zIndex:9998,background:bgc,padding:"12px 12px 0",overflow:"hidden"}:{position:"relative"};
+
+  return React.createElement("div",{style:wrapStyle},
     React.createElement("div",{style:{display:"flex",gap:6,marginBottom:6,alignItems:"center"}},
       LW_TF.map(function(t,i){
         return React.createElement("button",{key:t[0],onClick:function(){setTfIdx(i);},
           style:{background:tfIdx===i?(C2.btc||"#F7931A"):(C2.bg1||"#11131A"),color:tfIdx===i?"#000":txt,
             border:"1px solid "+gridC,borderRadius:6,padding:"3px 10px",fontSize:11,fontWeight:700,cursor:"pointer"}},t[0]);
       }),
-      pickActive&&React.createElement("span",{style:{fontSize:10,color:C2.btc||"#F7931A",marginLeft:6,fontWeight:700}},"✋ Touche le graphique pour fixer le niveau")
+      pickActive&&React.createElement("span",{style:{fontSize:10,color:C2.btc||"#F7931A",marginLeft:6,fontWeight:700}},"✋ Touche le graphique pour fixer le niveau"),
+      React.createElement("button",{onClick:function(){setFs(!fs);},title:"Plein écran",
+        style:{marginLeft:"auto",background:C2.bg1||"#11131A",color:txt,border:"1px solid "+gridC,borderRadius:6,padding:"3px 10px",fontSize:13,fontWeight:700,cursor:"pointer"}},fs?"✕":"⤢")
     ),
     noLib&&React.createElement("div",{style:{fontSize:11,color:down,padding:8}},"Librairie graphique non chargée (recharge la page)."),
-    React.createElement("div",{ref:containerRef,style:{width:"100%",height:height,opacity:loading?0.5:1}}),
+    React.createElement("div",{ref:containerRef,style:{width:"100%",height:chartHeight,opacity:loading?0.5:1}}),
     err&&React.createElement("div",{style:{fontSize:10,color:down,marginTop:4}},err)
   );
 }
@@ -7316,7 +7191,7 @@ function CongressView(){
 // ══════════════════════════════════════════════════════════════════════════════
 function MarketDash(){
   const[tab,setTab]=useState("macro");
-  var tabs=[["macro","🌐 Macro"],["btc","₿ Indicateurs"],["movers","📈 Top/Flop"],["funding","💸 Funding"],["congress","🏛 Congrès"]];
+  var tabs=[["macro","🌐 Macro"],["btc","₿ Indicateurs"],["movers","📈 Top/Flop"],["funding","💸 Funding"]];
   return React.createElement("div",null,
     React.createElement("div",{style:{display:"flex",gap:6,marginBottom:14,overflowX:"auto",paddingBottom:2}},
       tabs.map(function(t){
@@ -7327,8 +7202,7 @@ function MarketDash(){
     tab==="macro"&&React.createElement(MacroView,null),
     tab==="btc"&&React.createElement(BtcIndicators,null),
     tab==="movers"&&React.createElement(MoversView,null),
-    tab==="funding"&&React.createElement(FundingView,null),
-    tab==="congress"&&React.createElement(CongressView,null)
+    tab==="funding"&&React.createElement(FundingView,null)
   );
 }
 
