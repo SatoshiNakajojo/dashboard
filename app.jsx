@@ -263,6 +263,19 @@ async function fetchYahooCF(symbol){
   }catch(e){ return null; }
 }
 
+// v4.16 — repli multi-symboles pour tickers capricieux (ETC illiquides, etc.)
+var SYMBOL_FALLBACKS = {
+  NICK: ["NICK.L","NICK.MI","NICK.AS","NICK.SW","NICKEL.L","SNIK.L"]
+};
+async function fetchYahooCFmulti(ticker, primary){
+  var first = primary || ticker;
+  var p = await fetchYahooCF(first);
+  if(p!=null) return p;
+  var alts = SYMBOL_FALLBACKS[ticker];
+  if(alts){ for(var i=0;i<alts.length;i++){ if(alts[i]===first) continue; var q=await fetchYahooCF(alts[i]); if(q!=null){ try{ YF_MAP[ticker]=alts[i]; }catch(e){} return q; } } }
+  return null;
+}
+
 async function fetchYahoo(symbol){
   // Essai via Cloudflare d'abord (plus fiable pour EU)
   const cfPrice = await fetchYahooCF(symbol);
@@ -696,7 +709,7 @@ function applyPrices(prices, usdEur, effSrc){
 }
 
 // Date locale UTC+11 (Nouvelle-Calédonie)
-const APP_VERSION = "v4.15";
+const APP_VERSION = "v4.16";
 // v4.5 — fix NICK : NICK.AS n'existe pas chez Yahoo, le bon symbole EUR est NICK.MI (Milan)
 try{ if(typeof YF_MAP!=="undefined" && YF_MAP){ YF_MAP.NICK="NICK.L"; } }catch(e){}
 const NC_OFFSET_MS = 11 * 60 * 60 * 1000;
@@ -6631,7 +6644,17 @@ function cgiMigrateEntryConds(e){
 // ══════════════════════════════════════════════════════════════════════════════
 // CGI v4.0 — LWChart : graphique chandeliers TradingView + zones + indicateurs
 // ══════════════════════════════════════════════════════════════════════════════
-var LW_TF = [["J","1d","2y"],["S","1wk","5y"],["M","1mo","max"]];
+var LW_TF = [["30m","30m","1mo",0],["1H","60m","3mo",0],["4H","60m","6mo",4],["12H","60m","1y",12],["J","1d","2y",0],["S","1wk","5y",0],["M","1mo","max",0]];
+function lwResample(bars, hours){
+  if(!hours||!bars.length) return bars;
+  var span=hours*3600, buckets={}, order=[];
+  bars.forEach(function(b){
+    var key=Math.floor(b.time/span)*span;
+    if(!buckets[key]){ buckets[key]={time:key,open:b.open,high:b.high,low:b.low,close:b.close}; order.push(key); }
+    else{ var g=buckets[key]; if(b.high>g.high)g.high=b.high; if(b.low<g.low)g.low=b.low; g.close=b.close; }
+  });
+  return order.sort(function(a,b){return a-b;}).map(function(k){return buckets[k];});
+}
 
 // Helper : indicateurs clés depuis les bougies (réutilise le moteur P1)
 function computeKeyIndicators(candles){
@@ -6676,6 +6699,7 @@ function LWChart(props){
   var errState=useState(null); var err=errState[0], setErr=errState[1];
   var fsState=useState(false); var fs=fsState[0], setFs=fsState[1];
   var maState=useState(false); var showMA=maState[0], setShowMA=maState[1];
+  var maSelState=useState({9:false,20:true,50:true,100:false,200:true}); var maSel=maSelState[0], setMaSel=maSelState[1];
   var ichiState=useState(false); var showIchi=ichiState[0], setShowIchi=ichiState[1];
   var rsiState=useState(false); var showRSI=rsiState[0], setShowRSI=rsiState[1];
   var barsRef=useRef([]);
@@ -6687,6 +6711,7 @@ function LWChart(props){
   var drawingsState=useState([]); var drawings=drawingsState[0], setDrawings=drawingsState[1];
   var pendingState=useState(null); var pending=pendingState[0], setPending=pendingState[1];
   var drawTickState=useState(0); var drawTick=drawTickState[0], setDrawTick=drawTickState[1];
+  var selDrawState=useState(null); var selDraw=selDrawState[0], setSelDraw=selDrawState[1];
 
   var containerRef=useRef(null);
   var chartRef=useRef(null);
@@ -6742,6 +6767,7 @@ function LWChart(props){
           var bars=candles.filter(function(k){return k.c!=null&&k.t!=null;}).map(function(k){
             return { time:Math.floor(k.t/1000), open:k.o!=null?k.o:k.c, high:k.h!=null?k.h:k.c, low:k.l!=null?k.l:k.c, close:k.c };
           }).filter(function(b){ if(seen[b.time]) return false; seen[b.time]=1; return true; });
+          if(tf[3]) bars=lwResample(bars,tf[3]);
           seriesRef.current.setData(bars);
           barsRef.current=bars;
           if(chartRef.current) chartRef.current.timeScale().fitContent();
@@ -6780,7 +6806,8 @@ function LWChart(props){
     var sma=function(n){ var out=[]; for(var i=n-1;i<closes.length;i++){ var s=0; for(var j=i-n+1;j<=i;j++) s+=closes[j]; out.push({time:times[i],value:s/n}); } return out; };
     var addLine=function(color,data){ try{ var ls=chart.addLineSeries({color:color,lineWidth:1,priceLineVisible:false,lastValueVisible:false,crosshairMarkerVisible:false}); ls.setData(data); return ls; }catch(e){ return null; } };
     if(showMA){
-      [[20,"#3B82F6"],[50,"#F59E0B"],[200,"#EF4444"]].forEach(function(m){ if(closes.length>=m[0]){ var s=addLine(m[1],sma(m[0])); if(s) maSeriesRef.current.push(s); } });
+      var MACOL={9:"#22C55E",20:"#3B82F6",50:"#F59E0B",100:"#A855F7",200:"#EF4444"};
+      [9,20,50,100,200].forEach(function(n){ if(maSel[n]&&closes.length>=n){ var s=addLine(MACOL[n],sma(n)); if(s) maSeriesRef.current.push(s); } });
     }
     if(showIchi){
       var hl=function(n,i){ var hi=-Infinity,lo=Infinity; for(var j=Math.max(0,i-n+1);j<=i;j++){ if(highs[j]>hi)hi=highs[j]; if(lows[j]<lo)lo=lows[j]; } return (hi+lo)/2; };
@@ -6803,7 +6830,7 @@ function LWChart(props){
         rsiSeriesRef.current=rls;
       }catch(e){}
     }
-  },[showMA,showIchi,showRSI,loading,tfIdx]);
+  },[showMA,showIchi,showRSI,loading,tfIdx,JSON.stringify(maSel)]);
 
   var noLib=(typeof window!=="undefined"&&!window.LightweightCharts);
 
@@ -6812,7 +6839,9 @@ function LWChart(props){
   // Redessine après resize/chargement
   useEffect(function(){ var id=setTimeout(function(){ setDrawTick(function(x){return (x+1)%1000000;}); },60); return function(){clearTimeout(id);}; },[fs,loading]);
   function saveDraws(arr){ setDrawings(arr); try{ localStorage.setItem("cgi_draw_"+symbol, JSON.stringify(arr)); }catch(e){} }
-  function clearDraws(){ saveDraws([]); setPending(null); setDrawMode(null); }
+  function clearDraws(){ saveDraws([]); setPending(null); setDrawMode(null); setSelDraw(null); }
+  function delOneDraw(i){ var nd=(drawings||[]).slice(); nd.splice(i,1); saveDraws(nd); setSelDraw(null); }
+  function colorSelDraw(c){ if(selDraw==null) return; var nd=(drawings||[]).slice(); if(nd[selDraw]){ nd[selDraw]=Object.assign({},nd[selDraw],{color:c}); saveDraws(nd); } }
   function onDrawClick(e){
     if(!drawMode) return;
     var chart=chartRef.current, series=seriesRef.current, cont=containerRef.current; if(!chart||!series||!cont) return;
@@ -6822,9 +6851,25 @@ function LWChart(props){
     if(cx==null||cy==null) return;
     var x=cx-rect.left, y=cy-rect.top, l=null, p=null;
     try{ l=chart.timeScale().coordinateToLogical(x); p=series.coordinateToPrice(y); }catch(err){}
-    if(l==null||p==null) return;
-    if(!pending){ setPending({l:l,p:p}); }
-    else { saveDraws(drawings.concat([{type:drawMode,l1:pending.l,p1:pending.p,l2:l,p2:p}])); setPending(null); setDrawMode(null); }
+    var bars=barsRef.current||[];
+    if(l==null||p==null||!bars.length) return;
+    if(drawMode==="select"){
+      var t2x=function(tt){ try{ var v=chart.timeScale().timeToCoordinate(tt); if(v!=null) return v; }catch(e){} var best=0,bd=Infinity; for(var i=0;i<bars.length;i++){ var dd=Math.abs(bars[i].time-tt); if(dd<bd){bd=dd;best=i;} } try{ return chart.timeScale().logicalToCoordinate(best); }catch(e){ return null; } };
+      var p2y=function(pp){ try{ return series.priceToCoordinate(pp); }catch(e){ return null; } };
+      var distSeg=function(px,py,ax,ay,bx,by){ var dx=bx-ax,dy=by-ay; var L2=dx*dx+dy*dy; if(L2===0) return Math.hypot(px-ax,py-ay); var u=Math.max(0,Math.min(1,((px-ax)*dx+(py-ay)*dy)/L2)); return Math.hypot(px-(ax+u*dx),py-(ay+u*dy)); };
+      var bestI=null,bestD=16;
+      (drawings||[]).forEach(function(d,di){
+        var dd=Infinity;
+        if(d.type==="trend"){ var x1=t2x(d.t1),y1=p2y(d.p1),x2=t2x(d.t2),y2=p2y(d.p2); if(x1!=null&&y1!=null&&x2!=null&&y2!=null) dd=distSeg(x,y,x1,y1,x2,y2); }
+        else if(d.type==="fib"){ [0,0.236,0.382,0.5,0.618,0.786,1].forEach(function(f){ var yy=p2y(d.p1+(d.p2-d.p1)*f); if(yy!=null) dd=Math.min(dd,Math.abs(y-yy)); }); }
+        if(dd<bestD){ bestD=dd; bestI=di; }
+      });
+      setSelDraw(bestI); return;
+    }
+    var idx=Math.max(0,Math.min(bars.length-1,Math.round(l)));
+    var t=bars[idx].time;
+    if(!pending){ setPending({t:t,p:p}); }
+    else { saveDraws(drawings.concat([{type:drawMode,t1:pending.t,p1:pending.p,t2:t,p2:p,color:(drawMode==="trend"?(C2.btc||"#F7931A"):null)}])); setPending(null); setDrawMode(null); }
   }
 
   // Plein écran : redimensionne le graphique
@@ -6851,13 +6896,21 @@ function LWChart(props){
             style:{background:b[1]?(C2.blue||"#3B82F6"):(C2.bg1||"#11131A"),color:b[1]?"#fff":txt,border:"1px solid "+gridC,borderRadius:6,padding:"3px 9px",fontSize:11,fontWeight:700,cursor:"pointer"}},b[0]);
         })
       ),
+      fs&&showMA&&React.createElement("div",{style:{display:"flex",gap:4,marginLeft:4,alignItems:"center"}},
+        React.createElement("span",{style:{fontSize:9,color:C2.gray||"#888"}},"MM:"),
+        [9,20,50,100,200].map(function(n){ var on=!!maSel[n];
+          return React.createElement("button",{key:n,onClick:function(){setMaSel(function(prev){var x=Object.assign({},prev);x[n]=!prev[n];return x;});},
+            style:{background:on?(C2.btc||"#F7931A"):"transparent",color:on?"#000":(C2.gray||"#888"),border:"1px solid "+gridC,borderRadius:5,padding:"2px 6px",fontSize:10,fontWeight:700,cursor:"pointer"}},n);
+        })
+      ),
       fs&&React.createElement("div",{style:{display:"flex",gap:5,marginLeft:8,alignItems:"center"}},
-        [["╱ Ligne","trend"],["Fib","fib"]].map(function(b){ var on=drawMode===b[1];
-          return React.createElement("button",{key:b[1],onClick:function(){setDrawMode(on?null:b[1]);setPending(null);},
+        [["╱ Ligne","trend"],["Fib","fib"],["⤰ Sélect.","select"]].map(function(b){ var on=drawMode===b[1];
+          return React.createElement("button",{key:b[1],onClick:function(){setDrawMode(on?null:b[1]);setPending(null);setSelDraw(null);},
             style:{background:on?(C2.btc||"#F7931A"):(C2.bg1||"#11131A"),color:on?"#000":txt,border:"1px solid "+gridC,borderRadius:6,padding:"3px 9px",fontSize:11,fontWeight:700,cursor:"pointer"}},b[0]);
         }),
-        React.createElement("button",{key:"clr",onClick:clearDraws,style:{background:C2.bg1||"#11131A",color:down,border:"1px solid "+gridC,borderRadius:6,padding:"3px 9px",fontSize:11,fontWeight:700,cursor:"pointer"}},"Effacer"),
-        drawMode&&React.createElement("span",{style:{fontSize:10,color:C2.btc||"#F7931A",fontWeight:700}},pending?"Touche le 2e point":"Touche le 1er point")
+        React.createElement("button",{key:"clr",onClick:clearDraws,style:{background:C2.bg1||"#11131A",color:down,border:"1px solid "+gridC,borderRadius:6,padding:"3px 9px",fontSize:11,fontWeight:700,cursor:"pointer"}},"Tout effacer"),
+        drawMode&&drawMode!=="select"&&React.createElement("span",{style:{fontSize:10,color:C2.btc||"#F7931A",fontWeight:700}},pending?"Touche le 2e point":"Touche le 1er point"),
+        drawMode==="select"&&React.createElement("span",{style:{fontSize:10,color:C2.btc||"#F7931A",fontWeight:700}},"Touche un tracé pour le sélectionner")
       ),
       React.createElement("button",{onClick:function(){setFs(!fs);},title:"Plein écran",
         style:{marginLeft:"auto",background:C2.bg1||"#11131A",color:txt,border:"1px solid "+gridC,borderRadius:6,padding:"3px 10px",fontSize:13,fontWeight:700,cursor:"pointer"}},fs?"✕":"⤢")
@@ -6868,26 +6921,44 @@ function LWChart(props){
       (function(){
         var chart=chartRef.current, series=seriesRef.current; var _t=drawTick;
         if(!chart||!series) return null;
-        var l2x=function(l){ try{ return chart.timeScale().logicalToCoordinate(l); }catch(e){ return null; } };
+        var bars=barsRef.current||[];
+        var t2x=function(t){
+          try{ var v=chart.timeScale().timeToCoordinate(t); if(v!=null) return v; }catch(e){}
+          if(!bars.length) return null;
+          var best=0,bd=Infinity; for(var i=0;i<bars.length;i++){ var dd=Math.abs(bars[i].time-t); if(dd<bd){bd=dd;best=i;} }
+          try{ return chart.timeScale().logicalToCoordinate(best); }catch(e){ return null; }
+        };
         var p2y=function(p){ try{ return series.priceToCoordinate(p); }catch(e){ return null; } };
         var W=(containerRef.current?containerRef.current.clientWidth:300);
         var FIBS=[0,0.236,0.382,0.5,0.618,0.786,1];
         var FIBC=["#9CA3AF","#22C55E","#3B82F6","#EAB308","#A855F7","#F97316","#EF4444"];
         var els=[];
         (drawings||[]).forEach(function(d,di){
+          var sel=(selDraw===di);
           if(d.type==="trend"){
-            var x1=l2x(d.l1),y1=p2y(d.p1),x2=l2x(d.l2),y2=p2y(d.p2);
-            if(x1!=null&&y1!=null&&x2!=null&&y2!=null) els.push(React.createElement("line",{key:"t"+di,x1:x1,y1:y1,x2:x2,y2:y2,stroke:C2.btc||"#F7931A",strokeWidth:1.5}));
+            var x1=t2x(d.t1),y1=p2y(d.p1),x2=t2x(d.t2),y2=p2y(d.p2);
+            if(x1!=null&&y1!=null&&x2!=null&&y2!=null){
+              els.push(React.createElement("line",{key:"t"+di,x1:x1,y1:y1,x2:x2,y2:y2,stroke:d.color||(C2.btc||"#F7931A"),strokeWidth:sel?3:1.5}));
+              if(sel){ els.push(React.createElement("circle",{key:"th1"+di,cx:x1,cy:y1,r:4,fill:"#fff",stroke:d.color||C2.btc})); els.push(React.createElement("circle",{key:"th2"+di,cx:x2,cy:y2,r:4,fill:"#fff",stroke:d.color||C2.btc})); }
+            }
           } else if(d.type==="fib"){
-            FIBS.forEach(function(f,fi){ var price=d.p1+(d.p2-d.p1)*f; var y=p2y(price); if(y!=null){ els.push(React.createElement("line",{key:"f"+di+"_"+fi,x1:0,y1:y,x2:W,y2:y,stroke:FIBC[fi],strokeWidth:0.8,strokeDasharray:"4,3",opacity:0.85})); els.push(React.createElement("text",{key:"ft"+di+"_"+fi,x:3,y:y-2,fill:FIBC[fi],fontSize:8},(f*100).toFixed(1)+"%")); } });
+            FIBS.forEach(function(f,fi){ var price=d.p1+(d.p2-d.p1)*f; var y=p2y(price); if(y!=null){ els.push(React.createElement("line",{key:"f"+di+"_"+fi,x1:0,y1:y,x2:W,y2:y,stroke:FIBC[fi],strokeWidth:sel?1.6:0.8,strokeDasharray:"4,3",opacity:0.9})); els.push(React.createElement("text",{key:"ft"+di+"_"+fi,x:3,y:y-2,fill:FIBC[fi],fontSize:8},(f*100).toFixed(1)+"%")); } });
           }
         });
-        if(pending){ var px=l2x(pending.l),py=p2y(pending.p); if(px!=null&&py!=null) els.push(React.createElement("circle",{key:"pend",cx:px,cy:py,r:5,fill:C2.btc||"#F7931A"})); }
+        if(pending){ var px=t2x(pending.t),py=p2y(pending.p); if(px!=null&&py!=null) els.push(React.createElement("circle",{key:"pend",cx:px,cy:py,r:5,fill:C2.btc||"#F7931A"})); }
         return React.createElement(React.Fragment,null,
           React.createElement("svg",{width:"100%",height:chartHeight,style:{position:"absolute",left:0,top:0,pointerEvents:"none"}},els),
-          drawMode&&React.createElement("div",{onPointerUp:onDrawClick,style:{position:"absolute",left:0,top:0,width:"100%",height:chartHeight,zIndex:6,cursor:"crosshair",touchAction:"none",background:"transparent"}})
+          drawMode&&React.createElement("div",{onPointerUp:onDrawClick,style:{position:"absolute",left:0,top:0,width:"100%",height:chartHeight,zIndex:6,cursor:drawMode==="select"?"pointer":"crosshair",touchAction:"none",background:"transparent"}})
         );
-      })()
+      })(),
+      fs&&selDraw!=null&&(drawings||[])[selDraw]&&React.createElement("div",{style:{position:"absolute",top:8,left:"50%",transform:"translateX(-50%)",zIndex:8,display:"flex",gap:6,alignItems:"center",background:C2.bg1||"#11131A",border:"1px solid "+gridC,borderRadius:9,padding:"5px 8px",boxShadow:"0 4px 12px rgba(0,0,0,.4)"}},
+        React.createElement("span",{style:{fontSize:10,color:txt,fontWeight:700,marginRight:2}},(drawings[selDraw].type==="fib"?"Fibonacci":"Ligne")),
+        (drawings[selDraw].type==="trend")&&["#F7931A","#3B82F6","#22C55E","#EF4444","#A855F7","#EAB308"].map(function(c){
+          return React.createElement("button",{key:c,onClick:function(){colorSelDraw(c);},title:"Couleur",style:{width:16,height:16,borderRadius:8,background:c,border:(drawings[selDraw].color===c?"2px solid #fff":"1px solid "+gridC),cursor:"pointer",padding:0}});
+        }),
+        React.createElement("button",{onClick:function(){delOneDraw(selDraw);},title:"Supprimer ce tracé",style:{background:(C2.red||"#EF4444")+"22",color:C2.red||"#EF4444",border:"1px solid "+(C2.red||"#EF4444")+"66",borderRadius:6,padding:"2px 8px",fontSize:13,cursor:"pointer"}},"🗑"),
+        React.createElement("button",{onClick:function(){setSelDraw(null);},title:"Fermer",style:{background:"transparent",color:C2.gray||"#888",border:"none",fontSize:14,cursor:"pointer",padding:"0 2px"}},"✕")
+      )
     ),
     err&&React.createElement("div",{style:{fontSize:10,color:down,marginTop:4}},err)
   );
@@ -7464,7 +7535,7 @@ function PageWatchlist({ EFF, hidden }){
     setLoading(true);
     Promise.all(list.map(function(e){
       var sym=YF_MAP[e.ticker]||e.ticker;
-      return fetchYahooCF(sym).then(function(p){return[e.ticker,p];}).catch(function(){return[e.ticker,null];});
+      return fetchYahooCFmulti(e.ticker,sym).then(function(p){return[e.ticker,p];}).catch(function(){return[e.ticker,null];});
     })).then(function(res){
       var pm={}; res.forEach(function(r){if(r[1]!=null)pm[r[0]]=r[1];}); setPrices(pm); checkPriceAlerts(pm); setLoading(false);
     });
@@ -7483,7 +7554,7 @@ function PageWatchlist({ EFF, hidden }){
     setLoading(true);
     Promise.all(list.map(function(e){
       var sym=YF_MAP[e.ticker]||e.ticker;
-      return fetchYahooCF(sym).then(function(p){return[e.ticker,p];}).catch(function(){return[e.ticker,null];});
+      return fetchYahooCFmulti(e.ticker,sym).then(function(p){return[e.ticker,p];}).catch(function(){return[e.ticker,null];});
     })).then(function(res){
       var pm={}; res.forEach(function(r){if(r[1]!=null)pm[r[0]]=r[1];}); setPrices(pm); checkPriceAlerts(pm); setLoading(false);
     });
