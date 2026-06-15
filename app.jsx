@@ -696,9 +696,9 @@ function applyPrices(prices, usdEur, effSrc){
 }
 
 // Date locale UTC+11 (Nouvelle-Calédonie)
-const APP_VERSION = "v4.14";
+const APP_VERSION = "v4.15";
 // v4.5 — fix NICK : NICK.AS n'existe pas chez Yahoo, le bon symbole EUR est NICK.MI (Milan)
-try{ if(typeof YF_MAP!=="undefined" && YF_MAP){ YF_MAP.NICK="NICK.MI"; } }catch(e){}
+try{ if(typeof YF_MAP!=="undefined" && YF_MAP){ YF_MAP.NICK="NICK.L"; } }catch(e){}
 const NC_OFFSET_MS = 11 * 60 * 60 * 1000;
 const todayNC = () => {
   const nc = new Date(Date.now() + NC_OFFSET_MS);
@@ -6883,7 +6883,10 @@ function LWChart(props){
           }
         });
         if(pending){ var px=l2x(pending.l),py=p2y(pending.p); if(px!=null&&py!=null) els.push(React.createElement("circle",{key:"pend",cx:px,cy:py,r:5,fill:C2.btc||"#F7931A"})); }
-        return React.createElement("svg",{width:"100%",height:chartHeight,onPointerUp:onDrawClick,style:{position:"absolute",left:0,top:0,pointerEvents:drawMode?"auto":"none",cursor:drawMode?"crosshair":"default",touchAction:drawMode?"none":"auto"}},els);
+        return React.createElement(React.Fragment,null,
+          React.createElement("svg",{width:"100%",height:chartHeight,style:{position:"absolute",left:0,top:0,pointerEvents:"none"}},els),
+          drawMode&&React.createElement("div",{onPointerUp:onDrawClick,style:{position:"absolute",left:0,top:0,width:"100%",height:chartHeight,zIndex:6,cursor:"crosshair",touchAction:"none",background:"transparent"}})
+        );
       })()
     ),
     err&&React.createElement("div",{style:{fontSize:10,color:down,marginTop:4}},err)
@@ -9266,6 +9269,15 @@ function App(){
   // EFF = live est la source unique de vérité
   const EFF = live || CURRENT;
 
+  // v4.14 — actualisation auto au lancement (plus besoin d'actualiser à la main)
+  const autoRefRef = useRef(false);
+  useEffect(function(){
+    if(!ready || autoRefRef.current) return;
+    autoRefRef.current = true;
+    var id=setTimeout(function(){ try{ handleRefresh(); }catch(e){} }, 900);
+    return function(){ clearTimeout(id); };
+  },[ready]);
+
   const liveProps = {eur, setEur, hidden, setHidden, EFF, refreshing, handleRefresh, refreshedAt, refreshErr, fromSnapshot: live?._fromSnapshot||null, gistSync, liveDD, liveGDBS, liveGC, liveGSB, liveCM};
 
   // ── Préchargement au démarrage — charge local + KV en parallèle ──────────
@@ -9371,7 +9383,7 @@ function App(){
       if(kv.cgi_ibkr_annex) setLiveIbkrAnnex(unionTxnsById(SEED_IBKR_ANNEX, kv.cgi_ibkr_annex));
       if(kv.cgi_bench) setLiveBench(_mergeArrays(BENCH_IDX, kv.cgi_bench));
       if(kv.cgi_yfmap&&typeof kv.cgi_yfmap==="object") Object.assign(YF_MAP,kv.cgi_yfmap);
-      try{ YF_MAP.NICK="NICK.MI"; }catch(e){} // v4.5 — garde NICK.MI même après merge KV
+      try{ YF_MAP.NICK="NICK.L"; }catch(e){} // v4.5 — garde NICK.MI même après merge KV
       if(kv.cgi_icons&&typeof kv.cgi_icons==="object"){
         // Merger : KV écrase les entrées existantes (KV = vérité cloud)
         // mais on conserve les entrées localStorage qui ne seraient pas dans KV
@@ -10649,7 +10661,7 @@ function App(){
             <div style={{textAlign:"center",marginBottom:18}}>
               <div style={{fontSize:30,fontWeight:900,color:C.btc,letterSpacing:1}}>CGI</div>
               <div style={{fontSize:12,color:C.text2,marginTop:2}}>Creusot Global Investments</div>
-              <div style={{fontSize:11,color:C.gray,marginTop:8}}>Créé par <span style={{fontWeight:700,color:C.text}}>John Creusot</span></div>
+              <div style={{fontSize:11,color:C.gray,marginTop:8}}>Créé par <span style={{fontWeight:700,color:C.text}}>CREUSOT INDUSTRIES &amp; SOFTWARE CORP.</span></div>
               <div style={{display:"inline-block",marginTop:10,background:C.btc+"22",border:`1px solid ${C.btc}66`,borderRadius:20,padding:"4px 14px",fontSize:13,fontWeight:800,color:C.btc}}>Version {APP_VERSION}</div>
             </div>
             <div style={{fontSize:10,fontWeight:800,color:C.text3,textTransform:"uppercase",letterSpacing:.5,marginBottom:10}}>Historique des versions</div>
