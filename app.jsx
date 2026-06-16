@@ -810,6 +810,7 @@ const LSV9_KEYS = [
   "cgi_yfmap","cgi_icons",
   "cgi_inv",
   "cgi_futures","cgi_ibkr_annex",
+  "cgi_watchlist",
 ];
 function lsv9ReadAll(){ try{ const v=localStorage.getItem(LS_V9_KEY); return v?JSON.parse(v):{}; }catch{ return {}; } }
 function lsv9WriteAll(obj){ try{ localStorage.setItem(LS_V9_KEY, JSON.stringify(obj)); return true; }catch{ return false; } }
@@ -9230,7 +9231,7 @@ function App(){
           if(dPct!=null) body+="\nJour : "+(dPct>=0?"+":"")+dPct.toFixed(2)+"%";
           if(wPct!=null) body+="\nSemaine : "+(wPct>=0?"+":"")+wPct.toFixed(2)+"%";
           cgiNotifPush({type:"meteo",emoji:(dPct!=null?(dPct>=0?"📈":"📉"):"🌤️"),
-            dedupeKey:"meteo_"+lastDate, title:"Météo patrimoine", body:body, telegram:true});
+            dedupeKey:"meteo_"+lastDate, title:"Météo patrimoine", body:body, telegram:false}); // v5.4 — Telegram géré par le worker cron (même app fermée)
         }
       }
       var closed=(computeClosedTrades(txns||[]).closed)||[];
