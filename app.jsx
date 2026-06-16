@@ -10282,9 +10282,15 @@ function App(){
       // ── portfolio.items est la SOURCE DE VÉRITÉ (lu par buildSections) ──
       const pItems=base.portfolio.items;
       const seen={};
+      const tradedTks={}; (txns||[]).forEach(function(t){ if(t&&t.ticker) tradedTks[t.ticker]=1; });
       let newItems=pItems.map(function(it){
         if(it.cat==="Crypto"||it.cat==="Cash Matelas") return it; // garder crypto + cash intacts
-        const cp=posByTk[it.t]; if(!cp) return it;
+        const cp=posByTk[it.t];
+        if(!cp){
+          // pas de position calculée : si le ticker a été tradé → vendu à 100% → on retire ;
+          // sinon (jamais tradé : or, indices détenus hors txns…) → on garde tel quel
+          return tradedTks[it.t] ? null : it;
+        }
         seen[it.t]=1;
         const lv=it.live||cp.avgUSD||1;
         const qty=cp.qty;
@@ -10292,7 +10298,7 @@ function App(){
         const pa=cp.avgUSD!=null?cp.avgUSD:it.pa;
         const investi=(pa||lv)*qty;
         return {...it, qty:qty, pa:pa, val:val, pnl:Math.round(val-investi), pct:investi>0?(val-investi)/investi:0, valEUR:Math.round(val*rate)};
-      });
+      }).filter(Boolean);
       pos.forEach(function(p){
         if(CRYPTO_HINT[p.ticker]) return; // actions seulement — pas d'ajout crypto
         if(seen[p.ticker]||pItems.some(function(x){ return x.t===p.ticker; })) return;
@@ -10315,13 +10321,15 @@ function App(){
     // ── repli : pas de portfolio.items → on met à jour les ACTIONS seulement ──
     if(!base.stocks||!base.crypto) return;
     const stockTks={};  (base.stocks.items||[]).forEach(function(it){ stockTks[it.t]=1; });
+    const tradedTks={}; (txns||[]).forEach(function(t){ if(t&&t.ticker) tradedTks[t.ticker]=1; });
     const updItems=function(items){
       return (items||[]).map(function(it){
-        const cp=posByTk[it.t]; if(!cp) return it;
+        const cp=posByTk[it.t];
+        if(!cp) return tradedTks[it.t] ? null : it; // tradé mais net 0 → vendu → retiré
         const lv=it.live||cp.avgUSD||1; const qty=cp.qty; const val=Math.round(qty*lv);
         const pa=cp.avgUSD!=null?cp.avgUSD:it.pa; const investi=(pa||lv)*qty;
         return {...it, qty:qty, pa:pa, val:val, pnl:Math.round(val-investi), pct:investi>0?(val-investi)/investi:0};
-      });
+      }).filter(Boolean);
     };
     let newStocks=updItems(base.stocks.items);
     const newCrypto=(base.crypto.items||[]).slice(); // crypto inchangé
