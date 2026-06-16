@@ -710,7 +710,7 @@ function applyPrices(prices, usdEur, effSrc){
 }
 
 // Date locale UTC+11 (Nouvelle-Calédonie)
-const APP_VERSION = "v4.19";
+const APP_VERSION = "v5.0";
 // v4.5 — fix NICK : NICK.AS n'existe pas chez Yahoo, le bon symbole EUR est NICK.MI (Milan)
 try{ if(typeof YF_MAP!=="undefined" && YF_MAP){ YF_MAP.NICK="NICK.MI"; } }catch(e){}
 const NC_OFFSET_MS = 11 * 60 * 60 * 1000;
@@ -10297,7 +10297,15 @@ function App(){
     });
     const stocksTotal=newStocks.reduce(function(s,x){ return s+(x.val||0); },0);
     const cryptoTotal=newCrypto.reduce(function(s,x){ return s+(x.val||0); },0);
-    setLive({...base, stocks:{...base.stocks, items:newStocks, total:stocksTotal}, crypto:{...base.crypto, items:newCrypto, total:cryptoTotal}});
+    // v5.0 — recalcule TOUTE la chaîne dérivée pour que l'affichage suive réellement
+    const rate=base.usdEur||(base.eurUsd?1/base.eurUsd:1);     // USD→EUR
+    const eurUsd=base.eurUsd||(rate?1/rate:1);                 // EUR→USD
+    const bankUSD=(base.bank&&base.bank.totalEUR!=null)?Math.round(base.bank.totalEUR*eurUsd):((base.bank&&base.bank.total)||0);
+    const totalUSD=cryptoTotal+stocksTotal+bankUSD;
+    const totalEUR=Math.round(totalUSD*rate);
+    const tmpEFF={...base, crypto:{...base.crypto, total:cryptoTotal, items:newCrypto}, stocks:{...base.stocks, total:stocksTotal, items:newStocks}, bank:{...base.bank}};
+    const g=calcGdbPrices(tmpEFF);
+    setLive({...tmpEFF, totalUSD:totalUSD, totalEUR:totalEUR, usdEur:rate, eurUsd:eurUsd, gdbS:g.gdbS, gdbC:g.gdbC, _fromTxnsApplied:true});
   },[live,txns]);
 
   // v25.05 Phase 4 — applyInvestment : transfert Cash Matelas <-> fonds, creation/destruction
