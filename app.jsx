@@ -10649,15 +10649,15 @@ function App(){
         {/* Gauche : ↺ 📸 💵 */}
         <div style={{display:"flex",gap:9,alignItems:"center"}}>
           <button onClick={handleRefresh} disabled={refreshing} title="Actualiser les prix" style={{
-            width:34,height:34,borderRadius:C.radiusSm||8,
-            border:`1px solid ${C.border}`,
+            width:34,height:34,borderRadius:8,
+            border:`1px solid ${refreshing?C.border:C.gold+"55"}`,
             background:refreshing?C.bg2:"transparent",
             cursor:refreshing?"not-allowed":"pointer",
             display:"flex",alignItems:"center",justifyContent:"center",
-            color:refreshing?C.gray:C.text2,transition:"border-color .15s,color .15s,background .15s",
+            color:refreshing?C.gray:C.gold,transition:"border-color .18s,color .18s,background .18s",
           }}
-          onMouseEnter={e=>{ if(!refreshing){ e.currentTarget.style.borderColor=C.green; e.currentTarget.style.color=C.green; } }}
-          onMouseLeave={e=>{ if(!refreshing){ e.currentTarget.style.borderColor=C.border; e.currentTarget.style.color=C.text2; } }}>
+          onMouseEnter={e=>{ if(!refreshing){ e.currentTarget.style.borderColor=C.gold; e.currentTarget.style.background=C.gold+"14"; } }}
+          onMouseLeave={e=>{ if(!refreshing){ e.currentTarget.style.borderColor=C.gold+"55"; e.currentTarget.style.background="transparent"; } }}>
             <span style={{display:"flex",animation:refreshing?"spin 0.9s linear infinite":"none"}}>
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                 <polyline points="23 4 23 10 17 10"/>
@@ -10666,17 +10666,31 @@ function App(){
             </span>
           </button>
           <button onClick={()=>setShowSnap(true)} title="Prendre un snapshot" style={{
-            width:32,height:32,borderRadius:C.radiusSm||6,
-            border:`1.5px solid ${C.btc}`,background:C.btc+"1A",
-            cursor:"pointer",fontSize:15,
+            width:34,height:34,borderRadius:8,
+            border:`1px solid ${C.gold+"55"}`,background:"transparent",
+            cursor:"pointer",color:C.gold,transition:"border-color .18s,background .18s",
             display:"flex",alignItems:"center",justifyContent:"center",
-          }}>📸</button>
+          }}
+          onMouseEnter={e=>{ e.currentTarget.style.borderColor=C.gold; e.currentTarget.style.background=C.gold+"14"; }}
+          onMouseLeave={e=>{ e.currentTarget.style.borderColor=C.gold+"55"; e.currentTarget.style.background="transparent"; }}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+              <circle cx="12" cy="13" r="4"/>
+            </svg>
+          </button>
           <button onClick={()=>setShowTrade(true)} title="Achat / Vente" style={{
-            width:32,height:32,borderRadius:C.radiusSm||6,
-            border:`1.5px solid ${C.teal}`,background:C.teal+"1A",
-            cursor:"pointer",fontSize:15,
+            width:34,height:34,borderRadius:8,
+            border:`1px solid ${C.gold+"55"}`,background:"transparent",
+            cursor:"pointer",color:C.gold,transition:"border-color .18s,background .18s",
             display:"flex",alignItems:"center",justifyContent:"center",
-          }}>💵</button>
+          }}
+          onMouseEnter={e=>{ e.currentTarget.style.borderColor=C.gold; e.currentTarget.style.background=C.gold+"14"; }}
+          onMouseLeave={e=>{ e.currentTarget.style.borderColor=C.gold+"55"; e.currentTarget.style.background="transparent"; }}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/>
+              <polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/>
+            </svg>
+          </button>
         </div>
 
         {/* Centre : CREUSOT GLOBAL INVESTMENTS + version */}
@@ -10939,6 +10953,12 @@ function App(){
             <div style={{fontSize:10,fontWeight:800,color:C.text3,textTransform:"uppercase",letterSpacing:.5,marginBottom:10}}>Historique des versions</div>
             <div style={{display:"flex",flexDirection:"column",gap:10}}>
               {[
+                ["v5.4","Cash dip IBKR (USD/EUR), synchro watchlist multi-appareils corrigée, météo Telegram même app fermée, accueil à jour au lancement (dernier KV), boutons accent or, bouton actualiser refait."],
+                ["v5.0","Recalcul des positions depuis les transactions + application au portefeuille (actions, cash dip), synchro IBKR automatique."],
+                ["v4.19","NICK fiabilisé (fenêtre 3 mois pour titres illiquides) + logos de secours gratuits (Parqet)."],
+                ["v4.17","Panneau « Positions calculées » : reconstitution des positions depuis le journal de transactions."],
+                ["v4.16","Timeframes intraday, sélection/suppression/recoloration des tracés, repli multi-symboles."],
+                ["v4.15","Couche de dessin fiabilisée (capture dédiée) + rafraîchissement auto de la date locale."],
                 ["v4.14","Corrections : dessin (coordonnées logiques), NICK fiabilisé, synchro watchlist multi-appareils, météo Telegram automatique, page À propos."],
                 ["v4.13","Dessin Fibonacci & trendlines (persistés par ticker, partagés Suivi↔Portfolio) + onglet Flux (rotation des capitaux)."],
                 ["v4.12","Indicateurs de tracé : moyennes mobiles, Ichimoku, sous-panneau RSI (plein écran)."],
@@ -10950,6 +10970,9 @@ function App(){
                 ["v4.5","Logos réels, autocomplétion de tickers, graphique TradingView + zones, édition des transactions, correctif NICK."],
                 ["v4.4","Refonte de la barre du haut : cloche de notifications + réglages, accès direct aux données."],
                 ["v4.0","Conditions de suivi structurées, moteur de validation technique, notifications Telegram, worker cron autonome."],
+                ["v3.x","Onglet Suivi de marché (watchlist) avec thèse, scoring et alertes de prix ; analyse IA des news."],
+                ["v2.x","Suivi multi-actifs (crypto / actions / banque) par catégories, conversions EUR/USD, instantanés de patrimoine et historique."],
+                ["v1.0","Première version Creusot Global Investments (refonte de « GDB & Sons ») : positions, patrimoine total, fonds CGIC/CGIS calibrés ~100, synchro Cloudflare KV."],
               ].map(([v,desc])=>(
                 <div key={v} style={{display:"flex",gap:10}}>
                   <span style={{fontSize:12,fontWeight:800,color:C.btc,minWidth:42,flexShrink:0}}>{v}</span>
