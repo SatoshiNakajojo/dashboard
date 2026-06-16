@@ -709,7 +709,7 @@ function applyPrices(prices, usdEur, effSrc){
 }
 
 // Date locale UTC+11 (Nouvelle-Calédonie)
-const APP_VERSION = "v4.16";
+const APP_VERSION = "v4.17";
 // v4.5 — fix NICK : NICK.AS n'existe pas chez Yahoo, le bon symbole EUR est NICK.MI (Milan)
 try{ if(typeof YF_MAP!=="undefined" && YF_MAP){ YF_MAP.NICK="NICK.L"; } }catch(e){}
 const NC_OFFSET_MS = 11 * 60 * 60 * 1000;
@@ -6268,6 +6268,24 @@ function CloudKeyList({data, onRefresh}){
 
 // v26.02 Lot C — reconstruction des trades clotures (round-trip par actif, cout moyen).
 // Un cycle = de la 1ere acquisition (position 0->+) au retour a ~0. PnL = ventes - achats.
+// v4.17 — Positions ouvertes calculées depuis le journal de transactions
+// Coût moyen pondéré : BUY ajoute qté+coût ; SELL réduit qté et coût au prorata du PRU.
+function computeOpenPositions(txns){
+  var byT={};
+  (txns||[]).slice().sort(function(a,b){ return (a.date||"")<(b.date||"")?-1:1; }).forEach(function(t){
+    if(!t||!t.ticker) return;
+    var tk=t.ticker;
+    var p=byT[tk]||(byT[tk]={qty:0,costUSD:0,cur:t.currency||"USD"});
+    var q=+t.qty||0, v=Math.abs(+t.valueUSD||0);
+    if(t.side==="BUY"){ p.qty+=q; p.costUSD+=v; }
+    else { if(p.qty>1e-9){ var avg=p.costUSD/p.qty; p.costUSD-=avg*Math.min(q,p.qty); } p.qty-=q; }
+  });
+  return Object.keys(byT).map(function(tk){
+    var p=byT[tk];
+    return { ticker:tk, qty:Math.round(p.qty*1e6)/1e6, investedUSD:Math.max(0,p.costUSD), avgUSD:p.qty>1e-9?p.costUSD/p.qty:null, currency:p.cur };
+  }).filter(function(p){ return p.qty>1e-6; }).sort(function(a,b){ return b.investedUSD-a.investedUSD; });
+}
+
 function computeClosedTrades(txns){
   var STABLE={USDT:1,USDC:1,UST:1,DAI:1,BUSD:1,TUSD:1,FDUSD:1};
   var EPS=1e-6;
@@ -8522,7 +8540,64 @@ function TxnEditor(props){
   );
 }
 
+// v4.17 — Panneau additif (lecture seule) : positions recalculées depuis les transactions
+function ComputedPositions(props){
+  var txns=props.txns;
+  var positions = React.useMemo(function(){ return computeOpenPositions(txns||[]); }, [txns]);
+  var ps=React.useState({}); var prices=ps[0], setPrices=ps[1];
+  var vs=React.useState(false); var valuing=vs[0], setValuing=vs[1];
+  var os=React.useState(false); var open=os[0], setOpen=os[1];
+  var fmtUSD=function(v){ return v==null?"—":"$"+Math.round(v).toLocaleString("fr-FR"); };
+  var fmtQty=function(q){ var a=Math.abs(q); return a>=1?(Math.round(q*100)/100).toLocaleString("fr-FR"):String(Math.round(q*1e6)/1e6); };
+  function valoriser(){
+    setValuing(true);
+    var out={};
+    Promise.all(positions.map(function(p){
+      var sym=(typeof YF_MAP!=="undefined"&&YF_MAP[p.ticker])||p.ticker;
+      return fetchYahooCFmulti(p.ticker,sym).then(function(px){ if(px!=null) out[p.ticker]=px; }).catch(function(){});
+    })).then(function(){ setPrices(out); setValuing(false); });
+  }
+  var totalInvested=positions.reduce(function(s,p){ return s+(p.investedUSD||0); },0);
+  var totalValue=0, hasVal=false;
+  positions.forEach(function(p){ var px=prices[p.ticker]; if(px!=null){ totalValue+=p.qty*px; hasVal=true; } });
+  var th={flex:1,textAlign:"right"};
+  return (
+    <div style={{background:C.bg1,border:`1px solid ${C.border}`,borderRadius:12,padding:14,marginBottom:12}}>
+      <div onClick={function(){setOpen(!open);}} style={{display:"flex",justifyContent:"space-between",alignItems:"center",cursor:"pointer"}}>
+        <div>
+          <div style={{fontSize:13,fontWeight:700,color:C.text}}>Positions calculées <span style={{fontSize:10,color:C.text3,fontWeight:500}}>(depuis les transactions)</span></div>
+          <div style={{fontSize:10,color:C.text3,marginTop:2}}>{positions.length} positions · investi {fmtUSD(totalInvested)}</div>
+        </div>
+        <span style={{fontSize:16,color:C.text3,transform:open?"rotate(90deg)":"none",transition:"transform .15s"}}>›</span>
+      </div>
+      {open && (
+        <div style={{marginTop:12}}>
+          <button onClick={valoriser} disabled={valuing} style={{width:"100%",padding:"8px 0",marginBottom:10,borderRadius:8,border:`1px solid ${C.border}`,background:valuing?C.bg2:C.btc,color:valuing?C.text3:"#000",fontSize:12,fontWeight:700,cursor:valuing?"default":"pointer"}}>{valuing?"Valorisation…":"Valoriser au cours actuel"}</button>
+          <div style={{display:"flex",fontSize:9,color:C.text3,fontWeight:700,textTransform:"uppercase",padding:"6px 0",borderBottom:`1px solid ${C.border}`}}>
+            <span style={{flex:2}}>Ticker</span><span style={th}>Qté</span><span style={th}>PRU $</span><span style={th}>Investi</span>{hasVal&&<span style={th}>Valeur</span>}{hasVal&&<span style={th}>+/−</span>}
+          </div>
+          {positions.map(function(p){
+            var px=prices[p.ticker]; var val=px!=null?p.qty*px:null; var pnl=val!=null?val-p.investedUSD:null;
+            return (
+              <div key={p.ticker} style={{display:"flex",fontSize:11,color:C.text,padding:"6px 0",borderBottom:`1px solid ${C.border}66`,alignItems:"center"}}>
+                <span style={{flex:2,fontWeight:700}}>{p.ticker}</span>
+                <span style={th}>{fmtQty(p.qty)}</span>
+                <span style={{flex:1,textAlign:"right",color:C.text2}}>{p.avgUSD!=null?("$"+(Math.round(p.avgUSD*100)/100).toLocaleString("fr-FR")):"—"}</span>
+                <span style={{flex:1,textAlign:"right",color:C.text2}}>{fmtUSD(p.investedUSD)}</span>
+                {hasVal&&<span style={th}>{val!=null?fmtUSD(val):"—"}</span>}
+                {hasVal&&<span style={{flex:1,textAlign:"right",color:pnl==null?C.text3:(pnl>=0?C.green:C.red),fontWeight:700}}>{pnl!=null?((pnl>=0?"+":"")+fmtUSD(pnl)):"—"}</span>}
+              </div>
+            );
+          })}
+          {hasVal && <div style={{display:"flex",justifyContent:"space-between",marginTop:8,fontSize:12,fontWeight:700}}><span style={{color:C.text2}}>Valeur totale estimée</span><span style={{color:C.text}}>{fmtUSD(totalValue)}</span></div>}
+          <div style={{fontSize:9,color:C.text3,marginTop:8,lineHeight:1.5}}>Indicatif : coût moyen pondéré, en USD. La valorisation suppose un cours en USD (juste pour tes actions US ; les tickers EUR comme Paris seront approximatifs tant qu'on n'ajoute pas le change). Compare avec tes positions réelles — une quantité anormale révèle un doublon.</div>
+        </div>
+      )}
+    </div>
+  );
+}
 function PageData(
+
 {EFF, hidden, txns, addTxn, delTxn, chartData, liveDD, liveGDBS, liveGC, liveGSB, liveCM, liveSM, liveTM, liveBench, liveInv, liveFutures, liveIbkrAnnex, kvRefreshTick}){
   var _DD   = liveDD   || DD;
   var _INV  = liveInv  || INV_SEED_OK;
@@ -8783,6 +8858,7 @@ function PageData(
   return(
     <div>
       <TxnEditor txns={txns} addTxn={addTxn} delTxn={delTxn}/>
+      <ComputedPositions txns={txns}/>
       <div style={{display:"flex",gap:6,background:C.bg2,borderRadius:10,padding:4,marginBottom:12}}>
         {["local","cloud"].map(function(k){
           var l = k==="local" ? "Bases locales" : "Cloudflare KV";
