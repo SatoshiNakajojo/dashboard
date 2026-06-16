@@ -11037,5 +11037,23 @@ function App(){
 }
 
 
+// v5.4 — Garde-fou : affiche l'erreur au lieu d'un écran noir (et aide au diagnostic)
+class CGIErrorBoundary extends React.Component {
+  constructor(props){ super(props); this.state={err:null}; }
+  static getDerivedStateFromError(err){ return {err:err}; }
+  componentDidCatch(err,info){ try{ console.error("CGI crash:",err,info); }catch(e){} }
+  render(){
+    if(this.state.err){
+      var e=this.state.err;
+      return React.createElement("div",{style:{padding:"22px 18px",fontFamily:"ui-monospace,Menlo,monospace",color:"#e8e8e8",background:"#0b0e14",minHeight:"100vh",fontSize:12,lineHeight:1.55,overflowY:"auto"}},
+        React.createElement("div",{style:{color:"#EAB308",fontWeight:800,fontSize:16,marginBottom:12}},"⚠️ Erreur de rendu CGI"),
+        React.createElement("div",{style:{color:"#f87171",marginBottom:12,whiteSpace:"pre-wrap",fontWeight:700}}, String((e&&e.message)||e)),
+        React.createElement("pre",{style:{whiteSpace:"pre-wrap",color:"#9aa3b2",fontSize:10,maxHeight:"45vh",overflow:"auto",background:"#070a10",padding:10,borderRadius:8}}, (e&&e.stack)||""),
+        React.createElement("button",{onClick:function(){ try{ location.reload(); }catch(x){} }, style:{marginTop:16,padding:"9px 18px",background:"#EAB308",border:"none",borderRadius:8,fontWeight:800,cursor:"pointer",color:"#000"}},"Recharger")
+      );
+    }
+    return this.props.children;
+  }
+}
 const root = ReactDOM.createRoot(document.getElementById('root'));
-root.render(React.createElement(App));
+root.render(React.createElement(CGIErrorBoundary, null, React.createElement(App)));
