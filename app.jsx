@@ -265,7 +265,7 @@ async function fetchYahooCF(symbol){
 
 // v4.16 — repli multi-symboles pour tickers capricieux (ETC illiquides, etc.)
 var SYMBOL_FALLBACKS = {
-  NICK: ["NICK.L","NICK.MI","NICK.AS","NICK.SW","NICKEL.L","SNIK.L"]
+  NICK: ["NICK.MI","NICK.L","NICK.AS","NICK.SW"]
 };
 async function fetchYahooCFmulti(ticker, primary){
   var first = primary || ticker;
@@ -599,7 +599,8 @@ async function fetchAllPrices(){
     await Promise.all(batch.map(async([key, sym])=>{
       if(key==="EURUSD") return;  // retire du refresh Yahoo (buggait a chaque refresh)
       try {
-        const price = await fetchYahoo(sym);
+        let price = await fetchYahoo(sym);
+        if(price==null && SYMBOL_FALLBACKS[key]) price = await fetchYahooCFmulti(key, sym);
         if(price != null) results[key] = price;
         else results.errors.push(`${key}`); // null = échec silencieux
       } catch(e){ results.errors.push(`${key}`); }
@@ -709,9 +710,9 @@ function applyPrices(prices, usdEur, effSrc){
 }
 
 // Date locale UTC+11 (Nouvelle-Calédonie)
-const APP_VERSION = "v4.18";
+const APP_VERSION = "v4.19";
 // v4.5 — fix NICK : NICK.AS n'existe pas chez Yahoo, le bon symbole EUR est NICK.MI (Milan)
-try{ if(typeof YF_MAP!=="undefined" && YF_MAP){ YF_MAP.NICK="NICK.L"; } }catch(e){}
+try{ if(typeof YF_MAP!=="undefined" && YF_MAP){ YF_MAP.NICK="NICK.MI"; } }catch(e){}
 const NC_OFFSET_MS = 11 * 60 * 60 * 1000;
 const todayNC = () => {
   const nc = new Date(Date.now() + NC_OFFSET_MS);
@@ -2949,7 +2950,8 @@ function getBestIcon(ticker){
   if(db?.fmp)   return { type:"img",   value: db.fmp  };
   const base = TICKER_ICONS_BASE[ticker];
   if(base)      return { type:"emoji", value: base };
-  return null;
+  // v4.18 — logo gratuit de secours (Parqet, sans clé FMP) ; masqué si introuvable (onError)
+  return { type:"img", value: "https://assets.parqet.com/logos/symbol/"+encodeURIComponent(ticker)+"?format=png", fallback:true };
 }
 // Écrit dans ICON_DB, resync CUSTOM_ICONS, persiste en localStorage
 function setIconDb(ticker, patch){
@@ -3014,6 +3016,8 @@ function TickerIcon({ ticker, size=32, color="#ffffff22", onIconSaved, iconDbVer
   const [open, setOpen] = useState(false);
   const [userInput, setUserInput] = useState("");
   const [saving, setSaving] = useState(false);
+  const [imgFail, setImgFail] = useState(false);
+  React.useEffect(function(){ setImgFail(false); }, [ticker]);
   const db = ICON_DB[ticker] || {};
   const best = getBestIcon(ticker);
 
@@ -3046,9 +3050,10 @@ function TickerIcon({ ticker, size=32, color="#ffffff22", onIconSaved, iconDbVer
         }}
         title="Changer l'icône"
       >
-        {best?.type==="img"
-          ? <img src={best.value} alt={ticker} style={{width:"80%",height:"80%",objectFit:"contain",borderRadius:4}} onError={e=>e.target.style.display="none"}/>
-          : (best?.value || ticker.slice(0,3))
+        {best?.type==="img" && !imgFail
+          ? <img src={best.value} alt={ticker} style={{width:"80%",height:"80%",objectFit:"contain",borderRadius:4}}
+              onError={e=>{ if(!e.target.dataset.fb && !best.fallback){ e.target.dataset.fb="1"; e.target.src="https://assets.parqet.com/logos/symbol/"+encodeURIComponent(ticker)+"?format=png"; } else { setImgFail(true); } }}/>
+          : (best?.type==="emoji" ? best.value : ticker.slice(0,3))
         }
       </div>
 
@@ -9532,7 +9537,7 @@ function App(){
       if(kv.cgi_ibkr_annex) setLiveIbkrAnnex(unionTxnsById(SEED_IBKR_ANNEX, kv.cgi_ibkr_annex));
       if(kv.cgi_bench) setLiveBench(_mergeArrays(BENCH_IDX, kv.cgi_bench));
       if(kv.cgi_yfmap&&typeof kv.cgi_yfmap==="object") Object.assign(YF_MAP,kv.cgi_yfmap);
-      try{ YF_MAP.NICK="NICK.L"; }catch(e){} // v4.5 — garde NICK.MI même après merge KV
+      try{ YF_MAP.NICK="NICK.MI"; }catch(e){} // v4.5 — garde NICK.MI même après merge KV
       if(kv.cgi_icons&&typeof kv.cgi_icons==="object"){
         // Merger : KV écrase les entrées existantes (KV = vérité cloud)
         // mais on conserve les entrées localStorage qui ne seraient pas dans KV
