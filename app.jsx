@@ -10283,7 +10283,8 @@ function App(){
       const pItems=base.portfolio.items;
       const seen={};
       let newItems=pItems.map(function(it){
-        const cp=posByTk[it.t]; if(!cp) return it; // hors transactions (Cash Matelas…) → inchangé
+        if(it.cat==="Crypto"||it.cat==="Cash Matelas") return it; // garder crypto + cash intacts
+        const cp=posByTk[it.t]; if(!cp) return it;
         seen[it.t]=1;
         const lv=it.live||cp.avgUSD||1;
         const qty=cp.qty;
@@ -10293,9 +10294,10 @@ function App(){
         return {...it, qty:qty, pa:pa, val:val, pnl:Math.round(val-investi), pct:investi>0?(val-investi)/investi:0, valEUR:Math.round(val*rate)};
       });
       pos.forEach(function(p){
+        if(CRYPTO_HINT[p.ticker]) return; // actions seulement — pas d'ajout crypto
         if(seen[p.ticker]||pItems.some(function(x){ return x.t===p.ticker; })) return;
         const lv=p.avgUSD||1; const val=Math.round(p.qty*lv);
-        newItems=newItems.concat([{t:p.ticker, qty:p.qty, pa:p.avgUSD||null, live:lv, val:val, pnl:0, pct:0, valEUR:Math.round(val*rate), cat:CRYPTO_HINT[p.ticker]?"Crypto":"Picking", _fromTxns:true}]);
+        newItems=newItems.concat([{t:p.ticker, qty:p.qty, pa:p.avgUSD||null, live:lv, val:val, pnl:0, pct:0, valEUR:Math.round(val*rate), cat:"Picking", _fromTxns:true}]);
       });
       // dérive stocks/crypto/bank depuis portfolio (même logique que buildSections)
       const cryptoItems=newItems.filter(function(x){ return x.cat==="Crypto"; });
@@ -10310,9 +10312,8 @@ function App(){
       return;
     }
 
-    // ── repli : pas de portfolio.items → on met à jour stocks/crypto directement ──
+    // ── repli : pas de portfolio.items → on met à jour les ACTIONS seulement ──
     if(!base.stocks||!base.crypto) return;
-    const cryptoTks={}; (base.crypto.items||[]).forEach(function(it){ cryptoTks[it.t]=1; });
     const stockTks={};  (base.stocks.items||[]).forEach(function(it){ stockTks[it.t]=1; });
     const updItems=function(items){
       return (items||[]).map(function(it){
@@ -10322,12 +10323,12 @@ function App(){
         return {...it, qty:qty, pa:pa, val:val, pnl:Math.round(val-investi), pct:investi>0?(val-investi)/investi:0};
       });
     };
-    let newStocks=updItems(base.stocks.items), newCrypto=updItems(base.crypto.items);
+    let newStocks=updItems(base.stocks.items);
+    const newCrypto=(base.crypto.items||[]).slice(); // crypto inchangé
     pos.forEach(function(p){
-      if(stockTks[p.ticker]||cryptoTks[p.ticker]) return;
+      if(CRYPTO_HINT[p.ticker]||stockTks[p.ticker]) return; // actions seulement
       const lv=p.avgUSD||1;
-      const item={t:p.ticker, qty:p.qty, pa:p.avgUSD||null, live:lv, val:Math.round(p.qty*lv), pnl:0, pct:0, cat:CRYPTO_HINT[p.ticker]?"Crypto":"Picking", _fromTxns:true};
-      if(CRYPTO_HINT[p.ticker]) newCrypto=newCrypto.concat([item]); else newStocks=newStocks.concat([item]);
+      newStocks=newStocks.concat([{t:p.ticker, qty:p.qty, pa:p.avgUSD||null, live:lv, val:Math.round(p.qty*lv), pnl:0, pct:0, cat:"Picking", _fromTxns:true}]);
     });
     const stocksTotal=sum(newStocks), cryptoTotal=sum(newCrypto);
     const bankUSD=(base.bank&&base.bank.totalEUR!=null)?Math.round(base.bank.totalEUR*eurUsd):((base.bank&&base.bank.total)||0);
