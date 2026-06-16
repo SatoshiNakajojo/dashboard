@@ -709,7 +709,7 @@ function applyPrices(prices, usdEur, effSrc){
 }
 
 // Date locale UTC+11 (Nouvelle-Calédonie)
-const APP_VERSION = "v4.17";
+const APP_VERSION = "v4.18";
 // v4.5 — fix NICK : NICK.AS n'existe pas chez Yahoo, le bon symbole EUR est NICK.MI (Milan)
 try{ if(typeof YF_MAP!=="undefined" && YF_MAP){ YF_MAP.NICK="NICK.L"; } }catch(e){}
 const NC_OFFSET_MS = 11 * 60 * 60 * 1000;
@@ -8547,6 +8547,7 @@ function ComputedPositions(props){
   var ps=React.useState({}); var prices=ps[0], setPrices=ps[1];
   var vs=React.useState(false); var valuing=vs[0], setValuing=vs[1];
   var os=React.useState(false); var open=os[0], setOpen=os[1];
+  var as=React.useState(false); var applied=as[0], setApplied=as[1];
   var fmtUSD=function(v){ return v==null?"—":"$"+Math.round(v).toLocaleString("fr-FR"); };
   var fmtQty=function(q){ var a=Math.abs(q); return a>=1?(Math.round(q*100)/100).toLocaleString("fr-FR"):String(Math.round(q*1e6)/1e6); };
   function valoriser(){
@@ -8572,7 +8573,8 @@ function ComputedPositions(props){
       </div>
       {open && (
         <div style={{marginTop:12}}>
-          <button onClick={valoriser} disabled={valuing} style={{width:"100%",padding:"8px 0",marginBottom:10,borderRadius:8,border:`1px solid ${C.border}`,background:valuing?C.bg2:C.btc,color:valuing?C.text3:"#000",fontSize:12,fontWeight:700,cursor:valuing?"default":"pointer"}}>{valuing?"Valorisation…":"Valoriser au cours actuel"}</button>
+          <button onClick={valoriser} disabled={valuing} style={{width:"100%",padding:"8px 0",marginBottom:8,borderRadius:8,border:`1px solid ${C.border}`,background:valuing?C.bg2:C.btc,color:valuing?C.text3:"#000",fontSize:12,fontWeight:700,cursor:valuing?"default":"pointer"}}>{valuing?"Valorisation…":"Valoriser au cours actuel"}</button>
+          {props.applyPositions && <button onClick={function(){ props.applyPositions(); setApplied(true); }} style={{width:"100%",padding:"8px 0",marginBottom:10,borderRadius:8,border:`1px solid ${C.blue}`,background:C.blue+"22",color:C.blue,fontSize:12,fontWeight:700,cursor:"pointer"}}>{applied?"✓ Appliqué (aperçu) — recharge pour annuler":"Appliquer au portefeuille (aperçu)"}</button>}
           <div style={{display:"flex",fontSize:9,color:C.text3,fontWeight:700,textTransform:"uppercase",padding:"6px 0",borderBottom:`1px solid ${C.border}`}}>
             <span style={{flex:2}}>Ticker</span><span style={th}>Qté</span><span style={th}>PRU $</span><span style={th}>Investi</span>{hasVal&&<span style={th}>Valeur</span>}{hasVal&&<span style={th}>+/−</span>}
           </div>
@@ -8598,7 +8600,7 @@ function ComputedPositions(props){
 }
 function PageData(
 
-{EFF, hidden, txns, addTxn, delTxn, chartData, liveDD, liveGDBS, liveGC, liveGSB, liveCM, liveSM, liveTM, liveBench, liveInv, liveFutures, liveIbkrAnnex, kvRefreshTick}){
+{EFF, hidden, txns, addTxn, delTxn, applyPositions, chartData, liveDD, liveGDBS, liveGC, liveGSB, liveCM, liveSM, liveTM, liveBench, liveInv, liveFutures, liveIbkrAnnex, kvRefreshTick}){
   var _DD   = liveDD   || DD;
   var _INV  = liveInv  || INV_SEED_OK;
   // v1.0 CGI — force refresh KV après snapshot (kvRefreshTick incrémenté par App)
@@ -8858,7 +8860,7 @@ function PageData(
   return(
     <div>
       <TxnEditor txns={txns} addTxn={addTxn} delTxn={delTxn}/>
-      <ComputedPositions txns={txns}/>
+      <ComputedPositions txns={txns} applyPositions={applyPositions}/>
       <div style={{display:"flex",gap:6,background:C.bg2,borderRadius:10,padding:4,marginBottom:12}}>
         {["local","cloud"].map(function(k){
           var l = k==="local" ? "Bases locales" : "Cloudflare KV";
@@ -10259,6 +10261,40 @@ function App(){
     saveBase('cgi_txns', next);               // Phase 2 — base canonique : miroir v9 local + KV cgi_txns
   },[txns]);
 
+  // v4.17 — Aperçu : injecte les quantités + PRU calculés depuis les transactions
+  // dans les positions affichées (sans persister — un rechargement restaure l'état KV).
+  const applyPositionsFromTxns=useCallback(()=>{
+    const base=live||CURRENT;
+    if(!base||!base.stocks||!base.crypto) return;
+    const pos=computeOpenPositions(txns||[]);
+    const posByTk={}; pos.forEach(p=>{ posByTk[p.ticker]=p; });
+    const cryptoTks={}; (base.crypto.items||[]).forEach(it=>{ cryptoTks[it.t]=1; });
+    const stockTks={};  (base.stocks.items||[]).forEach(it=>{ stockTks[it.t]=1; });
+    const CRYPTO_HINT={BTC:1,ETH:1,SOL:1,XRP:1,ADA:1,DOGE:1,DOT:1,AVAX:1,LINK:1,MATIC:1,LTC:1,BCH:1,BNB:1};
+    const updItems=function(items){
+      return (items||[]).map(function(it){
+        const cp=posByTk[it.t]; if(!cp) return it;
+        const lv=it.live||cp.avgUSD||1;
+        const qty=cp.qty;
+        const val=Math.round(qty*lv);
+        const pa=cp.avgUSD!=null?cp.avgUSD:it.pa;
+        const investi=(pa||lv)*qty;
+        return {...it, qty:qty, pa:pa, val:val, pnl:Math.round(val-investi), pct:investi>0?(val-investi)/investi:0};
+      });
+    };
+    let newStocks=updItems(base.stocks.items);
+    let newCrypto=updItems(base.crypto.items);
+    pos.forEach(function(p){
+      if(stockTks[p.ticker]||cryptoTks[p.ticker]) return;
+      const lv=p.avgUSD||1;
+      const item={t:p.ticker, qty:p.qty, pa:p.avgUSD||null, live:lv, val:Math.round(p.qty*lv), pnl:0, pct:0, cat:CRYPTO_HINT[p.ticker]?"Crypto":"Picking", _fromTxns:true};
+      if(CRYPTO_HINT[p.ticker]) newCrypto=newCrypto.concat([item]); else newStocks=newStocks.concat([item]);
+    });
+    const stocksTotal=newStocks.reduce(function(s,x){ return s+(x.val||0); },0);
+    const cryptoTotal=newCrypto.reduce(function(s,x){ return s+(x.val||0); },0);
+    setLive({...base, stocks:{...base.stocks, items:newStocks, total:stocksTotal}, crypto:{...base.crypto, items:newCrypto, total:cryptoTotal}});
+  },[live,txns]);
+
   // v25.05 Phase 4 — applyInvestment : transfert Cash Matelas <-> fonds, creation/destruction
   // de parts (cumul DB), conservation EXACTE du cours (deltaUSD=montant/usdEur, shares=deltaUSD/cours$).
   // E1 : debit/credit Cash Matelas SEULEMENT si holder===INV_OWNER ; sinon apport externe (fonds brut).
@@ -10584,7 +10620,7 @@ function App(){
         {tab===3 && <PageGDB chartData={chartData} hidden={hidden} EFF={EFF} eur={eur} liveGSB={liveGSB} liveGDBS={liveGDBS} liveBench={liveBench} liveGC={gcEff} liveDD={liveDD} liveInv={liveInv}/>}
         {tab===6 && <PageWatchlist EFF={EFF} hidden={hidden}/>}
         {tab===5 && <PageLegend txns={txns} liveFutures={liveFutures} hidden={hidden} eur={eur} EFF={EFF} liveIbkrAnnex={liveIbkrAnnex}/>}
-        {tab===4 && <PageData EFF={EFF} hidden={hidden} txns={txns} addTxn={addTxn} delTxn={delTxn} chartData={chartData} kvRefreshTick={kvRefreshTick}
+        {tab===4 && <PageData EFF={EFF} hidden={hidden} txns={txns} addTxn={addTxn} delTxn={delTxn} applyPositions={applyPositionsFromTxns} chartData={chartData} kvRefreshTick={kvRefreshTick}
           liveDD={liveDD} liveGDBS={liveGDBS} liveGC={gcEff} liveGSB={liveGSB}
           liveCM={liveCM} liveSM={liveSM} liveTM={liveTM} liveBench={liveBench} liveInv={liveInv} liveFutures={liveFutures} liveIbkrAnnex={liveIbkrAnnex}/> }
         {/* Buy & Sell accessible via bouton flottant uniquement */}
