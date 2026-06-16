@@ -9606,6 +9606,14 @@ function App(){
     }
   }
 
+  // v5.4 #2 — Accueil à jour au lancement : choisit AUTOMATIQUEMENT le cloud (dernière version KV)
+  // dès qu'il est chargé ; repli local si KV indisponible. Plus besoin de choisir manuellement.
+  useEffect(function(){
+    if(!startScreen || startLoading) return;
+    if(kvData_snap && !kvError) applyStartChoice(true);
+    else applyStartChoice(false);
+  }, [startScreen, startLoading, kvData_snap, kvError]);
+
   useEffect(()=>{
     (async()=>{
       const pingResult = await cfPing();
@@ -10307,10 +10315,17 @@ function App(){
         newItems=newItems.concat([{t:p.ticker, qty:p.qty, pa:p.avgUSD||null, live:lv, val:val, pnl:0, pct:0, valEUR:Math.round(val*rate), cat:"Picking", _fromTxns:true}]);
       });
       // dérive stocks/crypto/bank depuis portfolio (même logique que buildSections)
-      // v5.4 — cash buy-the-dip IBKR : on consolide la catégorie "Cash" sur le solde USD actuel
-      const DIP_USD=166.36; // solde IBKR — à mettre à jour si ça change (idéalement via sync IBKR plus tard)
-      newItems=newItems.filter(function(x){ return x.cat!=="Cash"; })
-        .concat([{t:"USD", cat:"Cash", qty:DIP_USD, pa:1, live:1, val:Math.round(DIP_USD), pnl:0, pct:0, valEUR:Math.round(DIP_USD*rate), _fromTxns:true}]);
+      // v5.4 — cash buy-the-dip IBKR : USD = solde actuel, EUR = 0 ; on conserve STRC/KUCOIN/autres
+      const DIP_USD=166.36; // solde IBKR USD — à mettre à jour si ça change
+      var _hasUSD=false, _hasEUR=false;
+      newItems=newItems.map(function(it){
+        if(it.cat!=="Cash") return it;
+        if(it.t==="USD"){ _hasUSD=true; return {...it, qty:DIP_USD, pa:1, live:1, val:Math.round(DIP_USD), valEUR:Math.round(DIP_USD*rate), pnl:0, pct:0}; }
+        if(it.t==="EURO"){ _hasEUR=true; return {...it, qty:0, pa:it.pa||1.17, live:eurUsd, val:0, valEUR:0, pnl:0, pct:0}; }
+        return it; // STRC, KUCOIN, etc. inchangés
+      });
+      if(!_hasUSD) newItems=newItems.concat([{t:"USD", cat:"Cash", qty:DIP_USD, pa:1, live:1, val:Math.round(DIP_USD), valEUR:Math.round(DIP_USD*rate), pnl:0, pct:0, _fromTxns:true}]);
+      if(!_hasEUR) newItems=newItems.concat([{t:"EURO", cat:"Cash", qty:0, pa:1.17, live:eurUsd, val:0, valEUR:0, pnl:0, pct:0, _fromTxns:true}]);
       const cryptoItems=newItems.filter(function(x){ return x.cat==="Crypto"; });
       const stocksItems=newItems.filter(function(x){ return x.cat!=="Crypto"&&x.cat!=="Cash Matelas"; });
       const cryptoTotal=sum(cryptoItems), stocksTotal=sum(stocksItems);
@@ -10343,6 +10358,16 @@ function App(){
       const lv=p.avgUSD||1;
       newStocks=newStocks.concat([{t:p.ticker, qty:p.qty, pa:p.avgUSD||null, live:lv, val:Math.round(p.qty*lv), pnl:0, pct:0, cat:"Picking", _fromTxns:true}]);
     });
+    // v5.4 — cash dip IBKR aussi dans le repli : USD = solde, EUR = 0
+    const DIP_USD_FB=166.36; var _hUSD=false,_hEUR=false;
+    newStocks=newStocks.map(function(it){
+      if(it.cat!=="Cash") return it;
+      if(it.t==="USD"){ _hUSD=true; return {...it, qty:DIP_USD_FB, pa:1, live:1, val:Math.round(DIP_USD_FB), valEUR:Math.round(DIP_USD_FB*rate), pnl:0, pct:0}; }
+      if(it.t==="EURO"){ _hEUR=true; return {...it, qty:0, pa:it.pa||1.17, live:eurUsd, val:0, valEUR:0, pnl:0, pct:0}; }
+      return it;
+    });
+    if(!_hUSD) newStocks=newStocks.concat([{t:"USD", cat:"Cash", qty:DIP_USD_FB, pa:1, live:1, val:Math.round(DIP_USD_FB), valEUR:Math.round(DIP_USD_FB*rate), pnl:0, pct:0, _fromTxns:true}]);
+    if(!_hEUR) newStocks=newStocks.concat([{t:"EURO", cat:"Cash", qty:0, pa:1.17, live:eurUsd, val:0, valEUR:0, pnl:0, pct:0, _fromTxns:true}]);
     const stocksTotal=sum(newStocks), cryptoTotal=sum(newCrypto);
     const bankUSD=(base.bank&&base.bank.totalEUR!=null)?Math.round(base.bank.totalEUR*eurUsd):((base.bank&&base.bank.total)||0);
     const totalUSD=cryptoTotal+stocksTotal+bankUSD, totalEUR=Math.round(totalUSD*rate);
