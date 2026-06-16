@@ -710,7 +710,7 @@ function applyPrices(prices, usdEur, effSrc){
 }
 
 // Date locale UTC+11 (Nouvelle-Calédonie)
-const APP_VERSION = "v5.0";
+const APP_VERSION = "v5.4";
 // v4.5 — fix NICK : NICK.AS n'existe pas chez Yahoo, le bon symbole EUR est NICK.MI (Milan)
 try{ if(typeof YF_MAP!=="undefined" && YF_MAP){ YF_MAP.NICK="NICK.MI"; } }catch(e){}
 const NC_OFFSET_MS = 11 * 60 * 60 * 1000;
@@ -10306,6 +10306,10 @@ function App(){
         newItems=newItems.concat([{t:p.ticker, qty:p.qty, pa:p.avgUSD||null, live:lv, val:val, pnl:0, pct:0, valEUR:Math.round(val*rate), cat:"Picking", _fromTxns:true}]);
       });
       // dérive stocks/crypto/bank depuis portfolio (même logique que buildSections)
+      // v5.4 — cash buy-the-dip IBKR : on consolide la catégorie "Cash" sur le solde USD actuel
+      const DIP_USD=166.36; // solde IBKR — à mettre à jour si ça change (idéalement via sync IBKR plus tard)
+      newItems=newItems.filter(function(x){ return x.cat!=="Cash"; })
+        .concat([{t:"USD", cat:"Cash", qty:DIP_USD, pa:1, live:1, val:Math.round(DIP_USD), pnl:0, pct:0, valEUR:Math.round(DIP_USD*rate), _fromTxns:true}]);
       const cryptoItems=newItems.filter(function(x){ return x.cat==="Crypto"; });
       const stocksItems=newItems.filter(function(x){ return x.cat!=="Crypto"&&x.cat!=="Cash Matelas"; });
       const cryptoTotal=sum(cryptoItems), stocksTotal=sum(stocksItems);
@@ -10619,14 +10623,22 @@ function App(){
         {/* Gauche : ↺ 📸 💵 */}
         <div style={{display:"flex",gap:9,alignItems:"center"}}>
           <button onClick={handleRefresh} disabled={refreshing} title="Actualiser les prix" style={{
-            width:32,height:32,borderRadius:C.radiusSm||6,
-            border:`1.5px solid ${refreshing?C.border:C.green}`,
-            background:refreshing?"transparent":C.green+"1A",
+            width:34,height:34,borderRadius:C.radiusSm||8,
+            border:`1px solid ${C.border}`,
+            background:refreshing?C.bg2:"transparent",
             cursor:refreshing?"not-allowed":"pointer",
             display:"flex",alignItems:"center",justifyContent:"center",
-            color:refreshing?C.gray:C.green,fontSize:18,fontWeight:900,
-            animation:refreshing?"spin 1s linear infinite":"none",
-          }}>↺</button>
+            color:refreshing?C.gray:C.text2,transition:"border-color .15s,color .15s,background .15s",
+          }}
+          onMouseEnter={e=>{ if(!refreshing){ e.currentTarget.style.borderColor=C.green; e.currentTarget.style.color=C.green; } }}
+          onMouseLeave={e=>{ if(!refreshing){ e.currentTarget.style.borderColor=C.border; e.currentTarget.style.color=C.text2; } }}>
+            <span style={{display:"flex",animation:refreshing?"spin 0.9s linear infinite":"none"}}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="23 4 23 10 17 10"/>
+                <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+              </svg>
+            </span>
+          </button>
           <button onClick={()=>setShowSnap(true)} title="Prendre un snapshot" style={{
             width:32,height:32,borderRadius:C.radiusSm||6,
             border:`1.5px solid ${C.btc}`,background:C.btc+"1A",
