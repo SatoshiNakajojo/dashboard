@@ -10270,39 +10270,68 @@ function App(){
   // dans les positions affichées (sans persister — un rechargement restaure l'état KV).
   const applyPositionsFromTxns=useCallback(()=>{
     const base=live||CURRENT;
-    if(!base||!base.stocks||!base.crypto) return;
+    if(!base) return;
     const pos=computeOpenPositions(txns||[]);
     const posByTk={}; pos.forEach(p=>{ posByTk[p.ticker]=p; });
-    const cryptoTks={}; (base.crypto.items||[]).forEach(it=>{ cryptoTks[it.t]=1; });
-    const stockTks={};  (base.stocks.items||[]).forEach(it=>{ stockTks[it.t]=1; });
     const CRYPTO_HINT={BTC:1,ETH:1,SOL:1,XRP:1,ADA:1,DOGE:1,DOT:1,AVAX:1,LINK:1,MATIC:1,LTC:1,BCH:1,BNB:1};
-    const updItems=function(items){
-      return (items||[]).map(function(it){
-        const cp=posByTk[it.t]; if(!cp) return it;
+    const rate=base.usdEur||(base.eurUsd?1/base.eurUsd:1);     // USD→EUR
+    const eurUsd=base.eurUsd||(rate?1/rate:1);                 // EUR→USD
+    const sum=function(arr){ return arr.reduce(function(s,x){ return s+(x.val||0); },0); };
+
+    if(base.portfolio && base.portfolio.items && base.portfolio.items.length>0){
+      // ── portfolio.items est la SOURCE DE VÉRITÉ (lu par buildSections) ──
+      const pItems=base.portfolio.items;
+      const seen={};
+      let newItems=pItems.map(function(it){
+        const cp=posByTk[it.t]; if(!cp) return it; // hors transactions (Cash Matelas…) → inchangé
+        seen[it.t]=1;
         const lv=it.live||cp.avgUSD||1;
         const qty=cp.qty;
         const val=Math.round(qty*lv);
         const pa=cp.avgUSD!=null?cp.avgUSD:it.pa;
         const investi=(pa||lv)*qty;
+        return {...it, qty:qty, pa:pa, val:val, pnl:Math.round(val-investi), pct:investi>0?(val-investi)/investi:0, valEUR:Math.round(val*rate)};
+      });
+      pos.forEach(function(p){
+        if(seen[p.ticker]||pItems.some(function(x){ return x.t===p.ticker; })) return;
+        const lv=p.avgUSD||1; const val=Math.round(p.qty*lv);
+        newItems=newItems.concat([{t:p.ticker, qty:p.qty, pa:p.avgUSD||null, live:lv, val:val, pnl:0, pct:0, valEUR:Math.round(val*rate), cat:CRYPTO_HINT[p.ticker]?"Crypto":"Picking", _fromTxns:true}]);
+      });
+      // dérive stocks/crypto/bank depuis portfolio (même logique que buildSections)
+      const cryptoItems=newItems.filter(function(x){ return x.cat==="Crypto"; });
+      const stocksItems=newItems.filter(function(x){ return x.cat!=="Crypto"&&x.cat!=="Cash Matelas"; });
+      const cryptoTotal=sum(cryptoItems), stocksTotal=sum(stocksItems);
+      const bankTotalEUR=newItems.filter(function(x){ return x.cat==="Cash Matelas"; }).reduce(function(s,x){ return s+(x.valEUR||0); },0);
+      const bankUSD=Math.round(bankTotalEUR*eurUsd);
+      const totalUSD=cryptoTotal+stocksTotal+bankUSD, totalEUR=Math.round(totalUSD*rate);
+      const tmpEFF={...base, portfolio:{...base.portfolio, items:newItems}, crypto:{...base.crypto, total:cryptoTotal, items:cryptoItems}, stocks:{...base.stocks, total:stocksTotal, items:stocksItems}, bank:{...base.bank, totalEUR:bankTotalEUR}};
+      const g=calcGdbPrices(tmpEFF);
+      setLive({...tmpEFF, totalUSD:totalUSD, totalEUR:totalEUR, usdEur:rate, eurUsd:eurUsd, gdbS:g.gdbS, gdbC:g.gdbC, _fromTxnsApplied:true});
+      return;
+    }
+
+    // ── repli : pas de portfolio.items → on met à jour stocks/crypto directement ──
+    if(!base.stocks||!base.crypto) return;
+    const cryptoTks={}; (base.crypto.items||[]).forEach(function(it){ cryptoTks[it.t]=1; });
+    const stockTks={};  (base.stocks.items||[]).forEach(function(it){ stockTks[it.t]=1; });
+    const updItems=function(items){
+      return (items||[]).map(function(it){
+        const cp=posByTk[it.t]; if(!cp) return it;
+        const lv=it.live||cp.avgUSD||1; const qty=cp.qty; const val=Math.round(qty*lv);
+        const pa=cp.avgUSD!=null?cp.avgUSD:it.pa; const investi=(pa||lv)*qty;
         return {...it, qty:qty, pa:pa, val:val, pnl:Math.round(val-investi), pct:investi>0?(val-investi)/investi:0};
       });
     };
-    let newStocks=updItems(base.stocks.items);
-    let newCrypto=updItems(base.crypto.items);
+    let newStocks=updItems(base.stocks.items), newCrypto=updItems(base.crypto.items);
     pos.forEach(function(p){
       if(stockTks[p.ticker]||cryptoTks[p.ticker]) return;
       const lv=p.avgUSD||1;
       const item={t:p.ticker, qty:p.qty, pa:p.avgUSD||null, live:lv, val:Math.round(p.qty*lv), pnl:0, pct:0, cat:CRYPTO_HINT[p.ticker]?"Crypto":"Picking", _fromTxns:true};
       if(CRYPTO_HINT[p.ticker]) newCrypto=newCrypto.concat([item]); else newStocks=newStocks.concat([item]);
     });
-    const stocksTotal=newStocks.reduce(function(s,x){ return s+(x.val||0); },0);
-    const cryptoTotal=newCrypto.reduce(function(s,x){ return s+(x.val||0); },0);
-    // v5.0 — recalcule TOUTE la chaîne dérivée pour que l'affichage suive réellement
-    const rate=base.usdEur||(base.eurUsd?1/base.eurUsd:1);     // USD→EUR
-    const eurUsd=base.eurUsd||(rate?1/rate:1);                 // EUR→USD
+    const stocksTotal=sum(newStocks), cryptoTotal=sum(newCrypto);
     const bankUSD=(base.bank&&base.bank.totalEUR!=null)?Math.round(base.bank.totalEUR*eurUsd):((base.bank&&base.bank.total)||0);
-    const totalUSD=cryptoTotal+stocksTotal+bankUSD;
-    const totalEUR=Math.round(totalUSD*rate);
+    const totalUSD=cryptoTotal+stocksTotal+bankUSD, totalEUR=Math.round(totalUSD*rate);
     const tmpEFF={...base, crypto:{...base.crypto, total:cryptoTotal, items:newCrypto}, stocks:{...base.stocks, total:stocksTotal, items:newStocks}, bank:{...base.bank}};
     const g=calcGdbPrices(tmpEFF);
     setLive({...tmpEFF, totalUSD:totalUSD, totalEUR:totalEUR, usdEur:rate, eurUsd:eurUsd, gdbS:g.gdbS, gdbC:g.gdbC, _fromTxnsApplied:true});
