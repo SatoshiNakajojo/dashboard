@@ -1,11 +1,11 @@
 {
-  "name": "CREUSOT GLOBAL INVESTMENTS",
-  "short_name": "CGI",
+  "name": "J.C. GLOBAL INVESTMENTS",
+  "short_name": "J.C.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
-  "background_color": "#07080D",
-  "theme_color": "#07080D",
+  "background_color": "#0A0A0C",
+  "theme_color": "#0A0A0C",
   "icons": [
     {
       "src": "icon-192.png",

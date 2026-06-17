@@ -3,6 +3,16 @@ const { useState, useEffect, useCallback, useRef } = React;
 
 /* ─── THEMES ─────────────────────────────────────────────── */
 const THEMES = {
+  luxe: {
+    // ✦ Onyx & Champagne — family office : obsidienne profonde, or champagne mat, ivoire chaud
+    bg:"#0A0A0C",bg1:"#101013",bg2:"#16161A",bg3:"#1E1E24",
+    border:"#2A2A31",border2:"#3A3A44",
+    btc:"#C9A86A",blue:"#8FA8C9",teal:"#A8C9D4",gold:"#C9A86A",
+    purple:"#B08FD4",green:"#6FB89A",red:"#C77B7B",orange:"#D4A86A",gray:"#5C584F",
+    text:"#F3EFE6",text2:"#9A958A",text3:"#5C584F",
+    name:"✦ Onyx & Champagne", font:"'Inter','-apple-system','BlinkMacSystemFont',sans-serif",
+    radius:12, radiusSm:8,
+  },
   dark: {
     bg:"#07080D",bg1:"#0E1118",bg2:"#141820",bg3:"#1C2130",
     border:"#252D3D",border2:"#2E3A50",
@@ -71,7 +81,7 @@ const THEMES = {
 };
 
 /* C est une variable module réassignable au changement de thème */
-let C = THEMES.dark;
+let C = THEMES.luxe;
 const getCC = () => ({Indices:C.blue,Picking:C.teal,Or:C.gold,Cash:C.gray});
 let cc = getCC();
 
@@ -711,7 +721,7 @@ function applyPrices(prices, usdEur, effSrc){
 }
 
 // Date locale UTC+11 (Nouvelle-Calédonie)
-const APP_VERSION = "v5.50";
+const APP_VERSION = "v5.51";
 // v4.5 — fix NICK : NICK.AS n'existe pas chez Yahoo, le bon symbole EUR est NICK.MI (Milan)
 try{ if(typeof YF_MAP!=="undefined" && YF_MAP){ YF_MAP.NICK="NICK.MI"; } }catch(e){}
 const NC_OFFSET_MS = 11 * 60 * 60 * 1000;
@@ -9283,7 +9293,16 @@ function App(){
   const[gistError,setGistError]=useState(null);
   const[showGistDiag,setShowGistDiag]=useState(false);
   const[themeName,setThemeName]=useState(()=>{
-    try{ return localStorage.getItem('cgi_theme')||'dark'; }catch{ return 'dark'; }
+    try{
+      var saved=localStorage.getItem('cgi_theme');
+      // Bascule unique vers le nouveau thème LUXE (même si "dark" était sauvegardé)
+      if(!localStorage.getItem('cgi_luxe_v1')){
+        localStorage.setItem('cgi_luxe_v1','1');
+        localStorage.setItem('cgi_theme','luxe');
+        return 'luxe';
+      }
+      return saved||'luxe';
+    }catch{ return 'luxe'; }
   });
   const[showTheme,setShowTheme]=useState(false);
   const[showSettings,setShowSettings]=useState(false); // LOT1 — panneau réglages
@@ -10558,10 +10577,12 @@ function App(){
   },[txns]);
 
   if(!ready)return(
-    <div style={{background:C.bg,minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:12}}>
-      <div style={{fontSize:40}}>₿</div>
-      <div style={{color:C.btc,fontWeight:800,fontSize:18}}>CREUSOT GLOBAL INVESTMENTS</div>
-      <div style={{color:C.gray,fontSize:12}}>Chargement (peut prendre jusqu'à 10s)...</div>
+    <div style={{background:C.bg,minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",flexDirection:"column",gap:18}}>
+      <div style={{width:96,height:96,borderRadius:"50%",border:"1px solid "+C.gold,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 0 28px rgba(201,168,106,.35)"}}>
+        <span style={{fontFamily:"'Cormorant Garamond',Georgia,serif",fontWeight:500,fontSize:42,color:C.gold,letterSpacing:1}}>J.C</span>
+      </div>
+      <div style={{fontFamily:"'Cormorant Garamond',Georgia,serif",fontWeight:400,fontSize:22,color:C.text,letterSpacing:6,textAlign:"center"}}><span style={{color:C.gold,fontWeight:500}}>J.C.</span><br/>GLOBAL INVESTMENTS</div>
+      <div style={{color:C.text3,fontSize:10,letterSpacing:4}}>CHARGEMENT…</div>
     </div>
   );
 
@@ -10569,10 +10590,12 @@ function App(){
   if(startScreen) return(
     <div style={{fontFamily:"'-apple-system',sans-serif",background:C.bg,minHeight:"100vh",color:C.text,maxWidth:430,margin:"0 auto",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"0 24px"}}>
       {/* Logo */}
-      <div style={{fontSize:48,marginBottom:8}}>₿</div>
-      <div style={{fontSize:22,fontWeight:800,color:C.btc,marginBottom:4}}>CREUSOT GLOBAL INVESTMENTS</div>
-      <div style={{fontSize:11,color:C.gray,marginBottom:32}}>Choisir la source de données</div>
-      <div style={{position:"absolute",top:16,right:20,fontSize:10,color:C.btc,fontFamily:"monospace"}}>{APP_VERSION}</div>
+      <div style={{width:84,height:84,borderRadius:"50%",border:"1px solid "+C.gold,display:"flex",alignItems:"center",justifyContent:"center",marginBottom:18,boxShadow:"0 0 24px rgba(201,168,106,.3)"}}>
+        <span style={{fontFamily:"'Cormorant Garamond',Georgia,serif",fontWeight:500,fontSize:38,color:C.gold,letterSpacing:1}}>J.C</span>
+      </div>
+      <div style={{fontFamily:"'Cormorant Garamond',Georgia,serif",fontSize:24,fontWeight:400,color:C.text,letterSpacing:5,marginBottom:6,textAlign:"center"}}><span style={{color:C.gold,fontWeight:500}}>J.C.</span> GLOBAL INVESTMENTS</div>
+      <div style={{fontSize:10,color:C.text3,marginBottom:34,letterSpacing:3}}>CHOISIR LA SOURCE DE DONNÉES</div>
+      <div style={{position:"absolute",top:16,right:20,fontSize:10,color:C.gold,fontFamily:"monospace"}}>{APP_VERSION}</div>
 
       {startLoading ? (
         <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:12}}>
@@ -10705,10 +10728,10 @@ function App(){
           </button>
         </div>
 
-        {/* Centre : CREUSOT GLOBAL INVESTMENTS + version */}
+        {/* Centre : J.C. GLOBAL INVESTMENTS + version */}
         <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:2,flex:1,minWidth:0}}>
           <div style={{display:"flex",alignItems:"center",gap:6}}>
-            <span style={{fontSize:10,fontWeight:900,color:C.btc,letterSpacing:.1,lineHeight:1.15,textAlign:"center"}}>CREUSOT<br/>GLOBAL INVESTMENTS</span>
+            <span style={{fontFamily:"'Cormorant Garamond',Georgia,serif",fontSize:15,fontWeight:600,color:C.gold,letterSpacing:1.5,lineHeight:1.05,textAlign:"center"}}>J.C.<br/>GLOBAL INVESTMENTS</span>
             {gistSync===true  && <span onClick={()=>setShowGistDiag(true)} title="Cloudflare KV — connecté" style={{fontSize:10,color:C.green,cursor:"pointer"}}>☁︎</span>}
             {gistSync===false && <span onClick={()=>setShowGistDiag(true)} title="Erreur connexion" style={{fontSize:10,color:C.red,cursor:"pointer"}}>✗</span>}
             {gistSync===null  && <span style={{fontSize:10,color:C.gray}}>·</span>}
