@@ -121,6 +121,23 @@ function Icon({name,size=20,color="currentColor",sw=1.5,style}){
   });
 }
 
+/* Bouton "luxe" réutilisable — style Snapshot ; actif = accent champagne (ou couleur passée) */
+function lxBtn(opts){
+  opts = opts || {};
+  const active = !!opts.active;
+  const accent = opts.accent || C.gold;
+  return {
+    display:"inline-flex",alignItems:"center",justifyContent:"center",gap:6,
+    padding: opts.padding || "9px 13px",
+    borderRadius: C.radiusSm||8, fontFamily:C.font, fontSize: opts.fontSize||12, fontWeight:600,
+    letterSpacing:.3, cursor:"pointer", transition:"all .15s", whiteSpace:"nowrap",
+    border:`1px solid ${active?accent:C.border2}`,
+    background: active ? accent+"16" : "transparent",
+    color: active ? accent : C.text2,
+    ...(opts.style||{}),
+  };
+}
+
 
 /* ─── TF_CUTS dynamiques ─────────────────────────────── */
 function makeTFCuts(){
@@ -757,7 +774,7 @@ function applyPrices(prices, usdEur, effSrc){
 }
 
 // Date locale UTC+11 (Nouvelle-Calédonie)
-const APP_VERSION = "v5.56";
+const APP_VERSION = "v5.57";
 // v4.5 — fix NICK : NICK.AS n'existe pas chez Yahoo, le bon symbole EUR est NICK.MI (Milan)
 try{ if(typeof YF_MAP!=="undefined" && YF_MAP){ YF_MAP.NICK="NICK.MI"; } }catch(e){}
 const NC_OFFSET_MS = 11 * 60 * 60 * 1000;
@@ -3549,7 +3566,7 @@ function PageOverview({chartData,onSnapshot,eur,setEur,hidden,setHidden,EFF,refr
           <button onClick={onSnapshot} style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:7,padding:"11px 0",borderRadius:C.radius||12,border:`1px solid ${C.border2}`,background:"transparent",color:C.text2,fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:C.font}}>
             <Icon name="camera" size={15}/> Snapshot
           </button>
-          <button onClick={handleRefresh} disabled={refreshing} style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:7,padding:"11px 0",borderRadius:C.radius||12,border:`1px solid ${C.gold}55`,background:C.gold+"12",color:C.gold,fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:C.font,opacity:refreshing?.6:1}}>
+          <button onClick={handleRefresh} disabled={refreshing} style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:7,padding:"11px 0",borderRadius:C.radius||12,border:`1px solid ${C.border2}`,background:"transparent",color:C.text2,fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:C.font,opacity:refreshing?.6:1}}>
             <Icon name="refresh" size={15}/> {refreshing?"…":"Rafraîchir"}
           </button>
         </div>
@@ -4165,24 +4182,16 @@ function PageStats({chartData, hidden=false, EFF, eur=false, liveDD, src, liveIn
   return(
     <div>
       {/* ── Sélecteur catégorie ── */}
-      <div style={{display:"flex",gap:5,marginBottom:12}}>
-        {[["crypto","₿ Crypto",C.btc],["stocks","📈 Actions",C.blue],["total","∑ Total",C.green]].map(([k,l,c])=>(
-          <button key={k} onClick={()=>setCat(k)} style={{
-            flex:1,padding:"7px 4px",borderRadius:8,fontSize:11,fontWeight:700,
-            border:`1px solid ${cat===k?c:C.border}`,cursor:"pointer",
-            background:cat===k?c+"22":"transparent",color:cat===k?c:C.gray,
-          }}>{l}</button>
+      <div style={{display:"flex",gap:8,marginBottom:12}}>
+        {[["crypto","₿ Crypto",C.btc],["stocks","↗ Actions",C.blue],["total","∑ Total",C.green]].map(([k,l,c])=>(
+          <button key={k} onClick={()=>setCat(k)} style={lxBtn({active:cat===k,accent:c,style:{flex:1,padding:"8px 4px"}})}>{l}</button>
         ))}
       </div>
 
       {/* ── Sélecteur année ── */}
-      <div style={{display:"flex",gap:3,marginBottom:14,background:C.bg1,borderRadius:10,padding:4}}>
+      <div style={{display:"flex",gap:6,marginBottom:16,flexWrap:"wrap"}}>
         {years.map(y=>(
-          <button key={y} onClick={()=>setYr(y)} style={{
-            flex:1,padding:"5px 0",borderRadius:7,fontSize:11,fontWeight:700,
-            border:"none",cursor:"pointer",
-            background:safeYr===y?catColor:"transparent",color:safeYr===y?"#000":C.gray,
-          }}>{y}</button>
+          <button key={y} onClick={()=>setYr(y)} style={lxBtn({active:safeYr===y,accent:catColor,style:{flex:1,padding:"6px 0",fontSize:11}})}>{y}</button>
         ))}
       </div>
 
@@ -4214,10 +4223,9 @@ function PageStats({chartData, hidden=false, EFF, eur=false, liveDD, src, liveIn
         const n12=data.m.length, barW=Math.floor((W-16)/n12)-2, gap=2;
         const bx=i=>8+i*(barW+gap);
         return(
+          <>
+          <div style={{fontSize:10,color:C.text2,margin:"4px 0 12px",letterSpacing:4,textTransform:"uppercase"}}>Performance mensuelle {safeYr} — {cat==="crypto"?"Crypto":cat==="stocks"?"Actions":"Total"} {eur?"€":"$"}</div>
           <div style={{...crd(),marginBottom:14}}>
-            <div style={{fontSize:10,color:C.gray,marginBottom:8,fontWeight:700}}>
-              Performance mensuelle {safeYr} — {cat==="crypto"?"Crypto":cat==="stocks"?"Actions":"Total"} {eur?"€":"$"}
-            </div>
             <svg width="100%" viewBox={`0 0 ${W} ${TOTAL_H}`} style={{overflow:"visible",display:"block"}}>
               <line x1={4} y1={MIDLINE} x2={W-4} y2={MIDLINE} stroke={C.border} strokeWidth={0.8}/>
               {data.m.map((m,i)=>{
@@ -4260,13 +4268,14 @@ function PageStats({chartData, hidden=false, EFF, eur=false, liveDD, src, liveIn
               })}
             </svg>
           </div>
+          </>
         );
       })()}
 
       {/* ── Tableau mensuel détail ── */}
       {data&&(
         <div style={{...crd(),marginBottom:14,padding:"10px 8px"}}>
-          <div style={{fontSize:10,color:C.gray,fontWeight:700,marginBottom:8}}>Détail mensuel</div>
+          <div style={{fontSize:10,color:C.text2,letterSpacing:4,textTransform:"uppercase",marginBottom:10}}>Détail mensuel</div>
           <div style={{overflowX:"auto"}}>
             <table style={{width:"100%",borderCollapse:"collapse",fontSize:10}}>
               <thead>
@@ -5977,7 +5986,7 @@ function SnapshotModal({onSave, onClose, EFF}){
 /* ═══════════════════════════════════════════════════════════
    ROOT APP
 ═══════════════════════════════════════════════════════════ */
-const TABS=["Home","Portfolio","Stats","CGI","Data","Legend","Suivi"];
+const TABS=["Home","Portfolio","Stats","JCGI","Data","Legend","Suivi"];
 const ICONS=["◎","◑","▲","◈","⬡","♛","◉"];
 const NAV_ICONS=["home","pie","chart","gem","grid","list","search"];
 
@@ -7943,18 +7952,18 @@ function PageWatchlist({ EFF, hidden }){
     // ── Header ──────────────────────────────────────────────────────────────
     React.createElement("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"16px 16px 8px"}},
       React.createElement("div",null,
-        React.createElement("div",{style:{fontSize:20,fontWeight:700,color:textC}},"Suivi de marché"),
+        React.createElement("div",{style:{fontFamily:"'Cormorant Garamond',Georgia,serif",fontSize:34,fontWeight:500,color:textC,letterSpacing:1,lineHeight:1}},"Suivi de marché"),
         React.createElement("div",{style:{fontSize:11,color:grayC}},list.length+" ticker"+(list.length>1?"s":"")+(saving?" · 💾":""))
       ),
       React.createElement("div",{style:{display:"flex",gap:6,position:"relative"}},
-        React.createElement("button",{onClick:function(){setShowTools(function(v){return !v;});},style:{background:showTools?blueC+"22":cardBg,border:"1px solid "+(showTools?blueC:borderC),borderRadius:8,padding:"6px 10px",color:blueC,fontSize:11,fontWeight:700,cursor:"pointer"}},"🛠 Outils ▾"),
+        React.createElement("button",{onClick:function(){setShowTools(function(v){return !v;});},style:lxBtn({active:showTools,style:{padding:"7px 11px",fontSize:11}})},"Outils ▾"),
         showTools&&React.createElement("div",{style:{position:"absolute",top:36,right:46,zIndex:50,background:cardBg,border:"1px solid "+borderC,borderRadius:10,padding:6,minWidth:170,boxShadow:"0 8px 24px #000a",display:"flex",flexDirection:"column",gap:2}},
           React.createElement("button",{onClick:function(){setShowTools(false);fetchNews();},style:{background:"none",border:"none",textAlign:"left",padding:"9px 10px",color:blueC,fontSize:12,fontWeight:700,cursor:"pointer",borderRadius:6}},"📰 Analyser les news (IA)"),
           React.createElement("button",{onClick:function(){setShowTools(false);verifyTechnicalAll();},disabled:techBusy,style:{background:"none",border:"none",textAlign:"left",padding:"9px 10px",color:techBusy?grayC:greenC,fontSize:12,fontWeight:700,cursor:"pointer",borderRadius:6}},techBusy?"📈 Vérification…":"📈 Vérifier le technique"),
           React.createElement("button",{onClick:function(){setShowTools(false);setShowIndic(true);},style:{background:"none",border:"none",textAlign:"left",padding:"9px 10px",color:orangeC,fontSize:12,fontWeight:700,cursor:"pointer",borderRadius:6}},"📊 Indicateurs marché")
         ),
-        React.createElement("button",{onClick:refreshPrices,disabled:loading,style:{background:cardBg,border:"1px solid "+borderC,borderRadius:8,padding:"6px 10px",color:loading?grayC:blueC,fontSize:11,fontWeight:700,cursor:"pointer"}},loading?"⟳ ...":"⟳"),
-        React.createElement("button",{onClick:openAdd,style:{background:orangeC,border:"none",borderRadius:8,padding:"6px 12px",color:"#000",fontSize:12,fontWeight:600,cursor:"pointer"}},"+")
+        React.createElement("button",{onClick:refreshPrices,disabled:loading,style:lxBtn({style:{padding:"7px 10px",opacity:loading?.6:1}})},React.createElement(Icon,{name:"refresh",size:15,color:C.text2})),
+        React.createElement("button",{onClick:openAdd,style:lxBtn({active:true,style:{padding:"7px 12px"}})},React.createElement(Icon,{name:"plus",size:15}))
       )
     ),
 
@@ -7979,12 +7988,8 @@ function PageWatchlist({ EFF, hidden }){
     React.createElement("div",{style:{display:"flex",gap:6,padding:"0 16px 12px",overflowX:"auto"}},
       [["all","Tous ("+list.length+")"],["fav","★ Favoris"],["alerte","🔔"+(alertCount?" "+alertCount:"")]].map(function(f){
         var active=filter===f[0];
-        return React.createElement("button",{key:f[0],onClick:function(){setFilter(f[0]);},style:{
-          background:active?(f[0]==="alerte"?redC:orangeC):cardBg,
-          border:"1px solid "+(active?(f[0]==="alerte"?redC:orangeC):borderC),
-          borderRadius:16,padding:"4px 12px",color:active?"#000":grayC,
-          fontSize:11,fontWeight:active?700:500,cursor:"pointer",whiteSpace:"nowrap"
-        }},f[1]);
+        var acc=f[0]==="alerte"?redC:C.gold;
+        return React.createElement("button",{key:f[0],onClick:function(){setFilter(f[0]);},style:lxBtn({active:active,accent:acc,style:{padding:"6px 13px",fontSize:11,borderRadius:999}})},f[1]);
       })
     ),
 
@@ -8308,42 +8313,40 @@ function PageLegend(
   const avgDur = list.length?Math.round(list.reduce(function(a,t){return a+(t.durationDays||0);},0)/list.length):0;
   const fU = function(v){ return (v<0?"-$":"$")+Math.abs(Math.round(v)).toLocaleString("fr-FR"); };
   const Tab=function(props){ return (
-    <button onClick={props.onClick} style={{flex:1,padding:"8px 0",borderRadius:9,border:"none",cursor:"pointer",fontSize:13,fontWeight:600,
-      background:props.active?C.btc:C.bg2, color:props.active?"#000":C.text2}}>{props.label}</button>
+    <button onClick={props.onClick} style={lxBtn({active:props.active,style:{flex:1,padding:"9px 0",fontSize:13}})}>{props.label}</button>
   );};
   const Sort=function(props){ return (
-    <button onClick={props.onClick} style={{padding:"5px 11px",borderRadius:8,border:`1px solid ${props.active?C.btc:C.border}`,cursor:"pointer",
-      fontSize:11,fontWeight:700,background:props.active?C.btc+"22":"transparent",color:props.active?C.btc:C.text3}}>{props.label}</button>
+    <button onClick={props.onClick} style={lxBtn({active:props.active,style:{padding:"5px 11px",fontSize:11}})}>{props.label}</button>
   );};
   return (
     <div style={{padding:"8px 14px 96px"}}>
-      <div style={{fontSize:22,fontWeight:700,color:C.text,marginBottom:2}}>Legend</div>
-      <div style={{fontSize:12,color:C.text3,marginBottom:14}}>Trades cloturés · {board==="spot"?"Spot (crypto + actions)":"Futures"}</div>
+      <div style={{fontFamily:"'Cormorant Garamond',Georgia,serif",fontSize:34,fontWeight:500,color:C.text,letterSpacing:1,lineHeight:1,marginBottom:4}}>Legend</div>
+      <div style={{fontSize:10,color:C.text2,marginBottom:16,letterSpacing:4,textTransform:"uppercase"}}>Trades clôturés · {board==="spot"?"Spot":"Futures"}</div>
       <div style={{display:"flex",gap:8,marginBottom:14}}>
         <Tab label="Spot" active={board==="spot"} onClick={function(){setBoard("spot");}}/>
         <Tab label="Futures" active={board==="futures"} onClick={function(){setBoard("futures");}}/>
       </div>
       {/* Stats globales */}
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:14}}>
-        <div style={{background:(tot>=0?C.green:C.red)+"15",border:`1px solid ${(tot>=0?C.green:C.red)}40`,borderRadius:12,padding:"11px 13px"}}>
-          <div style={{fontSize:9,color:C.text3,textTransform:"uppercase",letterSpacing:1}}>P&L total</div>
-          <div style={{fontSize:19,fontWeight:700,color:tot>=0?C.green:C.red}}>{msk(fU(tot),hidden)}</div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:16}}>
+        <div style={{background:"transparent",border:`1px solid ${C.border2}`,borderRadius:C.radiusSm||8,padding:"11px 13px"}}>
+          <div style={{fontSize:9,color:C.text2,textTransform:"uppercase",letterSpacing:2}}>P&L total</div>
+          <div style={{fontSize:19,fontWeight:600,color:tot>=0?C.green:C.red,fontVariantNumeric:"tabular-nums"}}>{msk(fU(tot),hidden)}</div>
         </div>
-        <div style={{background:C.bg2,borderRadius:12,padding:"11px 13px"}}>
-          <div style={{fontSize:9,color:C.text3,textTransform:"uppercase",letterSpacing:1}}>Win rate</div>
-          <div style={{fontSize:19,fontWeight:700,color:C.text}}>{winRate}% <span style={{fontSize:11,color:C.text3,fontWeight:600}}>({wins}/{list.length})</span></div>
+        <div style={{background:"transparent",border:`1px solid ${C.border2}`,borderRadius:C.radiusSm||8,padding:"11px 13px"}}>
+          <div style={{fontSize:9,color:C.text2,textTransform:"uppercase",letterSpacing:2}}>Win rate</div>
+          <div style={{fontSize:19,fontWeight:600,color:C.text,fontVariantNumeric:"tabular-nums"}}>{winRate}% <span style={{fontSize:11,color:C.text3,fontWeight:600}}>({wins}/{list.length})</span></div>
         </div>
-        <div style={{background:C.bg2,borderRadius:12,padding:"11px 13px"}}>
-          <div style={{fontSize:9,color:C.text3,textTransform:"uppercase",letterSpacing:1}}>Meilleur</div>
-          <div style={{fontSize:15,fontWeight:600,color:C.green}}>{msk(fU(best),hidden)}</div>
+        <div style={{background:"transparent",border:`1px solid ${C.border2}`,borderRadius:C.radiusSm||8,padding:"11px 13px"}}>
+          <div style={{fontSize:9,color:C.text2,textTransform:"uppercase",letterSpacing:2}}>Meilleur</div>
+          <div style={{fontSize:15,fontWeight:600,color:C.green,fontVariantNumeric:"tabular-nums"}}>{msk(fU(best),hidden)}</div>
         </div>
-        <div style={{background:C.bg2,borderRadius:12,padding:"11px 13px"}}>
-          <div style={{fontSize:9,color:C.text3,textTransform:"uppercase",letterSpacing:1}}>Pire</div>
-          <div style={{fontSize:15,fontWeight:600,color:C.red}}>{msk(fU(worst),hidden)}</div>
+        <div style={{background:"transparent",border:`1px solid ${C.border2}`,borderRadius:C.radiusSm||8,padding:"11px 13px"}}>
+          <div style={{fontSize:9,color:C.text2,textTransform:"uppercase",letterSpacing:2}}>Pire</div>
+          <div style={{fontSize:15,fontWeight:600,color:C.red,fontVariantNumeric:"tabular-nums"}}>{msk(fU(worst),hidden)}</div>
         </div>
-        <div style={{gridColumn:"1 / -1",background:C.bg2,borderRadius:12,padding:"11px 13px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-          <div style={{fontSize:9,color:C.text3,textTransform:"uppercase",letterSpacing:1}}>Durée moyenne de trade</div>
-          <div style={{fontSize:16,fontWeight:600,color:C.text}}>{avgDur} jour{avgDur>1?"s":""}</div>
+        <div style={{gridColumn:"1 / -1",background:"transparent",border:`1px solid ${C.border2}`,borderRadius:C.radiusSm||8,padding:"11px 13px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div style={{fontSize:9,color:C.text2,textTransform:"uppercase",letterSpacing:2}}>Durée moyenne de trade</div>
+          <div style={{fontSize:16,fontWeight:600,color:C.text,fontVariantNumeric:"tabular-nums"}}>{avgDur} jour{avgDur>1?"s":""}</div>
         </div>
       </div>
       {/* Tri */}
@@ -9022,14 +9025,14 @@ function NotifBell(){
   // ── Bouton cloche (inline dans le header, ou flottant en repli) ──
   var inline=!!(arguments[0]&&arguments[0].inline);
   var bellStyle=inline
-    ? {position:"relative",width:32,height:32,borderRadius:C2.radiusSm||6,background:bg,border:"1px solid "+border,color:text,fontSize:16,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}
+    ? {position:"relative",width:32,height:32,borderRadius:C2.radiusSm||8,background:"transparent",border:"1px solid "+(C2.border2||border),color:(C2.text2||text),fontSize:16,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}
     : {position:"fixed",top:10,right:12,zIndex:200,width:38,height:38,borderRadius:"50%",background:bg,border:"1px solid "+border,color:text,fontSize:18,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 2px 8px #0006"};
   var bell=React.createElement("button",{
     onClick:function(){ setOpen(true); },
     "aria-label":"Notifications",
     style:bellStyle
   },
-    React.createElement(Icon,{name:"bell",size:17,color:text}),
+    React.createElement(Icon,{name:"bell",size:17,color:(C2.text2||text)}),
     unread>0&&React.createElement("span",{style:{position:"absolute",top:-4,right:-4,minWidth:18,height:18,padding:"0 4px",
       borderRadius:9,background:red,color:"#fff",fontSize:10,fontWeight:600,display:"flex",alignItems:"center",justifyContent:"center",border:"2px solid "+(C2.bg||"#07080D")}},
       unread>9?"9+":unread)
@@ -10594,8 +10597,8 @@ function App(){
         <div style={{display:"flex",gap:8,alignItems:"center"}}>
           <button onClick={()=>setShowTrade(true)} title="Achat / Vente" style={{
             width:32,height:32,borderRadius:C.radiusSm||8,
-            border:`1px solid ${C.gold}55`,background:C.gold+"12",
-            cursor:"pointer",color:C.gold,
+            border:`1px solid ${C.border2}`,background:"transparent",
+            cursor:"pointer",color:C.text2,
             display:"flex",alignItems:"center",justifyContent:"center",
           }}><Icon name="repeat" size={17}/></button>
           <NotifBell inline/>
