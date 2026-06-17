@@ -9585,19 +9585,21 @@ function App(){
       // build au lieu de la dernière valeur enregistrée localement.
       const lvPort=lsv9Get('cgi_portfolio'), lvCryp=lsv9Get('cgi_crypto'), lvStk=lsv9Get('cgi_stocks'), lvBank=lsv9Get('cgi_bank');
       if(lvPort && lvCryp && lvStk && lvBank){
-        const uE=CURRENT.usdEur, eU=1/uE;
-        const cryptoT=lvCryp.total||(lvCryp.items||[]).reduce((s,x)=>s+(x.val||0),0);
-        const stocksT=lvStk.total||(lvStk.items||[]).reduce((s,x)=>s+(x.val||0),0);
-        const bankUSD=Math.round((lvBank.totalEUR||0)*eU);
-        const totalUSD=cryptoT+stocksT+bankUSD;
-        const newLive={...CURRENT,date:lvPort.date||CURRENT.date,totalUSD,totalEUR:Math.round(totalUSD*uE),usdEur:uE,eurUsd:eU,
-          crypto:{...CURRENT.crypto,...lvCryp},stocks:{...CURRENT.stocks,...lvStk},bank:{...CURRENT.bank,...lvBank},
-          portfolio:{...lvPort},_fromSnapshot:lvPort.date};
-        // gdbS/gdbC : base GDBS locale (snapshot validé) prioritaire sur le calcul prix-positions
-        const gS=(lastLocalGDBS && lastLocalGDBS[1]) || calcGdbPrices(newLive).gdbS;
-        const gC=(lastLocalGDBS && lastLocalGDBS[2]) || calcGdbPrices(newLive).gdbC;
-        setLive({...newLive, gdbS:gS, gdbC:gC});
-        setRefreshedAt("local "+(lvPort.date||""));
+        try{
+          const uE=CURRENT.usdEur, eU=1/uE;
+          const cryptoT=lvCryp.total||(lvCryp.items||[]).reduce((s,x)=>s+(x.val||0),0);
+          const stocksT=lvStk.total||(lvStk.items||[]).reduce((s,x)=>s+(x.val||0),0);
+          const bankUSD=Math.round((lvBank.totalEUR||0)*eU);
+          const totalUSD=cryptoT+stocksT+bankUSD;
+          const newLive={...CURRENT,date:lvPort.date||CURRENT.date,totalUSD,totalEUR:Math.round(totalUSD*uE),usdEur:uE,eurUsd:eU,
+            crypto:{...CURRENT.crypto,...lvCryp},stocks:{...CURRENT.stocks,...lvStk},bank:{...CURRENT.bank,...lvBank},
+            portfolio:{...lvPort},_fromSnapshot:lvPort.date};
+          // gdbS/gdbC : base GDBS locale (snapshot validé) prioritaire sur le calcul prix-positions
+          const gS=(lastLocalGDBS && lastLocalGDBS[1]) || calcGdbPrices(newLive).gdbS;
+          const gC=(lastLocalGDBS && lastLocalGDBS[2]) || calcGdbPrices(newLive).gdbC;
+          setLive({...newLive, gdbS:gS, gdbC:gC});
+          setRefreshedAt("local "+(lvPort.date||""));
+        }catch(e){ try{ console.error("Boot local positions: repli sur base —",e); }catch(x){} }
       } else if(lastLocalGDBS && lastLocalGDBS[1]){
         setLive(prev => ({
           ...(prev || CURRENT),
