@@ -9936,6 +9936,13 @@ function App(){
     })();
   },[]);
 
+  // v5.4 — garde-fou anti-blocage : si le boot n'a pas fini sous 8 s (plantage ou
+  // await qui traîne), on force l'affichage pour ne jamais rester coincé sur l'écran de chargement.
+  useEffect(function(){
+    const _t = setTimeout(function(){ setReady(true); }, 8000);
+    return function(){ clearTimeout(_t); };
+  }, []);
+
   // ── Mise à jour des bases de données depuis un snapshot ──────────────────
   const [snapResult, setSnapResult] = useState(null); // {ok, log, errors, snap, nextData}
 
