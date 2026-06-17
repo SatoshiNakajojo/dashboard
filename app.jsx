@@ -96,7 +96,7 @@ const ICON_PATHS = {
   list:'<line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="3.5" cy="6" r="1"/><circle cx="3.5" cy="12" r="1"/><circle cx="3.5" cy="18" r="1"/>',
   gem:'<path d="M6 3h12l3 6-9 12L3 9z"/><path d="M3 9h18"/><path d="M9 3l-3 6 6 12"/><path d="M15 3l3 6-6 12"/>',
   bell:'<path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/>',
-  gear:'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-2.81 1.17V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 8 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15H4.5a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 6 8.6a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 11 4.6h.09A1.65 1.65 0 0 0 12 3.09V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 2.82 1.17l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 11.18V12a2 2 0 0 1 0 3z"/>',
+  gear:'<circle cx="12" cy="12" r="3.2"/><path d="M19.43 12.98a7.8 7.8 0 0 0 .07-.98 7.8 7.8 0 0 0-.07-.98l2.11-1.65a.5.5 0 0 0 .12-.64l-2-3.46a.5.5 0 0 0-.61-.22l-2.49 1a7.3 7.3 0 0 0-1.69-.98l-.38-2.65A.49.49 0 0 0 14 1h-4a.49.49 0 0 0-.49.42l-.38 2.65c-.61.25-1.17.59-1.69.98l-2.49-1a.5.5 0 0 0-.61.22l-2 3.46a.5.5 0 0 0 .12.64l2.11 1.65c-.04.32-.07.65-.07.98 0 .33.03.66.07.98l-2.11 1.65a.5.5 0 0 0-.12.64l2 3.46a.5.5 0 0 0 .61.22l2.49-1c.52.39 1.08.73 1.69.98l.38 2.65A.49.49 0 0 0 10 23h4a.49.49 0 0 0 .49-.42l.38-2.65c.61-.25 1.17-.59 1.69-.98l2.49 1a.5.5 0 0 0 .61-.22l2-3.46a.5.5 0 0 0-.12-.64z"/>',
   refresh:'<path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10"/><path d="M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>',
   eye:'<path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/>',
   eyeOff:'<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/>',
@@ -757,7 +757,7 @@ function applyPrices(prices, usdEur, effSrc){
 }
 
 // Date locale UTC+11 (Nouvelle-Calédonie)
-const APP_VERSION = "v5.53";
+const APP_VERSION = "v5.54";
 // v4.5 — fix NICK : NICK.AS n'existe pas chez Yahoo, le bon symbole EUR est NICK.MI (Milan)
 try{ if(typeof YF_MAP!=="undefined" && YF_MAP){ YF_MAP.NICK="NICK.MI"; } }catch(e){}
 const NC_OFFSET_MS = 11 * 60 * 60 * 1000;
@@ -10580,79 +10580,26 @@ function App(){
         background:C.bg,
         backdropFilter:"blur(12px)",WebkitBackdropFilter:"blur(12px)",
       }}>
-        {/* Gauche : ↺ 📸 💵 */}
-        <div style={{display:"flex",gap:9,alignItems:"center"}}>
-          <button onClick={handleRefresh} disabled={refreshing} title="Actualiser les prix" style={{
-            width:34,height:34,borderRadius:8,
-            border:`1px solid ${refreshing?C.border:C.gold+"55"}`,
-            background:refreshing?C.bg2:"transparent",
-            cursor:refreshing?"not-allowed":"pointer",
-            display:"flex",alignItems:"center",justifyContent:"center",
-            color:refreshing?C.gray:C.gold,transition:"border-color .18s,color .18s,background .18s",
-          }}
-          onMouseEnter={e=>{ if(!refreshing){ e.currentTarget.style.borderColor=C.gold; e.currentTarget.style.background=C.gold+"14"; } }}
-          onMouseLeave={e=>{ if(!refreshing){ e.currentTarget.style.borderColor=C.gold+"55"; e.currentTarget.style.background="transparent"; } }}>
-            <span style={{display:"flex",animation:refreshing?"spin 0.9s linear infinite":"none"}}>
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                <polyline points="23 4 23 10 17 10"/>
-                <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
-              </svg>
-            </span>
-          </button>
-          <button onClick={()=>setShowSnap(true)} title="Prendre un snapshot" style={{
-            width:34,height:34,borderRadius:8,
-            border:`1px solid ${C.gold+"55"}`,background:"transparent",
-            cursor:"pointer",color:C.gold,transition:"border-color .18s,background .18s",
-            display:"flex",alignItems:"center",justifyContent:"center",
-          }}
-          onMouseEnter={e=>{ e.currentTarget.style.borderColor=C.gold; e.currentTarget.style.background=C.gold+"14"; }}
-          onMouseLeave={e=>{ e.currentTarget.style.borderColor=C.gold+"55"; e.currentTarget.style.background="transparent"; }}>
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
-              <circle cx="12" cy="13" r="4"/>
-            </svg>
-          </button>
-          <button onClick={()=>setShowTrade(true)} title="Achat / Vente" style={{
-            width:34,height:34,borderRadius:8,
-            border:`1px solid ${C.gold+"55"}`,background:"transparent",
-            cursor:"pointer",color:C.gold,transition:"border-color .18s,background .18s",
-            display:"flex",alignItems:"center",justifyContent:"center",
-          }}
-          onMouseEnter={e=>{ e.currentTarget.style.borderColor=C.gold; e.currentTarget.style.background=C.gold+"14"; }}
-          onMouseLeave={e=>{ e.currentTarget.style.borderColor=C.gold+"55"; e.currentTarget.style.background="transparent"; }}>
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/>
-              <polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/>
-            </svg>
-          </button>
-        </div>
-
-        {/* Centre : logo cliquable → accueil */}
-        <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:2,flex:1,minWidth:0}}>
-          <div style={{display:"flex",alignItems:"center",gap:7}}>
-            <div onClick={()=>setTab(0)} title="Accueil" style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer"}}>
-              <div style={{width:27,height:27,borderRadius:"50%",border:`1px solid ${C.gold}`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-                <span style={{fontFamily:"'Cormorant Garamond',Georgia,serif",fontWeight:600,fontSize:12,color:C.gold,lineHeight:1}}>JC</span>
-              </div>
-              <span style={{fontFamily:"'Cormorant Garamond',Georgia,serif",fontSize:15,fontWeight:600,color:C.gold,letterSpacing:1.2,lineHeight:1.05,textAlign:"left"}}>J.C.<br/>GLOBAL INVESTMENTS</span>
-            </div>
-            {gistSync===true  && <span onClick={()=>setShowGistDiag(true)} title="Cloudflare KV — connecté" style={{cursor:"pointer",display:"flex"}}><Icon name="cloud" size={13} color={C.green}/></span>}
-            {gistSync===false && <span onClick={()=>setShowGistDiag(true)} title="Erreur connexion" style={{cursor:"pointer",display:"flex"}}><Icon name="x" size={13} color={C.red}/></span>}
-            {gistSync===null  && <span style={{fontSize:10,color:C.gray}}>·</span>}
+        {/* Gauche : logo cliquable -> accueil (comme la maquette) */}
+        <div onClick={()=>setTab(0)} title="Accueil" style={{display:"flex",alignItems:"center",gap:11,cursor:"pointer",minWidth:0}}>
+          <div style={{width:36,height:36,borderRadius:"50%",border:`1px solid ${C.gold}`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+            <span style={{fontFamily:"'Cormorant Garamond',Georgia,serif",fontWeight:600,fontSize:14,color:C.gold,lineHeight:1}}>JC</span>
           </div>
-          <span style={{fontSize:9,fontWeight:600,color:C.btc,opacity:.8,fontFamily:C.font,letterSpacing:.5}}>{APP_VERSION}</span>
+          <span style={{fontFamily:"'Cormorant Garamond',Georgia,serif",fontSize:15,fontWeight:600,letterSpacing:2,lineHeight:1.05,color:C.text}}>
+            <span style={{color:C.gold}}>J.C.</span><br/>GLOBAL INV.
+          </span>
         </div>
 
-        {/* Droite : œil confidentialité + notifications + réglages */}
+        {/* Droite : Achat/Vente + notifications + reglages */}
         <div style={{display:"flex",gap:8,alignItems:"center"}}>
-          <button onClick={()=>setHidden(!hidden)} title={hidden?"Afficher les montants":"Masquer les montants"} style={{
+          <button onClick={()=>setShowTrade(true)} title="Achat / Vente" style={{
             width:32,height:32,borderRadius:C.radiusSm||8,
-            border:`1px solid ${C.border2}`,background:"transparent",
-            cursor:"pointer",color:hidden?C.gold:C.text2,
+            border:`1px solid ${C.gold}55`,background:C.gold+"12",
+            cursor:"pointer",color:C.gold,
             display:"flex",alignItems:"center",justifyContent:"center",
-          }}><Icon name={hidden?"eyeOff":"eye"} size={17}/></button>
+          }}><Icon name="repeat" size={17}/></button>
           <NotifBell inline/>
-          <button onClick={()=>setShowSettings(true)} title="Réglages" style={{
+          <button onClick={()=>setShowSettings(true)} title="Reglages" style={{
             width:32,height:32,borderRadius:C.radiusSm||8,
             border:`1px solid ${C.border2}`,background:"transparent",
             cursor:"pointer",color:C.text2,
