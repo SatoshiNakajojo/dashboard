@@ -9550,17 +9550,19 @@ function App(){
       }
       const kvPort=kv.cgi_portfolio,kvCryp=kv.cgi_crypto,kvStk=kv.cgi_stocks,kvBank=kv.cgi_bank;
       if(kvPort&&kvCryp&&kvStk&&kvBank){
-        const uE=CURRENT.usdEur,eU=1/uE;
-        const cryptoT=kvCryp.total||(kvCryp.items||[]).reduce((s,x)=>s+(x.val||0),0);
-        const stocksT=kvStk.total||(kvStk.items||[]).reduce((s,x)=>s+(x.val||0),0);
-        const bankUSD=Math.round((kvBank.totalEUR||0)*eU);
-        const totalUSD=cryptoT+stocksT+bankUSD;
-        const newLive={...CURRENT,date:kvPort.date||CURRENT.date,totalUSD,totalEUR:Math.round(totalUSD*uE),usdEur:uE,eurUsd:eU,
-          crypto:{...CURRENT.crypto,...kvCryp},stocks:{...CURRENT.stocks,...kvStk},bank:{...CURRENT.bank,...kvBank},
-          portfolio:{...kvPort},_fromSnapshot:kvPort.date};
-        const{gdbS,gdbC}=calcGdbPrices(newLive);
-        setLive({...newLive,gdbS,gdbC});
-        setRefreshedAt("cloudflare "+kvPort.date);
+        try{
+          const uE=CURRENT.usdEur,eU=1/uE;
+          const cryptoT=kvCryp.total||(kvCryp.items||[]).reduce((s,x)=>s+(x.val||0),0);
+          const stocksT=kvStk.total||(kvStk.items||[]).reduce((s,x)=>s+(x.val||0),0);
+          const bankUSD=Math.round((kvBank.totalEUR||0)*eU);
+          const totalUSD=cryptoT+stocksT+bankUSD;
+          const newLive={...CURRENT,date:kvPort.date||CURRENT.date,totalUSD,totalEUR:Math.round(totalUSD*uE),usdEur:uE,eurUsd:eU,
+            crypto:{...CURRENT.crypto,...kvCryp},stocks:{...CURRENT.stocks,...kvStk},bank:{...CURRENT.bank,...kvBank},
+            portfolio:{...kvPort},_fromSnapshot:kvPort.date};
+          const{gdbS,gdbC}=calcGdbPrices(newLive);
+          setLive({...newLive,gdbS,gdbC});
+          setRefreshedAt("cloudflare "+kvPort.date);
+        }catch(e){ try{ console.error("Boot KV positions: repli sur base —",e); }catch(x){} }
       }
     } else {
       // v23.25 — boot LOCAL : calquer exactement le boot cloud en lisant lsv9 au lieu de KV.
