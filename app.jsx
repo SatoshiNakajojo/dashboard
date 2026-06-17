@@ -757,7 +757,7 @@ function applyPrices(prices, usdEur, effSrc){
 }
 
 // Date locale UTC+11 (Nouvelle-Calédonie)
-const APP_VERSION = "v5.52";
+const APP_VERSION = "v5.53";
 // v4.5 — fix NICK : NICK.AS n'existe pas chez Yahoo, le bon symbole EUR est NICK.MI (Milan)
 try{ if(typeof YF_MAP!=="undefined" && YF_MAP){ YF_MAP.NICK="NICK.MI"; } }catch(e){}
 const NC_OFFSET_MS = 11 * 60 * 60 * 1000;
@@ -3425,276 +3425,138 @@ function PageOverview({chartData,onSnapshot,eur,setEur,hidden,setHidden,EFF,refr
   const _sumUSD = _sections.reduce((s,sec)=>s+sec.totalUSD,0);
   const _sumEUR = Math.round(_sumUSD * _effSrc.usdEur);
 
+  // ─── LUXE overview : hero · répartition · performance (maquette v2) ───
+  const _po_today = todayNC();
+  const _po_rows = _DD_PO.filter(r=>r[0]<=_po_today && r[2]!=null);
+  const _po_cut  = new Date(Date.now()+NC_OFFSET_MS-33*864e5).toISOString().slice(0,10);
+  let _spark = _po_rows.filter(r=>r[0]>=_po_cut).map(r=>r[2]);
+  if(_spark.length<2) _spark = _po_rows.slice(-12).map(r=>r[2]);
+  if(_spark.length) _spark[_spark.length-1] = _sumEUR;
+  const _sv  = _spark.filter(v=>v!=null);
+  const _smn = _sv.length?Math.min(..._sv):0;
+  const _smx = _sv.length?Math.max(..._sv):1;
+  const _srng= (_smx-_smn)||1;
+  const _hn  = Math.max(1,_spark.length-1);
+  const _heroPts = _spark.map((v,i)=> v==null?null:`${(i/_hn*120).toFixed(1)},${(30-((v-_smn)/_srng)*26).toFixed(1)}`).filter(Boolean).join(" ");
+  const _po_delta = (()=>{
+    const t=new Date(Date.now()+NC_OFFSET_MS); t.setUTCDate(t.getUTCDate()-30);
+    const ds=t.toISOString().slice(0,10);
+    let ref=null,bd=Infinity;
+    for(const r of _DD_PO){ if(!r[0]||r[2]==null) continue; const d=Math.abs(new Date(r[0])-new Date(ds)); if(d<bd){bd=d;ref=r;} }
+    if(!ref) return {pnl:0,pct:0};
+    const startEUR=ref[2];
+    if(eur){ const pnl=_sumEUR-startEUR; return {pnl,pct:startEUR?pnl/startEUR:0}; }
+    const ueRef=ref[5]||_effSrc.usdEur;
+    const startUSD=Math.round(startEUR/ueRef);
+    const pnl=_sumUSD-startUSD; return {pnl,pct:startUSD?pnl/startUSD:0};
+  })();
+  const _dUp = (_po_delta.pct||0)>=0;
+  const _po_agg = {};
+  _sections.forEach(s=>{
+    let name=s.n, color=s.color;
+    if(s.n==="Crypto"){name="Crypto";color=C.btc;}
+    else if(s.n==="Indices ETF"){name="Indices";color=C.blue;}
+    else if(s.n==="Stock Picking"){name="Picking";color=C.teal;}
+    else if(s.n==="Or / Gold"){name="Or";color=C.gold;}
+    else {name="Cash";color=C.gray;}
+    if(!_po_agg[name]) _po_agg[name]={name,color,usd:0,pnl:0,investi:0};
+    _po_agg[name].usd += s.totalUSD;
+    _po_agg[name].pnl += s.items.reduce((a,x)=>a+(x.pnl||0),0);
+    _po_agg[name].investi += s.items.reduce((a,x)=>a+(x.investi||0),0);
+  });
+  const _allocTot = Object.values(_po_agg).reduce((a,c)=>a+Math.max(0,c.usd),0)||1;
+  const _alloc = Object.values(_po_agg).filter(c=>c.usd>0)
+    .map(c=>({...c, pct:c.usd/_allocTot*100, eurv:Math.round(c.usd*_effSrc.usdEur)}))
+    .sort((a,b)=>b.usd-a.usd);
+  const _perf = _alloc.filter(c=>c.name!=="Cash").slice(0,2).map(c=>{
+    const pct = c.investi>0 ? c.pnl/c.investi : 0;
+    const pnl = eur?Math.round(c.pnl*_effSrc.usdEur):c.pnl;
+    const up  = pct>=0;
+    const pts = _spark.map((v,i)=>{ if(v==null)return null; let t=(v-_smn)/_srng; if(!up)t=1-t; return `${(i/_hn*150).toFixed(1)},${(36-t*28).toFixed(1)}`; }).filter(Boolean).join(" ");
+    return {name:c.name,color:c.color,pct,pnl,up,pts};
+  });
+
   return(
-    <div>
-      {/* ── Portfolio card ── */}
-      <div style={{
-        background:C.bg1, borderRadius:14, marginBottom:12,
-        border:`1px solid ${C.border2}`, overflow:"hidden",
-      }}>
-        {/* Total header */}
-        <div style={{
-          background:C.btc+"18", borderBottom:`1px solid ${C.border}`,
-          padding:"14px 16px", display:"flex", justifyContent:"space-between", alignItems:"center",
-        }}>
-          <div style={{flex:1}}>
-            <div style={{fontSize:10,color:C.gray,marginBottom:3,textTransform:"uppercase",letterSpacing:.5}}>
-              {(()=>{
-                const src = chosenSource==="cloudflare" ? "BASE CF" : "BASE LOCALE";
-                const snapDate = (EFF||CURRENT).date || CURRENT.date;
-                const fmtDate = d => {
-                  if(!d) return "—";
-                  const dt = new Date(d);
-                  if(isNaN(dt)) return d;
-                  const m=["Jan","Fév","Mar","Avr","Mai","Jun","Jul","Aoû","Sep","Oct","Nov","Déc"][dt.getMonth()];
-                  return String(dt.getDate()).padStart(2,"0")+" "+m+" "+String(dt.getFullYear()).slice(2);
-                };
-                if(refreshedAt){
-                  // Un refresh a été effectué
-                  const refreshDate = refreshedAt.replace(/^(cloudflare|snapshot|locale)\s*/i,"");
-                  return `${src} · REFRESH ${fmtDate(refreshDate)} ⟳`;
-                }
-                return `${src} · ${fmtDate(snapDate)} 📂`;
-              })()}
-            </div>
-            <div style={{fontSize:32,fontWeight:900,letterSpacing:-1.5,color:C.green}}>
-              {msk(cur+fmt(Math.round(eur?_sumEUR:_sumUSD)), hidden)}
-            </div>
-            <div style={{fontSize:12,color:C.gray,marginTop:2}}>
-              {msk(eur?"$"+fmt(_sumUSD):"€"+fmt(_sumEUR), hidden)}
-            </div>
-          </div>
-          {/* Sparkline portfeuille — timeframe du graphique */}
-          {sparkData.length>1&&(()=>{
-            const W=110, H=56;
-            const vals = sparkData.filter(v=>v!=null);
-            if(!vals.length) return null;
-            const mn=Math.min(...vals), mx=Math.max(...vals), rng=mx-mn||1;
-            const n=sparkData.length;
-            const px=i=>i/(n-1)*W;
-            const py=v=>v==null?null:H-((v-mn)/rng)*(H-4)+2;
-            const pts=sparkData.map((v,i)=>v!=null?`${px(i).toFixed(1)},${py(v).toFixed(1)}`:null).filter(Boolean).join(" ");
-            const lastV=vals[vals.length-1];
-            const firstV=vals[0];
-            const trend=lastV>=firstV?C.green:C.red;
-            return(
-              <div style={{flexShrink:0,display:"flex",flexDirection:"column",alignItems:"flex-end",gap:3}}>
-                <div style={{fontSize:8,color:C.text3,letterSpacing:.3}}>{chartTF}</div>
-                <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} style={{overflow:"visible"}}>
-                  <defs>
-                    <linearGradient id="spkGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor={trend} stopOpacity="0.25"/>
-                      <stop offset="100%" stopColor={trend} stopOpacity="0"/>
-                    </linearGradient>
-                  </defs>
-                  {/* Zone remplie */}
-                  {pts&&<polygon points={`0,${H} ${pts} ${W},${H}`} fill="url(#spkGrad)"/>}
-                  {/* Courbe */}
-                  {pts&&<polyline points={pts} fill="none" stroke={trend} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round"/>}
-                  {/* Point final */}
-                  {sparkData[n-1]!=null&&<circle cx={px(n-1)} cy={py(sparkData[n-1])} r={3} fill={trend}/>}
-                </svg>
-                <div style={{fontSize:10,fontWeight:800,color:trend}}>
-                  {rng>0?((lastV-firstV)/firstV*100>=0?"+":"")+(((lastV-firstV)/firstV)*100).toFixed(1)+"%":"—"}
-                </div>
-              </div>
-            );
-          })()}
+    <div style={{margin:"0 -16px"}}>
+
+      {/* ════ HERO ════ */}
+      <div style={{padding:"22px 20px 22px",borderBottom:`1px solid ${C.border}`}}>
+        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
+          <span style={{fontSize:10,letterSpacing:4,color:C.text2,textTransform:"uppercase"}}>Patrimoine total</span>
+          <button onClick={()=>setHidden(!hidden)} title={hidden?"Afficher les montants":"Masquer les montants"}
+            style={{background:"none",border:"none",cursor:"pointer",color:C.text3,display:"flex",padding:0}}>
+            <Icon name={hidden?"eyeOff":"eye"} size={18}/>
+          </button>
         </div>
-
-        {/* ── 3 cases Crypto / Actions / Banque ── */}
-        {(()=>{
-          const _p = _effSrc;
-          const _uE = _p.usdEur || 0.86;
-          const _eU = _p.eurUsd || 1.162;
-          const _kuCoin = (_p.stocks?.items||[]).find(x=>x.t==="KUCOIN");
-          const _cryptoUSD = (_p.crypto?.total||0) + (_kuCoin?.val||0);
-          const _stocksUSD = (_p.stocks?.total||0) - (_kuCoin?.val||0);
-          const _bankEUR   = _p.bank?.totalEUR || CURRENT.bank?.totalEUR || 0;
-          const boxes = eur ? [
-            {label:"Crypto",  val:"€"+fmtK(Math.round(_cryptoUSD*_uE)), c:C.btc},
-            {label:"Actions", val:"€"+fmtK(Math.round(_stocksUSD*_uE)), c:C.blue},
-            {label:"Banque",  val:"€"+fmtK(_bankEUR),                   c:C.green},
-          ] : [
-            {label:"Crypto",  val:"$"+fmtK(_cryptoUSD),                 c:C.btc},
-            {label:"Actions", val:"$"+fmtK(_stocksUSD),                 c:C.blue},
-            {label:"Banque",  val:"$"+fmtK(Math.round(_bankEUR*_eU)),   c:C.green},
-          ];
-          return(
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:1,background:C.border,borderTop:`1px solid ${C.border}`}}>
-              {boxes.map((b,i)=>(
-                <div key={i} style={{background:C.bg1,padding:"8px 10px",textAlign:"center"}}>
-                  <div style={{fontSize:9,color:C.gray,marginBottom:2}}>{b.label}</div>
-                  <div style={{fontSize:13,fontWeight:800,color:b.c}}>{msk(b.val,hidden)}</div>
-                </div>
-              ))}
-            </div>
-          );
-        })()}
-
-        {/* P&L 1J / 1S / 1M / 6M / 1A */}
-        {(()=>{
-          const _src2 = EFF||CURRENT;
-          const _cur2 = eur ? "€" : "$";
-          const usdEurNow = _src2.usdEur;
-
-          // Valeur portefeuille courante en €
-          const _ddLast2 = _DD_PO.reduceRight((a,r)=>a!=null?a:(r[2]!=null?r[2]:null),null);
-          const _nowEUR = _src2.totalEUR || _ddLast2;
-          const _nowUSD = _nowEUR / usdEurNow;
-
-          // Ligne DD la plus proche (en valeur absolue) d'une date cible
-          // Prend la ligne avec |r[0] - targetDate| minimal parmi les lignes ayant totalEUR non null
-          const _ddClosest = days => {
-            const t = new Date(Date.now() + NC_OFFSET_MS);
-            t.setUTCDate(t.getUTCDate() - days);
-            const ds = t.toISOString().slice(0, 10);
-            let best = null, bestDiff = Infinity;
-            for (const r of _DD_PO) {
-              if (!r[0] || r[2] == null) continue;
-              const diff = Math.abs(new Date(r[0]) - new Date(ds));
-              if (diff < bestDiff) { bestDiff = diff; best = r; }
-            }
-            return best;
-          };
-
-          // Formule : var€ = totalEUR(today) − totalEUR(today − X jours)
-          //           var$ = (totalEUR(today) / usdEurNow) − (totalEUR(ref) / usdEurRef)
-          // Aucune soustraction d'investissements — variation brute du patrimoine
-          const _cell = days => {
-            const row = _ddClosest(days);
-            if (!row || !row[2]) return { pnl:0, pct:0 };
-            const startEUR  = row[2];
-            const usdEurRef = row[5] || usdEurNow;
-            if (eur) {
-              const pnl = Math.round(_nowEUR - startEUR);
-              return { pnl, pct: _nowEUR ? pnl / _nowEUR : 0 };
-            } else {
-              const nowUSD   = _nowEUR  / usdEurNow;
-              const startUSD = startEUR / usdEurRef;
-              const pnl = Math.round(nowUSD - startUSD);
-              return { pnl, pct: startUSD ? pnl / startUSD : 0 };
-            }
-          };
-
-          const cells = [
-            { label:"1J",  ..._cell(1)   },
-            { label:"1S",  ..._cell(7)   },
-            { label:"1M",  ..._cell(30)  },
-            { label:"6M",  ..._cell(182) },
-            { label:"1A",  ..._cell(365) },
-          ];
-          return(
-            <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:1,background:C.border}}>
-              {cells.map((c,i)=>(
-                <div key={i} style={{background:C.bg2,padding:"8px 6px",textAlign:"center"}}>
-                  <div style={{fontSize:9,color:C.gray,marginBottom:3}}>{c.label}</div>
-                  <div style={{fontSize:12,fontWeight:800,color:clr(c.pnl),letterSpacing:-.3}}>
-                    {hidden?"***":(c.pnl>=0?"+":"")+_cur2+fmtK(Math.abs(c.pnl))}
-                  </div>
-                  <div style={{
-                    fontSize:10,fontWeight:700,color:clr(c.pct),
-                    background:clr(c.pct)+"18",borderRadius:4,
-                    padding:"1px 4px",display:"inline-block",marginTop:2,
-                  }}>{fmtP(c.pct)}</div>
-                </div>
-              ))}
-            </div>
-          );
-        })()}
+        <div style={{fontFamily:"'Cormorant Garamond',Georgia,serif",fontWeight:400,fontSize:50,letterSpacing:1,color:C.text,fontVariantNumeric:"tabular-nums",lineHeight:1}}>
+          {hidden
+            ? "••••••"
+            : <><span style={{color:C.gold,fontSize:28,verticalAlign:5,marginRight:3}}>{cur}</span>{fmt(Math.round(eur?_sumEUR:_sumUSD))}</>}
+        </div>
+        <div style={{display:"flex",alignItems:"center",gap:14,marginTop:14}}>
+          {_heroPts && (
+            <svg width="120" height="34" viewBox="0 0 120 34" style={{flexShrink:0,overflow:"visible"}}>
+              <polyline points={_heroPts} fill="none" stroke={_dUp?C.green:C.red} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          )}
+          <span style={{display:"inline-flex",alignItems:"center",gap:6,fontSize:12,color:_dUp?C.green:C.red,fontVariantNumeric:"tabular-nums",border:`1px solid ${(_dUp?C.green:C.red)}47`,borderRadius:999,padding:"4px 11px"}}>
+            {_dUp?"▲":"▼"} {fmtP(_po_delta.pct)} · {_dUp?"+":"-"}{cur}{msk(fmt(Math.abs(_po_delta.pnl)),hidden)}
+          </span>
+        </div>
       </div>
 
-      {/* ── CGIC + CGIS encarts ── */}
-      {(()=>{
-        const _ov_src = EFF||CURRENT;
-        const _ov_gdbs = liveGDBS || GDBS;
-        const usdEurNow2 = _ov_src.usdEur;
-        const _ov_gdbsAt = days => {
-          const t=new Date(Date.now()+NC_OFFSET_MS); t.setUTCDate(t.getUTCDate()-days);
-          const ds=t.toISOString().slice(0,10);
-          return _ov_gdbs.reduceRight((a,r)=>a!=null?a:(r[0]<=ds&&r[1]?r:null),null);
-        };
-        const _ov_ddAt = days => {
-          const t=new Date(Date.now()+NC_OFFSET_MS); t.setUTCDate(t.getUTCDate()-days);
-          const ds=t.toISOString().slice(0,10);
-          return _DD_PO.reduceRight((a,r)=>a!=null?a:(r[0]<=ds&&r[5]?r:null),null);
-        };
-        const _gcNow2 = _ov_src.gdbC || calcGdbPrices(_ov_src).gdbC;
-        const _gsNow2 = _ov_src.gdbS || calcGdbPrices(_ov_src).gdbS;
-        const _gcPerf = d => {
-          const r=_ov_gdbsAt(d); if(!r||!r[2]) return null;
-          if(eur){ const dd=_ov_ddAt(d); const ref=dd?dd[5]:usdEurNow2; return parseFloat(((_gcNow2*usdEurNow2)/(r[2]*ref)-1).toFixed(4)); }
-          return parseFloat((_gcNow2/r[2]-1).toFixed(4));
-        };
-        const _gsPerf = d => {
-          const r=_ov_gdbsAt(d); if(!r||!r[1]) return null;
-          if(eur){ const dd=_ov_ddAt(d); const ref=dd?dd[5]:usdEurNow2; return parseFloat(((_gsNow2*usdEurNow2)/(r[1]*ref)-1).toFixed(4)); }
-          return parseFloat((_gsNow2/r[1]-1).toFixed(4));
-        };
-        const gdb = [
-          { label:"CGIC", price:gcPrice, d:_gcPerf(1), w:_gcPerf(7), m:_gcPerf(30), color:C.orange },
-          { label:"CGIS", price:gsPrice, d:_gsPerf(1), w:_gsPerf(7), m:_gsPerf(30), color:C.blue },
-        ];
-        return(
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:7,marginBottom:10}}>
-            {gdb.map((g,i)=>(
-              <div key={i} style={{
-                background:C.bg1, borderRadius:10, padding:"8px 10px",
-                border:`1px solid ${C.border}`,
-              }}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",marginBottom:5}}>
-                  <span style={{fontSize:12,fontWeight:800,color:g.color,letterSpacing:.3}}>{g.label}</span>
-                  <span style={{fontSize:16,fontWeight:900,color:g.color,letterSpacing:-0.5}}>{hidden?"***":gcCur+g.price}</span>
-                </div>
-                <div style={{display:"flex",gap:4}}>
-                  {[["1J",g.d],["1S",g.w],["1M",g.m]].map(([tf,v])=>(
-                    <div key={tf} style={{flex:1,textAlign:"center"}}>
-                      <div style={{fontSize:8,color:C.text3}}>{tf}</div>
-                      <div style={{fontSize:10,fontWeight:800,color:clr(v)}}>{fmtP(v,1)}</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        );
-      })()}
-
-      {/* ── GDB Comparison Chart ── */}
-      <SH label="CGIC · CGIS · Patrimoine total" color={C.gray}/>
-      <GdbCompareChart eur={eur} setEur={setEur} EFF={EFF} tf={chartTF} setTF={setChartTF} onSparkData={setSparkData} chartData={chartData} liveDD={liveDD} liveGDBS={liveGDBS} liveGC={liveGC}/>
-
-      {/* ── Taux EUR/USD ── */}
-      {(()=>{
-        const _src3 = EFF||CURRENT;
-        const eurUsdRate = _src3.eurUsd || (1/_src3.usdEur);
-        const usdEurRate = _src3.usdEur;
-        return(
-          <div style={{...crd(),display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 14px",marginBottom:8}}>
-            <div style={{display:"flex",alignItems:"center",gap:6}}>
-              <span style={{fontSize:13}}>🇪🇺</span>
-              <span style={{fontSize:11,color:C.text2,fontWeight:600}}>EUR / USD</span>
+      {/* ════ RÉPARTITION ════ */}
+      <div style={{fontSize:10,letterSpacing:4,color:C.text2,textTransform:"uppercase",padding:"20px 20px 12px"}}>Répartition</div>
+      <div style={{padding:"0 20px 4px"}}>
+        <div style={{display:"flex",height:10,borderRadius:5,overflow:"hidden",marginBottom:14,background:C.bg2}}>
+          {_alloc.map((a,i)=>(
+            <div key={i} style={{width:a.pct.toFixed(2)+"%",background:a.color}}/>
+          ))}
+        </div>
+        <div style={{display:"flex",flexDirection:"column",gap:9}}>
+          {_alloc.map((a,i)=>(
+            <div key={i} style={{display:"flex",alignItems:"center",gap:10,fontSize:13}}>
+              <span style={{width:9,height:9,borderRadius:3,flexShrink:0,background:a.color}}/>
+              <span style={{flex:1,color:C.text}}>{a.name}</span>
+              <span style={{color:C.text2,fontVariantNumeric:"tabular-nums"}}>{a.pct.toFixed(0)} % · {msk(fmt(a.eurv)+" €",hidden)}</span>
             </div>
-            <div style={{display:"flex",gap:16,alignItems:"center"}}>
-              <div style={{textAlign:"right"}}>
-                <div style={{fontSize:12,fontWeight:800,color:C.text}}>${eurUsdRate.toFixed(4)}</div>
-                <div style={{fontSize:9,color:C.gray}}>1€ = ${eurUsdRate.toFixed(4)}</div>
-              </div>
-              <div style={{textAlign:"right"}}>
-                <div style={{fontSize:12,fontWeight:800,color:C.text}}>€{usdEurRate.toFixed(4)}</div>
-                <div style={{fontSize:9,color:C.gray}}>1$ = €{usdEurRate.toFixed(4)}</div>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
+          ))}
+        </div>
+      </div>
 
-      {/* Version discrète */}
-      <div style={{
-        textAlign:"center",fontSize:9,color:C.text3,opacity:.35,
-        marginTop:6,letterSpacing:.5,pointerEvents:"none",
-      }}>
-        v18.5
+      {/* ════ PERFORMANCE ════ */}
+      <div style={{fontSize:10,letterSpacing:4,color:C.text2,textTransform:"uppercase",padding:"22px 20px 12px"}}>Performance</div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,padding:"0 20px 6px"}}>
+        {_perf.map((p,i)=>(
+          <div key={i} style={{border:`1px solid ${C.border}`,borderRadius:12,padding:"12px 12px 10px",background:C.bg1}}>
+            <div style={{fontSize:11,color:C.text2,letterSpacing:1,marginBottom:2}}>{p.name}</div>
+            <div style={{fontFamily:"'Cormorant Garamond',Georgia,serif",fontSize:21,color:C.text,fontVariantNumeric:"tabular-nums"}}>{fmtP(p.pct)}</div>
+            <div style={{fontSize:11,fontVariantNumeric:"tabular-nums",marginTop:1,color:p.up?C.green:C.red}}>
+              {p.up?"▲ +":"▼ -"}{cur}{msk(fmt(Math.abs(p.pnl)),hidden)}
+            </div>
+            <svg width="100%" height="44" viewBox="0 0 150 44" preserveAspectRatio="none" style={{marginTop:8}}>
+              <line x1="0" y1="11" x2="150" y2="11" stroke={C.border} strokeWidth="0.5"/>
+              <line x1="0" y1="33" x2="150" y2="33" stroke={C.border} strokeWidth="0.5"/>
+              {p.pts && <polyline points={p.pts} fill="none" stroke={p.color} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>}
+            </svg>
+          </div>
+        ))}
+      </div>
+
+      {/* ════ Accès détail (graphe complet + CGIC/CGIS) ════ */}
+      <div style={{padding:"14px 20px 6px"}}>
+        <div style={{display:"flex",gap:10}}>
+          <button onClick={onSnapshot} style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:7,padding:"11px 0",borderRadius:C.radius||12,border:`1px solid ${C.border2}`,background:"transparent",color:C.text2,fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:C.font}}>
+            <Icon name="camera" size={15}/> Snapshot
+          </button>
+          <button onClick={handleRefresh} disabled={refreshing} style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:7,padding:"11px 0",borderRadius:C.radius||12,border:`1px solid ${C.gold}55`,background:C.gold+"12",color:C.gold,fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:C.font,opacity:refreshing?.6:1}}>
+            <Icon name="refresh" size={15}/> {refreshing?"…":"Rafraîchir"}
+          </button>
+        </div>
+      </div>
+
+      <div style={{textAlign:"center",fontSize:9,color:C.text3,opacity:.4,marginTop:8,paddingBottom:6,letterSpacing:.5,pointerEvents:"none"}}>
+        {APP_VERSION}
       </div>
 
     </div>
