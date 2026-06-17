@@ -4,12 +4,14 @@ const { useState, useEffect, useCallback, useRef } = React;
 /* ─── THEMES ─────────────────────────────────────────────── */
 const THEMES = {
   luxe: {
-    // ✦ Onyx & Champagne — family office : obsidienne profonde, or champagne mat, ivoire chaud
-    bg:"#0A0A0C",bg1:"#101013",bg2:"#16161A",bg3:"#1E1E24",
-    border:"#2A2A31",border2:"#3A3A44",
-    btc:"#C9A86A",blue:"#8FA8C9",teal:"#A8C9D4",gold:"#C9A86A",
-    purple:"#B08FD4",green:"#6FB89A",red:"#C77B7B",orange:"#D4A86A",gray:"#5C584F",
-    text:"#F3EFE6",text2:"#9A958A",text3:"#5C584F",
+    // ✦ Onyx & Champagne — family office. Neutres CHAUDS (taupe), famille de catégories cohérente.
+    // Logique : champagne(gold)=marque/actif & Or · bronze(btc)=Crypto · ardoise(blue)=Indices
+    //           céladon(teal)=Picking · taupe(gray)=Cash · sauge(green)=gain · bois-de-rose(red)=perte
+    bg:"#0B0A08",bg1:"#13110D",bg2:"#1A1712",bg3:"#23201A",
+    border:"#2C2820",border2:"#3C3729",
+    btc:"#C08A4E",blue:"#7E97B8",teal:"#6FA38F",gold:"#C9A86A",
+    purple:"#B08FD4",green:"#7FB89A",red:"#C97F7F",orange:"#D4A86A",gray:"#9A9082",
+    text:"#F4F0E8",text2:"#A8A092",text3:"#6B6456",
     name:"✦ Onyx & Champagne", font:"'Inter','-apple-system','BlinkMacSystemFont',sans-serif",
     radius:12, radiusSm:8,
   },
@@ -84,6 +86,40 @@ const THEMES = {
 let C = THEMES.luxe;
 const getCC = () => ({Indices:C.blue,Picking:C.teal,Or:C.gold,Cash:C.gray});
 let cc = getCC();
+
+/* ─── ICÔNES — jeu filaire unifié (1.5px), thématisable ───────────────────── */
+const ICON_PATHS = {
+  home:'<path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/>',
+  pie:'<path d="M21 12a9 9 0 1 1-9-9v9z"/><path d="M12 3a9 9 0 0 1 9 9h-9z"/>',
+  chart:'<path d="M3 3v18h18"/><path d="M7 14l4-4 3 3 5-6"/>',
+  grid:'<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>',
+  list:'<line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="3.5" cy="6" r="1"/><circle cx="3.5" cy="12" r="1"/><circle cx="3.5" cy="18" r="1"/>',
+  gem:'<path d="M6 3h12l3 6-9 12L3 9z"/><path d="M3 9h18"/><path d="M9 3l-3 6 6 12"/><path d="M15 3l3 6-6 12"/>',
+  bell:'<path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/>',
+  gear:'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-2.81 1.17V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 8 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15H4.5a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 6 8.6a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 11 4.6h.09A1.65 1.65 0 0 0 12 3.09V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 2.82 1.17l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 11.18V12a2 2 0 0 1 0 3z"/>',
+  refresh:'<path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10"/><path d="M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>',
+  eye:'<path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/>',
+  eyeOff:'<path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/>',
+  edit:'<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4z"/>',
+  trash:'<path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>',
+  camera:'<path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/>',
+  repeat:'<path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/>',
+  plus:'<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>',
+  check:'<path d="M20 6L9 17l-5-5"/>',
+  x:'<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>',
+  cloud:'<path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/>',
+  alert:'<path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>',
+  search:'<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>',
+  clock:'<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
+  flame:'<path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/>',
+};
+function Icon({name,size=20,color="currentColor",sw=1.5,style}){
+  return React.createElement("svg",{
+    width:size,height:size,viewBox:"0 0 24 24",fill:"none",
+    stroke:color,strokeWidth:sw,strokeLinecap:"round",strokeLinejoin:"round",
+    style:style, dangerouslySetInnerHTML:{__html:ICON_PATHS[name]||""}
+  });
+}
 
 
 /* ─── TF_CUTS dynamiques ─────────────────────────────── */
@@ -721,7 +757,7 @@ function applyPrices(prices, usdEur, effSrc){
 }
 
 // Date locale UTC+11 (Nouvelle-Calédonie)
-const APP_VERSION = "v5.51";
+const APP_VERSION = "v5.52";
 // v4.5 — fix NICK : NICK.AS n'existe pas chez Yahoo, le bon symbole EUR est NICK.MI (Milan)
 try{ if(typeof YF_MAP!=="undefined" && YF_MAP){ YF_MAP.NICK="NICK.MI"; } }catch(e){}
 const NC_OFFSET_MS = 11 * 60 * 60 * 1000;
@@ -2052,7 +2088,7 @@ function TickerModal({ ticker, cat="", eur=false, usdEur=0.86, onClose }) {
                         </>
                       : item.dash
                         ? <span style={{fontSize:12,fontWeight:700,color:C.text3}}>—</span>
-                        : <span style={{fontSize:7,color:C.orange,fontFamily:"monospace",marginTop:2}}>
+                        : <span style={{fontSize:7,color:C.orange,fontFamily:C.font,marginTop:2}}>
                             {dbg.qsStatus ? "qs:" + dbg.qsStatus + " · " + (item.err||"") : "En attente…"}
                           </span>
                     }
@@ -2129,7 +2165,7 @@ function TickerModal({ ticker, cat="", eur=false, usdEur=0.86, onClose }) {
                       : <div style={{
                           borderRadius:10,padding:"10px 14px",
                           background:C.orange+"11",border:`1px solid ${C.orange+"44"}`,
-                          fontSize:8,color:C.orange,fontFamily:"monospace",
+                          fontSize:8,color:C.orange,fontFamily:C.font,
                         }}>
                           step:{etfDbg.step} qsStatus:{etfDbg.qsStatus} crumb:{etfDbg.crumb}
                           {" "}holdings:{etfDbg.holdingsCount} qsLen:{etfDbg.qsLen}
@@ -3077,7 +3113,7 @@ function TickerIcon({ ticker, size=32, color="#ffffff22", onIconSaved, iconDbVer
         }}>
           <div style={{background:C.bg2,borderRadius:16,padding:"20px 18px",width:280,border:`1px solid ${C.border}`,boxShadow:"0 8px 32px #0008"}}>
             <div style={{fontSize:13,fontWeight:800,color:C.text,marginBottom:14}}>
-              Icône — <span style={{color:C.btc,fontFamily:"monospace"}}>{ticker}</span>
+              Icône — <span style={{color:C.btc,fontFamily:C.font}}>{ticker}</span>
             </div>
 
             {/* Option FMP officielle */}
@@ -6081,6 +6117,7 @@ function SnapshotModal({onSave, onClose, EFF}){
 ═══════════════════════════════════════════════════════════ */
 const TABS=["Home","Portfolio","Stats","CGI","Data","Legend","Suivi"];
 const ICONS=["◎","◑","▲","◈","⬡","♛","◉"];
+const NAV_ICONS=["home","pie","chart","gem","grid","list","search"];
 
 /* ── Global API keys (from Power Query in Excel) ── */
 
@@ -6188,7 +6225,7 @@ function CloudKeyList({data, onRefresh}){
           <button onClick={function(){setSelectedKey(null);setSearch("");}} style={{background:C.bg2,border:"1px solid "+C.border,borderRadius:8,padding:"6px 12px",color:C.text,fontSize:12,cursor:"pointer",fontWeight:700}}>← Retour</button>
           <div style={{flex:1}}>
             <div style={{fontSize:12,fontWeight:700,color:C.teal}}>{label}</div>
-            <div style={{fontSize:9,color:C.gray,fontFamily:"monospace"}}>{"kv/"+selectedKey+" — "+(Array.isArray(val)?val.length+" lignes":Object.keys(val||{}).length+" cles")}</div>
+            <div style={{fontSize:9,color:C.gray,fontFamily:C.font}}>{"kv/"+selectedKey+" — "+(Array.isArray(val)?val.length+" lignes":Object.keys(val||{}).length+" cles")}</div>
           </div>
           <button onClick={function(){doDelete([selectedKey],false);}}
             disabled={deleting===selectedKey}
@@ -6209,7 +6246,7 @@ function CloudKeyList({data, onRefresh}){
                 <tbody>
                   {filtered.slice(0,100).map(function(row,ri){return(
                     <tr key={ri} style={{borderBottom:"1px solid "+C.border+"44",background:ri%2===0?"transparent":C.bg2+"44"}}>
-                      {row.map(function(cell,ci){return(<td key={ci} style={{padding:"4px 7px",color:ci===0?C.teal:C.text,fontFamily:"monospace",fontSize:10,whiteSpace:"nowrap",maxWidth:180,overflow:"hidden",textOverflow:"ellipsis"}}>{cell}</td>);})}
+                      {row.map(function(cell,ci){return(<td key={ci} style={{padding:"4px 7px",color:ci===0?C.teal:C.text,fontFamily:C.font,fontSize:10,whiteSpace:"nowrap",maxWidth:180,overflow:"hidden",textOverflow:"ellipsis"}}>{cell}</td>);})}
                     </tr>
                   );})}
                 </tbody>
@@ -6259,7 +6296,7 @@ function CloudKeyList({data, onRefresh}){
               <div onClick={function(){if(!empty){setSelectedKey(item.key);setSearch("");setDelMsg(null);}}}
                 style={{flex:1,cursor:empty?"default":"pointer",opacity:empty?0.5:1}}>
                 <div style={{fontSize:11,fontWeight:700,color:empty?C.gray:C.text}}>{item.label}</div>
-                <div style={{fontSize:9,color:C.gray,fontFamily:"monospace",marginTop:2}}>{"kv/"+item.key}</div>
+                <div style={{fontSize:9,color:C.gray,fontFamily:C.font,marginTop:2}}>{"kv/"+item.key}</div>
               </div>
               <div style={{textAlign:"right",display:"flex",alignItems:"center",gap:8}}>
                 {empty ? <span style={{fontSize:10,color:C.gray}}>Vide</span>
@@ -8910,7 +8947,7 @@ function PageData(
                     width:"100%",background:"transparent",border:"none",cursor:"pointer",
                     padding:"7px 0",textAlign:"left",
                   }}>
-                    <span style={{fontSize:11,fontWeight:700,color:isOpen?C.btc:C.teal,fontFamily:"monospace"}}>{b.name}</span>
+                    <span style={{fontSize:11,fontWeight:700,color:isOpen?C.btc:C.teal,fontFamily:C.font}}>{b.name}</span>
                     <div style={{display:"flex",alignItems:"center",gap:8}}>
                       <span style={{fontSize:11,color:C.text}}>{b.count} entrées</span>
                       <span style={{fontSize:9,color:C.gray}}>{b.last}</span>
@@ -9130,7 +9167,7 @@ function NotifBell(){
     "aria-label":"Notifications",
     style:bellStyle
   },
-    "🔔",
+    React.createElement(Icon,{name:"bell",size:17,color:text}),
     unread>0&&React.createElement("span",{style:{position:"absolute",top:-4,right:-4,minWidth:18,height:18,padding:"0 4px",
       borderRadius:9,background:red,color:"#fff",fontSize:10,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center",border:"2px solid "+(C2.bg||"#07080D")}},
       unread>9?"9+":unread)
@@ -10595,7 +10632,7 @@ function App(){
       </div>
       <div style={{fontFamily:"'Cormorant Garamond',Georgia,serif",fontSize:24,fontWeight:400,color:C.text,letterSpacing:5,marginBottom:6,textAlign:"center"}}><span style={{color:C.gold,fontWeight:500}}>J.C.</span> GLOBAL INVESTMENTS</div>
       <div style={{fontSize:10,color:C.text3,marginBottom:34,letterSpacing:3}}>CHOISIR LA SOURCE DE DONNÉES</div>
-      <div style={{position:"absolute",top:16,right:20,fontSize:10,color:C.gold,fontFamily:"monospace"}}>{APP_VERSION}</div>
+      <div style={{position:"absolute",top:16,right:20,fontSize:10,color:C.gold,fontFamily:C.font}}>{APP_VERSION}</div>
 
       {startLoading ? (
         <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:12}}>
@@ -10728,26 +10765,37 @@ function App(){
           </button>
         </div>
 
-        {/* Centre : J.C. GLOBAL INVESTMENTS + version */}
+        {/* Centre : logo cliquable → accueil */}
         <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:2,flex:1,minWidth:0}}>
-          <div style={{display:"flex",alignItems:"center",gap:6}}>
-            <span style={{fontFamily:"'Cormorant Garamond',Georgia,serif",fontSize:15,fontWeight:600,color:C.gold,letterSpacing:1.5,lineHeight:1.05,textAlign:"center"}}>J.C.<br/>GLOBAL INVESTMENTS</span>
-            {gistSync===true  && <span onClick={()=>setShowGistDiag(true)} title="Cloudflare KV — connecté" style={{fontSize:10,color:C.green,cursor:"pointer"}}>☁︎</span>}
-            {gistSync===false && <span onClick={()=>setShowGistDiag(true)} title="Erreur connexion" style={{fontSize:10,color:C.red,cursor:"pointer"}}>✗</span>}
+          <div style={{display:"flex",alignItems:"center",gap:7}}>
+            <div onClick={()=>setTab(0)} title="Accueil" style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer"}}>
+              <div style={{width:27,height:27,borderRadius:"50%",border:`1px solid ${C.gold}`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                <span style={{fontFamily:"'Cormorant Garamond',Georgia,serif",fontWeight:600,fontSize:12,color:C.gold,lineHeight:1}}>JC</span>
+              </div>
+              <span style={{fontFamily:"'Cormorant Garamond',Georgia,serif",fontSize:15,fontWeight:600,color:C.gold,letterSpacing:1.2,lineHeight:1.05,textAlign:"left"}}>J.C.<br/>GLOBAL INVESTMENTS</span>
+            </div>
+            {gistSync===true  && <span onClick={()=>setShowGistDiag(true)} title="Cloudflare KV — connecté" style={{cursor:"pointer",display:"flex"}}><Icon name="cloud" size={13} color={C.green}/></span>}
+            {gistSync===false && <span onClick={()=>setShowGistDiag(true)} title="Erreur connexion" style={{cursor:"pointer",display:"flex"}}><Icon name="x" size={13} color={C.red}/></span>}
             {gistSync===null  && <span style={{fontSize:10,color:C.gray}}>·</span>}
           </div>
-          <span style={{fontSize:9,fontWeight:700,color:C.btc,opacity:.8,fontFamily:"monospace",letterSpacing:.5}}>{APP_VERSION}</span>
+          <span style={{fontSize:9,fontWeight:600,color:C.btc,opacity:.8,fontFamily:C.font,letterSpacing:.5}}>{APP_VERSION}</span>
         </div>
 
-        {/* Droite : 🔔 notifications + ⚙️ réglages (LOT1) */}
-        <div style={{display:"flex",gap:9,alignItems:"center"}}>
+        {/* Droite : œil confidentialité + notifications + réglages */}
+        <div style={{display:"flex",gap:8,alignItems:"center"}}>
+          <button onClick={()=>setHidden(!hidden)} title={hidden?"Afficher les montants":"Masquer les montants"} style={{
+            width:32,height:32,borderRadius:C.radiusSm||8,
+            border:`1px solid ${C.border2}`,background:"transparent",
+            cursor:"pointer",color:hidden?C.gold:C.text2,
+            display:"flex",alignItems:"center",justifyContent:"center",
+          }}><Icon name={hidden?"eyeOff":"eye"} size={17}/></button>
           <NotifBell inline/>
           <button onClick={()=>setShowSettings(true)} title="Réglages" style={{
-            width:32,height:32,borderRadius:C.radiusSm||6,
-            border:`1.5px solid ${C.border}`,background:C.purple+"1A",
-            cursor:"pointer",fontSize:15,
+            width:32,height:32,borderRadius:C.radiusSm||8,
+            border:`1px solid ${C.border2}`,background:"transparent",
+            cursor:"pointer",color:C.text2,
             display:"flex",alignItems:"center",justifyContent:"center",
-          }}>⚙️</button>
+          }}><Icon name="gear" size={17}/></button>
         </div>
       </div>
       {/* ── Pull-to-refresh retiré (LOT1) ── */}
@@ -10766,8 +10814,8 @@ function App(){
       <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:430,background:C.bg,borderTop:`1px solid ${C.border}`,display:"flex",padding:"8px 0 20px",zIndex:100}}>
         {TABS.map((lb,i)=>(
           i===4 ? null : (
-          <button key={i} onClick={()=>setTab(i)} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:2,height:52,padding:"4px 2px",background:"none",border:"none",cursor:"pointer",color:tab===i?C.btc:C.text3,transition:"color .15s"}}>
-            <span style={{fontSize:20,lineHeight:1,display:"block"}}>{ICONS[i]}</span>
+          <button key={i} onClick={()=>setTab(i)} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:4,height:52,padding:"4px 2px",background:"none",border:"none",cursor:"pointer",color:tab===i?C.gold:C.text3,transition:"color .15s"}}>
+            <Icon name={NAV_ICONS[i]} size={21}/>
             <span style={{fontSize:9,fontWeight:700,lineHeight:1,display:"block"}}>{lb}</span>
           </button>
           )
@@ -10820,7 +10868,7 @@ function App(){
             <div style={{fontSize:13,fontWeight:800,color:gistSync?C.green:C.red,marginBottom:14}}>
               {gistSync?"🟢":"🔴"} Connexion Cloudflare — {gistSync?"Opérationnelle":"Erreur"}
             </div>
-            <div style={{background:C.bg2,borderRadius:10,padding:"12px 14px",fontFamily:"monospace",fontSize:11,display:"flex",flexDirection:"column",gap:8}}>
+            <div style={{background:C.bg2,borderRadius:10,padding:"12px 14px",fontFamily:C.font,fontSize:11,display:"flex",flexDirection:"column",gap:8}}>
               <div><span style={{color:C.gray}}>WORKER :</span> <span style={{color:C.text,fontSize:9}}>{CF_WORKER_URL}</span></div>
               <div><span style={{color:C.gray}}>AUTH_KEY :</span> <span style={{color:C.text}}>{CF_AUTH_KEY.slice(0,8)}…</span></div>
               <div style={{borderTop:`1px solid ${C.border}`,paddingTop:8}}>
@@ -10880,10 +10928,10 @@ function App(){
             <div style={{background:C.bg2,borderRadius:12,padding:"10px 14px",marginBottom:10}}>
               <div style={{fontSize:10,fontWeight:800,color:C.gray,textTransform:"uppercase",letterSpacing:.5,marginBottom:8}}>📱 Base locale</div>
               {snapResult.log.map((l,i)=>(
-                <div key={i} style={{fontSize:11,color:l.startsWith("✓")?C.green:C.red,fontFamily:"monospace",marginBottom:3}}>{l}</div>
+                <div key={i} style={{fontSize:11,color:l.startsWith("✓")?C.green:C.red,fontFamily:C.font,marginBottom:3}}>{l}</div>
               ))}
               {snapResult.errors.map((e,i)=>(
-                <div key={i} style={{fontSize:11,color:C.red,fontFamily:"monospace",marginBottom:3}}>{e}</div>
+                <div key={i} style={{fontSize:11,color:C.red,fontFamily:C.font,marginBottom:3}}>{e}</div>
               ))}
             </div>
 
@@ -10892,10 +10940,10 @@ function App(){
               <div style={{background:C.bg2,borderRadius:12,padding:"10px 14px",marginBottom:14}}>
                 <div style={{fontSize:10,fontWeight:800,color:C.gray,textTransform:"uppercase",letterSpacing:.5,marginBottom:8}}>💾 Enregistrement (local + cloud)</div>
                 {(snapResult.uploadLog||[]).map((l,i)=>(
-                  <div key={i} style={{fontSize:11,color:l.startsWith("✓")?C.green:C.red,fontFamily:"monospace",marginBottom:3}}>{l}</div>
+                  <div key={i} style={{fontSize:11,color:l.startsWith("✓")?C.green:C.red,fontFamily:C.font,marginBottom:3}}>{l}</div>
                 ))}
                 {(snapResult.uploadErrors||[]).map((e,i)=>(
-                  <div key={i} style={{fontSize:11,color:C.red,fontFamily:"monospace",marginBottom:3}}>{e}</div>
+                  <div key={i} style={{fontSize:11,color:C.red,fontFamily:C.font,marginBottom:3}}>{e}</div>
                 ))}
               </div>
             ) : snapResult.pendingUpload ? (
