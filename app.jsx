@@ -757,7 +757,7 @@ function applyPrices(prices, usdEur, effSrc){
 }
 
 // Date locale UTC+11 (Nouvelle-Calédonie)
-const APP_VERSION = "v5.54";
+const APP_VERSION = "v5.55";
 // v4.5 — fix NICK : NICK.AS n'existe pas chez Yahoo, le bon symbole EUR est NICK.MI (Milan)
 try{ if(typeof YF_MAP!=="undefined" && YF_MAP){ YF_MAP.NICK="NICK.MI"; } }catch(e){}
 const NC_OFFSET_MS = 11 * 60 * 60 * 1000;
@@ -1203,10 +1203,10 @@ function LineChart({series,dates,h=80,legend,defaultTF="ALL",hideTF=false,unit="
         <div style={{display:"flex",gap:3,marginBottom:10}}>
           {TFS.map(t=>(
             <button key={t} onClick={()=>{setTF(t);setHover(null);}} style={{
-              flex:1,padding:"4px 0",borderRadius:6,fontSize:10,fontWeight:700,
-              border:"none",cursor:"pointer",
-              background:tf===t?C.btc:"transparent",
-              color:tf===t?"#000":C.gray,
+              flex:1,padding:"4px 0",borderRadius:6,fontSize:10,fontWeight:600,letterSpacing:.5,
+              border:"none",cursor:"pointer",transition:"background .15s,color .15s",
+              background:tf===t?C.gold:"transparent",
+              color:tf===t?C.bg:C.text3,
             }}>{t}</button>
           ))}
         </div>
@@ -1220,7 +1220,7 @@ function LineChart({series,dates,h=80,legend,defaultTF="ALL",hideTF=false,unit="
           borderRadius:10,padding:"8px 14px",zIndex:50,minWidth:170,
           boxShadow:"0 8px 32px rgba(0,0,0,.7)",pointerEvents:"none",
         }}>
-          <div style={{fontSize:11,color:"#fff",fontWeight:800,textAlign:"center",marginBottom:6}}>
+          <div style={{fontSize:11,color:"#fff",fontWeight:600,textAlign:"center",marginBottom:6}}>
             {fmtDate(hovDate)}
           </div>
           {sliced.map((s,si)=>{
@@ -1233,14 +1233,14 @@ function LineChart({series,dates,h=80,legend,defaultTF="ALL",hideTF=false,unit="
                   <div style={{width:8,height:8,borderRadius:2,background:s.color,flexShrink:0}}/>
                   <span style={{fontSize:10,color:C.text2}}> {s.label||""}</span>
                 </div>
-                <span style={{fontSize:12,fontWeight:800,color:s.color}}>{disp}</span>
+                <span style={{fontSize:12,fontWeight:600,color:s.color}}>{disp}</span>
               </div>
             );
           })}
           {(markers||[]).filter(function(m){return m && Math.abs(m.i-hover.i)<=1;}).map(function(m,mi){
             return (<div key={"mt"+mi} style={{display:"flex",justifyContent:"space-between",gap:14,marginTop:5,paddingTop:5,borderTop:`1px solid ${C.border}`}}>
-              <span style={{fontSize:10,fontWeight:800,color:m.color}}>{m.side==="BUY"?"Achat":"Vente"}{m.qtyTxt?(" "+m.qtyTxt):""}</span>
-              <span style={{fontSize:11,fontWeight:800,color:m.color}}>{m.amtTxt||""}</span></div>);
+              <span style={{fontSize:10,fontWeight:600,color:m.color}}>{m.side==="BUY"?"Achat":"Vente"}{m.qtyTxt?(" "+m.qtyTxt):""}</span>
+              <span style={{fontSize:11,fontWeight:600,color:m.color}}>{m.amtTxt||""}</span></div>);
           })}
         </div>
       )}
@@ -1344,8 +1344,8 @@ function BarChart({pcts,months,pnls,h=44}){
           borderRadius:10,padding:"8px 14px",zIndex:50,textAlign:"center",
           boxShadow:"0 4px 20px rgba(0,0,0,.6)",pointerEvents:"none",minWidth:100,
         }}>
-          <div style={{fontSize:11,fontWeight:800,color:C.text}}>{months?.[sel]}</div>
-          <div style={{fontSize:14,fontWeight:900,color:clr(pcts[sel])}}>{fmtP(pcts[sel])}</div>
+          <div style={{fontSize:11,fontWeight:600,color:C.text}}>{months?.[sel]}</div>
+          <div style={{fontSize:14,fontWeight:700,color:clr(pcts[sel])}}>{fmtP(pcts[sel])}</div>
           {pnls&&<div style={{fontSize:11,color:clr(pnls[sel]),marginTop:2}}>
             {pnls[sel]>=0?"+":""}€{fmt(Math.abs(pnls[sel]))}
           </div>}
@@ -1445,14 +1445,14 @@ function Donut({data,size=160,ri=30,label,sub}){
 const SC=({label,val,color,sub,small})=>(
   <div style={{background:C.bg2,borderRadius:10,padding:"10px 12px",border:`1px solid ${C.border}`}}>
     <div style={{fontSize:9,color:C.gray,marginBottom:3,textTransform:"uppercase",letterSpacing:.5}}>{label}</div>
-    <div style={{fontSize:small?13:16,fontWeight:800,color:color||C.text,lineHeight:1.1}}>{val}</div>
+    <div style={{fontSize:small?13:16,fontWeight:600,color:color||C.text,lineHeight:1.1}}>{val}</div>
     {sub&&<div style={{fontSize:10,color:C.text3,marginTop:2}}>{sub}</div>}
   </div>
 );
 const SH=({label,right,color})=>(
   <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8,marginTop:16}}>
-    <span style={{fontSize:10,fontWeight:800,color:color||C.gray,textTransform:"uppercase",letterSpacing:.8}}>{label}</span>
-    {right&&<span style={{fontSize:13,fontWeight:800,color:color||C.text}}>{right}</span>}
+    <span style={{fontSize:10,fontWeight:600,color:color||C.gray,textTransform:"uppercase",letterSpacing:.8}}>{label}</span>
+    {right&&<span style={{fontSize:13,fontWeight:600,color:color||C.text}}>{right}</span>}
   </div>
 );
 const crd=(x={})=>({
@@ -1484,7 +1484,7 @@ const Modal=({title,onClose,children})=>(
   <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.82)",display:"flex",alignItems:"flex-end",justifyContent:"center",zIndex:300}}>
     <div style={{background:C.bg1,borderRadius:"20px 20px 0 0",width:"100%",maxWidth:430,maxHeight:"92vh",overflowY:"auto",padding:"20px 20px 48px"}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:18}}>
-        <span style={{fontSize:16,fontWeight:800}}>{title}</span>
+        <span style={{fontSize:16,fontWeight:600}}>{title}</span>
         <button onClick={onClose} style={{background:C.bg2,border:`1px solid ${C.border}`,borderRadius:8,width:32,height:32,color:C.text2,fontSize:18,cursor:"pointer"}}>×</button>
       </div>
       {children}
@@ -1508,7 +1508,7 @@ const FS=({label,value,onChange,options})=>(
   </div>
 );
 const Btn=({label,onClick,color,full,outline})=>(
-  <button onClick={onClick} style={{background:outline?"transparent":(color||C.btc),border:`1px solid ${color||C.btc}`,borderRadius:10,padding:"12px 20px",color:outline?(color||C.btc):"#000",fontWeight:800,fontSize:13,cursor:"pointer",width:full?"100%":"auto",marginBottom:full?8:0}}>{label}</button>
+  <button onClick={onClick} style={{background:outline?"transparent":(color||C.btc),border:`1px solid ${color||C.btc}`,borderRadius:10,padding:"12px 20px",color:outline?(color||C.btc):"#000",fontWeight:600,fontSize:13,cursor:"pointer",width:full?"100%":"auto",marginBottom:full?8:0}}>{label}</button>
 );
 
 /* ═══════════════════════════════════════════════════════════
@@ -1828,7 +1828,7 @@ function TickerModal({ ticker, cat="", eur=false, usdEur=0.86, onClose }) {
           )}
           {kpis.length>0 && (
             <div style={{marginTop:10,background:C.bg1,border:`1px solid ${C.border}`,borderRadius:10,padding:"8px 10px"}}>
-              <div style={{fontSize:10,fontWeight:800,color:C.btc,marginBottom:6,letterSpacing:.4}}>INDICATEURS CLÉS</div>
+              <div style={{fontSize:10,fontWeight:600,color:C.btc,marginBottom:6,letterSpacing:.4}}>INDICATEURS CLÉS</div>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"5px 12px"}}>
                 {kpis.map((k,i)=>(
                   <div key={i} style={{display:"flex",justifyContent:"space-between",fontSize:11}}>
@@ -1862,7 +1862,7 @@ function TickerModal({ ticker, cat="", eur=false, usdEur=0.86, onClose }) {
                 );
                 return null;
               })()}
-              <span style={{fontSize:22,fontWeight:900,color:C.text,letterSpacing:-0.5}}>{ticker}</span>
+              <span style={{fontSize:22,fontWeight:700,color:C.text,letterSpacing:-0.5}}>{ticker}</span>
               {isCrypto && data?.rank && (
                 <span style={{fontSize:12,fontWeight:700,color:C.btc,background:C.btc+"22",
                   borderRadius:6,padding:"2px 7px",flexShrink:0}}>#{data.rank}</span>
@@ -1982,7 +1982,7 @@ function TickerModal({ ticker, cat="", eur=false, usdEur=0.86, onClose }) {
           {/* Prix live + P&L 1d */}
           {!loading && !err && price != null && (
             <div style={{display:"flex",alignItems:"baseline",gap:10,marginBottom:10,flexWrap:"wrap"}}>
-              <span style={{fontSize:28,fontWeight:900,color:C.text,letterSpacing:-1}}>
+              <span style={{fontSize:28,fontWeight:700,color:C.text,letterSpacing:-1}}>
                 {fmtPriceV(priceDisp)}
               </span>
               {pnl1d != null && (
@@ -2262,12 +2262,12 @@ function SectionRow({section, open, onToggle, hidden=false, eur=false, usdEur=0.
         {/* Name + bar */}
         <div style={{flex:1, textAlign:"left"}}>
           <div style={{display:"flex", justifyContent:"space-between", alignItems:"center"}}>
-            <span style={{fontSize:14, fontWeight:800, color: open ? color : C.text}}>{n}</span>
+            <span style={{fontSize:14, fontWeight:600, color: open ? color : C.text}}>{n}</span>
             <div style={{display:"flex", alignItems:"center", gap:8}}>
               <span style={{fontSize:11,fontWeight:700,color:totalPnl>=0?C.green:C.red}}>
                 {msk(fmtP2(totalPnl),hidden)}
               </span>
-              <span style={{fontSize:14,fontWeight:800,color:C.text}}>
+              <span style={{fontSize:14,fontWeight:600,color:C.text}}>
                 {msk(fmtV(totalUSD),hidden)}
               </span>
             </div>
@@ -2360,13 +2360,13 @@ function SectionRow({section, open, onToggle, hidden=false, eur=false, usdEur=0.
                     </div>
                     {/* Droite : valeur + P&L */}
                     <div style={{textAlign:"right",flexShrink:0}}>
-                      <div style={{fontSize:13,fontWeight:800,color:C.text}}>
+                      <div style={{fontSize:13,fontWeight:600,color:C.text}}>
                         {hidden?"***":(item.valUSD===0?"$0":fmtV(item.valUSD))}
                       </div>
 
                       {item.pnl!==undefined&&item.pnl!==null&&(
                         <div style={{display:"flex",alignItems:"center",justifyContent:"flex-end",gap:4,marginTop:2}}>
-                          <span style={{fontSize:11,fontWeight:800,color:item.pnl>=0?C.green:C.red}}>
+                          <span style={{fontSize:11,fontWeight:600,color:item.pnl>=0?C.green:C.red}}>
                             {hidden?"***":fmtP2(item.pnl)}
                           </span>
                           {pnlPct!==null&&(
@@ -2551,7 +2551,7 @@ function GdbCompareChart({eur, setEur, EFF, tf, setTF, onSparkData, chartData, l
         {/* Bouton € / $ */}
         {setEur&&(
           <button onClick={()=>setEur(!eur)} style={{
-            padding:"4px 7px",borderRadius:6,fontSize:10,fontWeight:800,
+            padding:"4px 7px",borderRadius:6,fontSize:10,fontWeight:600,
             border:`1px solid ${eur?C.btc:C.border}`,cursor:"pointer",
             background:eur?C.btc+"22":"transparent",
             color:eur?C.btc:C.gray,
@@ -2571,7 +2571,7 @@ function GdbCompareChart({eur, setEur, EFF, tf, setTF, onSparkData, chartData, l
           boxShadow:"0 6px 24px rgba(0,0,0,.85)",
           pointerEvents:"none",
         }}>
-          <div style={{fontSize:11,color:"#fff",fontWeight:800,width:"100%",textAlign:"center",marginBottom:1}}>
+          <div style={{fontSize:11,color:"#fff",fontWeight:600,width:"100%",textAlign:"center",marginBottom:1}}>
             {fmtDate(hDate)}
           </div>
           {[
@@ -2584,7 +2584,7 @@ function GdbCompareChart({eur, setEur, EFF, tf, setTF, onSparkData, chartData, l
                 <div style={{width:8,height:8,borderRadius:2,background:x.color}}/>
                 <span style={{fontSize:10,color:C.text2}}>{x.label}</span>
               </div>
-              <span style={{fontSize:13,fontWeight:800,color:x.color}}>{x.val}</span>
+              <span style={{fontSize:13,fontWeight:600,color:x.color}}>{x.val}</span>
               {x.sub&&<span style={{fontSize:9,color:C.gray}}>{x.sub}</span>}
             </div>
           ))}
@@ -2665,7 +2665,7 @@ function GdbCompareChart({eur, setEur, EFF, tf, setTF, onSparkData, chartData, l
         padding:"12px 16px", flexShrink:0,
         background:C.bg1, borderBottom:`1px solid ${C.border}`,
       }}>
-        <span style={{fontSize:14, fontWeight:800, color:C.btc}}>CGIC · CGIS · Patrimoine</span>
+        <span style={{fontSize:14, fontWeight:600, color:C.btc}}>CGIC · CGIS · Patrimoine</span>
         <button onClick={()=>setFull(false)} style={{
           background:C.bg2, border:`1px solid ${C.border}`,
           borderRadius:8, padding:"6px 14px",
@@ -2799,7 +2799,7 @@ function PerfStrip({eur, EFF}){
             border:`1px solid ${C.border}`, textAlign:"center",
           }}>
             <div style={{fontSize:8,color:C.gray,marginBottom:2}}>{c.label}</div>
-            <div style={{fontSize:11,fontWeight:800,color:clr(c.pnl),letterSpacing:-.3}}>
+            <div style={{fontSize:11,fontWeight:600,color:clr(c.pnl),letterSpacing:-.3}}>
               {c.pnl>=0?"+":""}{cur}{fmtK(Math.abs(c.pnl))}
             </div>
             <div style={{
@@ -2819,7 +2819,7 @@ function PerfStrip({eur, EFF}){
           }}>
             <div style={{flex:1}}>
               <div style={{fontSize:9,color:C.gray,marginBottom:1}}>{g.label}</div>
-              <div style={{fontSize:14,fontWeight:800,color:g.color}}>{gcCur}{g.price}</div>
+              <div style={{fontSize:14,fontWeight:600,color:g.color}}>{gcCur}{g.price}</div>
             </div>
             <div style={{display:"flex",flexDirection:"column",gap:1,alignItems:"flex-end"}}>
               {[["1J",g.d],["1S",g.w],["1M",g.m]].map(([tf,v])=>(
@@ -2852,8 +2852,8 @@ function KpiBlock({label, pnl, pct, unit="€", val, sub, color}){
     }}>
       <div style={{fontSize:9, color:C.gray, textTransform:"uppercase", letterSpacing:.5}}>{label}</div>
       {val!=null
-        ? <div style={{fontSize:14, fontWeight:800, color}}>{val}</div>
-        : <div style={{fontSize:14, fontWeight:800, color:c}}>
+        ? <div style={{fontSize:14, fontWeight:600, color}}>{val}</div>
+        : <div style={{fontSize:14, fontWeight:600, color:c}}>
             {(pnl??0)>=0?"+":""}{unit}{fmtK(Math.abs(pnl??0))}
           </div>
       }
@@ -2880,7 +2880,7 @@ function GdbBlock({label, price, d, w, m, color}){
       border:`1px solid ${C.border}`,
     }}>
       <div style={{fontSize:9, color:C.gray, textTransform:"uppercase", letterSpacing:.5, marginBottom:3}}>{label}</div>
-      <div style={{fontSize:15, fontWeight:800, color, marginBottom:5}}>${price.toFixed(2)}</div>
+      <div style={{fontSize:15, fontWeight:600, color, marginBottom:5}}>${price.toFixed(2)}</div>
       <div style={{display:"flex", flexDirection:"column", gap:2}}>
         {rows.map(([tf,v])=>(
           <div key={tf} style={{display:"flex", justifyContent:"space-between", alignItems:"center"}}>
@@ -3112,7 +3112,7 @@ function TickerIcon({ ticker, size=32, color="#ffffff22", onIconSaved, iconDbVer
           background:"#00000088",
         }}>
           <div style={{background:C.bg2,borderRadius:16,padding:"20px 18px",width:280,border:`1px solid ${C.border}`,boxShadow:"0 8px 32px #0008"}}>
-            <div style={{fontSize:13,fontWeight:800,color:C.text,marginBottom:14}}>
+            <div style={{fontSize:13,fontWeight:600,color:C.text,marginBottom:14}}>
               Icône — <span style={{color:C.btc,fontFamily:C.font}}>{ticker}</span>
             </div>
 
@@ -3160,7 +3160,7 @@ function TickerIcon({ ticker, size=32, color="#ffffff22", onIconSaved, iconDbVer
                 <button
                   onClick={()=>{ if(userInput.trim()) saveIcon({user:userInput.trim()}); }}
                   disabled={!userInput.trim()||saving}
-                  style={{padding:"6px 8px",borderRadius:8,background:C.btc,border:"none",cursor:"pointer",fontSize:10,fontWeight:800,color:"#000",opacity:userInput.trim()?1:0.4,flexShrink:0,whiteSpace:"nowrap"}}
+                  style={{padding:"6px 8px",borderRadius:8,background:C.btc,border:"none",cursor:"pointer",fontSize:10,fontWeight:600,color:"#000",opacity:userInput.trim()?1:0.4,flexShrink:0,whiteSpace:"nowrap"}}
                 >
                   {saving?"…":"✓"}
                 </button>
@@ -3646,9 +3646,9 @@ function PageAllocation({hidden, EFF, eur=false, setEur, iconDbVersion=0, bumpIc
     <>
     <div>
       {/* ── View selector — 2 onglets ── */}
-      <div style={{display:"flex",gap:4,background:C.bg1,borderRadius:10,padding:4,marginBottom:14}}>
+      <div style={{display:"flex",gap:4,background:C.bg2,borderRadius:10,padding:4,marginBottom:14,border:`1px solid ${C.border}`}}>
         {[["detail","Détail"],["ajust","Allocation"]].map(([v,l])=>(
-          <button key={v} onClick={()=>setMode(v)} style={{flex:1,padding:"7px 0",borderRadius:7,fontSize:11,fontWeight:700,border:"none",cursor:"pointer",background:mode===v?C.blue:"transparent",color:mode===v?"#fff":C.gray}}>{l}</button>
+          <button key={v} onClick={()=>setMode(v)} style={{flex:1,padding:"7px 0",borderRadius:7,fontSize:11,fontWeight:600,letterSpacing:.5,border:"none",cursor:"pointer",background:mode===v?C.gold:"transparent",color:mode===v?C.bg:C.text3,transition:"background .15s,color .15s"}}>{l}</button>
         ))}
       </div>
 
@@ -3693,7 +3693,7 @@ function PageAllocation({hidden, EFF, eur=false, setEur, iconDbVersion=0, bumpIc
                 <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:7}}>
                   <div style={{width:9,height:9,borderRadius:2,background:a.c||s.color,flexShrink:0}}/>
                   <span style={{fontSize:13,fontWeight:700,flex:1}}>{s.n}</span>
-                  <span style={{fontSize:12,fontWeight:800}}>{(eur?"€":"$")+fmt(eur?Math.round(s.totalUSD*_src.usdEur):s.totalUSD)}</span>
+                  <span style={{fontSize:12,fontWeight:600}}>{(eur?"€":"$")+fmt(eur?Math.round(s.totalUSD*_src.usdEur):s.totalUSD)}</span>
                 </div>
                 <div style={{position:"relative",height:14,background:C.bg3,borderRadius:4,marginBottom:5,overflow:"hidden"}}>
                   <div style={{position:"absolute",left:0,top:0,height:"100%",width:Math.min(a.tgt/65*100,100)+"%",background:a.c||s.color,opacity:.2,borderRadius:4}}/>
@@ -3702,7 +3702,7 @@ function PageAllocation({hidden, EFF, eur=false, setEur, iconDbVersion=0, bumpIc
                 <div style={{display:"flex",justifyContent:"space-between"}}>
                   <span style={{fontSize:10,color:C.gray}}>Réel <b style={{color:a.c||s.color}}>{_ap.toFixed(1)}%</b></span>
                   <span style={{fontSize:10,color:C.gray}}>Cible <b style={{color:C.text2}}>{a.tgt}%</b></span>
-                  <span style={{fontSize:10,fontWeight:800,color:Math.abs(diff)<1?C.green:diff>0?C.orange:C.blue}}>
+                  <span style={{fontSize:10,fontWeight:600,color:Math.abs(diff)<1?C.green:diff>0?C.orange:C.blue}}>
                     {diff>=0?"+":""}{diff.toFixed(1)}% → {diff>0?"Vendre":"Achat"} {(eur?"€":"$")+fmt(Math.abs(adjDisp))}
                   </span>
                 </div>
@@ -3711,7 +3711,7 @@ function PageAllocation({hidden, EFF, eur=false, setEur, iconDbVersion=0, bumpIc
           })}
           {/* Plan d'action résumé */}
           <div style={{background:C.bg2,borderRadius:12,padding:14,border:`1px solid ${C.border}`,marginTop:4}}>
-            <div style={{fontSize:10,color:C.gray,marginBottom:10,fontWeight:800,textTransform:"uppercase",letterSpacing:.5}}>Plan d'action</div>
+            <div style={{fontSize:10,color:C.gray,marginBottom:10,fontWeight:600,textTransform:"uppercase",letterSpacing:.5}}>Plan d'action</div>
             {SECTIONS.filter(function(s){
               var allocName=SECT_TO_ALLOC[s.n]||s.n;
               var a=allocByName[allocName]||{tgt:0};
@@ -3730,7 +3730,7 @@ function PageAllocation({hidden, EFF, eur=false, setEur, iconDbVersion=0, bumpIc
                     <span style={{fontSize:12,fontWeight:600}}>{s.n}</span>
                   </div>
                   <div style={{textAlign:"right"}}>
-                    <div style={{fontSize:12,fontWeight:800,color:diff>0?C.orange:C.blue}}>
+                    <div style={{fontSize:12,fontWeight:600,color:diff>0?C.orange:C.blue}}>
                       {diff>0?"Vendre":"Acheter"} {(eur?"€":"$")+fmt(Math.abs(eur?adjEUR:adjUSD))}
                     </div>
                     <div style={{fontSize:10,color:C.gray}}>
@@ -3763,7 +3763,7 @@ function PageAllocation({hidden, EFF, eur=false, setEur, iconDbVersion=0, bumpIc
                 <div style={{flex:1,display:"flex",flexDirection:"column",gap:6}}>
                   {selSec ? (
                     <>
-                      <div style={{fontSize:10,fontWeight:800,color:selSec.color,marginBottom:4,textTransform:"uppercase",letterSpacing:.5}}>
+                      <div style={{fontSize:10,fontWeight:600,color:selSec.color,marginBottom:4,textTransform:"uppercase",letterSpacing:.5}}>
                         {selSec.n}
                       </div>
                       {selSec.items.slice(0,7).map((item,i)=>{
@@ -3779,7 +3779,7 @@ function PageAllocation({hidden, EFF, eur=false, setEur, iconDbVersion=0, bumpIc
                               <span style={{fontSize:10,color:C.text,fontWeight:600}}>{name}</span>
                             </div>
                             <div style={{textAlign:"right"}}>
-                              <div style={{fontSize:10,fontWeight:800,color:selSec.color}}>{pct.toFixed(1)}%</div>
+                              <div style={{fontSize:10,fontWeight:600,color:selSec.color}}>{pct.toFixed(1)}%</div>
                               <div style={{fontSize:9,color:C.text3,fontWeight:600}}>{cur2+fmtK(cvD(valUSD))}</div>
                             </div>
                           </div>
@@ -3798,7 +3798,7 @@ function PageAllocation({hidden, EFF, eur=false, setEur, iconDbVersion=0, bumpIc
                             <span style={{fontSize:11,color:C.text,fontWeight:600}}>{s.n}</span>
                           </div>
                           <div style={{textAlign:"right"}}>
-                            <div style={{fontSize:11,fontWeight:800,color:s.color}}>{s.pct.toFixed(1)}%</div>
+                            <div style={{fontSize:11,fontWeight:600,color:s.color}}>{s.pct.toFixed(1)}%</div>
                             <div style={{fontSize:9,color:clr(secPnl)}}>{secPnl>=0?"+":""}{cur2+fmtK(Math.abs(cvD(secPnl)))}</div>
                           </div>
                         </div>
@@ -3851,12 +3851,12 @@ function PageAllocation({hidden, EFF, eur=false, setEur, iconDbVersion=0, bumpIc
                 }}>
                   <div>
                     <div style={{fontSize:10,color:C.gray,marginBottom:3,textTransform:"uppercase",letterSpacing:.5}}>Total portefeuille</div>
-                    <div style={{fontSize:28,fontWeight:900,letterSpacing:-1,color:C.green}}>{msk(cur2+fmt(totalDisplay),hidden)}</div>
+                    <div style={{fontSize:28,fontWeight:700,letterSpacing:-1,color:C.green}}>{msk(cur2+fmt(totalDisplay),hidden)}</div>
                     <div style={{fontSize:13,color:C.gray,marginTop:2}}>{msk(eur?"$"+fmt(totalUSD):"€"+fmt(totalEUR),hidden)}</div>
                   </div>
                   <div style={{textAlign:"right"}}>
                     <div style={{fontSize:10,color:C.gray,marginBottom:3,textTransform:"uppercase",letterSpacing:.5}}>P&L positions</div>
-                    <div style={{fontSize:22,fontWeight:800,color:clr(sectionsPnl)}}>{hidden?"***":(sectionsPnl>=0?"+":"")+cur2+fmtK(Math.abs(eur?Math.round(sectionsPnl*(_src.usdEur||0.852)):sectionsPnl))}</div>
+                    <div style={{fontSize:22,fontWeight:600,color:clr(sectionsPnl)}}>{hidden?"***":(sectionsPnl>=0?"+":"")+cur2+fmtK(Math.abs(eur?Math.round(sectionsPnl*(_src.usdEur||0.852)):sectionsPnl))}</div>
                     <div style={{
                       fontSize:12,fontWeight:700,color:clr(sectionsPnl),
                       background:clr(sectionsPnl)+"22",borderRadius:6,padding:"2px 8px",
@@ -3894,7 +3894,7 @@ function PageAllocation({hidden, EFF, eur=false, setEur, iconDbVersion=0, bumpIc
                       {boxes.map((b,i)=>(
                         <div key={i} style={{background:C.bg2,padding:"10px 12px",textAlign:"center"}}>
                           <div style={{fontSize:9,color:C.gray,marginBottom:3}}>{b.label}</div>
-                          <div style={{fontSize:13,fontWeight:800,color:b.c}}>{hidden?"***":b.val}</div>
+                          <div style={{fontSize:13,fontWeight:600,color:b.c}}>{hidden?"***":b.val}</div>
                         </div>
                       ))}
                     </div>
@@ -4197,7 +4197,7 @@ function PageStats({chartData, hidden=false, EFF, eur=false, liveDD, src, liveIn
           ].map(([l,v,c])=>(
             <div key={l} style={{background:C.bg1,borderRadius:8,padding:"8px 6px",border:`1px solid ${C.border}`,textAlign:"center"}}>
               <div style={{fontSize:8,color:C.gray,marginBottom:3}}>{l}</div>
-              <div style={{fontSize:11,fontWeight:800,color:c}}>{msk(v,hidden)}</div>
+              <div style={{fontSize:11,fontWeight:600,color:c}}>{msk(v,hidden)}</div>
             </div>
           ))}
         </div>
@@ -4294,7 +4294,7 @@ function PageStats({chartData, hidden=false, EFF, eur=false, liveDD, src, liveIn
                     </tr>
                   );
                 })}
-                <tr style={{borderTop:`1px solid ${C.border}`,fontWeight:800}}>
+                <tr style={{borderTop:`1px solid ${C.border}`,fontWeight:600}}>
                   {(()=>{
                     // BOM = premier mois converti
                     const firstI = data.bom?.findIndex(v=>v!=null) ?? -1;
@@ -4313,7 +4313,7 @@ function PageStats({chartData, hidden=false, EFF, eur=false, liveDD, src, liveIn
                       <td style={{padding:"5px 6px",textAlign:"right",color:C.text,fontSize:9}}>{ttlEOM!=null?msk(cur+Math.round(ttlEOM).toLocaleString("fr-FR"),hidden):"—"}</td>
                       <td style={{padding:"5px 6px",textAlign:"right",color:ttlInv2?C.teal:C.text3,fontSize:9}}>{ttlInv2?msk((ttlInv2>0?"+":"")+Math.round(ttlInv2).toLocaleString("fr-FR")+cur,hidden):"—"}</td>
                       <td style={{padding:"5px 6px",textAlign:"right",color:bclr(ttlPnlY),fontSize:9}}>{msk((ttlPnlY>=0?"+":"")+Math.round(ttlPnlY).toLocaleString("fr-FR"),hidden)}</td>
-                      <td style={{padding:"5px 6px",textAlign:"right",color:bclr(ttlPctY),fontSize:9,fontWeight:800}}>{fmtP(ttlPctY)}</td>
+                      <td style={{padding:"5px 6px",textAlign:"right",color:bclr(ttlPctY),fontSize:9,fontWeight:600}}>{fmtP(ttlPctY)}</td>
                     </>);
                   })()}
                 </tr>
@@ -4493,7 +4493,7 @@ function GdbCompareChartGDB({onTFChange, liveGSB, liveGDBS, liveBench, liveGC}){
           boxShadow:"0 6px 24px rgba(0,0,0,.85)",
           pointerEvents:"none",
         }}>
-          <div style={{fontSize:10,color:"#fff",fontWeight:800,width:"100%",textAlign:"center",marginBottom:2}}>
+          <div style={{fontSize:10,color:"#fff",fontWeight:600,width:"100%",textAlign:"center",marginBottom:2}}>
             {fmtDate(hDate)}
           </div>
           {SERIES.map(({vals,col,lbl})=>{
@@ -4506,7 +4506,7 @@ function GdbCompareChartGDB({onTFChange, liveGSB, liveGDBS, liveBench, liveGC}){
                   <div style={{width:7,height:7,borderRadius:2,background:col}}/>
                   <span style={{fontSize:8,color:C.text2}}>{lbl}</span>
                 </div>
-                <span style={{fontSize:11,fontWeight:800,color:perf>=0?C.green:C.red}}>{perf>=0?"+":""}{perf.toFixed(1)}%</span>
+                <span style={{fontSize:11,fontWeight:600,color:perf>=0?C.green:C.red}}>{perf>=0?"+":""}{perf.toFixed(1)}%</span>
               </div>
             );
           })}
@@ -4561,7 +4561,7 @@ function GdbCompareChartGDB({onTFChange, liveGSB, liveGDBS, liveBench, liveGC}){
       display:"flex",flexDirection:"column",
     }}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 16px",background:C.bg1,borderBottom:`1px solid ${C.border}`,flexShrink:0}}>
-        <span style={{fontSize:13,fontWeight:800,color:C.btc}}>CGIC · CGIS · Benchmarks</span>
+        <span style={{fontSize:13,fontWeight:600,color:C.btc}}>CGIC · CGIS · Benchmarks</span>
         <button onClick={()=>setFull(false)} style={{background:C.bg2,border:`1px solid ${C.border}`,borderRadius:8,padding:"6px 14px",color:C.text,fontSize:12,fontWeight:700,cursor:"pointer"}}>✕</button>
       </div>
       <div style={{flex:1,overflowY:"auto",padding:"12px 16px"}}>{chartBody}</div>
@@ -4626,10 +4626,10 @@ function FondCard({label, cours, qty, fonds, color, perfs, hidden, eur, usdEur, 
 
       {/* Cours + perf création */}
       <div style={{display:"flex",alignItems:"flex-end",justifyContent:"space-between",marginBottom:16}}>
-        <div style={{fontSize:26,fontWeight:900,color,letterSpacing:-1,lineHeight:1}}>
+        <div style={{fontSize:26,fontWeight:700,color,letterSpacing:-1,lineHeight:1}}>
           {msk(affCours, hidden)}
         </div>        <div style={{textAlign:"right"}}>
-          <div style={{fontSize:14,fontWeight:800,color:pUp?C.green:C.red}}>
+          <div style={{fontSize:14,fontWeight:600,color:pUp?C.green:C.red}}>
             {fmtP(perfCreation)}
           </div>
           <div style={{fontSize:9,color:C.gray,letterSpacing:.3}}>depuis création</div>
@@ -4643,11 +4643,11 @@ function FondCard({label, cours, qty, fonds, color, perfs, hidden, eur, usdEur, 
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:0,marginBottom:14}}>
         <div>
           <div style={{fontSize:8,color:C.gray,letterSpacing:1.5,textTransform:"uppercase",marginBottom:4}}>Fonds</div>
-          <div style={{fontSize:17,fontWeight:800,color:C.text}}>{msk(affFonds, hidden)}</div>
+          <div style={{fontSize:17,fontWeight:600,color:C.text}}>{msk(affFonds, hidden)}</div>
         </div>
         <div style={{textAlign:"right"}}>
           <div style={{fontSize:8,color:C.gray,letterSpacing:1.5,textTransform:"uppercase",marginBottom:4}}>Parts</div>
-          <div style={{fontSize:17,fontWeight:800,color:C.text}}>{msk(Math.round(qty).toLocaleString("fr-FR"), hidden)}</div>
+          <div style={{fontSize:17,fontWeight:600,color:C.text}}>{msk(Math.round(qty).toLocaleString("fr-FR"), hidden)}</div>
         </div>
       </div>
 
@@ -4659,7 +4659,7 @@ function FondCard({label, cours, qty, fonds, color, perfs, hidden, eur, usdEur, 
             border:`1px solid ${C.border}`,
           }}>
             <div style={{fontSize:9,color:C.gray,marginBottom:3,letterSpacing:.5}}>{l}</div>
-            <div style={{fontSize:13,fontWeight:800,color:v!=null?clr(v):C.gray}}>
+            <div style={{fontSize:13,fontWeight:600,color:v!=null?clr(v):C.gray}}>
               {v!=null?fmtP(v):"—"}
             </div>
           </div>
@@ -4720,23 +4720,23 @@ function FondDetailModal({fond, EFF, liveInv, liveDD, liveGC, eur, onClose}){
       <div onClick={function(e){e.stopPropagation();}} style={{background:C.bg1,borderRadius:"20px 20px 0 0",padding:"22px 18px 32px",width:"100%",maxWidth:460,maxHeight:"88vh",overflowY:"auto",border:`1px solid ${C.border}`}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16}}>
           <div>
-            <div style={{fontSize:18,fontWeight:900,color:color}}>{fond}</div>
+            <div style={{fontSize:18,fontWeight:700,color:color}}>{fond}</div>
             <div style={{fontSize:12,color:C.text3,marginTop:2}}>{isC?"Crypto":"Actions"} · {Math.round(totalParts).toLocaleString("fr-FR")} parts</div>
           </div>
           <div style={{textAlign:"right"}}>
-            <div style={{fontSize:18,fontWeight:800,color:C.text}}>{fmtE(valueNow)}</div>
+            <div style={{fontSize:18,fontWeight:600,color:C.text}}>{fmtE(valueNow)}</div>
             <div style={{fontSize:11,color:C.text3}}>cours {"\u20ac"}{coursEur.toFixed(4)}</div>
           </div>
         </div>
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:14}}>
           <div style={{background:(pnlUp?C.green:C.red)+"15",border:`1px solid ${(pnlUp?C.green:C.red)}40`,borderRadius:12,padding:"12px 14px"}}>
             <div style={{fontSize:10,color:C.text3,textTransform:"uppercase",letterSpacing:1}}>P&L latent</div>
-            <div style={{fontSize:20,fontWeight:900,color:pnlUp?C.green:C.red}}>{pnlUp?"+":""}{fmtE(pnl)}</div>
+            <div style={{fontSize:20,fontWeight:700,color:pnlUp?C.green:C.red}}>{pnlUp?"+":""}{fmtE(pnl)}</div>
             <div style={{fontSize:12,fontWeight:700,color:pnlUp?C.green:C.red}}>{pnlUp?"+":""}{(pnlPct*100).toFixed(1)}%</div>
           </div>
           <div style={{background:C.bg2,borderRadius:12,padding:"12px 14px"}}>
             <div style={{fontSize:10,color:C.text3,textTransform:"uppercase",letterSpacing:1}}>Investi net · PRU</div>
-            <div style={{fontSize:20,fontWeight:900,color:C.text}}>{fmtE(netInvested)}</div>
+            <div style={{fontSize:20,fontWeight:700,color:C.text}}>{fmtE(netInvested)}</div>
             <div style={{fontSize:12,fontWeight:700,color:C.text2}}>{pru.toFixed(2)} {"\u20ac"}/part</div>
           </div>
         </div>
@@ -4761,7 +4761,7 @@ function FondDetailModal({fond, EFF, liveInv, liveDD, liveGC, eur, onClose}){
         {fs && (
           <div onClick={function(){setFs(false);}} style={{position:"fixed",inset:0,zIndex:720,background:C.bg1,display:"flex",flexDirection:"column",padding:"14px"}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
-              <div style={{fontSize:15,fontWeight:800,color:color}}>{fond} · Investi vs Valeur</div>
+              <div style={{fontSize:15,fontWeight:600,color:color}}>{fond} · Investi vs Valeur</div>
               <button onClick={function(){setFs(false);}} style={{background:C.bg2,border:`1px solid ${C.border}`,borderRadius:8,padding:"6px 12px",fontSize:13,fontWeight:700,cursor:"pointer",color:C.text}}>✕</button>
             </div>
             <div onClick={function(e){e.stopPropagation();}} style={{flex:1,display:"flex",alignItems:"center",width:"100%"}}>
@@ -4959,7 +4959,7 @@ function PageTrades({txns,onAdd,onDel,hidden=false,EFF,onTradeApplied,showAdd:sh
 
   return(
     <div>
-      <button onClick={()=>setShowAdd(true)} style={{width:"100%",background:C.green+"22",border:`1px solid ${C.green}`,borderRadius:10,padding:"11px 0",color:C.green,fontWeight:800,fontSize:13,cursor:"pointer",marginBottom:14}}>
+      <button onClick={()=>setShowAdd(true)} style={{width:"100%",background:C.green+"22",border:`1px solid ${C.green}`,borderRadius:10,padding:"11px 0",color:C.green,fontWeight:600,fontSize:13,cursor:"pointer",marginBottom:14}}>
         + Enregistrer achat / vente
       </button>
 
@@ -4974,7 +4974,7 @@ function PageTrades({txns,onAdd,onDel,hidden=false,EFF,onTradeApplied,showAdd:sh
         {Object.values(pos).map((p,i,arr)=>(
           <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 0",borderBottom:i<arr.length-1?`1px solid ${C.border}`:"none"}}>
             <div>
-              <span style={{fontSize:13,fontWeight:800,color:C.btc}}>{p.t}</span>
+              <span style={{fontSize:13,fontWeight:600,color:C.btc}}>{p.t}</span>
               {p.sq>0&&<span style={{fontSize:10,color:C.red,marginLeft:6}}>Vendu: {p.sq.toFixed(3)}</span>}
             </div>
             <div style={{textAlign:"right"}}>
@@ -4991,15 +4991,15 @@ function PageTrades({txns,onAdd,onDel,hidden=false,EFF,onTradeApplied,showAdd:sh
         return(
           <div key={t.id} style={{...crd(),display:"flex",alignItems:"center",gap:10,padding:"10px 12px"}}>
             <div style={{width:34,height:34,borderRadius:9,background:(buy?C.green:C.red)+"22",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
-              <span style={{fontSize:14,color:buy?C.green:C.red,fontWeight:800}}>{buy?"↓":"↑"}</span>
+              <span style={{fontSize:14,color:buy?C.green:C.red,fontWeight:600}}>{buy?"↓":"↑"}</span>
             </div>
             <div style={{flex:1}}>
               <div style={{display:"flex",justifyContent:"space-between"}}>
                 <div style={{display:"flex",alignItems:"center",gap:5}}>
-                  <span style={{fontSize:13,fontWeight:800}}>{t.ticker.toUpperCase()}</span>
+                  <span style={{fontSize:13,fontWeight:600}}>{t.ticker.toUpperCase()}</span>
                   <span style={{fontSize:9,color:buy?C.green:C.red,background:(buy?C.green:C.red)+"22",padding:"1px 5px",borderRadius:4,fontWeight:700}}>{t.side.toUpperCase()}</span>
                 </div>
-                <span style={{fontSize:13,fontWeight:800,color:buy?C.green:C.red}}>{hidden?"***":(buy?"-":"+")+"$"+fmt(valo)}</span>
+                <span style={{fontSize:13,fontWeight:600,color:buy?C.green:C.red}}>{hidden?"***":(buy?"-":"+")+"$"+fmt(valo)}</span>
               </div>
               <div style={{display:"flex",justifyContent:"space-between",marginTop:2}}>
                 <span style={{fontSize:10,color:C.gray}}>{t.date} · {t.qty} × {hidden?"***":"$"+fmt(t.price)}</span>
@@ -5188,7 +5188,7 @@ function TradeModal({onClose, onAdd, onTradeApplied, EFF, holders, onInvestAppli
         <div style={{padding:"8px 0"}}>
           <div style={{textAlign:"center",marginBottom:16}}>
             <div style={{fontSize:40,marginBottom:8}}>✅</div>
-            <div style={{fontSize:16,fontWeight:800,color:C.green,marginBottom:4}}>
+            <div style={{fontSize:16,fontWeight:600,color:C.green,marginBottom:4}}>
               {done.type==="trade"
                 ? (done.side==="BUY" ? "Achat enregistré" : "Vente enregistrée")
                 : done.type==="retrait" ? "Retrait effectué" : "Dépôt effectué"}
@@ -5199,7 +5199,7 @@ function TradeModal({onClose, onAdd, onTradeApplied, EFF, holders, onInvestAppli
             {done.type==="trade" ? (<>
               <div style={{display:"flex",justifyContent:"space-between"}}>
                 <span style={{fontSize:12,color:C.text2}}>Ticker</span>
-                <span style={{fontSize:13,fontWeight:800,color:C.text}}>{done.ticker}</span>
+                <span style={{fontSize:13,fontWeight:600,color:C.text}}>{done.ticker}</span>
               </div>
               <div style={{display:"flex",justifyContent:"space-between",borderTop:`1px solid ${C.border}`,paddingTop:7}}>
                 <span style={{fontSize:12,color:C.text2}}>Quantité</span>
@@ -5208,7 +5208,7 @@ function TradeModal({onClose, onAdd, onTradeApplied, EFF, holders, onInvestAppli
               <div style={{display:"flex",justifyContent:"space-between",borderTop:`1px solid ${C.border}`,paddingTop:7}}>
                 <span style={{fontSize:12,color:C.text2}}>Montant</span>
                 <div style={{textAlign:"right"}}>
-                  <div style={{fontSize:14,fontWeight:800,color:done.side==="BUY"?C.red:C.green}}>
+                  <div style={{fontSize:14,fontWeight:600,color:done.side==="BUY"?C.red:C.green}}>
                     {done.side==="BUY"?"-":"+"}${fmt(done.valoUSD)}
                   </div>
                   <div style={{fontSize:10,color:C.text3}}>{done.side==="BUY"?"-":"+"}€{fmt(done.valoEUR)}</div>
@@ -5227,11 +5227,11 @@ function TradeModal({onClose, onAdd, onTradeApplied, EFF, holders, onInvestAppli
             </>) : (<>
               <div style={{display:"flex",justifyContent:"space-between"}}>
                 <span style={{fontSize:12,color:C.text2}}>Banque</span>
-                <span style={{fontSize:13,fontWeight:800,color:C.text}}>{done.bank}</span>
+                <span style={{fontSize:13,fontWeight:600,color:C.text}}>{done.bank}</span>
               </div>
               <div style={{display:"flex",justifyContent:"space-between",borderTop:`1px solid ${C.border}`,paddingTop:7}}>
                 <span style={{fontSize:12,color:C.text2}}>Montant</span>
-                <span style={{fontSize:15,fontWeight:800,color:done.type==="retrait"?C.red:C.green}}>
+                <span style={{fontSize:15,fontWeight:600,color:done.type==="retrait"?C.red:C.green}}>
                   {done.type==="retrait"?"-":"+"}€{fmt(done.montant)}
                 </span>
               </div>
@@ -5316,7 +5316,7 @@ function TradeModal({onClose, onAdd, onTradeApplied, EFF, holders, onInvestAppli
                   border:`1.5px ${showNew ? "solid" : "dashed"} ${showNew ? C.red+"aa" : C.teal}`,
                   background: showNew ? C.red+"15" : C.teal+"18",
                   color: showNew ? C.red : C.teal,
-                  fontSize:13, fontWeight:800,
+                  fontSize:13, fontWeight:600,
                   display:"flex", alignItems:"center", justifyContent:"center", gap:8,
                   letterSpacing:0.2,
                 }}>
@@ -5408,7 +5408,7 @@ function TradeModal({onClose, onAdd, onTradeApplied, EFF, holders, onInvestAppli
                     <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
                       <span style={{fontSize:12,color:C.gray}}>Valorisation</span>
                       <div style={{textAlign:"right"}}>
-                        <span style={{fontSize:14,fontWeight:800,color:col}}>{sign}${fmt(valoUSD)}</span>
+                        <span style={{fontSize:14,fontWeight:600,color:col}}>{sign}${fmt(valoUSD)}</span>
                         <span style={{fontSize:10,color:C.gray,marginLeft:6}}>{sign}€{fmt(valoEUR)}</span>
                       </div>
                     </div>
@@ -5474,7 +5474,7 @@ function TradeModal({onClose, onAdd, onTradeApplied, EFF, holders, onInvestAppli
               <div style={{background:C.bg3,borderRadius:8,padding:"10px 12px",marginBottom:14}}>
                 <div style={{display:"flex",justifyContent:"space-between",marginBottom:5}}>
                   <span style={{fontSize:12,color:C.gray}}>{isRetrait?"Retrait":"Dépôt"}</span>
-                  <span style={{fontSize:14,fontWeight:800,color:col}}>{sign}€{fmt(montant)}</span>
+                  <span style={{fontSize:14,fontWeight:600,color:col}}>{sign}€{fmt(montant)}</span>
                 </div>
                 <div style={{display:"flex",justifyContent:"space-between",paddingBottom:4,borderBottom:`1px solid ${C.border}`}}>
                   <span style={{fontSize:11,color:C.gray}}>{depot.bank} après</span>
@@ -5517,7 +5517,7 @@ function TradeModal({onClose, onAdd, onTradeApplied, EFF, holders, onInvestAppli
                 }}>
                   <div style={{textAlign:"center",marginBottom:20}}>
                     <div style={{fontSize:36,marginBottom:8}}>{isRetrait?"⬆":"⬇"}</div>
-                    <div style={{fontSize:16,fontWeight:800,color:C.text}}>
+                    <div style={{fontSize:16,fontWeight:600,color:C.text}}>
                       Confirmer le {isRetrait?"retrait":"dépôt"}
                     </div>
                     <div style={{fontSize:13,color:C.text3,marginTop:4}}>{depot.bank}</div>
@@ -5528,7 +5528,7 @@ function TradeModal({onClose, onAdd, onTradeApplied, EFF, holders, onInvestAppli
                     background:col+"15",border:`1px solid ${col}40`,
                     borderRadius:12,padding:"16px",textAlign:"center",marginBottom:16,
                   }}>
-                    <div style={{fontSize:32,fontWeight:900,color:col,letterSpacing:-1}}>
+                    <div style={{fontSize:32,fontWeight:700,color:col,letterSpacing:-1}}>
                       {isRetrait?"-":"+"}€{fmt(montant)}
                     </div>
                     {depot.note&&<div style={{fontSize:11,color:C.text3,marginTop:4}}>{depot.note}</div>}
@@ -5543,7 +5543,7 @@ function TradeModal({onClose, onAdd, onTradeApplied, EFF, holders, onInvestAppli
                     </div>
                     <div style={{display:"flex",justifyContent:"space-between",padding:"5px 0",borderTop:`1px solid ${C.border}`}}>
                       <span style={{fontSize:12,fontWeight:700,color:C.text2}}>{depot.bank} après</span>
-                      <span style={{fontSize:13,fontWeight:800,color:after<0?C.red:C.green}}>€{fmt(after)}</span>
+                      <span style={{fontSize:13,fontWeight:600,color:after<0?C.red:C.green}}>€{fmt(after)}</span>
                     </div>
                     <div style={{display:"flex",justifyContent:"space-between",padding:"5px 0",borderTop:`1px solid ${C.border}`}}>
                       <span style={{fontSize:12,color:C.text2}}>Cash Matelas total</span>
@@ -5625,11 +5625,11 @@ function TradeModal({onClose, onAdd, onTradeApplied, EFF, holders, onInvestAppli
                 <div onClick={e=>e.stopPropagation()} style={{background:C.bg1,borderRadius:"20px 20px 0 0",padding:"24px 20px 36px",width:"100%",maxWidth:430,border:`1px solid ${C.border}`}}>
                   <div style={{textAlign:"center",marginBottom:20}}>
                     <div style={{fontSize:36,marginBottom:8}}>{isIn?"📈":"📉"}</div>
-                    <div style={{fontSize:16,fontWeight:800,color:C.text}}>Confirmer {isIn?"l'investissement":"le désinvestissement"}</div>
+                    <div style={{fontSize:16,fontWeight:600,color:C.text}}>Confirmer {isIn?"l'investissement":"le désinvestissement"}</div>
                     <div style={{fontSize:13,color:C.text3,marginTop:4}}>{invest.fonds} · {holderR}</div>
                   </div>
                   <div style={{background:col+"15",border:`1px solid ${col}40`,borderRadius:12,padding:"16px",textAlign:"center",marginBottom:16}}>
-                    <div style={{fontSize:32,fontWeight:900,color:col,letterSpacing:-1}}>{isIn?"+":"-"}{fmt(montant)}</div>
+                    <div style={{fontSize:32,fontWeight:700,color:col,letterSpacing:-1}}>{isIn?"+":"-"}{fmt(montant)}</div>
                     <div style={{fontSize:11,color:C.text3,marginTop:2}}>{invest.date}</div>
                   </div>
                   <div style={{background:C.bg2,borderRadius:10,padding:"12px 14px",marginBottom:16}}>
@@ -5639,7 +5639,7 @@ function TradeModal({onClose, onAdd, onTradeApplied, EFF, holders, onInvestAppli
                     </div>
                     <div style={{display:"flex",justifyContent:"space-between",padding:"5px 0",borderTop:`1px solid ${C.border}`}}>
                       <span style={{fontSize:12,fontWeight:700,color:C.text2}}>Parts {isIn?"créées":"détruites"}</span>
-                      <span style={{fontSize:13,fontWeight:800,color:col}}>{isIn?"+":"-"}{fmtQty(shares)}</span>
+                      <span style={{fontSize:13,fontWeight:600,color:col}}>{isIn?"+":"-"}{fmtQty(shares)}</span>
                     </div>
                     <div style={{display:"flex",justifyContent:"space-between",padding:"5px 0",borderTop:`1px solid ${C.border}`}}>
                       <span style={{fontSize:12,color:C.text2}}>{isIn?"Depuis":"Vers"} (Cash Matelas)</span>
@@ -5832,13 +5832,13 @@ function SnapshotModal({onSave, onClose, EFF}){
         <div style={{padding:"8px 0"}}>
           <div style={{textAlign:"center",marginBottom:20}}>
             <div style={{fontSize:36,marginBottom:8}}>✅</div>
-            <div style={{fontSize:16,fontWeight:800,color:C.green}}>Snapshot enregistré</div>
+            <div style={{fontSize:16,fontWeight:600,color:C.green}}>Snapshot enregistré</div>
             <div style={{fontSize:12,color:C.gray,marginTop:3}}>{saved.d}</div>
           </div>
 
           {/* ── Base locale : ce qui a été écrit ── */}
           <div style={{background:C.bg2,borderRadius:12,padding:"12px 14px",marginBottom:12}}>
-            <div style={{fontSize:10,color:C.gray,fontWeight:800,textTransform:"uppercase",letterSpacing:.5,marginBottom:10}}>📱 Base locale mise à jour</div>
+            <div style={{fontSize:10,color:C.gray,fontWeight:600,textTransform:"uppercase",letterSpacing:.5,marginBottom:10}}>📱 Base locale mise à jour</div>
             <div style={{display:"flex",flexDirection:"column",gap:6}}>
 
               {/* DD */}
@@ -5906,7 +5906,7 @@ function SnapshotModal({onSave, onClose, EFF}){
             border:`1px solid ${EFF?C.green:C.btc}44`,display:"flex",alignItems:"center",gap:8}}>
             <div style={{fontSize:16}}>{EFF?"🟢":"🟡"}</div>
             <div>
-              <div style={{fontSize:11,color:EFF?C.green:C.btc,fontWeight:800}}>
+              <div style={{fontSize:11,color:EFF?C.green:C.btc,fontWeight:600}}>
                 {EFF?"Prix live (refresh effectué)":"Prix statiques (pas de refresh)"}
               </div>
               <div style={{fontSize:10,color:C.gray}}>
@@ -5923,7 +5923,7 @@ function SnapshotModal({onSave, onClose, EFF}){
               <div style={{fontSize:9,color:C.gray,marginBottom:4}}>P&L réel € (col D) — auto</div>
               <div style={{
                 background:C.bg3,borderRadius:8,padding:"10px 12px",
-                fontSize:13,fontWeight:800,
+                fontSize:13,fontWeight:600,
                 color:preview.pnl>=0?C.green:C.red,
               }}>
                 {preview.pnl>=0?"+":""}{Math.round(preview.pnl).toLocaleString("fr-FR")} €
@@ -5936,7 +5936,7 @@ function SnapshotModal({onSave, onClose, EFF}){
 
           {/* Preview automatique — 41 colonnes */}
           <div style={{background:C.bg2,borderRadius:10,padding:"10px 12px",marginBottom:14,border:`1px solid ${C.border}`}}>
-            <div style={{fontSize:10,color:C.gray,fontWeight:800,marginBottom:10,textTransform:"uppercase",letterSpacing:.5}}>
+            <div style={{fontSize:10,color:C.gray,fontWeight:600,marginBottom:10,textTransform:"uppercase",letterSpacing:.5}}>
               Aperçu — 41 colonnes Chart (auto-calculées)
             </div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:4}}>
@@ -6318,7 +6318,7 @@ function TradeDetailModal({trade, kind, onClose, liveIbkrAnnex}){
   const Info=function(props){ return (
     <div style={{background:C.bg2,borderRadius:10,padding:"9px 11px"}}>
       <div style={{fontSize:9,color:C.text3,textTransform:"uppercase",letterSpacing:1}}>{props.k}</div>
-      <div style={{fontSize:14,fontWeight:800,color:props.c||C.text,marginTop:2}}>{props.v}</div>
+      <div style={{fontSize:14,fontWeight:600,color:props.c||C.text,marginTop:2}}>{props.v}</div>
     </div>
   );};
 
@@ -6328,14 +6328,14 @@ function TradeDetailModal({trade, kind, onClose, liveIbkrAnnex}){
         {/* En-tete */}
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14}}>
           <div>
-            <div style={{fontSize:20,fontWeight:900,color:C.text}}>{ticker}</div>
+            <div style={{fontSize:20,fontWeight:700,color:C.text}}>{ticker}</div>
             <div style={{display:"flex",alignItems:"center",gap:7,marginTop:3}}>
-              {(function(){var cl=assetClass(ticker,src,isFut);return <span style={{fontSize:9,fontWeight:800,padding:"2px 7px",borderRadius:5,background:cl.color+"22",color:cl.color}}>{cl.label}</span>;})()}
+              {(function(){var cl=assetClass(ticker,src,isFut);return <span style={{fontSize:9,fontWeight:600,padding:"2px 7px",borderRadius:5,background:cl.color+"22",color:cl.color}}>{cl.label}</span>;})()}
               <span style={{fontSize:11,fontWeight:700,color:isFut?(dir==="LONG"?C.green:C.red):C.text3}}>{typeLabel}{isFut?(" \u00b7 x"+trade.lev):""}</span>
             </div>
           </div>
           <div style={{textAlign:"right"}}>
-            <div style={{fontSize:20,fontWeight:900,color:up?C.green:C.red}}>{(up?"+":"")+fU(pnlUSD)}</div>
+            <div style={{fontSize:20,fontWeight:700,color:up?C.green:C.red}}>{(up?"+":"")+fU(pnlUSD)}</div>
             <div style={{fontSize:12,fontWeight:700,color:up?C.green:C.red}}>{(up?"+":"")+fE(pnlEUR)} {trade.pct!=null?("\u00b7 "+(up?"+":"")+trade.pct.toFixed(1)+"%"):""}</div>
           </div>
         </div>
@@ -7000,11 +7000,11 @@ function BtcIndicators(){
       React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}},
         React.createElement("div",null,
           React.createElement("div",{style:{fontSize:9,color:C.text3,textTransform:"uppercase",letterSpacing:0.5}},"Recommandation"),
-          React.createElement("div",{style:{fontSize:28,fontWeight:800,color:d.recoColor,lineHeight:1.1,marginTop:3}},d.reco||"—")
+          React.createElement("div",{style:{fontSize:28,fontWeight:600,color:d.recoColor,lineHeight:1.1,marginTop:3}},d.reco||"—")
         ),
         React.createElement("div",{style:{textAlign:"right"}},
           React.createElement("div",{style:{fontSize:9,color:C.text3,textTransform:"uppercase",letterSpacing:0.5}},"Surchauffe"),
-          React.createElement("div",{style:{fontSize:24,fontWeight:800,color:d.recoColor,lineHeight:1.1,marginTop:3}},d.aggHeat!=null?Math.round(d.aggHeat):"—",React.createElement("span",{style:{fontSize:12,fontWeight:600,color:C.text2}},"/100"))
+          React.createElement("div",{style:{fontSize:24,fontWeight:600,color:d.recoColor,lineHeight:1.1,marginTop:3}},d.aggHeat!=null?Math.round(d.aggHeat):"—",React.createElement("span",{style:{fontSize:12,fontWeight:600,color:C.text2}},"/100"))
         )
       ),
       React.createElement("div",{style:{position:"relative",height:8,borderRadius:5,marginTop:12,background:grad}},
@@ -7028,7 +7028,7 @@ function BtcIndicators(){
                   React.createElement("div",{style:{fontSize:10,color:o.color,marginTop:2,fontWeight:600}},o.zone)
                 ),
                 React.createElement("div",{style:{display:"flex",alignItems:"center",gap:10,flexShrink:0}},
-                  React.createElement("span",{style:{fontSize:15,fontWeight:800,color:C.text}},o.value),
+                  React.createElement("span",{style:{fontSize:15,fontWeight:600,color:C.text}},o.value),
                   React.createElement("span",{style:{width:9,height:9,borderRadius:"50%",background:o.color,flexShrink:0}}),
                   React.createElement("span",{style:{fontSize:10,color:C.text3}},open?"▾":"▸")
                 )
@@ -7083,11 +7083,11 @@ function FundingView(){
     return React.createElement("div",{key:name,style:{background:C.bg1,border:"1px solid "+C.border,borderRadius:10,overflow:"hidden"}},
       React.createElement("button",{onClick:function(){tog(name);},style:{width:"100%",background:"none",border:"none",cursor:"pointer",padding:"10px 12px",display:"flex",justifyContent:"space-between",alignItems:"center"}},
         React.createElement("div",{style:{textAlign:"left"}},
-          React.createElement("div",{style:{fontSize:13,fontWeight:800,color:C.text}},name+" ",React.createElement("span",{style:{fontSize:9,color:C.text3}},open?"▾":"▸")),
+          React.createElement("div",{style:{fontSize:13,fontWeight:600,color:C.text}},name+" ",React.createElement("span",{style:{fontSize:9,color:C.text3}},open?"▾":"▸")),
           React.createElement("div",{style:{fontSize:9,color:C.text3,marginTop:1}},(d.nPlatforms||0)+" plateformes · OI "+cgiBigUsd(d.totalOiUsd)+" · Vol "+cgiBigUsd(d.totalVolUsd))
         ),
         React.createElement("div",{style:{textAlign:"right"}},
-          React.createElement("div",{style:{fontSize:15,fontWeight:800,color:aColor(apr)}},aTxt(apr)),
+          React.createElement("div",{style:{fontSize:15,fontWeight:600,color:aColor(apr)}},aTxt(apr)),
           React.createElement("div",{style:{fontSize:8,color:C.text3}},"APR agrégé (pond. OI)")
         )
       ),
@@ -7116,11 +7116,11 @@ function FundingView(){
     cryptoRow("ETH",fund.eth||{}),
     nb&&React.createElement("div",{style:{background:C.bg1,border:"1px solid "+C.border,borderRadius:10,padding:"10px 12px",display:"flex",justifyContent:"space-between",alignItems:"center"}},
       React.createElement("div",null,
-        React.createElement("div",{style:{fontSize:13,fontWeight:800,color:C.text}},"Nasdaq (NQ)"),
+        React.createElement("div",{style:{fontSize:13,fontWeight:600,color:C.text}},"Nasdaq (NQ)"),
         React.createElement("div",{style:{fontSize:9,color:C.text3,marginTop:1}},"Basis "+(nb.basisPct>=0?"+":"")+nb.basisPct.toFixed(2)+"% · éch. "+nb.expiry+" ("+nb.daysToExpiry+"j)")
       ),
       React.createElement("div",{style:{textAlign:"right"}},
-        React.createElement("div",{style:{fontSize:15,fontWeight:800,color:aColor(nb.annualizedPct)}},aTxt(nb.annualizedPct)),
+        React.createElement("div",{style:{fontSize:15,fontWeight:600,color:aColor(nb.annualizedPct)}},aTxt(nb.annualizedPct)),
         React.createElement("div",{style:{fontSize:8,color:C.text3}},"Basis annualisé")
       )
     ),
@@ -7190,7 +7190,7 @@ function MacroView(){
   var pulseCard=function(label,val,sub,color){
     return React.createElement("div",{style:{flex:1,background:C.bg1,border:"1px solid "+C.border,borderRadius:10,padding:"10px 12px"}},
       React.createElement("div",{style:{fontSize:9,color:C.text3,textTransform:"uppercase",letterSpacing:0.5}},label),
-      React.createElement("div",{style:{fontSize:20,fontWeight:800,color:color||C.text,marginTop:3}},val),
+      React.createElement("div",{style:{fontSize:20,fontWeight:600,color:color||C.text,marginTop:3}},val),
       sub?React.createElement("div",{style:{fontSize:10,color:C.text2,marginTop:1}},sub):null
     );
   };
@@ -7206,7 +7206,7 @@ function MacroView(){
         treas.map(function(t){
           return React.createElement("div",{key:t.symbol,style:{flex:1,background:C.bg1,border:"1px solid "+C.border,borderRadius:10,padding:"8px 10px",textAlign:"center"}},
             React.createElement("div",{style:{fontSize:9,color:C.text3}},t.label),
-            React.createElement("div",{style:{fontSize:16,fontWeight:800,color:C.text,marginTop:2}},t.price!=null?t.price.toFixed(2)+"%":"—"),
+            React.createElement("div",{style:{fontSize:16,fontWeight:600,color:C.text,marginTop:2}},t.price!=null?t.price.toFixed(2)+"%":"—"),
             React.createElement("div",{style:{fontSize:9,color:cgiPctColor(t.pct),marginTop:1}},t.pct!=null?cgiPctFmt(t.pct):"")
           );
         })
@@ -7265,7 +7265,7 @@ function CongressView(){
       return React.createElement("div",{key:m.label+mi,style:{background:C.bg1,border:"1px solid "+C.border,borderRadius:10,overflow:"hidden",opacity:m.n===0?0.55:1}},
         React.createElement("div",{onClick:function(){ if(m.n>0) toggle(mi); },style:{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,padding:"10px 12px",cursor:m.n>0?"pointer":"default"}},
           React.createElement("div",{style:{display:"flex",alignItems:"center",gap:7,minWidth:0}},
-            React.createElement("span",{style:{fontSize:9,fontWeight:800,color:pc(m.party),border:"1px solid "+pc(m.party)+"66",borderRadius:4,padding:"1px 4px",flexShrink:0}},m.party),
+            React.createElement("span",{style:{fontSize:9,fontWeight:600,color:pc(m.party),border:"1px solid "+pc(m.party)+"66",borderRadius:4,padding:"1px 4px",flexShrink:0}},m.party),
             React.createElement("span",{style:{fontSize:12,fontWeight:700,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}},m.label)
           ),
           React.createElement("span",{style:{fontSize:9,color:C.text3,flexShrink:0,textAlign:"right"}},m.n===0?"aucun trade":(congView==="port"?((m.portfolio||[]).length+" pos. · ~"+moneyC(m.portTotal||0)):(m.n+" trades · "+(m.last||""))))
@@ -7281,7 +7281,7 @@ function CongressView(){
                         React.createElement("span",{style:{fontSize:8,color:C.text3}},h.n+" op.")
                       ),
                       React.createElement("div",{style:{display:"flex",gap:10,alignItems:"baseline",flexShrink:0}},
-                        React.createElement("span",{style:{fontSize:10,fontWeight:800,color:C.text}},h.weight!=null?h.weight.toFixed(1)+"%":"—"),
+                        React.createElement("span",{style:{fontSize:10,fontWeight:600,color:C.text}},h.weight!=null?h.weight.toFixed(1)+"%":"—"),
                         React.createElement("span",{style:{fontSize:9,color:C.text3,minWidth:52,textAlign:"right"}},moneyC(h.net))
                       )
                     );
@@ -7289,7 +7289,7 @@ function CongressView(){
             : tr.map(function(t,ti){
                 return React.createElement("div",{key:ti,style:{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,padding:"6px 2px",borderBottom:ti<tr.length-1?"1px solid "+C.border+"66":"none"}},
                   React.createElement("div",{style:{display:"flex",alignItems:"baseline",gap:6,minWidth:0}},
-                    React.createElement("span",{style:{fontSize:11,fontWeight:800,color:sideCol(t.side),flexShrink:0}},sideSym(t.side)),
+                    React.createElement("span",{style:{fontSize:11,fontWeight:600,color:sideCol(t.side),flexShrink:0}},sideSym(t.side)),
                     React.createElement("span",{style:{fontSize:10,fontWeight:700,color:t.ticker?C.btc:C.text2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:150}},t.ticker||t.asset)
                   ),
                   React.createElement("div",{style:{display:"flex",gap:10,alignItems:"baseline",flexShrink:0}},
@@ -7444,7 +7444,7 @@ function PageWatchlist({ EFF, hidden }){
       width:40,height:40,borderRadius:"50%",background:bg+"22",
       border:"2px solid "+bg,display:"flex",alignItems:"center",
       justifyContent:"center",flexShrink:0,fontSize:sym.length>1?13:18,
-      fontWeight:900,color:bg,userSelect:"none"
+      fontWeight:700,color:bg,userSelect:"none"
     }},sym);
   }
   function wlMigrate(arr){ return (Array.isArray(arr)?arr:[]).map(cgiMigrateEntryConds); } // v4.0
@@ -7943,7 +7943,7 @@ function PageWatchlist({ EFF, hidden }){
     // ── Header ──────────────────────────────────────────────────────────────
     React.createElement("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"16px 16px 8px"}},
       React.createElement("div",null,
-        React.createElement("div",{style:{fontSize:20,fontWeight:900,color:textC}},"Suivi de marché"),
+        React.createElement("div",{style:{fontSize:20,fontWeight:700,color:textC}},"Suivi de marché"),
         React.createElement("div",{style:{fontSize:11,color:grayC}},list.length+" ticker"+(list.length>1?"s":"")+(saving?" · 💾":""))
       ),
       React.createElement("div",{style:{display:"flex",gap:6,position:"relative"}},
@@ -7954,7 +7954,7 @@ function PageWatchlist({ EFF, hidden }){
           React.createElement("button",{onClick:function(){setShowTools(false);setShowIndic(true);},style:{background:"none",border:"none",textAlign:"left",padding:"9px 10px",color:orangeC,fontSize:12,fontWeight:700,cursor:"pointer",borderRadius:6}},"📊 Indicateurs marché")
         ),
         React.createElement("button",{onClick:refreshPrices,disabled:loading,style:{background:cardBg,border:"1px solid "+borderC,borderRadius:8,padding:"6px 10px",color:loading?grayC:blueC,fontSize:11,fontWeight:700,cursor:"pointer"}},loading?"⟳ ...":"⟳"),
-        React.createElement("button",{onClick:openAdd,style:{background:orangeC,border:"none",borderRadius:8,padding:"6px 12px",color:"#000",fontSize:12,fontWeight:800,cursor:"pointer"}},"+")
+        React.createElement("button",{onClick:openAdd,style:{background:orangeC,border:"none",borderRadius:8,padding:"6px 12px",color:"#000",fontSize:12,fontWeight:600,cursor:"pointer"}},"+")
       )
     ),
 
@@ -7962,7 +7962,7 @@ function PageWatchlist({ EFF, hidden }){
     showIndic&&ReactDOM.createPortal(
       React.createElement("div",{style:{position:"fixed",inset:0,zIndex:9996,background:C.bg,display:"flex",flexDirection:"column"}},
         React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"14px 16px",borderBottom:"1px solid "+borderC,flexShrink:0}},
-          React.createElement("div",{style:{fontSize:15,fontWeight:800,color:textC}},"📊 Indicateurs marché"),
+          React.createElement("div",{style:{fontSize:15,fontWeight:600,color:textC}},"📊 Indicateurs marché"),
           React.createElement("button",{onClick:function(){setShowIndic(false);},style:{background:"none",border:"none",color:grayC,fontSize:24,cursor:"pointer",lineHeight:1}},"×")
         ),
         React.createElement("div",{style:{flex:1,overflowY:"auto",padding:"14px 16px 30px"}},
@@ -8012,7 +8012,7 @@ function PageWatchlist({ EFF, hidden }){
                 React.createElement("div",{style:{flex:1}},
                   React.createElement("div",{style:{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}},
                     e.fav&&React.createElement("span",{style:{color:orangeC,fontSize:14}},"★"),
-                    React.createElement("span",{style:{fontSize:16,fontWeight:900,color:textC}},e.ticker),
+                    React.createElement("span",{style:{fontSize:16,fontWeight:700,color:textC}},e.ticker),
                     e.domain&&React.createElement("span",{style:{fontSize:9,background:blueC+"22",border:"1px solid "+blueC+"44",borderRadius:4,padding:"1px 6px",color:blueC}},e.domain),
                     React.createElement("span",{style:{fontSize:9,background:borderC,borderRadius:4,padding:"1px 6px",color:grayC}},e.cat),
                     condTotal>0&&React.createElement("span",{style:{fontSize:11,fontWeight:700,color:score===condTotal&&score>0?greenC:score>0?orangeC:grayC}},
@@ -8024,7 +8024,7 @@ function PageWatchlist({ EFF, hidden }){
                 ),
                 React.createElement("div",{style:{textAlign:"right"}},
                   price!=null
-                    ? React.createElement("span",{style:{fontSize:17,fontWeight:800,color:textC}},"$"+price.toLocaleString("fr-FR",{maximumFractionDigits:2}))
+                    ? React.createElement("span",{style:{fontSize:17,fontWeight:600,color:textC}},"$"+price.toLocaleString("fr-FR",{maximumFractionDigits:2}))
                     : React.createElement("span",{style:{fontSize:13,color:grayC}},loading?"...":"—")
                 )
               ),
@@ -8048,7 +8048,7 @@ function PageWatchlist({ EFF, hidden }){
                         style:{display:"flex",alignItems:"flex-start",gap:6,cursor:"pointer",padding:"3px 6px",
                           background:c.validated?greenC+"15":C.bg,border:"1px solid "+(c.validated?greenC+"44":borderC)}},
                         React.createElement("span",{style:{fontSize:12,color:c.validated?greenC:grayC,flexShrink:0,marginTop:1}},c.validated?"✓":"○"),
-                        React.createElement("span",{style:{fontSize:8,flexShrink:0,marginTop:3,padding:"0 4px",borderRadius:4,fontWeight:800,
+                        React.createElement("span",{style:{fontSize:8,flexShrink:0,marginTop:3,padding:"0 4px",borderRadius:4,fontWeight:600,
                           background:(c.cat==="technique"?blueC:c.cat==="fondamentale"?orangeC:grayC)+"22",
                           color:c.cat==="technique"?blueC:c.cat==="fondamentale"?orangeC:grayC}},
                           c.cat==="technique"?"T":c.cat==="fondamentale"?"F":"P"),
@@ -8107,7 +8107,7 @@ function PageWatchlist({ EFF, hidden }){
     },
       React.createElement("div",{style:{background:bgC,border:"1px solid "+borderC,borderRadius:"16px 16px 0 0",width:"100%",maxWidth:520,margin:"0 auto",maxHeight:"85vh",display:"flex",flexDirection:"column"}},
         React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"16px 16px 8px",flexShrink:0}},
-          React.createElement("span",{style:{fontSize:16,fontWeight:800,color:textC}},"📰 News — Tickers suivis"),
+          React.createElement("span",{style:{fontSize:16,fontWeight:600,color:textC}},"📰 News — Tickers suivis"),
           React.createElement("button",{onClick:function(){setNewsPanel(false);},style:{background:"none",border:"none",color:grayC,fontSize:20,cursor:"pointer"}},"×")
         ),
         React.createElement("div",{style:{overflowY:"auto",flex:1,padding:"0 12px 16px"}},
@@ -8151,7 +8151,7 @@ function PageWatchlist({ EFF, hidden }){
 
         // En-tête modal
         React.createElement("div",{style:{display:"flex",justifyContent:"space-between",marginBottom:16}},
-          React.createElement("span",{style:{fontSize:16,fontWeight:800,color:textC}},modal==="add"?"Ajouter un ticker":"Modifier "+editForm.ticker),
+          React.createElement("span",{style:{fontSize:16,fontWeight:600,color:textC}},modal==="add"?"Ajouter un ticker":"Modifier "+editForm.ticker),
           React.createElement("button",{onClick:closeModal,style:{background:"none",border:"none",color:grayC,fontSize:20,cursor:"pointer"}},"×")
         ),
 
@@ -8271,7 +8271,7 @@ function PageWatchlist({ EFF, hidden }){
         ),
 
         // Submit
-        React.createElement("button",{onClick:submitForm,style:{width:"100%",background:orangeC,border:"none",borderRadius:10,padding:"12px",color:"#000",fontSize:14,fontWeight:800,cursor:"pointer"}},
+        React.createElement("button",{onClick:submitForm,style:{width:"100%",background:orangeC,border:"none",borderRadius:10,padding:"12px",color:"#000",fontSize:14,fontWeight:600,cursor:"pointer"}},
           modal==="add"?"Ajouter à la watchlist":"Enregistrer")
       )   
     )      
@@ -8308,7 +8308,7 @@ function PageLegend(
   const avgDur = list.length?Math.round(list.reduce(function(a,t){return a+(t.durationDays||0);},0)/list.length):0;
   const fU = function(v){ return (v<0?"-$":"$")+Math.abs(Math.round(v)).toLocaleString("fr-FR"); };
   const Tab=function(props){ return (
-    <button onClick={props.onClick} style={{flex:1,padding:"8px 0",borderRadius:9,border:"none",cursor:"pointer",fontSize:13,fontWeight:800,
+    <button onClick={props.onClick} style={{flex:1,padding:"8px 0",borderRadius:9,border:"none",cursor:"pointer",fontSize:13,fontWeight:600,
       background:props.active?C.btc:C.bg2, color:props.active?"#000":C.text2}}>{props.label}</button>
   );};
   const Sort=function(props){ return (
@@ -8317,7 +8317,7 @@ function PageLegend(
   );};
   return (
     <div style={{padding:"8px 14px 96px"}}>
-      <div style={{fontSize:22,fontWeight:900,color:C.text,marginBottom:2}}>Legend</div>
+      <div style={{fontSize:22,fontWeight:700,color:C.text,marginBottom:2}}>Legend</div>
       <div style={{fontSize:12,color:C.text3,marginBottom:14}}>Trades cloturés · {board==="spot"?"Spot (crypto + actions)":"Futures"}</div>
       <div style={{display:"flex",gap:8,marginBottom:14}}>
         <Tab label="Spot" active={board==="spot"} onClick={function(){setBoard("spot");}}/>
@@ -8327,23 +8327,23 @@ function PageLegend(
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:14}}>
         <div style={{background:(tot>=0?C.green:C.red)+"15",border:`1px solid ${(tot>=0?C.green:C.red)}40`,borderRadius:12,padding:"11px 13px"}}>
           <div style={{fontSize:9,color:C.text3,textTransform:"uppercase",letterSpacing:1}}>P&L total</div>
-          <div style={{fontSize:19,fontWeight:900,color:tot>=0?C.green:C.red}}>{msk(fU(tot),hidden)}</div>
+          <div style={{fontSize:19,fontWeight:700,color:tot>=0?C.green:C.red}}>{msk(fU(tot),hidden)}</div>
         </div>
         <div style={{background:C.bg2,borderRadius:12,padding:"11px 13px"}}>
           <div style={{fontSize:9,color:C.text3,textTransform:"uppercase",letterSpacing:1}}>Win rate</div>
-          <div style={{fontSize:19,fontWeight:900,color:C.text}}>{winRate}% <span style={{fontSize:11,color:C.text3,fontWeight:600}}>({wins}/{list.length})</span></div>
+          <div style={{fontSize:19,fontWeight:700,color:C.text}}>{winRate}% <span style={{fontSize:11,color:C.text3,fontWeight:600}}>({wins}/{list.length})</span></div>
         </div>
         <div style={{background:C.bg2,borderRadius:12,padding:"11px 13px"}}>
           <div style={{fontSize:9,color:C.text3,textTransform:"uppercase",letterSpacing:1}}>Meilleur</div>
-          <div style={{fontSize:15,fontWeight:800,color:C.green}}>{msk(fU(best),hidden)}</div>
+          <div style={{fontSize:15,fontWeight:600,color:C.green}}>{msk(fU(best),hidden)}</div>
         </div>
         <div style={{background:C.bg2,borderRadius:12,padding:"11px 13px"}}>
           <div style={{fontSize:9,color:C.text3,textTransform:"uppercase",letterSpacing:1}}>Pire</div>
-          <div style={{fontSize:15,fontWeight:800,color:C.red}}>{msk(fU(worst),hidden)}</div>
+          <div style={{fontSize:15,fontWeight:600,color:C.red}}>{msk(fU(worst),hidden)}</div>
         </div>
         <div style={{gridColumn:"1 / -1",background:C.bg2,borderRadius:12,padding:"11px 13px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
           <div style={{fontSize:9,color:C.text3,textTransform:"uppercase",letterSpacing:1}}>Durée moyenne de trade</div>
-          <div style={{fontSize:16,fontWeight:800,color:C.text}}>{avgDur} jour{avgDur>1?"s":""}</div>
+          <div style={{fontSize:16,fontWeight:600,color:C.text}}>{avgDur} jour{avgDur>1?"s":""}</div>
         </div>
       </div>
       {/* Tri */}
@@ -8361,15 +8361,15 @@ function PageLegend(
           return (
             <div key={i} onClick={function(){setSel({trade:t,kind:board});}} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 4px",borderBottom:`1px solid ${C.border}`,cursor:"pointer"}}>
               <div style={{flex:1,minWidth:0}}>
-                <div style={{fontSize:14,fontWeight:800,color:C.text,display:"flex",alignItems:"center",gap:7,flexWrap:"wrap"}}>
+                <div style={{fontSize:14,fontWeight:600,color:C.text,display:"flex",alignItems:"center",gap:7,flexWrap:"wrap"}}>
                   <span>{t.ticker}</span>
-                  <span style={{fontSize:9,fontWeight:800,padding:"1px 6px",borderRadius:5,background:cls.color+"22",color:cls.color}}>{cls.label}</span>
+                  <span style={{fontSize:9,fontWeight:600,padding:"1px 6px",borderRadius:5,background:cls.color+"22",color:cls.color}}>{cls.label}</span>
                   {board==="futures" && <span style={{fontSize:10,fontWeight:700,color:t.dir==="LONG"?C.green:C.red}}>{t.dir} x{t.lev}</span>}
                 </div>
                 <div style={{fontSize:10,color:C.text3,marginTop:2}}>{t.entryDate} → {t.exitDate} · {t.durationDays}j</div>
               </div>
               <div style={{textAlign:"right"}}>
-                <div style={{fontSize:14,fontWeight:800,color:up?C.green:C.red}}>{msk((up?"+":"")+fU(t.pnlUSD),hidden)}</div>
+                <div style={{fontSize:14,fontWeight:600,color:up?C.green:C.red}}>{msk((up?"+":"")+fU(t.pnlUSD),hidden)}</div>
                 <div style={{fontSize:11,fontWeight:700,color:up?C.green:C.red}}>{t.pct==null?"—":((up?"+":"")+t.pct.toFixed(1)+"%")}</div>
               </div>
             </div>
@@ -8414,7 +8414,7 @@ function TxnEditor(props){
   return React.createElement("div",{style:{background:bg,border:"1px solid "+border,borderRadius:12,marginBottom:12,overflow:"hidden"}},
     React.createElement("button",{onClick:function(){setOpen(!open);},
       style:{width:"100%",display:"flex",justifyContent:"space-between",alignItems:"center",background:"none",border:"none",padding:"12px 14px",color:txt,cursor:"pointer"}},
-      React.createElement("span",{style:{fontSize:13,fontWeight:800}},"✏️ Éditer les transactions"),
+      React.createElement("span",{style:{fontSize:13,fontWeight:600}},"✏️ Éditer les transactions"),
       React.createElement("span",{style:{fontSize:12,color:gray}},open?"▾":"▸")
     ),
     open&&React.createElement("div",{style:{padding:"0 14px 14px"}},
@@ -8436,7 +8436,7 @@ function TxnEditor(props){
         React.createElement("div",null,React.createElement("div",{style:{fontSize:10,color:gray,marginBottom:3}},"Montant ("+f.currency+")"),
           React.createElement("input",{type:"number",value:f.valueUSD,placeholder:"1500",onChange:function(e){up("valueUSD",e.target.value);},style:inp}))
       ),
-      React.createElement("button",{onClick:submit,style:{width:"100%",background:btc,border:"none",borderRadius:8,padding:"10px",color:"#000",fontSize:13,fontWeight:800,cursor:"pointer"}},"+ Ajouter la transaction"),
+      React.createElement("button",{onClick:submit,style:{width:"100%",background:btc,border:"none",borderRadius:8,padding:"10px",color:"#000",fontSize:13,fontWeight:600,cursor:"pointer"}},"+ Ajouter la transaction"),
       msg&&React.createElement("div",{style:{fontSize:11,color:green,marginTop:8,textAlign:"center"}},msg),
       React.createElement("div",{style:{fontSize:10,color:gray,margin:"14px 0 6px",fontWeight:700}},"DERNIÈRES TRANSACTIONS"),
       React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:4,maxHeight:260,overflowY:"auto"}},
@@ -9031,7 +9031,7 @@ function NotifBell(){
   },
     React.createElement(Icon,{name:"bell",size:17,color:text}),
     unread>0&&React.createElement("span",{style:{position:"absolute",top:-4,right:-4,minWidth:18,height:18,padding:"0 4px",
-      borderRadius:9,background:red,color:"#fff",fontSize:10,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center",border:"2px solid "+(C2.bg||"#07080D")}},
+      borderRadius:9,background:red,color:"#fff",fontSize:10,fontWeight:600,display:"flex",alignItems:"center",justifyContent:"center",border:"2px solid "+(C2.bg||"#07080D")}},
       unread>9?"9+":unread)
   );
 
@@ -9069,7 +9069,7 @@ function NotifBell(){
     React.createElement("label",{style:lbl},"Chat ID"),
     React.createElement("input",{value:tgChat,placeholder:"7592951435",onChange:function(e){setTgChat(e.target.value);},style:{...inp,marginBottom:14}}),
     React.createElement("div",{style:{display:"flex",gap:8}},
-      React.createElement("button",{onClick:saveTg,style:{flex:1,background:btc,border:"none",borderRadius:8,padding:"10px",color:"#000",fontSize:13,fontWeight:800,cursor:"pointer"}},"Enregistrer"),
+      React.createElement("button",{onClick:saveTg,style:{flex:1,background:btc,border:"none",borderRadius:8,padding:"10px",color:"#000",fontSize:13,fontWeight:600,cursor:"pointer"}},"Enregistrer"),
       React.createElement("button",{onClick:testTg,style:{flex:"0 0 80px",background:bg,border:"1px solid "+border,borderRadius:8,padding:"10px",color:blue,fontSize:13,fontWeight:700,cursor:"pointer"}},"Tester"),
       React.createElement("button",{onClick:forceCheck,style:{flex:"0 0 100px",background:bg,border:"1px solid "+border,borderRadius:8,padding:"10px",color:green,fontSize:12,fontWeight:700,cursor:"pointer"}},"🔄 Forcer")
     ),
@@ -10514,12 +10514,12 @@ function App(){
               <div style={{display:"flex",alignItems:"center",gap:10}}>
                 <span style={{fontSize:22}}>📱</span>
                 <div>
-                  <div style={{fontSize:14,fontWeight:800,color:C.text}}>Base locale</div>
+                  <div style={{fontSize:14,fontWeight:600,color:C.text}}>Base locale</div>
                   <div style={{fontSize:10,color:C.gray}}>Build intégré dans l'app</div>
                 </div>
               </div>
               <div style={{textAlign:"right"}}>
-                <div style={{fontSize:18,fontWeight:800,color:C.btc}}>${fmtK(localData?.totalUSD||0)}</div>
+                <div style={{fontSize:18,fontWeight:600,color:C.btc}}>${fmtK(localData?.totalUSD||0)}</div>
                 <div style={{fontSize:11,color:C.gray}}>€{fmtK(localData?.totalEUR||0)}</div>
               </div>
             </div>
@@ -10535,7 +10535,7 @@ function App(){
               <div style={{display:"flex",alignItems:"center",gap:10}}>
                 <span style={{fontSize:22}}>☁️</span>
                 <div>
-                  <div style={{fontSize:14,fontWeight:800,color:C.gray}}>Cloudflare KV</div>
+                  <div style={{fontSize:14,fontWeight:600,color:C.gray}}>Cloudflare KV</div>
                   <div style={{fontSize:10,color:C.red}}>{kvError}</div>
                 </div>
               </div>
@@ -10550,12 +10550,12 @@ function App(){
                 <div style={{display:"flex",alignItems:"center",gap:10}}>
                   <span style={{fontSize:22}}>☁️</span>
                   <div>
-                    <div style={{fontSize:14,fontWeight:800,color:C.text}}>Cloudflare KV</div>
+                    <div style={{fontSize:14,fontWeight:600,color:C.text}}>Cloudflare KV</div>
                     <div style={{fontSize:10,color:C.gray}}>Dernier snapshot cloud</div>
                   </div>
                 </div>
                 <div style={{textAlign:"right"}}>
-                  <div style={{fontSize:18,fontWeight:800,color:C.teal}}>${fmtK(kvData_snap?.totalUSD||0)}</div>
+                  <div style={{fontSize:18,fontWeight:600,color:C.teal}}>${fmtK(kvData_snap?.totalUSD||0)}</div>
                   <div style={{fontSize:11,color:C.gray}}>€{fmtK(kvData_snap?.totalEUR||0)}</div>
                 </div>
               </div>
@@ -10674,7 +10674,7 @@ function App(){
             width:"100%",maxWidth:430,border:`1px solid ${C.border}`,
           }}>
             <div style={{width:36,height:4,borderRadius:2,background:C.border,margin:"0 auto 16px"}}/>
-            <div style={{fontSize:13,fontWeight:800,color:gistSync?C.green:C.red,marginBottom:14}}>
+            <div style={{fontSize:13,fontWeight:600,color:gistSync?C.green:C.red,marginBottom:14}}>
               {gistSync?"🟢":"🔴"} Connexion Cloudflare — {gistSync?"Opérationnelle":"Erreur"}
             </div>
             <div style={{background:C.bg2,borderRadius:10,padding:"12px 14px",fontFamily:C.font,fontSize:11,display:"flex",flexDirection:"column",gap:8}}>
@@ -10729,13 +10729,13 @@ function App(){
           }}>
             <div style={{width:36,height:4,borderRadius:2,background:C.border,margin:"0 auto 16px"}}/>
 
-            <div style={{fontSize:14,fontWeight:800,color:snapResult.ok?C.green:C.red,marginBottom:14}}>
+            <div style={{fontSize:14,fontWeight:600,color:snapResult.ok?C.green:C.red,marginBottom:14}}>
               {snapResult.ok?"✅ Bases de données mises à jour":"⚠️ Erreurs lors de la mise à jour"}
             </div>
 
             {/* ── Base locale ── */}
             <div style={{background:C.bg2,borderRadius:12,padding:"10px 14px",marginBottom:10}}>
-              <div style={{fontSize:10,fontWeight:800,color:C.gray,textTransform:"uppercase",letterSpacing:.5,marginBottom:8}}>📱 Base locale</div>
+              <div style={{fontSize:10,fontWeight:600,color:C.gray,textTransform:"uppercase",letterSpacing:.5,marginBottom:8}}>📱 Base locale</div>
               {snapResult.log.map((l,i)=>(
                 <div key={i} style={{fontSize:11,color:l.startsWith("✓")?C.green:C.red,fontFamily:C.font,marginBottom:3}}>{l}</div>
               ))}
@@ -10747,7 +10747,7 @@ function App(){
             {/* ── Cloudflare KV ── */}
             {snapResult.uploadDone ? (
               <div style={{background:C.bg2,borderRadius:12,padding:"10px 14px",marginBottom:14}}>
-                <div style={{fontSize:10,fontWeight:800,color:C.gray,textTransform:"uppercase",letterSpacing:.5,marginBottom:8}}>💾 Enregistrement (local + cloud)</div>
+                <div style={{fontSize:10,fontWeight:600,color:C.gray,textTransform:"uppercase",letterSpacing:.5,marginBottom:8}}>💾 Enregistrement (local + cloud)</div>
                 {(snapResult.uploadLog||[]).map((l,i)=>(
                   <div key={i} style={{fontSize:11,color:l.startsWith("✓")?C.green:C.red,fontFamily:C.font,marginBottom:3}}>{l}</div>
                 ))}
@@ -10757,7 +10757,7 @@ function App(){
               </div>
             ) : snapResult.pendingUpload ? (
               <div style={{background:C.bg2,borderRadius:12,padding:"10px 14px",marginBottom:14}}>
-                <div style={{fontSize:10,fontWeight:800,color:C.gray,textTransform:"uppercase",letterSpacing:.5,marginBottom:4}}>💾 Enregistrement</div>
+                <div style={{fontSize:10,fontWeight:600,color:C.gray,textTransform:"uppercase",letterSpacing:.5,marginBottom:4}}>💾 Enregistrement</div>
                 <div style={{fontSize:11,color:C.gray}}>Enregistré en local — envoi cloud en cours…</div>
               </div>
             ) : null}
@@ -10774,7 +10774,7 @@ function App(){
               <button onClick={()=>setSnapResult(null)} style={{
                 width:"100%",padding:"12px 0",borderRadius:10,
                 background:C.bg2,border:`1px solid ${C.green}`,
-                color:C.green,fontSize:13,fontWeight:800,cursor:"pointer",
+                color:C.green,fontSize:13,fontWeight:600,cursor:"pointer",
               }}>Fermer</button>
             )}
           </div>
@@ -10789,17 +10789,17 @@ function App(){
           }}>
             <div style={{width:36,height:4,borderRadius:2,background:C.border,margin:"0 auto 16px"}}/>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
-              <div style={{fontSize:14,fontWeight:800,color:C.text}}>⚙️ Réglages</div>
+              <div style={{fontSize:14,fontWeight:600,color:C.text}}>⚙️ Réglages</div>
               <button onClick={()=>setShowSettings(false)} style={{background:"none",border:"none",color:C.gray,fontSize:22,cursor:"pointer",lineHeight:1}}>×</button>
             </div>
             <div style={{display:"flex",flexDirection:"column",gap:8}}>
               <button onClick={()=>setEur(!eur)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",padding:"12px 14px",borderRadius:10,border:`1px solid ${C.border}`,background:C.bg,cursor:"pointer"}}>
                 <span style={{display:"flex",alignItems:"center",gap:12}}><span style={{fontSize:18}}>💱</span><span style={{fontSize:13,fontWeight:700,color:C.text}}>Devise d'affichage</span></span>
-                <span style={{fontSize:13,fontWeight:800,color:eur?C.green:C.gold}}>{eur?"EUR €":"USD $"}</span>
+                <span style={{fontSize:13,fontWeight:600,color:eur?C.green:C.gold}}>{eur?"EUR €":"USD $"}</span>
               </button>
               <button onClick={()=>setHidden(!hidden)} style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",padding:"12px 14px",borderRadius:10,border:`1px solid ${C.border}`,background:C.bg,cursor:"pointer"}}>
                 <span style={{display:"flex",alignItems:"center",gap:12}}><span style={{fontSize:18}}>{hidden?"🙈":"👁"}</span><span style={{fontSize:13,fontWeight:700,color:C.text}}>Masquer les montants</span></span>
-                <span style={{fontSize:13,fontWeight:800,color:hidden?C.btc:C.gray}}>{hidden?"Masqué":"Visible"}</span>
+                <span style={{fontSize:13,fontWeight:600,color:hidden?C.btc:C.gray}}>{hidden?"Masqué":"Visible"}</span>
               </button>
               <button onClick={()=>{setShowSettings(false);setShowTheme(true);}} style={{display:"flex",alignItems:"center",justifyContent:"space-between",width:"100%",padding:"12px 14px",borderRadius:10,border:`1px solid ${C.border}`,background:C.bg,cursor:"pointer"}}>
                 <span style={{display:"flex",alignItems:"center",gap:12}}><span style={{fontSize:18}}>🎨</span><span style={{fontSize:13,fontWeight:700,color:C.text}}>Thème</span></span>
@@ -10837,12 +10837,12 @@ function App(){
           <div onClick={e=>e.stopPropagation()} style={{background:C.bg1,borderRadius:"20px 20px 0 0",padding:"20px 20px 36px",width:"100%",maxWidth:430,maxHeight:"85vh",overflowY:"auto",border:`1px solid ${C.border}`}}>
             <div style={{width:36,height:4,borderRadius:2,background:C.border,margin:"0 auto 18px"}}/>
             <div style={{textAlign:"center",marginBottom:18}}>
-              <div style={{fontSize:30,fontWeight:900,color:C.btc,letterSpacing:1}}>CGI</div>
+              <div style={{fontSize:30,fontWeight:700,color:C.btc,letterSpacing:1}}>CGI</div>
               <div style={{fontSize:12,color:C.text2,marginTop:2}}>Creusot Global Investments</div>
               <div style={{fontSize:11,color:C.gray,marginTop:8}}>Créé par <span style={{fontWeight:700,color:C.text}}>CREUSOT INDUSTRIES &amp; SOFTWARE CORP.</span></div>
-              <div style={{display:"inline-block",marginTop:10,background:C.btc+"22",border:`1px solid ${C.btc}66`,borderRadius:20,padding:"4px 14px",fontSize:13,fontWeight:800,color:C.btc}}>Version {APP_VERSION}</div>
+              <div style={{display:"inline-block",marginTop:10,background:C.btc+"22",border:`1px solid ${C.btc}66`,borderRadius:20,padding:"4px 14px",fontSize:13,fontWeight:600,color:C.btc}}>Version {APP_VERSION}</div>
             </div>
-            <div style={{fontSize:10,fontWeight:800,color:C.text3,textTransform:"uppercase",letterSpacing:.5,marginBottom:10}}>Historique des versions</div>
+            <div style={{fontSize:10,fontWeight:600,color:C.text3,textTransform:"uppercase",letterSpacing:.5,marginBottom:10}}>Historique des versions</div>
             <div style={{display:"flex",flexDirection:"column",gap:10}}>
               {[
                 ["v5.4","Cash dip IBKR (USD/EUR), synchro watchlist multi-appareils corrigée, météo Telegram même app fermée, accueil à jour au lancement (dernier KV), boutons accent or, bouton actualiser refait."],
@@ -10867,7 +10867,7 @@ function App(){
                 ["v1.0","Première version Creusot Global Investments (refonte de « GDB & Sons ») : positions, patrimoine total, fonds CGIC/CGIS calibrés ~100, synchro Cloudflare KV."],
               ].map(([v,desc])=>(
                 <div key={v} style={{display:"flex",gap:10}}>
-                  <span style={{fontSize:12,fontWeight:800,color:C.btc,minWidth:42,flexShrink:0}}>{v}</span>
+                  <span style={{fontSize:12,fontWeight:600,color:C.btc,minWidth:42,flexShrink:0}}>{v}</span>
                   <span style={{fontSize:12,color:C.text2,lineHeight:1.5}}>{desc}</span>
                 </div>
               ))}
@@ -10884,7 +10884,7 @@ function App(){
             width:"100%",maxWidth:430,border:`1px solid ${C.border}`,
           }}>
             <div style={{width:36,height:4,borderRadius:2,background:C.border,margin:"0 auto 18px"}}/>
-            <div style={{fontSize:13,fontWeight:800,color:C.text,marginBottom:16}}>🎨 Thème de l'application</div>
+            <div style={{fontSize:13,fontWeight:600,color:C.text,marginBottom:16}}>🎨 Thème de l'application</div>
             <div style={{display:"flex",flexDirection:"column",gap:10}}>
               {[
                 ["dark",      "🌑","Fond sombre · Optimal la nuit"],
@@ -10938,10 +10938,10 @@ class CGIErrorBoundary extends React.Component {
     if(this.state.err){
       var e=this.state.err;
       return React.createElement("div",{style:{padding:"22px 18px",fontFamily:"ui-monospace,Menlo,monospace",color:"#e8e8e8",background:"#0b0e14",minHeight:"100vh",fontSize:12,lineHeight:1.55,overflowY:"auto"}},
-        React.createElement("div",{style:{color:"#EAB308",fontWeight:800,fontSize:16,marginBottom:12}},"⚠️ Erreur de rendu CGI"),
+        React.createElement("div",{style:{color:"#EAB308",fontWeight:600,fontSize:16,marginBottom:12}},"⚠️ Erreur de rendu CGI"),
         React.createElement("div",{style:{color:"#f87171",marginBottom:12,whiteSpace:"pre-wrap",fontWeight:700}}, String((e&&e.message)||e)),
         React.createElement("pre",{style:{whiteSpace:"pre-wrap",color:"#9aa3b2",fontSize:10,maxHeight:"45vh",overflow:"auto",background:"#070a10",padding:10,borderRadius:8}}, (e&&e.stack)||""),
-        React.createElement("button",{onClick:function(){ try{ location.reload(); }catch(x){} }, style:{marginTop:16,padding:"9px 18px",background:"#EAB308",border:"none",borderRadius:8,fontWeight:800,cursor:"pointer",color:"#000"}},"Recharger")
+        React.createElement("button",{onClick:function(){ try{ location.reload(); }catch(x){} }, style:{marginTop:16,padding:"9px 18px",background:"#EAB308",border:"none",borderRadius:8,fontWeight:600,cursor:"pointer",color:"#000"}},"Recharger")
       );
     }
     return this.props.children;
