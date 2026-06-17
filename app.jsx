@@ -757,7 +757,7 @@ function applyPrices(prices, usdEur, effSrc){
 }
 
 // Date locale UTC+11 (Nouvelle-Calédonie)
-const APP_VERSION = "v5.55";
+const APP_VERSION = "v5.56";
 // v4.5 — fix NICK : NICK.AS n'existe pas chez Yahoo, le bon symbole EUR est NICK.MI (Milan)
 try{ if(typeof YF_MAP!=="undefined" && YF_MAP){ YF_MAP.NICK="NICK.MI"; } }catch(e){}
 const NC_OFFSET_MS = 11 * 60 * 60 * 1000;
@@ -3810,10 +3810,8 @@ function PageAllocation({hidden, EFF, eur=false, setEur, iconDbVersion=0, bumpIc
             );
           })()}
 
-          {/* Hint */}
-          <div style={{fontSize:10,color:C.gray,marginBottom:8,textAlign:"center",fontStyle:"italic"}}>
-            Appuyer sur une catégorie pour voir le détail
-          </div>
+          {/* Titre de section — style home */}
+          <div style={{fontSize:10,letterSpacing:4,color:C.text2,textTransform:"uppercase",margin:"24px 0 12px"}}>Positions</div>
 
           {/* Sections accordéon */}
           {SECTIONS.map(sec=>(
@@ -3846,21 +3844,23 @@ function PageAllocation({hidden, EFF, eur=false, setEur, iconDbVersion=0, bumpIc
                 border:`1px solid ${C.border2}`, overflow:"hidden",
               }}>
                 <div style={{
-                  background:C.btc+"18", borderBottom:`1px solid ${C.border}`,
-                  padding:"14px 16px", display:"flex", justifyContent:"space-between", alignItems:"center",
+                  padding:"20px 18px", display:"flex", justifyContent:"space-between", alignItems:"flex-start",
+                  borderBottom:`1px solid ${C.border}`,
                 }}>
                   <div>
-                    <div style={{fontSize:10,color:C.gray,marginBottom:3,textTransform:"uppercase",letterSpacing:.5}}>Total portefeuille</div>
-                    <div style={{fontSize:28,fontWeight:700,letterSpacing:-1,color:C.green}}>{msk(cur2+fmt(totalDisplay),hidden)}</div>
-                    <div style={{fontSize:13,color:C.gray,marginTop:2}}>{msk(eur?"$"+fmt(totalUSD):"€"+fmt(totalEUR),hidden)}</div>
+                    <div style={{fontSize:10,color:C.text2,marginBottom:8,textTransform:"uppercase",letterSpacing:4}}>Total portefeuille</div>
+                    <div style={{fontFamily:"'Cormorant Garamond',Georgia,serif",fontWeight:400,fontSize:42,lineHeight:1,color:C.text,fontVariantNumeric:"tabular-nums"}}>
+                      {hidden?"••••••":<><span style={{color:C.gold,fontSize:25,verticalAlign:4,marginRight:2}}>{cur2}</span>{fmt(totalDisplay)}</>}
+                    </div>
+                    <div style={{fontSize:12,color:C.text3,marginTop:6,fontVariantNumeric:"tabular-nums"}}>{msk(eur?"$"+fmt(totalUSD):"€"+fmt(totalEUR),hidden)}</div>
                   </div>
                   <div style={{textAlign:"right"}}>
-                    <div style={{fontSize:10,color:C.gray,marginBottom:3,textTransform:"uppercase",letterSpacing:.5}}>P&L positions</div>
-                    <div style={{fontSize:22,fontWeight:600,color:clr(sectionsPnl)}}>{hidden?"***":(sectionsPnl>=0?"+":"")+cur2+fmtK(Math.abs(eur?Math.round(sectionsPnl*(_src.usdEur||0.852)):sectionsPnl))}</div>
+                    <div style={{fontSize:10,color:C.text2,marginBottom:8,textTransform:"uppercase",letterSpacing:4}}>P&L</div>
+                    <div style={{fontFamily:"'Cormorant Garamond',Georgia,serif",fontSize:28,lineHeight:1,color:clr(sectionsPnl),fontVariantNumeric:"tabular-nums"}}>{hidden?"•••":(sectionsPnl>=0?"+":"")+cur2+fmtK(Math.abs(eur?Math.round(sectionsPnl*(_src.usdEur||0.852)):sectionsPnl))}</div>
                     <div style={{
-                      fontSize:12,fontWeight:700,color:clr(sectionsPnl),
-                      background:clr(sectionsPnl)+"22",borderRadius:6,padding:"2px 8px",
-                      display:"inline-block",marginTop:3,
+                      fontSize:11,fontVariantNumeric:"tabular-nums",color:clr(sectionsPnl),
+                      border:`1px solid ${clr(sectionsPnl)}47`,borderRadius:999,padding:"3px 10px",
+                      display:"inline-block",marginTop:8,
                     }}>{fmtP(pnlPct)}</div>
                   </div>
                 </div>
