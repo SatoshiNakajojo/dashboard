@@ -1,3 +1,4 @@
+/** @jsxRuntime classic */
 const { useState, useEffect, useCallback, useRef } = React;
 
 /* ─── THEMES ─────────────────────────────────────────────── */
@@ -710,7 +711,7 @@ function applyPrices(prices, usdEur, effSrc){
 }
 
 // Date locale UTC+11 (Nouvelle-Calédonie)
-const APP_VERSION = "v5.49";
+const APP_VERSION = "v5.50";
 // v4.5 — fix NICK : NICK.AS n'existe pas chez Yahoo, le bon symbole EUR est NICK.MI (Milan)
 try{ if(typeof YF_MAP!=="undefined" && YF_MAP){ YF_MAP.NICK="NICK.MI"; } }catch(e){}
 const NC_OFFSET_MS = 11 * 60 * 60 * 1000;
