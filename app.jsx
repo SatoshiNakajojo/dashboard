@@ -792,7 +792,7 @@ function applyPrices(prices, usdEur, effSrc){
 }
 
 // Date locale UTC+11 (Nouvelle-Calédonie)
-const APP_VERSION = "v6.05";
+const APP_VERSION = "v6.06";
 // v4.5 — fix NICK : NICK.AS n'existe pas chez Yahoo, le bon symbole EUR est NICK.MI (Milan)
 try{ if(typeof YF_MAP!=="undefined" && YF_MAP){ YF_MAP.NICK="NICK.MI"; } }catch(e){}
 const NC_OFFSET_MS = 11 * 60 * 60 * 1000;
@@ -1581,6 +1581,30 @@ function TickerModal({ ticker, cat="", eur=false, usdEur=0.86, onClose }) {
   const svgRef = useRef(null);
   const [holdingsOpen, setHoldingsOpen] = useState(false);
   const [kpis, setKpis] = useState([]); // v4.0 LOT4 — indicateurs clés
+  // ── #3 — Position + historique des trades du ticker ──
+  const [posEdit, setPosEdit] = useState(false);
+  const [posData, setPosData] = useState(()=>{ try{ return lsv9Get('cgi_pos_'+ticker)||{}; }catch(e){ return {}; } });
+  const savePos = (patch)=>{ const next={...posData,...patch}; setPosData(next); try{ lsv9Set('cgi_pos_'+ticker, next); }catch(e){} };
+  const tkTrades = (()=>{
+    let all=null; try{ all=lsv9Get('cgi_txns'); }catch(e){}
+    if(!Array.isArray(all)||!all.length) all=(typeof SEED_TXNS_REAL!=="undefined")?SEED_TXNS_REAL:[];
+    return all.filter(t=>t&&t.ticker===ticker).sort((a,b)=>(a.date<b.date?-1:1));
+  })();
+  const pos = (()=>{
+    let buyQ=0, buyV=0, sellQ=0, firstBuy=null;
+    tkTrades.forEach(t=>{ const q=Math.abs(t.qty||0), p=t.price||0;
+      if(t.side==="BUY"){ buyQ+=q; buyV+=q*p; if(!firstBuy) firstBuy=t.date; }
+      else if(t.side==="SELL"){ sellQ+=q; } });
+    return { netQ:buyQ-sellQ, pru:buyQ>0?buyV/buyQ:null, firstBuy };
+  })();
+  const holdDays = pos.firstBuy ? Math.round((Date.now()-new Date(pos.firstBuy).getTime())/86400000) : null;
+  const fmtHold = d => d==null?"—":(d>=60?Math.round(d/30)+" mois":d+" j");
+  const _cur = eur?"€":"$";
+  const curPrice = (()=>{
+    if(data?.price!=null && !isNaN(Number(data.price))) return Number(data.price);
+    const c=data?.candles; if(Array.isArray(c)&&c.length){ const k=c[c.length-1]; const v=k.close??k.c??k.value; return v!=null?Number(v):null; }
+    return null;
+  })();
   // v4.0 LOT4 — récupère le plan d'investissement (zones) depuis le watchlist
   const wlPlan = (()=>{
     try{
@@ -1869,6 +1893,50 @@ function TickerModal({ ticker, cat="", eur=false, usdEur=0.86, onClose }) {
                   <div key={i} style={{display:"flex",justifyContent:"space-between",fontSize:11}}>
                     <span style={{color:C.gray}}>{k.label}</span>
                     <span style={{fontWeight:700,color:k.tone==="up"?C.green:k.tone==="down"?C.red:C.text}}>{k.value}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* ── #3 MA POSITION (éditable) ── */}
+          <div style={{marginTop:10,background:C.bg1,border:`1px solid ${C.border}`,borderRadius:10,padding:"10px 12px"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+              <span style={{fontSize:10,fontWeight:600,color:C.gold,letterSpacing:.4}}>MA POSITION</span>
+              <button onClick={()=>setPosEdit(v=>!v)} style={lxBtn({active:posEdit,style:{padding:"3px 9px",fontSize:10,gap:4}})}>
+                <Icon name={posEdit?"check":"edit"} size={12} color={posEdit?C.gold:C.text2}/>{posEdit?"OK":"Éditer"}
+              </button>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"7px 12px",fontSize:11}}>
+              <div style={{display:"flex",justifyContent:"space-between"}}><span style={{color:C.text3}}>Position</span><span style={{fontWeight:700,color:C.text}}>{pos.netQ?pos.netQ.toLocaleString("fr-FR",{maximumFractionDigits:4}):"—"}</span></div>
+              <div style={{display:"flex",justifyContent:"space-between"}}><span style={{color:C.text3}}>Prix d'achat moyen</span><span style={{fontWeight:700,color:C.text}}>{pos.pru!=null?_cur+pos.pru.toFixed(2):"—"}</span></div>
+              <div style={{display:"flex",justifyContent:"space-between"}}><span style={{color:C.text3}}>Cours actuel</span><span style={{fontWeight:700,color:C.text}}>{curPrice!=null?_cur+curPrice.toFixed(2):"—"}</span></div>
+              <div style={{display:"flex",justifyContent:"space-between"}}><span style={{color:C.text3}}>Durée de hold</span><span style={{fontWeight:700,color:C.text}}>{fmtHold(holdDays)}</span></div>
+              {pos.pru!=null && curPrice!=null && (()=>{ const pct=curPrice/pos.pru-1; return(
+                <div style={{display:"flex",justifyContent:"space-between"}}><span style={{color:C.text3}}>P&L latent</span><span style={{fontWeight:700,color:pct>=0?C.green:C.red}}>{(pct>=0?"+":"")+(pct*100).toFixed(1)}%</span></div>
+              );})()}
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                <span style={{color:C.text3}}>Objectif de vente</span>
+                {posEdit
+                  ? <input type="number" value={posData.target||""} onChange={e=>savePos({target:e.target.value})} placeholder="prix" style={{width:72,background:C.bg2,border:`1px solid ${C.border2}`,borderRadius:6,color:C.text,fontSize:11,padding:"2px 6px",textAlign:"right"}}/>
+                  : <span style={{fontWeight:700,color:posData.target?C.gold:C.text3}}>{posData.target?_cur+Number(posData.target).toFixed(2):"—"}</span>}
+              </div>
+            </div>
+            {posEdit
+              ? <input value={posData.note||""} onChange={e=>savePos({note:e.target.value})} placeholder="Note sur la position…" style={{marginTop:8,width:"100%",boxSizing:"border-box",background:C.bg2,border:`1px solid ${C.border2}`,borderRadius:6,color:C.text,fontSize:11,padding:"5px 8px"}}/>
+              : (posData.note ? <div style={{marginTop:8,fontSize:11,color:C.text2,fontStyle:"italic"}}>{posData.note}</div> : null)}
+          </div>
+
+          {/* ── #3 HISTORIQUE DES TRADES ── */}
+          {tkTrades.length>0 && (
+            <div style={{marginTop:10,background:C.bg1,border:`1px solid ${C.border}`,borderRadius:10,padding:"10px 12px"}}>
+              <div style={{fontSize:10,fontWeight:600,color:C.gold,letterSpacing:.4,marginBottom:8}}>HISTORIQUE DES TRADES · {tkTrades.length}</div>
+              <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                {tkTrades.slice().reverse().map((t,i)=>(
+                  <div key={t.id||i} style={{display:"flex",alignItems:"center",gap:8,fontSize:11}}>
+                    <span style={{fontSize:9,fontWeight:700,color:t.side==="BUY"?C.green:C.red,border:`1px solid ${(t.side==="BUY"?C.green:C.red)}55`,borderRadius:5,padding:"1px 6px",minWidth:42,textAlign:"center"}}>{t.side==="BUY"?"ACHAT":"VENTE"}</span>
+                    <span style={{color:C.text3,minWidth:62}}>{t.date}</span>
+                    <span style={{flex:1,textAlign:"right",color:C.text}}>{Math.abs(t.qty||0).toLocaleString("fr-FR",{maximumFractionDigits:4})} @ {t.currency==="EUR"?"€":"$"}{Number(t.price||0).toFixed(2)}</span>
                   </div>
                 ))}
               </div>
