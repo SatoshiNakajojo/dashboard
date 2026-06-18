@@ -774,7 +774,7 @@ function applyPrices(prices, usdEur, effSrc){
 }
 
 // Date locale UTC+11 (Nouvelle-Calédonie)
-const APP_VERSION = "v5.57";
+const APP_VERSION = "v5.58";
 // v4.5 — fix NICK : NICK.AS n'existe pas chez Yahoo, le bon symbole EUR est NICK.MI (Milan)
 try{ if(typeof YF_MAP!=="undefined" && YF_MAP){ YF_MAP.NICK="NICK.MI"; } }catch(e){}
 const NC_OFFSET_MS = 11 * 60 * 60 * 1000;
@@ -5986,7 +5986,7 @@ function SnapshotModal({onSave, onClose, EFF}){
 /* ═══════════════════════════════════════════════════════════
    ROOT APP
 ═══════════════════════════════════════════════════════════ */
-const TABS=["Home","Portfolio","Stats","JCGI","Data","Legend","Suivi"];
+const TABS=["Home","Portfolio","Stats","JCGI","Data","Legend","Tracking"];
 const ICONS=["◎","◑","▲","◈","⬡","♛","◉"];
 const NAV_ICONS=["home","pie","chart","gem","grid","list","search"];
 
@@ -7952,7 +7952,7 @@ function PageWatchlist({ EFF, hidden }){
     // ── Header ──────────────────────────────────────────────────────────────
     React.createElement("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"16px 16px 8px"}},
       React.createElement("div",null,
-        React.createElement("div",{style:{fontFamily:"'Cormorant Garamond',Georgia,serif",fontSize:34,fontWeight:500,color:textC,letterSpacing:1,lineHeight:1}},"Suivi de marché"),
+        React.createElement("div",{style:{fontFamily:"'Cormorant Garamond',Georgia,serif",fontSize:25,fontWeight:500,color:textC,letterSpacing:.5,lineHeight:1.1}},"Suivi de marché"),
         React.createElement("div",{style:{fontSize:11,color:grayC}},list.length+" ticker"+(list.length>1?"s":"")+(saving?" · 💾":""))
       ),
       React.createElement("div",{style:{display:"flex",gap:6,position:"relative"}},
@@ -8022,7 +8022,7 @@ function PageWatchlist({ EFF, hidden }){
                     React.createElement("span",{style:{fontSize:9,background:borderC,borderRadius:4,padding:"1px 6px",color:grayC}},e.cat),
                     condTotal>0&&React.createElement("span",{style:{fontSize:11,fontWeight:700,color:score===condTotal&&score>0?greenC:score>0?orangeC:grayC}},
                       scoreEmoji(score,condTotal)+" "+score+"/"+condTotal),
-                    inAlert&&React.createElement("span",{style:{fontSize:11,color:redC,fontWeight:700}},"🔔 ALERTE"),
+                    inAlert&&React.createElement("span",{style:{display:"inline-flex",alignItems:"center",gap:4,fontSize:10,fontWeight:600,color:redC,border:"1px solid "+redC+"55",borderRadius:C.radiusSm||8,padding:"2px 8px"}},React.createElement(Icon,{name:"bell",size:12,color:redC}),"ALERTE"),
                     atBuyZone&&React.createElement("span",{style:{fontSize:11,color:greenC,fontWeight:700}},"✓ ZONE ACHAT")
                   ),
                   React.createElement("div",{style:{fontSize:11,color:grayC,marginTop:2}},e.name)
@@ -8094,9 +8094,9 @@ function PageWatchlist({ EFF, hidden }){
 
               // Actions
               React.createElement("div",{style:{display:"flex",gap:6,marginTop:10}},
-                React.createElement("button",{onClick:function(){toggleFav(e.id);},style:{background:"none",border:"1px solid "+borderC,borderRadius:6,padding:"3px 8px",color:e.fav?orangeC:grayC,fontSize:11,cursor:"pointer"}},e.fav?"★":"☆"),
-                React.createElement("button",{onClick:function(){openEdit(e);},style:{background:"none",border:"1px solid "+borderC,borderRadius:6,padding:"3px 8px",color:blueC,fontSize:11,cursor:"pointer"}},"✏️ Éditer"),
-                React.createElement("button",{onClick:function(){deleteEntry(e.id);},style:{background:"none",border:"1px solid "+redC+"44",borderRadius:6,padding:"3px 8px",color:redC,fontSize:11,cursor:"pointer"}},"🗑")
+                React.createElement("button",{onClick:function(){toggleFav(e.id);},style:lxBtn({active:e.fav,style:{padding:"5px 10px",fontSize:12}})},e.fav?"★":"☆"),
+                React.createElement("button",{onClick:function(){openEdit(e);},style:lxBtn({style:{padding:"5px 11px",gap:5}})},React.createElement(Icon,{name:"edit",size:14,color:C.text2}),"Éditer"),
+                React.createElement("button",{onClick:function(){deleteEntry(e.id);},style:lxBtn({style:{padding:"5px 10px"}})},React.createElement(Icon,{name:"trash",size:14,color:redC}))
               )
             );
           })
@@ -8320,7 +8320,7 @@ function PageLegend(
   );};
   return (
     <div style={{padding:"8px 14px 96px"}}>
-      <div style={{fontFamily:"'Cormorant Garamond',Georgia,serif",fontSize:34,fontWeight:500,color:C.text,letterSpacing:1,lineHeight:1,marginBottom:4}}>Legend</div>
+      <div style={{fontFamily:"'Cormorant Garamond',Georgia,serif",fontSize:25,fontWeight:500,color:C.text,letterSpacing:.5,lineHeight:1.1,marginBottom:4}}>Legend</div>
       <div style={{fontSize:10,color:C.text2,marginBottom:16,letterSpacing:4,textTransform:"uppercase"}}>Trades clôturés · {board==="spot"?"Spot":"Futures"}</div>
       <div style={{display:"flex",gap:8,marginBottom:14}}>
         <Tab label="Spot" active={board==="spot"} onClick={function(){setBoard("spot");}}/>
