@@ -784,7 +784,7 @@ function applyPrices(prices, usdEur, effSrc){
 }
 
 // Date locale UTC+11 (Nouvelle-Calédonie)
-const APP_VERSION = "v5.63";
+const APP_VERSION = "v5.64";
 // v4.5 — fix NICK : NICK.AS n'existe pas chez Yahoo, le bon symbole EUR est NICK.MI (Milan)
 try{ if(typeof YF_MAP!=="undefined" && YF_MAP){ YF_MAP.NICK="NICK.MI"; } }catch(e){}
 const NC_OFFSET_MS = 11 * 60 * 60 * 1000;
@@ -4107,7 +4107,7 @@ function PageStats({chartData, hidden=false, EFF, eur=false, liveDD, src, liveIn
   const worstI = realPct.reduce((wi,v,i)=>{if(v==null)return wi; return wi===-1||v<realPct[wi]?i:wi;}, -1);
 
   // Colors for bars
-  const bclr = v => v==null?"transparent":v>=0?C.green:C.red;
+  const bclr = v => v==null?"transparent":v>=0?catColor:C.red;
 
   return(
     <div>
@@ -4135,7 +4135,7 @@ function PageStats({chartData, hidden=false, EFF, eur=false, liveDD, src, liveIn
             ["Pire",worstI>=0?data.m[worstI]+" "+fmtP(realPct[worstI]):"—",C.red],
           ].map(([l,v,c])=>(
             <div key={l} style={{background:C.bg1,borderRadius:8,padding:"8px 6px",border:`1px solid ${C.border}`,textAlign:"center"}}>
-              <div style={{fontSize:8,color:C.gray,marginBottom:3}}>{l}</div>
+              <div style={{fontSize:8,color:C.text2,marginBottom:3}}>{l}</div>
               <div style={{fontSize:11,fontWeight:600,color:c}}>{msk(v,hidden)}</div>
             </div>
           ))}
@@ -4177,7 +4177,7 @@ function PageStats({chartData, hidden=false, EFF, eur=false, liveDD, src, liveIn
                 return(
                   <g key={i}>
                     <rect x={bx(i)} y={barY} width={barW} height={barH}
-                      fill={col} opacity={0.85} rx={2}/>
+                      fill={col} opacity={1} rx={2}/>
                     <text x={cx} y={lblY} textAnchor="middle"
                       fill={col} fontSize={6.5} fontWeight="800">
                       {fmtP(v,0)}
@@ -4211,7 +4211,7 @@ function PageStats({chartData, hidden=false, EFF, eur=false, liveDD, src, liveIn
               <thead>
                 <tr>
                   {["Mois","BOM","EOM","Investi",`P&L ${cur}`,"%"].map(h=>(
-                    <th key={h} style={{padding:"4px 6px",color:C.gray,fontWeight:600,textAlign:h==="Mois"?"left":"right",borderBottom:`1px solid ${C.border}`,fontSize:9}}>{h}</th>
+                    <th key={h} style={{padding:"4px 6px",color:C.text2,fontWeight:600,textAlign:h==="Mois"?"left":"right",borderBottom:`1px solid ${C.border}`,fontSize:9}}>{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -4225,7 +4225,7 @@ function PageStats({chartData, hidden=false, EFF, eur=false, liveDD, src, liveIn
                   return(
                     <tr key={i} style={{borderBottom:`1px solid ${C.border}22`}}>
                       <td style={{padding:"5px 6px",color:C.text2,fontWeight:600}}>{m}</td>
-                      <td style={{padding:"5px 6px",textAlign:"right",color:C.gray}}>{bomC!=null?msk(cur+Math.round(bomC).toLocaleString("fr-FR"),hidden):"—"}</td>
+                      <td style={{padding:"5px 6px",textAlign:"right",color:C.text2}}>{bomC!=null?msk(cur+Math.round(bomC).toLocaleString("fr-FR"),hidden):"—"}</td>
                       <td style={{padding:"5px 6px",textAlign:"right",color:C.text}}>{eomC!=null?msk(cur+Math.round(eomC).toLocaleString("fr-FR"),hidden):"—"}</td>
                       <td style={{padding:"5px 6px",textAlign:"right",color:ivC?C.teal:C.text3,fontWeight:ivC?700:400}}>{ivC?msk((ivC>0?"+":"")+Math.round(ivC).toLocaleString("fr-FR")+cur,hidden):"—"}</td>
                       <td style={{padding:"5px 6px",textAlign:"right",color:bclr(pnlC)}}>{pnlC!=null?msk((pnlC>=0?"+":"")+Math.round(pnlC).toLocaleString("fr-FR"),hidden):"—"}</td>
@@ -4248,7 +4248,7 @@ function PageStats({chartData, hidden=false, EFF, eur=false, liveDD, src, liveIn
                     const ttlPctY = ttlBOM ? ttlPnlY / ttlBOM : (ttlInv2 ? ttlPnlY / ttlInv2 : 0);
                     return(<>
                       <td style={{padding:"5px 6px",color:C.text,fontSize:9}}>TOTAL</td>
-                      <td style={{padding:"5px 6px",textAlign:"right",color:C.gray,fontSize:9}}>{ttlBOM!=null?msk(cur+Math.round(ttlBOM).toLocaleString("fr-FR"),hidden):"—"}</td>
+                      <td style={{padding:"5px 6px",textAlign:"right",color:C.text2,fontSize:9}}>{ttlBOM!=null?msk(cur+Math.round(ttlBOM).toLocaleString("fr-FR"),hidden):"—"}</td>
                       <td style={{padding:"5px 6px",textAlign:"right",color:C.text,fontSize:9}}>{ttlEOM!=null?msk(cur+Math.round(ttlEOM).toLocaleString("fr-FR"),hidden):"—"}</td>
                       <td style={{padding:"5px 6px",textAlign:"right",color:ttlInv2?C.teal:C.text3,fontSize:9}}>{ttlInv2?msk((ttlInv2>0?"+":"")+Math.round(ttlInv2).toLocaleString("fr-FR")+cur,hidden):"—"}</td>
                       <td style={{padding:"5px 6px",textAlign:"right",color:bclr(ttlPnlY),fontSize:9}}>{msk((ttlPnlY>=0?"+":"")+Math.round(ttlPnlY).toLocaleString("fr-FR"),hidden)}</td>
@@ -4267,7 +4267,7 @@ function PageStats({chartData, hidden=false, EFF, eur=false, liveDD, src, liveIn
         <>
           <SH label="Saisonnalité historique — Crypto" color={C.btc}/>
           <div style={{...crd(),marginBottom:14}}>
-            <div style={{fontSize:9,color:C.gray,marginBottom:8}}>Performance mensuelle moyenne (2020–2026)</div>
+            <div style={{fontSize:9,color:C.text2,marginBottom:8}}>Performance mensuelle moyenne (2020–2026)</div>
             {(()=>{
               const mx2=Math.max(...SEAS_CRYPTO.pct.map(Math.abs),.01);
               const WS=320, HT=44, HB=44, HLB=14, MIDL=HT;
@@ -4281,12 +4281,12 @@ function PageStats({chartData, hidden=false, EFF, eur=false, liveDD, src, liveIn
                     const v=SEAS_CRYPTO.pct[i];
                     const cx=bxS(i)+bwS/2;
                     const hpx=Math.max(2,Math.abs(v)/mx2*(HT-6));
-                    const isPos=v>=0; const col=bclr(v);
+                    const isPos=v>=0; const col=v>=0?C.btc:C.red;
                     const barY=isPos?MIDL-hpx:MIDL;
                     const lblY=isPos?MIDL-hpx-3:MIDL+hpx+9;
                     return(
                       <g key={i}>
-                        <rect x={bxS(i)} y={barY} width={bwS} height={hpx} fill={col} opacity={0.8} rx={2}/>
+                        <rect x={bxS(i)} y={barY} width={bwS} height={hpx} fill={col} opacity={1} rx={2}/>
                         <text x={cx} y={lblY} textAnchor="middle" fill={col} fontSize={6} fontWeight="800">{fmtP(v,0)}</text>
                         <text x={cx} y={MIDL+HB+HLB-2} textAnchor="middle" fill={C.text3} fontSize={6.5}>{m.slice(0,3)}</text>
                       </g>
