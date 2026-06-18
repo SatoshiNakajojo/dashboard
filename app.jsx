@@ -792,7 +792,7 @@ function applyPrices(prices, usdEur, effSrc){
 }
 
 // Date locale UTC+11 (Nouvelle-Calédonie)
-const APP_VERSION = "v6.04";
+const APP_VERSION = "v6.05";
 // v4.5 — fix NICK : NICK.AS n'existe pas chez Yahoo, le bon symbole EUR est NICK.MI (Milan)
 try{ if(typeof YF_MAP!=="undefined" && YF_MAP){ YF_MAP.NICK="NICK.MI"; } }catch(e){}
 const NC_OFFSET_MS = 11 * 60 * 60 * 1000;
@@ -4403,7 +4403,14 @@ function GdbCompareChartGDB({onTFChange, liveGSB, liveGDBS, liveBench, liveGC}){
   const onTouch = e => { e.preventDefault(); if(!svgRef.current) return; const t=e.touches[0]||e.changedTouches[0]; if(e.type==="touchstart"){_tm3.current=false;_ts3.current=t.clientX;}else{_tm3.current=Math.abs(t.clientX-_ts3.current)>4;} setHover({i:getIdx(t.clientX, svgRef.current.getBoundingClientRect())}); };
   const onTouchEnd1=ev=>{ev.preventDefault();if(!_tm3.current)setHover(null);};
 
+  const hasData=(vals)=>{
+    const nn=vals.filter(v=>v!=null);
+    if(nn.length<2) return false;
+    const distinct=new Set(nn.map(v=>Math.round(v*100)));
+    return distinct.size>=2;   // au moins 2 valeurs distinctes = vraie courbe (sinon plate/0 → ignorée)
+  };
   const mkLine=(vals,col,bold)=>{
+    if(!hasData(vals)) return null;
     const pts=vals.map((v,i)=>v!=null?`${px(i)},${py(v)}`:null).filter(Boolean).join(" ");
     return pts?<polyline key={col} points={pts} fill="none" stroke={col} strokeWidth={full?(bold?1.2:0.7):(bold?2.2:1.3)} opacity={full?0.8:.85}/>:null;
   };
@@ -4421,10 +4428,10 @@ function GdbCompareChartGDB({onTFChange, liveGSB, liveGDBS, liveBench, liveGC}){
   const SERIES = [
     {vals:gcB,  col:C.btc,    lbl:"CGIC"},
     {vals:gsB,  col:C.blue,   lbl:"CGIS"},
-    {vals:btcB, col:C.gold,   lbl:"BTC"},
-    {vals:ethB, col:C.purple, lbl:"ETH"},
+    {vals:btcB, col:C.purple, lbl:"BTC"},
+    {vals:ethB, col:C.red,    lbl:"ETH"},
     {vals:nqB,  col:C.green,  lbl:"Nasdaq"},
-    {vals:msB,  col:C.teal,   lbl:"MSCI"},
+    {vals:msB,  col:C.gold,   lbl:"MSCI"},
     {vals:spB,  col:C.gray,   lbl:"S&P"},
   ];
 
@@ -4485,8 +4492,8 @@ function GdbCompareChartGDB({onTFChange, liveGSB, liveGDBS, liveBench, liveGC}){
         ))}
         <line x1={PL} y1={py(100)} x2={W-PR} y2={py(100)} stroke="rgba(255,255,255,.15)" strokeWidth={.8} strokeDasharray="3,3"/>
         {mkLine(gcB,C.btc,true)}{mkLine(gsB,C.blue,true)}
-        {mkLine(btcB,C.gold,false)}{mkLine(ethB,C.purple,false)}
-        {mkLine(nqB,C.green,false)}{mkLine(msB,C.teal,false)}{mkLine(spB,C.gray,false)}
+        {mkLine(btcB,C.purple,false)}{mkLine(ethB,C.red,false)}
+        {mkLine(nqB,C.green,false)}{mkLine(msB,C.gold,false)}{mkLine(spB,C.gray,false)}
         {/* Crosshair */}
         {hi!=null && <>
           <line x1={px(hi)} y1={2} x2={px(hi)} y2={H} stroke="rgba(255,255,255,.18)" strokeWidth={1} strokeDasharray="3,3"/>
@@ -4500,7 +4507,7 @@ function GdbCompareChartGDB({onTFChange, liveGSB, liveGDBS, liveBench, liveGC}){
 
       {/* Légende — hors graphique */}
       <div style={{display:"flex",flexWrap:"wrap",gap:12,justifyContent:"center",marginTop:12}}>
-        {SERIES.map(({col,lbl,vals})=>{
+        {SERIES.filter(s=>hasData(s.vals)).map(({col,lbl,vals})=>{
           const p=lastPerf(vals);
           return(
             <div key={lbl} style={{display:"flex",alignItems:"center",gap:5}}>
