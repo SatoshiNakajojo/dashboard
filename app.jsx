@@ -112,6 +112,10 @@ const ICON_PATHS = {
   search:'<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>',
   clock:'<circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>',
   flame:'<path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/>',
+  coin:'<circle cx="12" cy="12" r="9"/><path d="M14.5 9.2a2.7 2.2 0 0 0-2.5-1.2c-1.5 0-2.6.7-2.6 1.8 0 1.1 1 1.6 2.6 1.9 1.6.3 2.7.8 2.7 2 0 1.2-1.2 1.9-2.8 1.9a2.8 2.2 0 0 1-2.6-1.3"/><path d="M12 6.2v1.4M12 16.4v1.4"/>',
+  layers:'<path d="M12 2 2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>',
+  target:'<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.4"/>',
+  wallet:'<rect x="2.5" y="6" width="19" height="12" rx="2.5"/><path d="M6 9.5v5M18 9.5v5"/><circle cx="12" cy="12" r="2.4"/>',
 };
 function Icon({name,size=20,color="currentColor",sw=1.5,style}){
   return React.createElement("svg",{
@@ -120,6 +124,12 @@ function Icon({name,size=20,color="currentColor",sw=1.5,style}){
     style:style, dangerouslySetInnerHTML:{__html:ICON_PATHS[name]||""}
   });
 }
+
+/* Famille de position → icône filaire (plus d'emoji) */
+const FAMILY_ICONS = {
+  "Crypto":"coin", "Indices ETF":"layers", "Stock Picking":"target",
+  "Or / Gold":"gem", "Cash Dip":"wallet", "Cash Matelas":"wallet",
+};
 
 /* Bouton "luxe" réutilisable — style Snapshot ; actif = accent champagne (ou couleur passée) */
 function lxBtn(opts){
@@ -774,7 +784,7 @@ function applyPrices(prices, usdEur, effSrc){
 }
 
 // Date locale UTC+11 (Nouvelle-Calédonie)
-const APP_VERSION = "v5.60";
+const APP_VERSION = "v5.61";
 // v4.5 — fix NICK : NICK.AS n'existe pas chez Yahoo, le bon symbole EUR est NICK.MI (Milan)
 try{ if(typeof YF_MAP!=="undefined" && YF_MAP){ YF_MAP.NICK="NICK.MI"; } }catch(e){}
 const NC_OFFSET_MS = 11 * 60 * 60 * 1000;
@@ -2269,13 +2279,13 @@ function SectionRow({section, open, onToggle, hidden=false, eur=false, usdEur=0.
           alignItems:"center", gap:12, transition:"all .18s",
         }}
       >
-        {/* Icon — carré bordé, style boutons du bandeau */}
+        {/* Icon — carré bordé, logo filaire (style boutons du bandeau) */}
         <div style={{
           width:38, height:38, borderRadius:C.radiusSm||8, flexShrink:0,
           background:"transparent", border:`1px solid ${open ? color : C.border2}`,
-          display:"flex", alignItems:"center", justifyContent:"center", fontSize:17,
+          display:"flex", alignItems:"center", justifyContent:"center",
           color:color, transition:"all .18s",
-        }}>{icon}</div>
+        }}><Icon name={FAMILY_ICONS[n]||"grid"} size={19} color={color}/></div>
 
         {/* Name + bar */}
         <div style={{flex:1, textAlign:"left"}}>
@@ -3765,39 +3775,14 @@ function PageAllocation({hidden, EFF, eur=false, setEur, iconDbVersion=0, bumpIc
       {/* ── DÉTAIL PAR CATÉGORIE ── */}
       {mode==="detail"&&(
         <>
-          {/* ── RÉPARTITION (style home) ── */}
-          {(()=>{
-            const _t = SECTIONS.reduce((a,s)=>a+Math.max(0,s.totalUSD),0)||1;
-            const cur2b = eur?"€":"$";
-            const cvD = v => eur ? Math.round(v*_src.usdEur) : v;
-            const _al = SECTIONS.filter(s=>s.totalUSD>0).map(s=>({n:s.n,color:s.color,pct:s.totalUSD/_t*100,usd:s.totalUSD})).sort((a,b)=>b.usd-a.usd);
-            return(
-              <div style={{marginBottom:18}}>
-                <div style={{fontSize:10,letterSpacing:4,color:C.text2,textTransform:"uppercase",margin:"4px 0 12px"}}>Répartition</div>
-                <div style={{display:"flex",height:10,borderRadius:5,overflow:"hidden",marginBottom:14,background:C.bg2}}>
-                  {_al.map((a,i)=><div key={i} style={{width:a.pct.toFixed(2)+"%",background:a.color}}/>)}
-                </div>
-                <div style={{display:"flex",flexDirection:"column",gap:9}}>
-                  {_al.map((a,i)=>(
-                    <div key={i} style={{display:"flex",alignItems:"center",gap:10,fontSize:13}}>
-                      <span style={{width:9,height:9,borderRadius:3,flexShrink:0,background:a.color}}/>
-                      <span style={{flex:1,color:C.text}}>{a.n}</span>
-                      <span style={{color:C.text2,fontVariantNumeric:"tabular-nums"}}>{a.pct.toFixed(0)} % · {msk(cur2b+fmtK(cvD(a.usd)),hidden)}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            );
-          })()}
-
-          {/* ── TOTAL PORTEFEUILLE (titre dehors, entre Répartition et Positions) ── */}
+          {/* ── TOTAL PORTEFEUILLE (tout en haut, titre dehors) ── */}
           {(()=>{
             const sectionsPnl = SECTIONS.reduce((acc,s)=>acc+s.items.reduce((a,x)=>a+(x.pnl||0),0),0);
             const investi = SECTIONS.reduce((acc,s)=>acc+s.items.reduce((a,x)=>a+(x.investi||0),0),0);
             const pnlPct = investi>0?sectionsPnl/investi:0;
             const cur2b = eur?"€":"$";
             return(
-              <div>
+              <div style={{marginBottom:20}}>
                 <div style={{fontSize:10,letterSpacing:4,color:C.text2,textTransform:"uppercase",margin:"4px 0 12px"}}>Total portefeuille</div>
                 <div style={{border:`1px solid ${C.border2}`,borderRadius:C.radius||12,padding:"18px 16px",display:"flex",justifyContent:"space-between",alignItems:"flex-start",background:C.bg1}}>
                   <div>
@@ -3810,6 +3795,33 @@ function PageAllocation({hidden, EFF, eur=false, setEur, iconDbVersion=0, bumpIc
                     <div style={{fontFamily:"'Cormorant Garamond',Georgia,serif",fontSize:26,lineHeight:1,color:clr(sectionsPnl),fontVariantNumeric:"tabular-nums"}}>{hidden?"•••":(sectionsPnl>=0?"+":"")+cur2b+fmtK(Math.abs(eur?Math.round(sectionsPnl*(_src.usdEur||0.852)):sectionsPnl))}</div>
                     <div style={{fontSize:11,fontVariantNumeric:"tabular-nums",color:clr(sectionsPnl),border:`1px solid ${clr(sectionsPnl)}47`,borderRadius:999,padding:"3px 10px",display:"inline-block",marginTop:8}}>{fmtP(pnlPct)}</div>
                   </div>
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* ── RÉPARTITION : camembert + chips (style home) ── */}
+          {(()=>{
+            const _t = SECTIONS.reduce((a,s)=>a+Math.max(0,s.totalUSD),0)||1;
+            const cur2b = eur?"€":"$";
+            const cvD = v => eur ? Math.round(v*_src.usdEur) : v;
+            const _al = SECTIONS.filter(s=>s.totalUSD>0).map(s=>({n:s.n,color:s.color,pct:s.totalUSD/_t*100,usd:s.totalUSD})).sort((a,b)=>b.usd-a.usd);
+            const donutData = SECTIONS.map(s=>({v:s.pct/100,c:s.color,n:s.n,pct:s.pct,usd:s.totalUSD}));
+            return(
+              <div style={{marginBottom:18}}>
+                <div style={{fontSize:10,letterSpacing:4,color:C.text2,textTransform:"uppercase",margin:"4px 0 14px"}}>Répartition</div>
+                <div style={{display:"flex",justifyContent:"center",marginBottom:18}}>
+                  <DonutControlled size={170} ri={34} label="TOTAL" sub={cur2b+fmtK(cvD(SECTIONS.reduce((s,sec)=>s+sec.totalUSD,0)))}
+                    data={donutData} sel={selSlice} onSel={i=>setSelSlice(selSlice===i?null:i)}/>
+                </div>
+                <div style={{display:"flex",flexDirection:"column",gap:9}}>
+                  {_al.map((a,i)=>(
+                    <div key={i} style={{display:"flex",alignItems:"center",gap:10,fontSize:13}}>
+                      <span style={{width:9,height:9,borderRadius:3,flexShrink:0,background:a.color}}/>
+                      <span style={{flex:1,color:C.text}}>{a.n}</span>
+                      <span style={{color:C.text2,fontVariantNumeric:"tabular-nums"}}>{a.pct.toFixed(0)} % · {msk(cur2b+fmtK(cvD(a.usd)),hidden)}</span>
+                    </div>
+                  ))}
                 </div>
               </div>
             );
@@ -4527,29 +4539,20 @@ function FondCard({label, cours, qty, fonds, color, perfs, hidden, eur, usdEur, 
   const perfs3 = perfs.slice(0,3);
 
   return(
+    <>
+    {/* Titre SORTI du bloc — police home (petites capitales) */}
+    <div style={{fontSize:10,letterSpacing:4,color:C.text2,textTransform:"uppercase",margin:"2px 0 10px",display:"flex",gap:8,alignItems:"baseline"}}>
+      <span style={{color}}>{titre}</span>{sousTitre&&<span style={{color:C.text3,letterSpacing:2}}>· {sousTitre}</span>}
+    </div>
     <div onClick={onClick} style={{
       background:C.bg1,
-      borderRadius:C.radius||14,
+      borderRadius:C.radius||12,
       border:`1px solid ${C.border}`,
-      borderLeft:`3px solid ${color}`,
-      padding:"12px 12px",
-      marginBottom:12,
+      padding:"14px 14px",
+      marginBottom:16,
       position:"relative",
-      overflow:"hidden",
       cursor:onClick?"pointer":"default",
     }}>
-      {/* Halo décoratif */}
-      <div style={{
-        position:"absolute",top:-30,right:-30,width:100,height:100,borderRadius:"50%",
-        background:`radial-gradient(circle,${color}18,transparent 70%)`,
-        pointerEvents:"none",
-      }}/>
-
-      {/* Titre */}
-      <div style={{fontSize:10,fontWeight:700,color:C.gray,letterSpacing:2,textTransform:"uppercase",marginBottom:10}}>
-        <span style={{color}}>{titre}</span>
-        {sousTitre&&<span style={{color:C.gray}}>{" — "}{sousTitre}</span>}
-      </div>
 
       {/* Cours + perf création */}
       <div style={{display:"flex",alignItems:"flex-end",justifyContent:"space-between",marginBottom:16}}>
@@ -4593,6 +4596,7 @@ function FondCard({label, cours, qty, fonds, color, perfs, hidden, eur, usdEur, 
         ))}
       </div>
     </div>
+    </>
   );
 }
 
