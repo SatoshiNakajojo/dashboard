@@ -131,6 +131,14 @@ const FAMILY_ICONS = {
   "Or / Gold":"gem", "Cash Dip":"wallet", "Cash Matelas":"wallet",
 };
 
+/* Titre d'onglet — police luxe Cinzel champagne + sous-titre petites capitales */
+function PageTitle({title, sub}){
+  return React.createElement("div",{style:{marginBottom:18}},
+    React.createElement("div",{style:{fontFamily:"'Cinzel',Georgia,serif",fontSize:20,fontWeight:600,letterSpacing:2.5,color:C.gold,lineHeight:1.15}}, title),
+    sub ? React.createElement("div",{style:{fontSize:9,letterSpacing:4,color:C.text2,textTransform:"uppercase",marginTop:6}}, sub) : null
+  );
+}
+
 /* Bouton "luxe" réutilisable — style Snapshot ; actif = accent champagne (ou couleur passée) */
 function lxBtn(opts){
   opts = opts || {};
@@ -784,7 +792,7 @@ function applyPrices(prices, usdEur, effSrc){
 }
 
 // Date locale UTC+11 (Nouvelle-Calédonie)
-const APP_VERSION = "v6.0";
+const APP_VERSION = "v6.01";
 // v4.5 — fix NICK : NICK.AS n'existe pas chez Yahoo, le bon symbole EUR est NICK.MI (Milan)
 try{ if(typeof YF_MAP!=="undefined" && YF_MAP){ YF_MAP.NICK="NICK.MI"; } }catch(e){}
 const NC_OFFSET_MS = 11 * 60 * 60 * 1000;
@@ -4463,9 +4471,9 @@ function GdbCompareChartGDB({onTFChange, liveGSB, liveGDBS, liveBench, liveGC}){
           </g>
         ))}
         <line x1={PL} y1={py(100)} x2={W-PR} y2={py(100)} stroke="rgba(255,255,255,.15)" strokeWidth={.8} strokeDasharray="3,3"/>
-        {mkLine(gcB,"#F7931A",true)}{mkLine(gsB,"#EF4444",true)}
-        {mkLine(btcB,"#FBBF24",false)}{mkLine(ethB,"#1E40AF",false)}
-        {mkLine(nqB,"#10B981",false)}{mkLine(msB,"#EC4899",false)}{mkLine(spB,"#6B7280",false)}
+        {mkLine(gcB,C.btc,true)}{mkLine(gsB,C.blue,true)}
+        {mkLine(btcB,C.gold,false)}{mkLine(ethB,C.purple,false)}
+        {mkLine(nqB,C.green,false)}{mkLine(msB,C.teal,false)}{mkLine(spB,C.gray,false)}
         {/* Crosshair */}
         {hi!=null && <>
           <line x1={px(hi)} y1={2} x2={px(hi)} y2={H} stroke="rgba(255,255,255,.18)" strokeWidth={1} strokeDasharray="3,3"/>
@@ -4847,6 +4855,7 @@ function PageGDB(
 
   return(
     <div>
+      <PageTitle title="JCGI" sub="Fonds · CGIC & CGIS"/>
       <div style={{display:"grid",gridTemplateColumns:"1fr",gap:8,marginBottom:4}}>
         <FondCard label="CGIC — Crypto" cours={gcToday} qty={gcQty} fonds={gcFonds} color={C.btc} hidden={hidden}
           eur={eur} usdEur={src.usdEur} perfAllTime={gcPerfAllTime} onClick={()=>setDetailFond("CGIC")}
@@ -4857,7 +4866,7 @@ function PageGDB(
       </div>
       {detailFond && <FondDetailModal fond={detailFond} EFF={EFF} liveInv={liveInv} liveDD={liveDD} liveGC={liveGC} eur={eur} onClose={()=>setDetailFond(null)}/>}
 
-      <SH label="Comparaison à base 100 au départ de la période" color={C.gray}/>
+      <div style={{fontSize:10,letterSpacing:4,color:C.text2,textTransform:"uppercase",margin:"22px 0 12px"}}>Comparaison à base 100</div>
       <GdbCompareChartGDB onTFChange={setBenchTF} liveGSB={liveGSB} liveGDBS={liveGDBS} liveBench={liveBench} liveGC={liveGC}/>
       {/* Liste benchmark en barres retiree a la demande — v26.08 */}
     </div>
@@ -7880,7 +7889,7 @@ function PageWatchlist({ EFF, hidden }){
     // ── Header ──────────────────────────────────────────────────────────────
     React.createElement("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"16px 16px 8px"}},
       React.createElement("div",null,
-        React.createElement("div",{style:{fontFamily:"'Cormorant Garamond',Georgia,serif",fontSize:25,fontWeight:500,color:textC,letterSpacing:.5,lineHeight:1.1}},"Suivi de marché"),
+        React.createElement("div",{style:{fontFamily:"'Cinzel',Georgia,serif",fontSize:19,fontWeight:600,color:C.gold,letterSpacing:2,lineHeight:1.15}},"Tracking"),
         React.createElement("div",{style:{fontSize:11,color:grayC}},list.length+" ticker"+(list.length>1?"s":"")+(saving?" · 💾":""))
       ),
       React.createElement("div",{style:{display:"flex",gap:6,position:"relative"}},
@@ -8251,8 +8260,7 @@ function PageLegend(
   );};
   return (
     <div style={{padding:"8px 14px 96px"}}>
-      <div style={{fontFamily:"'Cormorant Garamond',Georgia,serif",fontSize:25,fontWeight:500,color:C.text,letterSpacing:.5,lineHeight:1.1,marginBottom:4}}>Legend</div>
-      <div style={{fontSize:10,color:C.text2,marginBottom:16,letterSpacing:4,textTransform:"uppercase"}}>Trades clôturés · {board==="spot"?"Spot":"Futures"}</div>
+      <PageTitle title="Legend" sub={"Trades clôturés · "+(board==="spot"?"Spot":"Futures")}/>
       <div style={{display:"flex",gap:8,marginBottom:14}}>
         <Tab label="Spot" active={board==="spot"} onClick={function(){setBoard("spot");}}/>
         <Tab label="Futures" active={board==="futures"} onClick={function(){setBoard("futures");}}/>
