@@ -792,7 +792,7 @@ function applyPrices(prices, usdEur, effSrc){
 }
 
 // Date locale UTC+11 (Nouvelle-Calédonie)
-const APP_VERSION = "v6.01";
+const APP_VERSION = "v6.02";
 // v4.5 — fix NICK : NICK.AS n'existe pas chez Yahoo, le bon symbole EUR est NICK.MI (Milan)
 try{ if(typeof YF_MAP!=="undefined" && YF_MAP){ YF_MAP.NICK="NICK.MI"; } }catch(e){}
 const NC_OFFSET_MS = 11 * 60 * 60 * 1000;
@@ -3682,6 +3682,7 @@ function PageAllocation({hidden, EFF, eur=false, setEur, iconDbVersion=0, bumpIc
   return(
     <>
     <div>
+      <PageTitle title="Portfolio" sub="Allocation & positions"/>
       {/* ── View selector — style Snapshot ── */}
       <div style={{display:"flex",gap:8,marginBottom:16}}>
         {[["detail","Détail"],["ajust","Allocation"]].map(([v,l])=>(
@@ -4120,6 +4121,7 @@ function PageStats({chartData, hidden=false, EFF, eur=false, liveDD, src, liveIn
 
   return(
     <div>
+      <PageTitle title="Stats" sub="Performance & saisonnalité"/>
       {/* ── Sélecteur catégorie ── */}
       <div style={{display:"flex",gap:8,marginBottom:12}}>
         {[["crypto","₿ Crypto",C.btc],["stocks","↗ Actions",C.blue],["total","∑ Total",C.green]].map(([k,l,c])=>(
