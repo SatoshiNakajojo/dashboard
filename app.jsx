@@ -784,7 +784,7 @@ function applyPrices(prices, usdEur, effSrc){
 }
 
 // Date locale UTC+11 (Nouvelle-Calédonie)
-const APP_VERSION = "v5.62";
+const APP_VERSION = "v5.63";
 // v4.5 — fix NICK : NICK.AS n'existe pas chez Yahoo, le bon symbole EUR est NICK.MI (Milan)
 try{ if(typeof YF_MAP!=="undefined" && YF_MAP){ YF_MAP.NICK="NICK.MI"; } }catch(e){}
 const NC_OFFSET_MS = 11 * 60 * 60 * 1000;
@@ -4395,13 +4395,13 @@ function GdbCompareChartGDB({onTFChange, liveGSB, liveGDBS, liveBench, liveGC}){
   /* Tooltip data au hover */
   const hDate = hi!=null ? dates[hi] : null;
   const SERIES = [
-    {vals:gcB,  col:"#F7931A", lbl:"CGIC"},
-    {vals:gsB,  col:"#EF4444", lbl:"CGIS"},
-    {vals:btcB, col:"#FBBF24", lbl:"BTC"},
-    {vals:ethB, col:"#1E40AF", lbl:"ETH"},
-    {vals:nqB,  col:"#10B981", lbl:"Nasdaq"},
-    {vals:msB,  col:"#EC4899", lbl:"MSCI"},
-    {vals:spB,  col:"#6B7280", lbl:"S&P"},
+    {vals:gcB,  col:C.btc,    lbl:"CGIC"},
+    {vals:gsB,  col:C.blue,   lbl:"CGIS"},
+    {vals:btcB, col:C.gold,   lbl:"BTC"},
+    {vals:ethB, col:C.purple, lbl:"ETH"},
+    {vals:nqB,  col:C.green,  lbl:"Nasdaq"},
+    {vals:msB,  col:C.teal,   lbl:"MSCI"},
+    {vals:spB,  col:C.gray,   lbl:"S&P"},
   ];
 
   const vw = typeof window!=="undefined"?window.innerWidth:390;
@@ -4411,13 +4411,9 @@ function GdbCompareChartGDB({onTFChange, liveGSB, liveGDBS, liveBench, liveGC}){
   const chartBody = (
     <>
       {/* TF selector */}
-      <div style={{display:"flex",gap:3,marginBottom:10}}>
+      <div style={{display:"flex",gap:6,marginBottom:12}}>
         {["1W","1M","MTD","YTD","1Y","2Y","ALL"].map(t=>(
-          <button key={t} onClick={()=>handleTF(t)} style={{
-            flex:1,padding:"4px 0",borderRadius:6,fontSize:10,fontWeight:700,
-            border:"none",cursor:"pointer",
-            background:tf===t?C.btc:"transparent",color:tf===t?"#000":C.gray,
-          }}>{t}</button>
+          <button key={t} onClick={()=>handleTF(t)} style={lxBtn({active:tf===t,style:{flex:1,padding:"6px 0",fontSize:10}})}>{t}</button>
         ))}
       </div>
 
@@ -4478,15 +4474,15 @@ function GdbCompareChartGDB({onTFChange, liveGSB, liveGDBS, liveBench, liveGC}){
         })}
       </svg>
 
-      {/* Legend */}
-      <div style={{display:"flex",flexWrap:"wrap",gap:6,justifyContent:"center",paddingTop:5,borderTop:`1px solid ${C.border}`}}>
+      {/* Légende — hors graphique */}
+      <div style={{display:"flex",flexWrap:"wrap",gap:12,justifyContent:"center",marginTop:12}}>
         {SERIES.map(({col,lbl,vals})=>{
           const p=lastPerf(vals);
           return(
-            <div key={lbl} style={{display:"flex",alignItems:"center",gap:3}}>
-              <div style={{width:10,height:2,background:col,borderRadius:1}}/>
-              <span style={{fontSize:8,color:C.gray}}>{lbl}</span>
-              {p!=null&&<span style={{fontSize:8,fontWeight:700,color:p>=0?C.green:C.red}}>{p>=0?"+":""}{p.toFixed(1)}%</span>}
+            <div key={lbl} style={{display:"flex",alignItems:"center",gap:5}}>
+              <div style={{width:12,height:2,background:col,borderRadius:1}}/>
+              <span style={{fontSize:9,color:C.text2}}>{lbl}</span>
+              {p!=null&&<span style={{fontSize:9,fontWeight:600,color:p>=0?C.green:C.red,fontVariantNumeric:"tabular-nums"}}>{p>=0?"+":""}{p.toFixed(1)}%</span>}
             </div>
           );
         })}
@@ -4506,12 +4502,12 @@ function GdbCompareChartGDB({onTFChange, liveGSB, liveGDBS, liveBench, liveGC}){
       <div style={{flex:1,overflowY:"auto",padding:"12px 16px"}}>{chartBody}</div>
     </div>
   ) : (
-    <div style={{background:C.bg1,borderRadius:12,padding:"10px 10px 6px",border:`1px solid ${C.border}`,marginBottom:12,position:"relative"}}>
+    <div style={{background:"transparent",border:"none",padding:0,marginBottom:12,position:"relative"}}>
       <button onClick={()=>setFull(true)} title="Plein écran" style={{
-        position:"absolute",top:8,right:8,zIndex:10,
-        background:C.bg2,border:`1px solid ${C.border}`,borderRadius:6,
-        width:22,height:22,display:"flex",alignItems:"center",justifyContent:"center",
-        cursor:"pointer",fontSize:11,color:C.gray,
+        position:"absolute",top:40,right:0,zIndex:10,
+        background:"transparent",border:`1px solid ${C.border2}`,borderRadius:6,
+        width:24,height:24,display:"flex",alignItems:"center",justifyContent:"center",
+        cursor:"pointer",fontSize:11,color:C.text2,
       }}>⛶</button>
       {chartBody}
     </div>
