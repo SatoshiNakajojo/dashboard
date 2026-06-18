@@ -774,7 +774,7 @@ function applyPrices(prices, usdEur, effSrc){
 }
 
 // Date locale UTC+11 (Nouvelle-Calédonie)
-const APP_VERSION = "v5.58";
+const APP_VERSION = "v5.59";
 // v4.5 — fix NICK : NICK.AS n'existe pas chez Yahoo, le bon symbole EUR est NICK.MI (Milan)
 try{ if(typeof YF_MAP!=="undefined" && YF_MAP){ YF_MAP.NICK="NICK.MI"; } }catch(e){}
 const NC_OFFSET_MS = 11 * 60 * 60 * 1000;
@@ -2269,11 +2269,12 @@ function SectionRow({section, open, onToggle, hidden=false, eur=false, usdEur=0.
           alignItems:"center", gap:12, transition:"all .18s",
         }}
       >
-        {/* Icon */}
+        {/* Icon — carré bordé, style boutons du bandeau */}
         <div style={{
-          width:38, height:38, borderRadius:10, flexShrink:0,
-          background: color+"22", display:"flex", alignItems:"center",
-          justifyContent:"center", fontSize:18,
+          width:38, height:38, borderRadius:C.radiusSm||8, flexShrink:0,
+          background:"transparent", border:`1px solid ${open ? color : C.border2}`,
+          display:"flex", alignItems:"center", justifyContent:"center", fontSize:17,
+          color:color, transition:"all .18s",
         }}>{icon}</div>
 
         {/* Name + bar */}
@@ -7986,10 +7987,13 @@ function PageWatchlist({ EFF, hidden }){
 
     // ── Filtres ──────────────────────────────────────────────────────────────
     React.createElement("div",{style:{display:"flex",gap:6,padding:"0 16px 12px",overflowX:"auto"}},
-      [["all","Tous ("+list.length+")"],["fav","★ Favoris"],["alerte","🔔"+(alertCount?" "+alertCount:"")]].map(function(f){
+      [["all","Tous ("+list.length+")"],["fav","★ Favoris"],["alerte",alertCount?String(alertCount):""]].map(function(f){
         var active=filter===f[0];
         var acc=f[0]==="alerte"?redC:C.gold;
-        return React.createElement("button",{key:f[0],onClick:function(){setFilter(f[0]);},style:lxBtn({active:active,accent:acc,style:{padding:"6px 13px",fontSize:11,borderRadius:999}})},f[1]);
+        var content=f[0]==="alerte"
+          ? React.createElement("span",{style:{display:"inline-flex",alignItems:"center",gap:5}},React.createElement(Icon,{name:"bell",size:13,color:active?acc:C.text2}),f[1])
+          : f[1];
+        return React.createElement("button",{key:f[0],onClick:function(){setFilter(f[0]);},style:lxBtn({active:active,accent:acc,style:{padding:"6px 13px",fontSize:11,borderRadius:999}})},content);
       })
     ),
 
