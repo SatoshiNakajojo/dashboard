@@ -774,7 +774,7 @@ function applyPrices(prices, usdEur, effSrc){
 }
 
 // Date locale UTC+11 (Nouvelle-Calédonie)
-const APP_VERSION = "v5.59";
+const APP_VERSION = "v5.60";
 // v4.5 — fix NICK : NICK.AS n'existe pas chez Yahoo, le bon symbole EUR est NICK.MI (Milan)
 try{ if(typeof YF_MAP!=="undefined" && YF_MAP){ YF_MAP.NICK="NICK.MI"; } }catch(e){}
 const NC_OFFSET_MS = 11 * 60 * 60 * 1000;
@@ -3765,64 +3765,51 @@ function PageAllocation({hidden, EFF, eur=false, setEur, iconDbVersion=0, bumpIc
       {/* ── DÉTAIL PAR CATÉGORIE ── */}
       {mode==="detail"&&(
         <>
-          {/* Donut + légende côte à côte */}
+          {/* ── RÉPARTITION (style home) ── */}
           {(()=>{
-            const sectionsTotal2 = SECTIONS.reduce((s,sec)=>s+sec.totalUSD,0);
-            const donutData = SECTIONS.map(s=>({v:s.pct/100,c:s.color,n:s.n,pct:s.pct,usd:s.totalUSD}));
-            const selSec = selSlice!=null ? SECTIONS[selSlice] : null;
-            const cur2 = eur?"€":"$";
+            const _t = SECTIONS.reduce((a,s)=>a+Math.max(0,s.totalUSD),0)||1;
+            const cur2b = eur?"€":"$";
             const cvD = v => eur ? Math.round(v*_src.usdEur) : v;
+            const _al = SECTIONS.filter(s=>s.totalUSD>0).map(s=>({n:s.n,color:s.color,pct:s.totalUSD/_t*100,usd:s.totalUSD})).sort((a,b)=>b.usd-a.usd);
             return(
-              <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:14}}>
-                <div style={{flexShrink:0}}>
-                  <DonutControlled size={150} ri={30} label="TOTAL" sub={cur2+fmtK(cvD(sectionsTotal2))}
-                    data={donutData} sel={selSlice} onSel={i=>setSelSlice(selSlice===i?null:i)}/>
+              <div style={{marginBottom:18}}>
+                <div style={{fontSize:10,letterSpacing:4,color:C.text2,textTransform:"uppercase",margin:"4px 0 12px"}}>Répartition</div>
+                <div style={{display:"flex",height:10,borderRadius:5,overflow:"hidden",marginBottom:14,background:C.bg2}}>
+                  {_al.map((a,i)=><div key={i} style={{width:a.pct.toFixed(2)+"%",background:a.color}}/>)}
                 </div>
-                <div style={{flex:1,display:"flex",flexDirection:"column",gap:6}}>
-                  {selSec ? (
-                    <>
-                      <div style={{fontSize:10,fontWeight:600,color:selSec.color,marginBottom:4,textTransform:"uppercase",letterSpacing:.5}}>
-                        {selSec.n}
-                      </div>
-                      {selSec.items.slice(0,7).map((item,i)=>{
-                        const name  = item.t||item.ticker||item.label||"—";
-                        const icon  = TICKER_ICONS[item.t||item.ticker]||item.icon||"•";
-                        const valUSD= item.val||item.valUSD||0;
-                        const pnl   = item.pnl||0;
-                        const pct   = selSec.totalUSD>0?(valUSD/selSec.totalUSD)*100:0;
-                        return(
-                          <div key={i} style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-                            <div style={{display:"flex",alignItems:"center",gap:5}}>
-                              <span style={{fontSize:12}}>{icon}</span>
-                              <span style={{fontSize:10,color:C.text,fontWeight:600}}>{name}</span>
-                            </div>
-                            <div style={{textAlign:"right"}}>
-                              <div style={{fontSize:10,fontWeight:600,color:selSec.color}}>{pct.toFixed(1)}%</div>
-                              <div style={{fontSize:9,color:C.text3,fontWeight:600}}>{cur2+fmtK(cvD(valUSD))}</div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                      <div style={{fontSize:9,color:C.gray,marginTop:2,textAlign:"center",fontStyle:"italic"}}>Appuie à nouveau pour revenir</div>
-                    </>
-                  ) : (
-                    SECTIONS.map((s,i)=>{
-                      const secPnl = s.items.reduce((acc,x)=>acc+(x.pnl||0),0);
-                      return(
-                        <div key={i} style={{display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer"}}
-                          onClick={()=>setSelSlice(i)}>
-                          <div style={{display:"flex",alignItems:"center",gap:6}}>
-                            <div style={{width:8,height:8,borderRadius:2,background:s.color,flexShrink:0}}/>
-                            <span style={{fontSize:11,color:C.text,fontWeight:600}}>{s.n}</span>
-                          </div>
-                          <div style={{textAlign:"right"}}>
-                            <div style={{fontSize:11,fontWeight:600,color:s.color}}>{s.pct.toFixed(1)}%</div>
-                            <div style={{fontSize:9,color:clr(secPnl)}}>{secPnl>=0?"+":""}{cur2+fmtK(Math.abs(cvD(secPnl)))}</div>
-                          </div>
-                        </div>
-                      );
-                    })
-                  )}
+                <div style={{display:"flex",flexDirection:"column",gap:9}}>
+                  {_al.map((a,i)=>(
+                    <div key={i} style={{display:"flex",alignItems:"center",gap:10,fontSize:13}}>
+                      <span style={{width:9,height:9,borderRadius:3,flexShrink:0,background:a.color}}/>
+                      <span style={{flex:1,color:C.text}}>{a.n}</span>
+                      <span style={{color:C.text2,fontVariantNumeric:"tabular-nums"}}>{a.pct.toFixed(0)} % · {msk(cur2b+fmtK(cvD(a.usd)),hidden)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* ── TOTAL PORTEFEUILLE (titre dehors, entre Répartition et Positions) ── */}
+          {(()=>{
+            const sectionsPnl = SECTIONS.reduce((acc,s)=>acc+s.items.reduce((a,x)=>a+(x.pnl||0),0),0);
+            const investi = SECTIONS.reduce((acc,s)=>acc+s.items.reduce((a,x)=>a+(x.investi||0),0),0);
+            const pnlPct = investi>0?sectionsPnl/investi:0;
+            const cur2b = eur?"€":"$";
+            return(
+              <div>
+                <div style={{fontSize:10,letterSpacing:4,color:C.text2,textTransform:"uppercase",margin:"4px 0 12px"}}>Total portefeuille</div>
+                <div style={{border:`1px solid ${C.border2}`,borderRadius:C.radius||12,padding:"18px 16px",display:"flex",justifyContent:"space-between",alignItems:"flex-start",background:C.bg1}}>
+                  <div>
+                    <div style={{fontFamily:"'Cormorant Garamond',Georgia,serif",fontWeight:400,fontSize:40,lineHeight:1,color:C.text,fontVariantNumeric:"tabular-nums"}}>
+                      {hidden?"••••••":<><span style={{color:C.gold,fontSize:24,verticalAlign:4,marginRight:2}}>{cur2b}</span>{fmt(totalDisplay)}</>}
+                    </div>
+                    <div style={{fontSize:12,color:C.text3,marginTop:6,fontVariantNumeric:"tabular-nums"}}>{msk(eur?"$"+fmt(totalUSD):"€"+fmt(totalEUR),hidden)}</div>
+                  </div>
+                  <div style={{textAlign:"right"}}>
+                    <div style={{fontFamily:"'Cormorant Garamond',Georgia,serif",fontSize:26,lineHeight:1,color:clr(sectionsPnl),fontVariantNumeric:"tabular-nums"}}>{hidden?"•••":(sectionsPnl>=0?"+":"")+cur2b+fmtK(Math.abs(eur?Math.round(sectionsPnl*(_src.usdEur||0.852)):sectionsPnl))}</div>
+                    <div style={{fontSize:11,fontVariantNumeric:"tabular-nums",color:clr(sectionsPnl),border:`1px solid ${clr(sectionsPnl)}47`,borderRadius:999,padding:"3px 10px",display:"inline-block",marginTop:8}}>{fmtP(pnlPct)}</div>
+                  </div>
                 </div>
               </div>
             );
@@ -3851,76 +3838,6 @@ function PageAllocation({hidden, EFF, eur=false, setEur, iconDbVersion=0, bumpIc
             />
           ))}
 
-          {/* Footer total */}
-          {(()=>{
-            const sectionsPnl = SECTIONS.reduce((acc,s)=>acc+s.items.reduce((a,x)=>a+(x.pnl||0),0),0);
-            const investi = SECTIONS.reduce((acc,s)=>acc+s.items.reduce((a,x)=>a+(x.investi||0),0),0);
-            const pnlPct = investi > 0 ? sectionsPnl / investi : 0;
-            return (
-              <div style={{
-                background:C.bg1, borderRadius:14, marginTop:10,
-                border:`1px solid ${C.border2}`, overflow:"hidden",
-              }}>
-                <div style={{
-                  padding:"20px 18px", display:"flex", justifyContent:"space-between", alignItems:"flex-start",
-                  borderBottom:`1px solid ${C.border}`,
-                }}>
-                  <div>
-                    <div style={{fontSize:10,color:C.text2,marginBottom:8,textTransform:"uppercase",letterSpacing:4}}>Total portefeuille</div>
-                    <div style={{fontFamily:"'Cormorant Garamond',Georgia,serif",fontWeight:400,fontSize:42,lineHeight:1,color:C.text,fontVariantNumeric:"tabular-nums"}}>
-                      {hidden?"••••••":<><span style={{color:C.gold,fontSize:25,verticalAlign:4,marginRight:2}}>{cur2}</span>{fmt(totalDisplay)}</>}
-                    </div>
-                    <div style={{fontSize:12,color:C.text3,marginTop:6,fontVariantNumeric:"tabular-nums"}}>{msk(eur?"$"+fmt(totalUSD):"€"+fmt(totalEUR),hidden)}</div>
-                  </div>
-                  <div style={{textAlign:"right"}}>
-                    <div style={{fontSize:10,color:C.text2,marginBottom:8,textTransform:"uppercase",letterSpacing:4}}>P&L</div>
-                    <div style={{fontFamily:"'Cormorant Garamond',Georgia,serif",fontSize:28,lineHeight:1,color:clr(sectionsPnl),fontVariantNumeric:"tabular-nums"}}>{hidden?"•••":(sectionsPnl>=0?"+":"")+cur2+fmtK(Math.abs(eur?Math.round(sectionsPnl*(_src.usdEur||0.852)):sectionsPnl))}</div>
-                    <div style={{
-                      fontSize:11,fontVariantNumeric:"tabular-nums",color:clr(sectionsPnl),
-                      border:`1px solid ${clr(sectionsPnl)}47`,borderRadius:999,padding:"3px 10px",
-                      display:"inline-block",marginTop:8,
-                    }}>{fmtP(pnlPct)}</div>
-                  </div>
-                </div>
-                {(()=>{
-                  // Totaux corrects selon définition :
-                  // Crypto  = crypto (BTC) + KuCoin
-                  // Actions = stocks (tout sauf KuCoin) : indices + picking + or + cash plateforme
-                  // Banque  = cash matelas (BCI+Bourso+DeBlock)
-                  const _p = EFF || CURRENT;
-                  const _uE = _p.usdEur || 0.86;
-                  const _eU = _p.eurUsd || 1.162;
-                  // Crypto : total crypto (BTC) + valeur KuCoin (dans stocks mais appartient à CGIC)
-                  const _kuCoin = (_p.stocks?.items||[]).find(x=>x.t==="KUCOIN");
-                  const _cryptoUSD = (_p.crypto?.total||0) + (_kuCoin?.val||0);
-                  // Actions : total stocks - KuCoin
-                  const _stocksUSD = (_p.stocks?.total||0) - (_kuCoin?.val||0);
-                  // Banque : totalEUR du bank (toujours en €)
-                  const _bankEUR = _p.bank?.totalEUR || CURRENT.bank?.totalEUR || 0;
-
-                  const boxes = eur ? [
-                    {label:"Crypto",  val:"€"+fmtK(Math.round(_cryptoUSD*_uE)), c:C.btc},
-                    {label:"Actions", val:"€"+fmtK(Math.round(_stocksUSD*_uE)), c:C.blue},
-                    {label:"Banque",  val:"€"+fmtK(_bankEUR),                   c:C.green},
-                  ] : [
-                    {label:"Crypto",  val:"$"+fmtK(_cryptoUSD),                 c:C.btc},
-                    {label:"Actions", val:"$"+fmtK(_stocksUSD),                 c:C.blue},
-                    {label:"Banque",  val:"$"+fmtK(Math.round(_bankEUR*_eU)),   c:C.green},
-                  ];
-                  return (
-                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:1,background:C.border}}>
-                      {boxes.map((b,i)=>(
-                        <div key={i} style={{background:C.bg2,padding:"10px 12px",textAlign:"center"}}>
-                          <div style={{fontSize:9,color:C.gray,marginBottom:3}}>{b.label}</div>
-                          <div style={{fontSize:13,fontWeight:600,color:b.c}}>{hidden?"***":b.val}</div>
-                        </div>
-                      ))}
-                    </div>
-                  );
-                })()}
-              </div>
-            );
-          })()}
         </>
       )}
     </div>
