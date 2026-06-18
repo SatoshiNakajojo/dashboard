@@ -792,7 +792,7 @@ function applyPrices(prices, usdEur, effSrc){
 }
 
 // Date locale UTC+11 (Nouvelle-Calédonie)
-const APP_VERSION = "v6.03";
+const APP_VERSION = "v6.04";
 // v4.5 — fix NICK : NICK.AS n'existe pas chez Yahoo, le bon symbole EUR est NICK.MI (Milan)
 try{ if(typeof YF_MAP!=="undefined" && YF_MAP){ YF_MAP.NICK="NICK.MI"; } }catch(e){}
 const NC_OFFSET_MS = 11 * 60 * 60 * 1000;
@@ -4359,6 +4359,16 @@ function GdbCompareChartGDB({onTFChange, liveGSB, liveGDBS, liveBench, liveGC}){
     return vals.map(v=>v!=null ? round2(v/first*100) : null);
   };
 
+  // Assainit une série indicielle : retire les valeurs <=0 et les outliers absurdes
+  // (un point > 8x ou < 1/8 de la médiane est une erreur de données → ignoré).
+  const sanitize = (vals) => {
+    const pos = vals.filter(v=>v!=null && v>0);
+    if(pos.length < 3) return vals.map(v=>(v!=null && v>0)?v:null);
+    const sorted=[...pos].sort((a,b)=>a-b);
+    const med = sorted[Math.floor(sorted.length/2)] || 1;
+    return vals.map(v=> (v!=null && v>0 && v<=med*8 && v>=med/8) ? v : null);
+  };
+
   const gcRaw  = dates.map(d=>gcMap[d]||null);
   const gsRaw  = dates.map(d=>{ const g=_GSB_data.find(x=>x[0]===d); return g&&g[1]!=null?g[1]:null; });
   const btcRaw = dates.map(d=>{ const r=benchMap[d]; return r?r[1]:null; }); // BTC
@@ -4367,13 +4377,13 @@ function GdbCompareChartGDB({onTFChange, liveGSB, liveGDBS, liveBench, liveGC}){
   const ethRaw = dates.map(d=>{ const r=benchMap[d]; return r?r[2]:null; }); // ETH
   const msRaw  = dates.map(d=>{ const r=benchMap[d]; return r?r[5]:null; }); // MSCI
 
-  const gcB  = rebase(gcRaw);
-  const gsB  = rebase(gsRaw);
-  const btcB = rebase(btcRaw);
-  const spB  = rebase(spRaw);
-  const nqB  = rebase(nqRaw);
-  const ethB = rebase(ethRaw);
-  const msB  = rebase(msRaw);
+  const gcB  = rebase(sanitize(gcRaw));
+  const gsB  = rebase(sanitize(gsRaw));
+  const btcB = rebase(sanitize(btcRaw));
+  const spB  = rebase(sanitize(spRaw));
+  const nqB  = rebase(sanitize(nqRaw));
+  const ethB = rebase(sanitize(ethRaw));
+  const msB  = rebase(sanitize(msRaw));
 
   const allVals = [...gcB,...gsB,...btcB,...spB,...nqB,...ethB,...msB].filter(v=>v!=null);
   if(!n||!allVals.length) return null;
