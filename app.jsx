@@ -784,7 +784,7 @@ function applyPrices(prices, usdEur, effSrc){
 }
 
 // Date locale UTC+11 (Nouvelle-Calédonie)
-const APP_VERSION = "v5.64";
+const APP_VERSION = "v6.0";
 // v4.5 — fix NICK : NICK.AS n'existe pas chez Yahoo, le bon symbole EUR est NICK.MI (Milan)
 try{ if(typeof YF_MAP!=="undefined" && YF_MAP){ YF_MAP.NICK="NICK.MI"; } }catch(e){}
 const NC_OFFSET_MS = 11 * 60 * 60 * 1000;
@@ -3530,6 +3530,7 @@ function PageOverview({chartData,onSnapshot,eur,setEur,hidden,setHidden,EFF,refr
           <span style={{display:"inline-flex",alignItems:"center",gap:6,fontSize:12,color:_dUp?C.green:C.red,fontVariantNumeric:"tabular-nums",border:`1px solid ${(_dUp?C.green:C.red)}47`,borderRadius:999,padding:"4px 11px"}}>
             {_dUp?"▲":"▼"} {fmtP(_po_delta.pct)} · {_dUp?"+":"-"}{cur}{msk(fmt(Math.abs(_po_delta.pnl)),hidden)}
           </span>
+          <span style={{fontSize:10,color:C.text3,letterSpacing:1.5}}>30 jours</span>
         </div>
       </div>
 
@@ -3553,7 +3554,7 @@ function PageOverview({chartData,onSnapshot,eur,setEur,hidden,setHidden,EFF,refr
       </div>
 
       {/* ════ PERFORMANCE ════ */}
-      <div style={{fontSize:10,letterSpacing:4,color:C.text2,textTransform:"uppercase",padding:"22px 20px 12px"}}>Performance</div>
+      <div style={{fontSize:10,letterSpacing:4,color:C.text2,textTransform:"uppercase",padding:"22px 20px 12px"}}>Performance · 30 jours</div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,padding:"0 20px 6px"}}>
         {_perf.map((p,i)=>(
           <div key={i} style={{border:`1px solid ${C.border}`,borderRadius:12,padding:"12px 12px 10px",background:C.bg1}}>
@@ -3810,18 +3811,18 @@ function PageAllocation({hidden, EFF, eur=false, setEur, iconDbVersion=0, bumpIc
             return(
               <div style={{marginBottom:18}}>
                 <div style={{fontSize:10,letterSpacing:4,color:C.text2,textTransform:"uppercase",margin:"4px 0 14px"}}>Répartition</div>
-                <div style={{display:"flex",justifyContent:"center",marginBottom:18}}>
-                  <DonutControlled size={170} ri={34} label="TOTAL" sub={cur2b+fmtK(cvD(SECTIONS.reduce((s,sec)=>s+sec.totalUSD,0)))}
+                <div style={{display:"flex",alignItems:"center",gap:16,marginBottom:4}}>
+                  <DonutControlled size={140} ri={28} label="TOTAL" sub={cur2b+fmtK(cvD(SECTIONS.reduce((s,sec)=>s+sec.totalUSD,0)))}
                     data={donutData} sel={selSlice} onSel={i=>setSelSlice(selSlice===i?null:i)}/>
-                </div>
-                <div style={{display:"flex",flexDirection:"column",gap:9}}>
-                  {_al.map((a,i)=>(
-                    <div key={i} style={{display:"flex",alignItems:"center",gap:10,fontSize:13}}>
-                      <span style={{width:9,height:9,borderRadius:3,flexShrink:0,background:a.color}}/>
-                      <span style={{flex:1,color:C.text}}>{a.n}</span>
-                      <span style={{color:C.text2,fontVariantNumeric:"tabular-nums"}}>{a.pct.toFixed(0)} % · {msk(cur2b+fmtK(cvD(a.usd)),hidden)}</span>
-                    </div>
-                  ))}
+                  <div style={{flex:1,display:"flex",flexDirection:"column",gap:8,minWidth:0}}>
+                    {_al.map((a,i)=>(
+                      <div key={i} style={{display:"flex",alignItems:"center",gap:8,fontSize:11.5}}>
+                        <span style={{width:8,height:8,borderRadius:2,flexShrink:0,background:a.color}}/>
+                        <span style={{flex:1,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{a.n}</span>
+                        <span style={{color:C.text2,fontVariantNumeric:"tabular-nums",whiteSpace:"nowrap"}}>{a.pct.toFixed(0)}% · {msk(cur2b+fmtK(cvD(a.usd)),hidden)}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
             );
@@ -4204,8 +4205,9 @@ function PageStats({chartData, hidden=false, EFF, eur=false, liveDD, src, liveIn
 
       {/* ── Tableau mensuel détail ── */}
       {data&&(
+        <>
+        <div style={{fontSize:10,color:C.text2,letterSpacing:4,textTransform:"uppercase",margin:"6px 0 12px"}}>Détail mensuel</div>
         <div style={{...crd(),marginBottom:14,padding:"10px 8px"}}>
-          <div style={{fontSize:10,color:C.text2,letterSpacing:4,textTransform:"uppercase",marginBottom:10}}>Détail mensuel</div>
           <div style={{overflowX:"auto"}}>
             <table style={{width:"100%",borderCollapse:"collapse",fontSize:10}}>
               <thead>
@@ -4260,6 +4262,7 @@ function PageStats({chartData, hidden=false, EFF, eur=false, liveDD, src, liveIn
             </table>
           </div>
         </div>
+        </>
       )}
 
       {/* ── Saisonnalité crypto (toutes années) ── */}
@@ -10553,7 +10556,7 @@ function App(){
       </div>
       <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:430,background:C.bg,borderTop:`1px solid ${C.border}`,display:"flex",padding:"8px 0 20px",zIndex:100}}>
         {TABS.map((lb,i)=>(
-          i===4 ? null : (
+          (i===4||i===0) ? null : (
           <button key={i} onClick={()=>setTab(i)} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:4,height:52,padding:"4px 2px",background:"none",border:"none",cursor:"pointer",color:tab===i?C.gold:C.text3,transition:"color .15s"}}>
             <Icon name={NAV_ICONS[i]} size={21}/>
             <span style={{fontSize:9,fontWeight:700,lineHeight:1,display:"block"}}>{lb}</span>

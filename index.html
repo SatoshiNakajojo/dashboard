@@ -32,7 +32,7 @@
     .ring2{position:absolute;inset:11px;border-radius:50%;border:1px solid rgba(201,168,106,.22);opacity:0;animation:ringIn 1.8s .15s ease-out forwards;}
     .mono{position:relative;z-index:2;font-family:'Cormorant Garamond',Georgia,serif;font-weight:500;font-size:54px;letter-spacing:1px;color:#C9A86A;opacity:0;animation:monoIn 1.8s ease-out forwards;}
     .mono .d{color:#E6CF9B;}
-    .wordmark{font-family:'Cormorant Garamond',Georgia,serif;font-weight:400;font-size:25px;letter-spacing:7px;color:#F3EFE6;text-align:center;line-height:1.5;opacity:0;animation:fadeUp 1.6s .5s ease-out forwards;}
+    .wordmark{font-family:'Cormorant Garamond',Georgia,serif;font-weight:400;font-size:25px;letter-spacing:7px;text-indent:7px;color:#F3EFE6;text-align:center;line-height:1.5;opacity:0;animation:fadeUp 1.6s .5s ease-out forwards;}
     .wordmark b{font-weight:500;color:#E6CF9B;}
     .bar{width:190px;height:1px;background:#2A2A31;position:relative;overflow:hidden;opacity:0;animation:fadeUp 1.4s .7s ease-out forwards;}
     .bar i{position:absolute;left:0;top:0;height:100%;width:0%;background:linear-gradient(90deg,#8C6F3F,#C9A86A,#E6CF9B);transition:width .25s ease-out;}
@@ -60,31 +60,28 @@
   <div id="root"></div>
 
   <script>
-    // ─── Barre de progression RÉELLE ───────────────────────────────────────
-    // target = objectif courant ; on lisse l'affichage vers target.
-    // Chaque script chargé pousse un palier ; pendant la compilation Babel + le
-    // boot React, on "rampe" doucement vers 92% ; quand l'app est prête → 100%.
+    // ─── Barre de progression LINÉAIRE (vitesse constante) ────────────────
     (function(){
-      var target=4, shown=0, creeping=false;
-      window.__cgiProg=function(p){ if(p>target) target=p; };
-      window.__cgiCreep=function(){ creeping=true; };
-      function tick(){
-        if(creeping && target<92) target += (92-target)*0.045;
-        shown += (target-shown)*0.16;
+      var shown=0, ready=false, last=null;
+      var RATE = 95/2400;   // % par ms → atteint 95% en ~2.4s à vitesse constante
+      window.__cgiProg=function(){};   // progression pilotée par le temps (linéaire)
+      window.__cgiCreep=function(){};
+      function tick(ts){
+        if(last===null) last=ts;
+        var dt=ts-last; last=ts;
+        var cap = ready ? 100 : 95;
+        shown = Math.min(cap, shown + RATE*dt);
         var fill=document.getElementById('bar-fill'), pct=document.getElementById('bar-pct');
         if(fill) fill.style.width=shown.toFixed(1)+'%';
         if(pct) pct.textContent=Math.round(shown)+'\u00A0%';
-        requestAnimationFrame(tick);
+        if(shown<100) requestAnimationFrame(tick);
       }
       requestAnimationFrame(tick);
-      // L'app React appelle __hideLoader() quand elle est prête → on finit à 100% puis fondu
       window.__hideLoader=function(){
-        target=100; creeping=false;
-        var pct=document.getElementById('bar-pct'); if(pct) pct.textContent='100\u00A0%';
+        ready=true;
         var l=document.getElementById('loader');
-        if(l && l.style.display!=='none'){ setTimeout(function(){ l.style.opacity='0'; setTimeout(function(){ l.style.display='none'; },550); }, 420); }
+        if(l && l.style.display!=='none'){ setTimeout(function(){ l.style.opacity='0'; setTimeout(function(){ l.style.display='none'; },550); }, 520); }
       };
-      // Filet de sécurité : retrait forcé après 30s
       setTimeout(function(){ if(window.__hideLoader) window.__hideLoader(); }, 30000);
     })();
   </script>
@@ -102,7 +99,7 @@
   <script src="seeds.js?v=2.07"></script>
   <script>window.__cgiProg(62)</script>
   <!-- app.jsx : compile par Babel de maniere asynchrone apres ce point -->
-  <script type="text/babel" data-presets="react" src="app.jsx?v=5.64"></script>
+  <script type="text/babel" data-presets="react" src="app.jsx?v=6.0"></script>
   <script>window.__cgiProg(72); window.__cgiCreep();</script>
 </body>
 </html>
