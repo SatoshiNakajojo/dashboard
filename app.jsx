@@ -792,7 +792,7 @@ function applyPrices(prices, usdEur, effSrc){
 }
 
 // Date locale UTC+11 (Nouvelle-Calédonie)
-const APP_VERSION = "v6.06";
+const APP_VERSION = "v6.07";
 // v4.5 — fix NICK : NICK.AS n'existe pas chez Yahoo, le bon symbole EUR est NICK.MI (Milan)
 try{ if(typeof YF_MAP!=="undefined" && YF_MAP){ YF_MAP.NICK="NICK.MI"; } }catch(e){}
 const NC_OFFSET_MS = 11 * 60 * 60 * 1000;
@@ -900,6 +900,22 @@ function lsv9WriteAll(obj){ try{ localStorage.setItem(LS_V9_KEY, JSON.stringify(
 function lsv9Get(key){ const all=lsv9ReadAll(); const e=all[key]; return e && typeof e==="object" && "v" in e ? e.v : (e!==undefined?e:null); }
 // Lit l'horodatage d'écriture d'une base — null si absente
 function lsv9GetMeta(key){ const all=lsv9ReadAll(); const e=all[key]; return e && typeof e==="object" && "t" in e ? e.t : null; }
+
+// ── Helpers partagés trades (#3, #16, #17) ──────────────────────────────────
+function getAllTxns(){
+  let all=null; try{ all=lsv9Get('cgi_txns'); }catch(e){}
+  if(!Array.isArray(all)||!all.length){ try{ all=(typeof SEED_TXNS_REAL!=="undefined")?SEED_TXNS_REAL:[]; }catch(e){ all=[]; } }
+  return Array.isArray(all)?all:[];
+}
+function getTickerTrades(ticker){
+  const T=String(ticker||"").toUpperCase().trim();
+  if(!T) return [];
+  return getAllTxns().filter(t=>t&&t.ticker&&String(t.ticker).toUpperCase().trim()===T)
+                     .sort((a,b)=>(a.date<b.date?-1:(a.date>b.date?1:0)));
+}
+function tradeTickers(){
+  return [...new Set(getAllTxns().map(t=>t&&t.ticker).filter(Boolean).map(x=>String(x).toUpperCase().trim()))].sort();
+}
 // Écrit une base (ignore les clés inconnues et les valeurs vides)
 function lsv9Set(key, value, t){
   if(LSV9_KEYS.indexOf(key)<0) return false;
@@ -1585,11 +1601,7 @@ function TickerModal({ ticker, cat="", eur=false, usdEur=0.86, onClose }) {
   const [posEdit, setPosEdit] = useState(false);
   const [posData, setPosData] = useState(()=>{ try{ return lsv9Get('cgi_pos_'+ticker)||{}; }catch(e){ return {}; } });
   const savePos = (patch)=>{ const next={...posData,...patch}; setPosData(next); try{ lsv9Set('cgi_pos_'+ticker, next); }catch(e){} };
-  const tkTrades = (()=>{
-    let all=null; try{ all=lsv9Get('cgi_txns'); }catch(e){}
-    if(!Array.isArray(all)||!all.length) all=(typeof SEED_TXNS_REAL!=="undefined")?SEED_TXNS_REAL:[];
-    return all.filter(t=>t&&t.ticker===ticker).sort((a,b)=>(a.date<b.date?-1:1));
-  })();
+  const tkTrades = getTickerTrades(ticker);
   const pos = (()=>{
     let buyQ=0, buyV=0, sellQ=0, firstBuy=null;
     tkTrades.forEach(t=>{ const q=Math.abs(t.qty||0), p=t.price||0;
@@ -1922,6 +1934,7 @@ function TickerModal({ ticker, cat="", eur=false, usdEur=0.86, onClose }) {
                   : <span style={{fontWeight:700,color:posData.target?C.gold:C.text3}}>{posData.target?_cur+Number(posData.target).toFixed(2):"—"}</span>}
               </div>
             </div>
+            {tkTrades.length===0 && <div style={{marginTop:8,fontSize:10,color:C.text3,fontStyle:"italic"}}>Aucun trade enregistré pour {ticker} (le symbole du log peut différer — ex. BTC est détenu via IBIT).</div>}
             {posEdit
               ? <input value={posData.note||""} onChange={e=>savePos({note:e.target.value})} placeholder="Note sur la position…" style={{marginTop:8,width:"100%",boxSizing:"border-box",background:C.bg2,border:`1px solid ${C.border2}`,borderRadius:6,color:C.text,fontSize:11,padding:"5px 8px"}}/>
               : (posData.note ? <div style={{marginTop:8,fontSize:11,color:C.text2,fontStyle:"italic"}}>{posData.note}</div> : null)}
@@ -7428,6 +7441,7 @@ function PageWatchlist({ EFF, hidden }){
   const[editForm,setEditForm] = useState({});
   const[expanded,setExpanded] = useState({});
   const[filter,setFilter]     = useState("all");  // all|fav|alerte
+  const[showSearch,setShowSearch] = useState(false);
   const[saving,setSaving]     = useState(false);
   const[newsPanel,setNewsPanel]= useState(false);
   const[news,setNews]         = useState([]);
@@ -7984,6 +7998,7 @@ function PageWatchlist({ EFF, hidden }){
         React.createElement("div",{style:{fontSize:11,color:grayC}},list.length+" ticker"+(list.length>1?"s":"")+(saving?" · 💾":""))
       ),
       React.createElement("div",{style:{display:"flex",gap:6,position:"relative"}},
+        React.createElement("button",{onClick:function(){setShowSearch(function(v){return !v;});},style:lxBtn({active:showSearch,style:{padding:"7px 10px"}})},React.createElement(Icon,{name:"search",size:15,color:showSearch?C.gold:C.text2})),
         React.createElement("button",{onClick:function(){setShowTools(function(v){return !v;});},style:lxBtn({active:showTools,style:{padding:"7px 11px",fontSize:11}})},"Outils ▾"),
         showTools&&React.createElement("div",{style:{position:"absolute",top:36,right:46,zIndex:50,background:cardBg,border:"1px solid "+borderC,borderRadius:10,padding:6,minWidth:170,boxShadow:"0 8px 24px #000a",display:"flex",flexDirection:"column",gap:2}},
           React.createElement("button",{onClick:function(){setShowTools(false);fetchNews();},style:{background:"none",border:"none",textAlign:"left",padding:"9px 10px",color:blueC,fontSize:12,fontWeight:700,cursor:"pointer",borderRadius:6}},"📰 Analyser les news (IA)"),
@@ -8023,6 +8038,8 @@ function PageWatchlist({ EFF, hidden }){
         return React.createElement("button",{key:f[0],onClick:function(){setFilter(f[0]);},style:lxBtn({active:active,accent:acc,style:{padding:"6px 13px",fontSize:11,borderRadius:999}})},content);
       })
     ),
+
+    showSearch ? React.createElement("div",{style:{padding:"0 16px"}}, React.createElement(TickerSearchPanel,{withPlan:true})) : null,
 
     // ── Liste des tickers ─────────────────────────────────────────────────────
     displayed.length===0
@@ -8318,11 +8335,69 @@ function PageWatchlist({ EFF, hidden }){
 // ── FIN PageWatchlist v2 ──────────────────────────────────────────────────────
 
 
+// ── #16/#17 — Recherche d'un ticker → trades (+ plan optionnel) ─────────────
+function TickerSearchPanel({withPlan=false}){
+  const [q,setQ]=useState("");
+  const T=String(q||"").toUpperCase().trim();
+  const trades = T?getTickerTrades(T):[];
+  const suggestions = T && trades.length===0 ? tradeTickers().filter(x=>x.indexOf(T)>=0).slice(0,8) : [];
+  let buyQ=0,buyV=0,sellQ=0;
+  trades.forEach(t=>{ const qy=Math.abs(t.qty||0),p=t.price||0; if(t.side==="BUY"){buyQ+=qy;buyV+=qy*p;} else if(t.side==="SELL"){sellQ+=qy;} });
+  const netQ=buyQ-sellQ, pru=buyQ>0?buyV/buyQ:null;
+  const plan = (withPlan && T) ? (()=>{ try{ const arr=JSON.parse(localStorage.getItem("cgi_watchlist_direct")||"[]"); return Array.isArray(arr)?(arr.find(x=>String(x.ticker||"").toUpperCase().trim()===T)||null):null; }catch(e){return null;} })() : null;
+  return (
+    <div style={{marginBottom:16}}>
+      <div style={{display:"flex",alignItems:"center",gap:8,border:`1px solid ${C.border2}`,borderRadius:C.radiusSm||8,padding:"8px 11px",background:C.bg1}}>
+        <Icon name="search" size={15} color={C.text2}/>
+        <input value={q} onChange={e=>setQ(e.target.value)} placeholder="Rechercher un ticker…" style={{flex:1,background:"transparent",border:"none",outline:"none",color:C.text,fontSize:13,fontFamily:C.font}}/>
+        {q?<button onClick={()=>setQ("")} style={{background:"none",border:"none",cursor:"pointer",color:C.text3,padding:0,display:"flex"}}><Icon name="x" size={14}/></button>:null}
+      </div>
+      {suggestions.length>0 && (
+        <div style={{display:"flex",flexWrap:"wrap",gap:6,marginTop:8}}>
+          {suggestions.map(s=>(<button key={s} onClick={()=>setQ(s)} style={lxBtn({style:{padding:"4px 10px",fontSize:11}})}>{s}</button>))}
+        </div>
+      )}
+      {T && trades.length===0 && suggestions.length===0 && (
+        <div style={{marginTop:10,fontSize:12,color:C.text3,fontStyle:"italic"}}>Aucun trade pour « {T} ».</div>
+      )}
+      {T && trades.length>0 && (
+        <div style={{marginTop:12}}>
+          <div style={{display:"flex",gap:16,flexWrap:"wrap",marginBottom:10,fontSize:12}}>
+            <span style={{color:C.text2}}>Position <b style={{color:C.text}}>{netQ.toLocaleString("fr-FR",{maximumFractionDigits:4})}</b></span>
+            {pru!=null && <span style={{color:C.text2}}>PRU <b style={{color:C.text}}>{pru.toFixed(2)}</b></span>}
+            <span style={{color:C.text2}}>Trades <b style={{color:C.text}}>{trades.length}</b></span>
+          </div>
+          {withPlan && (
+            <div style={{marginBottom:12,fontSize:11,padding:"8px 11px",border:`1px solid ${C.border}`,borderRadius:8,background:C.bg1}}>
+              {plan ? (
+                <span style={{color:C.text2}}>
+                  Plan : <span style={{color:C.green}}>achat {plan.buyZone?((plan.buyZone.low??"?")+"–"+(plan.buyZone.high??"?")):"—"}</span>
+                  {(plan.sellTargets&&plan.sellTargets.length)?<span> · <span style={{color:C.red}}>cibles {plan.sellTargets.map(s=>s.price).filter(x=>x!=null).join(", ")}</span></span>:null}
+                </span>
+              ) : <span style={{fontStyle:"italic",color:C.text3}}>Aucun plan dans la watchlist pour ce ticker.</span>}
+            </div>
+          )}
+          <div style={{display:"flex",flexDirection:"column",gap:7}}>
+            {trades.slice().reverse().map((t,i)=>(
+              <div key={t.id||i} style={{display:"flex",alignItems:"center",gap:8,fontSize:11,borderBottom:`1px solid ${C.border}`,paddingBottom:7}}>
+                <span style={{fontSize:9,fontWeight:700,color:t.side==="BUY"?C.green:C.red,border:`1px solid ${(t.side==="BUY"?C.green:C.red)}55`,borderRadius:5,padding:"1px 6px",minWidth:42,textAlign:"center"}}>{t.side==="BUY"?"ACHAT":"VENTE"}</span>
+                <span style={{color:C.text3,minWidth:62}}>{t.date}</span>
+                <span style={{flex:1,textAlign:"right",color:C.text}}>{Math.abs(t.qty||0).toLocaleString("fr-FR",{maximumFractionDigits:4})} @ {t.currency==="EUR"?"€":"$"}{Number(t.price||0).toFixed(2)}{t.bankAccount?<span style={{color:C.text3,fontSize:9}}> · {t.bankAccount}</span>:null}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function PageLegend(
 {txns, liveFutures, hidden, eur, EFF, liveIbkrAnnex}){
   const [board,setBoard]=useState("spot");
   const [sel,setSel]=useState(null);
   const [sortK,setSortK]=useState("pnl");
+  const [showSearch,setShowSearch]=useState(false);
   const spot = React.useMemo(function(){ return computeClosedTrades(txns||[]).closed; }, [txns]);
   const fut = React.useMemo(function(){
     return (liveFutures||SEED_FUTURES).map(function(t){
@@ -8352,6 +8427,10 @@ function PageLegend(
   return (
     <div style={{padding:"8px 14px 96px"}}>
       <PageTitle title="Legend" sub={"Trades clôturés · "+(board==="spot"?"Spot":"Futures")}/>
+      <button onClick={()=>setShowSearch(v=>!v)} style={lxBtn({active:showSearch,style:{marginBottom:14,padding:"8px 13px",gap:7}})}>
+        <Icon name="search" size={14} color={showSearch?C.gold:C.text2}/>Recherche ticker
+      </button>
+      {showSearch && <TickerSearchPanel/>}
       <div style={{display:"flex",gap:8,marginBottom:14}}>
         <Tab label="Spot" active={board==="spot"} onClick={function(){setBoard("spot");}}/>
         <Tab label="Futures" active={board==="futures"} onClick={function(){setBoard("futures");}}/>
