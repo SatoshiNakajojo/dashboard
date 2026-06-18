@@ -792,7 +792,7 @@ function applyPrices(prices, usdEur, effSrc){
 }
 
 // Date locale UTC+11 (Nouvelle-Calédonie)
-const APP_VERSION = "v6.02";
+const APP_VERSION = "v6.03";
 // v4.5 — fix NICK : NICK.AS n'existe pas chez Yahoo, le bon symbole EUR est NICK.MI (Milan)
 try{ if(typeof YF_MAP!=="undefined" && YF_MAP){ YF_MAP.NICK="NICK.MI"; } }catch(e){}
 const NC_OFFSET_MS = 11 * 60 * 60 * 1000;
@@ -4101,12 +4101,13 @@ function PageStats({chartData, hidden=false, EFF, eur=false, liveDD, src, liveIn
   const realPct = (data?.bom||[]).map((bom,i)=>{
     if(bom==null) return null;
     const pnl = cvtPNL(i);
-    const bomC = cvtBOM(i);
     if(pnl==null) return null;
-    if(bomC && bomC!==0) return pnl/bomC;
-    // v24.04 — début de fonds (BOM=0) : % = P&L / Investi
+    const bomC = cvtBOM(i);
     const invC = cvtINV(i);
-    return (invC && invC!==0) ? pnl/invC : null;
+    // base de capital = valeur début de mois + apports du mois
+    // (évite les % aberrants quand BOM est minuscule : début de fonds, gros apport)
+    const base = (bomC||0) + (invC||0);
+    return base>0 ? pnl/base : null;
   });
 
   const validPnlC = data?.m?.map((_,i)=>cvtPNL(i)).filter(v=>v!=null)??[];
@@ -4779,13 +4780,7 @@ function PageGDB(
   const GC_CREATION_EUR = 10.0;  // toujours 10€ à la création
   const GS_CREATION_EUR = 10.0;
 
-  const gcPerfAllTime = eur
-    ? (gcToday * usdEurNow) / GC_CREATION_EUR - 1           // cours actuel en € / 10€
-    : gcToday / GC_CREATION_USD - 1;                         // cours actuel en $ / 10.88$
-
-  const gsPerfAllTime = eur
-    ? (gsToday * usdEurNow) / GS_CREATION_EUR - 1           // cours actuel en € / 10€
-    : gsToday / GS_CREATION_USD - 1;                         // cours actuel en $ / 11.67$
+  // (gcPerfAllTime / gsPerfAllTime sont calculés plus bas depuis INV_SEED — voir bloc "P&L fonds")
 
   const gsYTD = gsPerf(dytd);
 
@@ -4794,6 +4789,15 @@ function PageGDB(
   const gcFonds = Math.round(gdbCfondsUSD != null ? gdbCfondsUSD : src.crypto.total);
   const gsQty   = FUND_PARTS.S;
   const gsFonds = Math.round(gdbSfondsUSD || (src.stocks.items.filter(x=>x.cat!=="Cash").reduce((s,x)=>s+x.val,0) + (src.stocks.items.find(x=>x.t==="EURO")?.val||0)));
+
+  // ── P&L fonds depuis INV_SEED (capital net investi) — remplace l'ancien GDBS (indice base-100, cassé) ──
+  const _INV_GDB = liveInv || INV_SEED_OK;
+  const _netFund = f => { let m=0,sh=0; _INV_GDB.forEach(x=>{ if(x.fonds===f){ const s=(x.io==="OUT")?-1:1; m+=s*(x.montant||0); sh+=s*(x.shares||0); } }); return {m,sh}; };
+  const _ncgic=_netFund("CGIC"), _ncgis=_netFund("CGIS");
+  const gcNAV = _ncgic.sh>0 ? gcFonds/_ncgic.sh : 0;   // NAV (cours) en $
+  const gsNAV = _ncgis.sh>0 ? gsFonds/_ncgis.sh : 0;
+  const gcPerfAllTime = _ncgic.m>0 ? (gcFonds*usdEurNow)/_ncgic.m - 1 : 0;   // P&L money-weighted en €
+  const gsPerfAllTime = _ncgis.m>0 ? (gsFonds*usdEurNow)/_ncgis.m - 1 : 0;
 
 
   const bench = (()=>{
@@ -4859,10 +4863,10 @@ function PageGDB(
     <div>
       <PageTitle title="JCGI" sub="Fonds · CGIC & CGIS"/>
       <div style={{display:"grid",gridTemplateColumns:"1fr",gap:8,marginBottom:4}}>
-        <FondCard label="CGIC — Crypto" cours={gcToday} qty={gcQty} fonds={gcFonds} color={C.btc} hidden={hidden}
+        <FondCard label="CGIC — Crypto" cours={gcNAV} qty={_ncgic.sh} fonds={gcFonds} color={C.btc} hidden={hidden}
           eur={eur} usdEur={src.usdEur} perfAllTime={gcPerfAllTime} onClick={()=>setDetailFond("CGIC")}
           perfs={[["1J",gcPerf(d1)],["1S",gcPerf(d7)],["1M",gcPerf(d30)],["YTD",gcPerf(dytd)],["ALL",gcPerfAllTime]]}/>
-        <FondCard label="CGIS — Actions" cours={gsToday} qty={gsQty} fonds={gsFonds} color={C.blue} hidden={hidden}
+        <FondCard label="CGIS — Actions" cours={gsNAV} qty={_ncgis.sh} fonds={gsFonds} color={C.blue} hidden={hidden}
           eur={eur} usdEur={src.usdEur} perfAllTime={gsPerfAllTime} onClick={()=>setDetailFond("CGIS")}
           perfs={[["1J",gsPerf(d1)],["1S",gsPerf(d7)],["1M",gsPerf(d30)],["YTD",gsYTD],["1Y*",gsYTD]]}/>
       </div>
