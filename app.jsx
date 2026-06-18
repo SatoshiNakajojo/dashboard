@@ -784,7 +784,7 @@ function applyPrices(prices, usdEur, effSrc){
 }
 
 // Date locale UTC+11 (Nouvelle-Calédonie)
-const APP_VERSION = "v5.61";
+const APP_VERSION = "v5.62";
 // v4.5 — fix NICK : NICK.AS n'existe pas chez Yahoo, le bon symbole EUR est NICK.MI (Milan)
 try{ if(typeof YF_MAP!=="undefined" && YF_MAP){ YF_MAP.NICK="NICK.MI"; } }catch(e){}
 const NC_OFFSET_MS = 11 * 60 * 60 * 1000;
@@ -3673,12 +3673,37 @@ function PageAllocation({hidden, EFF, eur=false, setEur, iconDbVersion=0, bumpIc
   return(
     <>
     <div>
-      {/* ── View selector — 2 onglets ── */}
-      <div style={{display:"flex",gap:4,background:C.bg2,borderRadius:10,padding:4,marginBottom:14,border:`1px solid ${C.border}`}}>
+      {/* ── View selector — style Snapshot ── */}
+      <div style={{display:"flex",gap:8,marginBottom:16}}>
         {[["detail","Détail"],["ajust","Allocation"]].map(([v,l])=>(
-          <button key={v} onClick={()=>setMode(v)} style={{flex:1,padding:"7px 0",borderRadius:7,fontSize:11,fontWeight:600,letterSpacing:.5,border:"none",cursor:"pointer",background:mode===v?C.gold:"transparent",color:mode===v?C.bg:C.text3,transition:"background .15s,color .15s"}}>{l}</button>
+          <button key={v} onClick={()=>setMode(v)} style={lxBtn({active:mode===v,style:{flex:1,padding:"9px 0"}})}>{l}</button>
         ))}
       </div>
+
+      {/* ── TOTAL PORTEFEUILLE — toujours visible (Détail + Allocation) ── */}
+      {(()=>{
+        const sectionsPnl = SECTIONS.reduce((acc,s)=>acc+s.items.reduce((a,x)=>a+(x.pnl||0),0),0);
+        const investi = SECTIONS.reduce((acc,s)=>acc+s.items.reduce((a,x)=>a+(x.investi||0),0),0);
+        const pnlPct = investi>0?sectionsPnl/investi:0;
+        const cur2b = eur?"€":"$";
+        return(
+          <div style={{marginBottom:20}}>
+            <div style={{fontSize:10,letterSpacing:4,color:C.text2,textTransform:"uppercase",margin:"4px 0 12px"}}>Total portefeuille</div>
+            <div style={{border:`1px solid ${C.border2}`,borderRadius:C.radius||12,padding:"18px 16px",display:"flex",justifyContent:"space-between",alignItems:"flex-start",background:C.bg1}}>
+              <div>
+                <div style={{fontFamily:"'Cormorant Garamond',Georgia,serif",fontWeight:400,fontSize:40,lineHeight:1,color:C.text,fontVariantNumeric:"tabular-nums"}}>
+                  {hidden?"••••••":<><span style={{color:C.gold,fontSize:24,verticalAlign:4,marginRight:2}}>{cur2b}</span>{fmt(totalDisplay)}</>}
+                </div>
+                <div style={{fontSize:12,color:C.text3,marginTop:6,fontVariantNumeric:"tabular-nums"}}>{msk(eur?"$"+fmt(totalUSD):"€"+fmt(totalEUR),hidden)}</div>
+              </div>
+              <div style={{textAlign:"right"}}>
+                <div style={{fontFamily:"'Cormorant Garamond',Georgia,serif",fontSize:26,lineHeight:1,color:clr(sectionsPnl),fontVariantNumeric:"tabular-nums"}}>{hidden?"•••":(sectionsPnl>=0?"+":"")+cur2b+fmtK(Math.abs(eur?Math.round(sectionsPnl*(_src.usdEur||0.852)):sectionsPnl))}</div>
+                <div style={{fontSize:11,fontVariantNumeric:"tabular-nums",color:clr(sectionsPnl),border:`1px solid ${clr(sectionsPnl)}47`,borderRadius:999,padding:"3px 10px",display:"inline-block",marginTop:8}}>{fmtP(pnlPct)}</div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ── ALLOCATION : donuts + ajustements fusionnés ── */}
       {(mode==="compare"||mode==="ajust")&&(
@@ -3775,31 +3800,6 @@ function PageAllocation({hidden, EFF, eur=false, setEur, iconDbVersion=0, bumpIc
       {/* ── DÉTAIL PAR CATÉGORIE ── */}
       {mode==="detail"&&(
         <>
-          {/* ── TOTAL PORTEFEUILLE (tout en haut, titre dehors) ── */}
-          {(()=>{
-            const sectionsPnl = SECTIONS.reduce((acc,s)=>acc+s.items.reduce((a,x)=>a+(x.pnl||0),0),0);
-            const investi = SECTIONS.reduce((acc,s)=>acc+s.items.reduce((a,x)=>a+(x.investi||0),0),0);
-            const pnlPct = investi>0?sectionsPnl/investi:0;
-            const cur2b = eur?"€":"$";
-            return(
-              <div style={{marginBottom:20}}>
-                <div style={{fontSize:10,letterSpacing:4,color:C.text2,textTransform:"uppercase",margin:"4px 0 12px"}}>Total portefeuille</div>
-                <div style={{border:`1px solid ${C.border2}`,borderRadius:C.radius||12,padding:"18px 16px",display:"flex",justifyContent:"space-between",alignItems:"flex-start",background:C.bg1}}>
-                  <div>
-                    <div style={{fontFamily:"'Cormorant Garamond',Georgia,serif",fontWeight:400,fontSize:40,lineHeight:1,color:C.text,fontVariantNumeric:"tabular-nums"}}>
-                      {hidden?"••••••":<><span style={{color:C.gold,fontSize:24,verticalAlign:4,marginRight:2}}>{cur2b}</span>{fmt(totalDisplay)}</>}
-                    </div>
-                    <div style={{fontSize:12,color:C.text3,marginTop:6,fontVariantNumeric:"tabular-nums"}}>{msk(eur?"$"+fmt(totalUSD):"€"+fmt(totalEUR),hidden)}</div>
-                  </div>
-                  <div style={{textAlign:"right"}}>
-                    <div style={{fontFamily:"'Cormorant Garamond',Georgia,serif",fontSize:26,lineHeight:1,color:clr(sectionsPnl),fontVariantNumeric:"tabular-nums"}}>{hidden?"•••":(sectionsPnl>=0?"+":"")+cur2b+fmtK(Math.abs(eur?Math.round(sectionsPnl*(_src.usdEur||0.852)):sectionsPnl))}</div>
-                    <div style={{fontSize:11,fontVariantNumeric:"tabular-nums",color:clr(sectionsPnl),border:`1px solid ${clr(sectionsPnl)}47`,borderRadius:999,padding:"3px 10px",display:"inline-block",marginTop:8}}>{fmtP(pnlPct)}</div>
-                  </div>
-                </div>
-              </div>
-            );
-          })()}
-
           {/* ── RÉPARTITION : camembert + chips (style home) ── */}
           {(()=>{
             const _t = SECTIONS.reduce((a,s)=>a+Math.max(0,s.totalUSD),0)||1;
@@ -4534,9 +4534,12 @@ function FondCard({label, cours, qty, fonds, color, perfs, hidden, eur, usdEur, 
   const pUp = perfCreation >= 0;
   const affCours = eur ? "€"+(cours*(usdEur||0.852)).toFixed(2) : "$"+cours.toFixed(2);
   const affFonds = eur ? "€"+fmtK(Math.round(fonds*(usdEur||0.852))) : "$"+fmtK(fonds);
+  const valDet = qty*cours;
+  const affVal = eur ? "€"+fmtK(Math.round(valDet*(usdEur||0.852))) : "$"+fmtK(valDet);
+  const partFonds = fonds>0 ? (valDet/fonds*100) : null;
 
   // Perfs 1J, 1S, 1M seulement (3 premières)
-  const perfs3 = perfs.slice(0,3);
+  const perfs3 = perfs;  // toutes les perfs (carte pleine largeur)
 
   return(
     <>
@@ -4569,20 +4572,24 @@ function FondCard({label, cours, qty, fonds, color, perfs, hidden, eur, usdEur, 
       {/* Séparateur */}
       <div style={{height:1,background:C.border,marginBottom:12}}/>
 
-      {/* Fonds + Parts */}
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:0,marginBottom:14}}>
+      {/* Fonds + Valeur détenue + Parts */}
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:0,marginBottom:14}}>
         <div>
           <div style={{fontSize:8,color:C.gray,letterSpacing:1.5,textTransform:"uppercase",marginBottom:4}}>Fonds</div>
-          <div style={{fontSize:17,fontWeight:600,color:C.text}}>{msk(affFonds, hidden)}</div>
+          <div style={{fontSize:16,fontWeight:600,color:C.text}}>{msk(affFonds, hidden)}</div>
+        </div>
+        <div style={{textAlign:"center"}}>
+          <div style={{fontSize:8,color:C.gray,letterSpacing:1.5,textTransform:"uppercase",marginBottom:4}}>Valeur détenue</div>
+          <div style={{fontSize:16,fontWeight:600,color}}>{msk(affVal, hidden)}</div>
         </div>
         <div style={{textAlign:"right"}}>
           <div style={{fontSize:8,color:C.gray,letterSpacing:1.5,textTransform:"uppercase",marginBottom:4}}>Parts</div>
-          <div style={{fontSize:17,fontWeight:600,color:C.text}}>{msk(Math.round(qty).toLocaleString("fr-FR"), hidden)}</div>
+          <div style={{fontSize:16,fontWeight:600,color:C.text}}>{msk(Math.round(qty).toLocaleString("fr-FR"), hidden)}{partFonds!=null&&<span style={{fontSize:10,color:C.text3,fontWeight:600}}> · {partFonds.toFixed(0)}%</span>}</div>
         </div>
       </div>
 
-      {/* Perfs 1J / 1S / 1M */}
-      <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:6}}>
+      {/* Perfs 1J / 1S / 1M / YTD / ALL */}
+      <div style={{display:"grid",gridTemplateColumns:`repeat(${perfs3.length},1fr)`,gap:6}}>
         {perfs3.map(([l,v])=>(
           <div key={l} style={{
             background:C.bg2,borderRadius:8,padding:"7px 0",textAlign:"center",
@@ -4841,7 +4848,7 @@ function PageGDB(
 
   return(
     <div>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:4}}>
+      <div style={{display:"grid",gridTemplateColumns:"1fr",gap:8,marginBottom:4}}>
         <FondCard label="CGIC — Crypto" cours={gcToday} qty={gcQty} fonds={gcFonds} color={C.btc} hidden={hidden}
           eur={eur} usdEur={src.usdEur} perfAllTime={gcPerfAllTime} onClick={()=>setDetailFond("CGIC")}
           perfs={[["1J",gcPerf(d1)],["1S",gcPerf(d7)],["1M",gcPerf(d30)],["YTD",gcPerf(dytd)],["ALL",gcPerfAllTime]]}/>
