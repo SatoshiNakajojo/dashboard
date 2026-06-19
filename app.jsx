@@ -792,7 +792,7 @@ function applyPrices(prices, usdEur, effSrc){
 }
 
 // Date locale UTC+11 (Nouvelle-Calédonie)
-const APP_VERSION = "v6.12";
+const APP_VERSION = "v6.13";
 // v4.5 — fix NICK : NICK.AS n'existe pas chez Yahoo, le bon symbole EUR est NICK.MI (Milan)
 try{ if(typeof YF_MAP!=="undefined" && YF_MAP){ YF_MAP.NICK="NICK.MI"; } }catch(e){}
 const NC_OFFSET_MS = 11 * 60 * 60 * 1000;
@@ -4316,10 +4316,10 @@ function PageStats({chartData, hidden=false, EFF, eur=false, liveDD, src, liveIn
           });
         });
         if(pts.length<2) return null;
-        let acc=1; const cum=pts.map(p=>{ acc*=(1+p.ret); return {label:p.label, v:(acc-1)}; });
         const TFS=[["3M",3],["6M",6],["1A",12],["2A",24],["ALL",9999]];
-        const nShow = pnlTF==="ALL"?cum.length:Math.min(cum.length, (TFS.find(t=>t[0]===pnlTF)||["",cum.length])[1]);
-        const show = cum.slice(-nShow);
+        const nShow = pnlTF==="ALL"?pts.length:Math.min(pts.length, (TFS.find(t=>t[0]===pnlTF)||["",pts.length])[1]);
+        const win = pts.slice(-nShow);   // fenêtre = période sélectionnée
+        let acc=1; const show = win.map(p=>{ acc*=(1+p.ret); return {label:p.label, v:(acc-1)}; });
         const W=320,H=120,PADX=6,PADY=14;
         const vals=show.map(p=>p.v);
         let mn=Math.min(...vals,0), mx=Math.max(...vals,0); if(mn===mx){mn-=0.01;mx+=0.01;}
@@ -4333,7 +4333,7 @@ function PageStats({chartData, hidden=false, EFF, eur=false, liveDD, src, liveIn
         return(
           <>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",margin:"4px 0 10px"}}>
-            <span style={{fontSize:10,color:C.text2,letterSpacing:4,textTransform:"uppercase"}}>P&L cumulé · {cat==="crypto"?"Crypto":cat==="stocks"?"Actions":"Total"}</span>
+            <span style={{fontSize:10,color:C.text2,letterSpacing:4,textTransform:"uppercase"}}>P&L · {cat==="crypto"?"Crypto":cat==="stocks"?"Actions":"Total"} · {pnlTF==="ALL"?"Tout":pnlTF}</span>
             <span style={{fontSize:17,fontWeight:700,fontFamily:"'Cormorant Garamond',serif",color:lineCol}}>{(last>=0?"+":"")+(last*100).toFixed(1)}%</span>
           </div>
           <div style={{...crd(),marginBottom:10}}>
@@ -5040,17 +5040,22 @@ function PageGDB(
   const d30  = TF["1M"];
   const dytd = TF["YTD"];
 
-  // Perf corrigée du taux si mode €
-  const gsPerf = d => {
-    const ref = gsPriceAt(d); if(!ref) return null;
-    if(eur){ const usdRef=usdEurAt(d); return (gsToday*usdEurNow)/(ref*usdRef)-1; }
-    return gsToday/ref-1;
+  // Perf période via NAV réelle = valeur du fonds (€, depuis DD) ÷ parts cumulées (INV).
+  // Remplace l'ancien calcul GDBS (série mono-ligne → 1J/1S/1M/YTD identiques).
+  const _INV_PERF = liveInv || INV_SEED_OK;
+  const _partsAt = (fond, dstr) => { let sh=0; _INV_PERF.forEach(m=>{ if(m && m.fonds===fond && String(m.date)<=dstr) sh+=(m.io==="OUT"?-1:1)*(m.shares||0); }); return sh; };
+  const _partsNow = fond => _INV_PERF.reduce((a,m)=>a+((m&&m.fonds===fond)?(m.io==="OUT"?-1:1)*(m.shares||0):0),0);
+  const _fundValAtEUR = (fond, dstr) => {
+    let row=null; for(let i=_DD.length-1;i>=0;i--){ if(_DD[i][0]<=dstr){ row=_DD[i]; break; } }
+    if(!row) return null;
+    if(fond==="CGIC") return row[1]!=null?row[1]:null;                                  // cryptoEUR
+    return (row[4]!=null && row[5]!=null) ? row[4]*GDB_S_NB_PARTS*row[5] : null;        // CGIS €
   };
-  const gcPerf = d => {
-    const ref = gcPriceAt(d); if(!ref) return null;
-    if(eur){ const usdRef=usdEurAt(d); return (gcToday*usdEurNow)/(ref*usdRef)-1; }
-    return gcToday/ref-1;
-  };
+  const _navAt = (fond, dstr) => { const v=_fundValAtEUR(fond,dstr), p=_partsAt(fond,dstr); return (v!=null && p>0) ? v/p : null; };
+  const _navNow = fond => { const p=_partsNow(fond); const vUSD=(fond==="CGIC"?gcFonds:gsFonds); return (p>0 && vUSD!=null) ? (vUSD*usdEurNow)/p : null; };
+  const _perfPeriod = (fond, d) => { const a=_navAt(fond,d), n=_navNow(fond); return (a!=null && n!=null && a>0) ? n/a-1 : null; };
+  const gsPerf = d => _perfPeriod("CGIS", d);
+  const gcPerf = d => _perfPeriod("CGIC", d);
   // Depuis création CGIC : 10€ = 10.88$ au 25 mars 2020
   const GC_CREATION_USD = 10.88;
   const GC_CREATION_DATE = "2020-03-25";
