@@ -792,7 +792,7 @@ function applyPrices(prices, usdEur, effSrc){
 }
 
 // Date locale UTC+11 (Nouvelle-Calédonie)
-const APP_VERSION = "v6.07";
+const APP_VERSION = "v6.08";
 // v4.5 — fix NICK : NICK.AS n'existe pas chez Yahoo, le bon symbole EUR est NICK.MI (Milan)
 try{ if(typeof YF_MAP!=="undefined" && YF_MAP){ YF_MAP.NICK="NICK.MI"; } }catch(e){}
 const NC_OFFSET_MS = 11 * 60 * 60 * 1000;
@@ -915,6 +915,27 @@ function getTickerTrades(ticker){
 }
 function tradeTickers(){
   return [...new Set(getAllTxns().map(t=>t&&t.ticker).filter(Boolean).map(x=>String(x).toUpperCase().trim()))].sort();
+}
+// Apparie ventes ↔ achats en FIFO → P&L réalisé, % et durée de détention par vente (#21)
+function fifoEnrich(trades){
+  const lots=[]; // file FIFO des achats {qty,price,date}
+  return trades.map(t=>{
+    const q=Math.abs(t.qty||0), p=t.price||0;
+    if(t.side==="BUY"){ lots.push({qty:q,price:p,date:t.date}); return {...t, held:null, pnl:null, pnlPct:null}; }
+    let rem=q, cost=0, matched=0, wDays=0;
+    while(rem>1e-9 && lots.length){
+      const lot=lots[0]; const take=Math.min(rem,lot.qty);
+      cost+=take*lot.price; matched+=take;
+      const days=Math.round((new Date(t.date)-new Date(lot.date))/86400000);
+      wDays+=take*days; lot.qty-=take; rem-=take;
+      if(lot.qty<=1e-9) lots.shift();
+    }
+    const avgCost=matched>0?cost/matched:null;
+    const pnl=avgCost!=null?(p-avgCost)*matched:null;
+    const pnlPct=(avgCost!=null&&avgCost>0)?(p/avgCost-1):null;
+    const held=matched>0?Math.round(wDays/matched):null;
+    return {...t, held, pnl, pnlPct, avgCost};
+  });
 }
 // Écrit une base (ignore les clés inconnues et les valeurs vides)
 function lsv9Set(key, value, t){
@@ -1580,7 +1601,7 @@ const TF_CONFIG = [
 // Mapping TF_CONFIG index → days CoinGecko
 const TF_CG_DAYS = ["1","7","7","14","30","365","1825","max"];
 
-function TickerModal({ ticker, cat="", eur=false, usdEur=0.86, onClose }) {
+function TickerModal({ ticker, cat="", row=null, eur=false, usdEur=0.86, onClose }) {
   const isCrypto = cat === "Crypto" || !!(CG_MAP[ticker]);
   const cgId     = CG_MAP[ticker] || ticker.toLowerCase();
   const yfSym    = YF_MAP[ticker] || ticker;
@@ -1614,9 +1635,17 @@ function TickerModal({ ticker, cat="", eur=false, usdEur=0.86, onClose }) {
   const _cur = eur?"€":"$";
   const curPrice = (()=>{
     if(data?.price!=null && !isNaN(Number(data.price))) return Number(data.price);
-    const c=data?.candles; if(Array.isArray(c)&&c.length){ const k=c[c.length-1]; const v=k.close??k.c??k.value; return v!=null?Number(v):null; }
+    const c=data?.candles; if(Array.isArray(c)&&c.length){ const k=c[c.length-1]; const v=k.close??k.c??k.value; if(v!=null) return Number(v); }
+    if(row && row.qty) return row.valUSD/row.qty;   // crypto/manuel : NAV depuis la ligne
     return null;
   })();
+  // Position affichée : depuis les trades si présents, sinon depuis la LIGNE (crypto saisi manuellement)
+  const hasTrades = tkTrades.length>0;
+  const dispNetQ = hasTrades ? pos.netQ : (row && row.qty!=null ? row.qty : null);
+  const dispPru  = hasTrades ? pos.pru  : (row && row.pa!=null ? row.pa : null);
+  // Objectifs de vente multiples (migration depuis l'ancien champ unique)
+  const targets = Array.isArray(posData.targets) ? posData.targets : (posData.target!=null&&posData.target!=="" ? [String(posData.target)] : []);
+  const setTargets = (arr)=>savePos({targets:arr, target:undefined});
   // v4.0 LOT4 — récupère le plan d'investissement (zones) depuis le watchlist
   const wlPlan = (()=>{
     try{
@@ -1920,18 +1949,36 @@ function TickerModal({ ticker, cat="", eur=false, usdEur=0.86, onClose }) {
               </button>
             </div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"7px 12px",fontSize:11}}>
-              <div style={{display:"flex",justifyContent:"space-between"}}><span style={{color:C.text3}}>Position</span><span style={{fontWeight:700,color:C.text}}>{pos.netQ?pos.netQ.toLocaleString("fr-FR",{maximumFractionDigits:4}):"—"}</span></div>
-              <div style={{display:"flex",justifyContent:"space-between"}}><span style={{color:C.text3}}>Prix d'achat moyen</span><span style={{fontWeight:700,color:C.text}}>{pos.pru!=null?_cur+pos.pru.toFixed(2):"—"}</span></div>
+              <div style={{display:"flex",justifyContent:"space-between"}}><span style={{color:C.text3}}>Position</span><span style={{fontWeight:700,color:C.text}}>{dispNetQ?Number(dispNetQ).toLocaleString("fr-FR",{maximumFractionDigits:6}):"—"}</span></div>
+              <div style={{display:"flex",justifyContent:"space-between"}}><span style={{color:C.text3}}>Prix d'achat moyen</span><span style={{fontWeight:700,color:C.text}}>{dispPru!=null?_cur+Number(dispPru).toFixed(2):"—"}</span></div>
               <div style={{display:"flex",justifyContent:"space-between"}}><span style={{color:C.text3}}>Cours actuel</span><span style={{fontWeight:700,color:C.text}}>{curPrice!=null?_cur+curPrice.toFixed(2):"—"}</span></div>
               <div style={{display:"flex",justifyContent:"space-between"}}><span style={{color:C.text3}}>Durée de hold</span><span style={{fontWeight:700,color:C.text}}>{fmtHold(holdDays)}</span></div>
-              {pos.pru!=null && curPrice!=null && (()=>{ const pct=curPrice/pos.pru-1; return(
+              {dispPru!=null && curPrice!=null && (()=>{ const pct=curPrice/dispPru-1; return(
                 <div style={{display:"flex",justifyContent:"space-between"}}><span style={{color:C.text3}}>P&L latent</span><span style={{fontWeight:700,color:pct>=0?C.green:C.red}}>{(pct>=0?"+":"")+(pct*100).toFixed(1)}%</span></div>
               );})()}
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                <span style={{color:C.text3}}>Objectif de vente</span>
-                {posEdit
-                  ? <input type="number" value={posData.target||""} onChange={e=>savePos({target:e.target.value})} placeholder="prix" style={{width:72,background:C.bg2,border:`1px solid ${C.border2}`,borderRadius:6,color:C.text,fontSize:11,padding:"2px 6px",textAlign:"right"}}/>
-                  : <span style={{fontWeight:700,color:posData.target?C.gold:C.text3}}>{posData.target?_cur+Number(posData.target).toFixed(2):"—"}</span>}
+            </div>
+            {/* Objectifs de vente — multiples, éditables */}
+            <div style={{marginTop:12}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:7}}>
+                <span style={{fontSize:10,color:C.text3,textTransform:"uppercase",letterSpacing:1}}>Objectifs de vente</span>
+                {posEdit && targets.length<12 && <button onClick={()=>setTargets([...targets,""])} style={lxBtn({style:{padding:"3px 9px",fontSize:10,gap:4}})}><Icon name="plus" size={12} color={C.text2}/>Ajouter</button>}
+              </div>
+              {targets.length===0 && <div style={{fontSize:11,color:C.text3,fontStyle:"italic"}}>{posEdit?"Clique sur « Ajouter ».":"Aucun objectif."}</div>}
+              <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                {targets.map((tg,ti)=>{
+                  const tv=parseFloat(tg);
+                  const dist=(curPrice!=null&&!isNaN(tv)&&curPrice>0)?(tv/curPrice-1):null;
+                  return(
+                    <div key={ti} style={{display:"flex",alignItems:"center",gap:8,fontSize:11}}>
+                      <span style={{width:18,height:18,borderRadius:5,flexShrink:0,border:`1px solid ${C.gold}55`,color:C.gold,fontSize:9,fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center"}}>{ti+1}</span>
+                      {posEdit
+                        ? <input type="number" value={tg} onChange={e=>{const a=[...targets];a[ti]=e.target.value;setTargets(a);}} placeholder="prix" style={{flex:1,background:C.bg2,border:`1px solid ${C.border2}`,borderRadius:6,color:C.text,fontSize:11,padding:"3px 8px"}}/>
+                        : <span style={{flex:1,fontWeight:700,color:C.text}}>{!isNaN(tv)?_cur+tv.toFixed(2):tg}</span>}
+                      {dist!=null && <span style={{fontVariantNumeric:"tabular-nums",color:dist>=0?C.green:C.red,minWidth:54,textAlign:"right"}}>{(dist>=0?"+":"")+(dist*100).toFixed(1)}%</span>}
+                      {posEdit && <button onClick={()=>setTargets(targets.filter((_,j)=>j!==ti))} style={{background:"none",border:"none",cursor:"pointer",color:C.red,padding:0,display:"flex"}}><Icon name="trash" size={13}/></button>}
+                    </div>
+                  );
+                })}
               </div>
             </div>
             {tkTrades.length===0 && <div style={{marginTop:8,fontSize:10,color:C.text3,fontStyle:"italic"}}>Aucun trade enregistré pour {ticker} (le symbole du log peut différer — ex. BTC est détenu via IBIT).</div>}
@@ -1940,16 +1987,24 @@ function TickerModal({ ticker, cat="", eur=false, usdEur=0.86, onClose }) {
               : (posData.note ? <div style={{marginTop:8,fontSize:11,color:C.text2,fontStyle:"italic"}}>{posData.note}</div> : null)}
           </div>
 
-          {/* ── #3 HISTORIQUE DES TRADES ── */}
+          {/* ── #3/#21 HISTORIQUE DES TRADES (durée HODL + P&L par vente) ── */}
           {tkTrades.length>0 && (
             <div style={{marginTop:10,background:C.bg1,border:`1px solid ${C.border}`,borderRadius:10,padding:"10px 12px"}}>
               <div style={{fontSize:10,fontWeight:600,color:C.gold,letterSpacing:.4,marginBottom:8}}>HISTORIQUE DES TRADES · {tkTrades.length}</div>
-              <div style={{display:"flex",flexDirection:"column",gap:6}}>
-                {tkTrades.slice().reverse().map((t,i)=>(
-                  <div key={t.id||i} style={{display:"flex",alignItems:"center",gap:8,fontSize:11}}>
-                    <span style={{fontSize:9,fontWeight:700,color:t.side==="BUY"?C.green:C.red,border:`1px solid ${(t.side==="BUY"?C.green:C.red)}55`,borderRadius:5,padding:"1px 6px",minWidth:42,textAlign:"center"}}>{t.side==="BUY"?"ACHAT":"VENTE"}</span>
-                    <span style={{color:C.text3,minWidth:62}}>{t.date}</span>
-                    <span style={{flex:1,textAlign:"right",color:C.text}}>{Math.abs(t.qty||0).toLocaleString("fr-FR",{maximumFractionDigits:4})} @ {t.currency==="EUR"?"€":"$"}{Number(t.price||0).toFixed(2)}</span>
+              <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                {fifoEnrich(tkTrades).slice().reverse().map((t,i)=>(
+                  <div key={t.id||i} style={{fontSize:11,borderBottom:`1px solid ${C.border}`,paddingBottom:7}}>
+                    <div style={{display:"flex",alignItems:"center",gap:8}}>
+                      <span style={{fontSize:9,fontWeight:700,color:t.side==="BUY"?C.green:C.red,border:`1px solid ${(t.side==="BUY"?C.green:C.red)}55`,borderRadius:5,padding:"1px 6px",minWidth:42,textAlign:"center"}}>{t.side==="BUY"?"ACHAT":"VENTE"}</span>
+                      <span style={{color:C.text3,minWidth:62}}>{t.date}</span>
+                      <span style={{flex:1,textAlign:"right",color:C.text}}>{Math.abs(t.qty||0).toLocaleString("fr-FR",{maximumFractionDigits:4})} @ {t.currency==="EUR"?"€":"$"}{Number(t.price||0).toFixed(2)}</span>
+                    </div>
+                    {t.side==="SELL" && (t.pnl!=null || t.held!=null) && (
+                      <div style={{display:"flex",gap:14,justifyContent:"flex-end",marginTop:3,fontSize:10,color:C.text3}}>
+                        {t.held!=null && <span>HODL {fmtHold(t.held)}</span>}
+                        {t.pnl!=null && <span>P&L <b style={{color:t.pnl>=0?C.green:C.red}}>{(t.pnl>=0?"+":"")+(t.currency==="EUR"?"€":"$")+Math.abs(t.pnl).toFixed(0)}{t.pnlPct!=null?" ("+(t.pnlPct>=0?"+":"")+(t.pnlPct*100).toFixed(1)+"%)":""}</b></span>}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -2414,7 +2469,7 @@ function SectionRow({section, open, onToggle, hidden=false, eur=false, usdEur=0.
             const isLast=i===items.length-1;
             const pnlPct=item.pct??(item.pnl&&item.investi?item.pnl/item.investi:null);
             return(
-              <div key={i} onClick={()=>item.ticker&&onTickerClick&&onTickerClick(item.ticker, item.cat)} style={{display:"flex",alignItems:"center",gap:8,padding:"7px 12px",borderBottom:isLast?"none":`1px solid ${C.border}`,background:i%2===0?"transparent":C.bg1+"66",cursor:item.ticker?"pointer":"default"}}>
+              <div key={i} onClick={()=>item.ticker&&onTickerClick&&onTickerClick(item.ticker, item.cat, item)} style={{display:"flex",alignItems:"center",gap:8,padding:"7px 12px",borderBottom:isLast?"none":`1px solid ${C.border}`,background:i%2===0?"transparent":C.bg1+"66",cursor:item.ticker?"pointer":"default"}}>
                 {/* Icon — TickerIcon si ticker connu, sinon fallback BankLogo/emoji */}
                 {(()=>{
                   // Logos SVG custom uniquement pour KUCOIN (pas de ticker boursier, logo SVG maison)
@@ -3928,9 +3983,9 @@ function PageAllocation({hidden, EFF, eur=false, setEur, iconDbVersion=0, bumpIc
               section={sec}
               open={openSec===sec.key}
               onToggle={()=>setOpenSec(openSec===sec.key?null:sec.key)}
-              onTickerClick={(t, cat)=>{
+              onTickerClick={(t, cat, item)=>{
                 const NO_MODAL=["BCI","Bourso","DeBlock","KUCOIN","EURO","USD"];
-                if(!NO_MODAL.includes(t)) setTickerModal({ticker:t, cat:cat||""});
+                if(!NO_MODAL.includes(t)) setTickerModal({ticker:t, cat:cat||"", row:item||null});
               }}
               hidden={hidden}
               eur={eur}
@@ -3948,6 +4003,7 @@ function PageAllocation({hidden, EFF, eur=false, setEur, iconDbVersion=0, bumpIc
       <TickerModal
         ticker={tickerModal.ticker}
         cat={tickerModal.cat}
+        row={tickerModal.row}
         eur={eur}
         usdEur={(_src||EFF||CURRENT).usdEur||0.86}
         onClose={()=>setTickerModal(null)}
@@ -8335,31 +8391,71 @@ function PageWatchlist({ EFF, hidden }){
 // ── FIN PageWatchlist v2 ──────────────────────────────────────────────────────
 
 
-// ── #16/#17 — Recherche d'un ticker → trades (+ plan optionnel) ─────────────
+// ── #16/#17/#22 — Recherche ticker : trades (Legend) OU plans+alertes (Tracking) ──
 function TickerSearchPanel({withPlan=false}){
   const [q,setQ]=useState("");
   const T=String(q||"").toUpperCase().trim();
+  const wl=(()=>{ try{ const a=JSON.parse(localStorage.getItem("cgi_watchlist_direct")||"[]"); return Array.isArray(a)?a:[]; }catch(e){ return []; } })();
+  const allTickers = withPlan
+    ? [...new Set(wl.map(x=>String(x.ticker||"").toUpperCase().trim()).filter(Boolean))].sort()
+    : tradeTickers();
+  const matchExact = allTickers.indexOf(T)>=0;
+  const suggestions = T && !matchExact ? allTickers.filter(x=>x.indexOf(T)>=0).slice(0,8) : [];
+  const SearchBox = (
+    <div style={{display:"flex",alignItems:"center",gap:8,border:`1px solid ${C.border2}`,borderRadius:C.radiusSm||8,padding:"8px 11px",background:C.bg1}}>
+      <Icon name="search" size={15} color={C.text2}/>
+      <input value={q} onChange={e=>setQ(e.target.value)} placeholder={withPlan?"Rechercher un plan / une alerte…":"Rechercher un ticker…"} style={{flex:1,background:"transparent",border:"none",outline:"none",color:C.text,fontSize:13,fontFamily:C.font}}/>
+      {q?<button onClick={()=>setQ("")} style={{background:"none",border:"none",cursor:"pointer",color:C.text3,padding:0,display:"flex"}}><Icon name="x" size={14}/></button>:null}
+    </div>
+  );
+  const Sugg = suggestions.length>0 ? (
+    <div style={{display:"flex",flexWrap:"wrap",gap:6,marginTop:8}}>
+      {suggestions.map(sg=>(<button key={sg} onClick={()=>setQ(sg)} style={lxBtn({style:{padding:"4px 10px",fontSize:11}})}>{sg}</button>))}
+    </div>
+  ) : null;
+
+  if(withPlan){
+    const e = T ? (wl.find(x=>String(x.ticker||"").toUpperCase().trim()===T)||null) : null;
+    const bz = e&&e.buyZone; const st = (e&&e.sellTargets)||[];
+    return (
+      <div style={{marginBottom:16}}>
+        {SearchBox}{Sugg}
+        {T && !e && suggestions.length===0 && <div style={{marginTop:10,fontSize:12,color:C.text3,fontStyle:"italic"}}>Aucun plan ni alerte pour « {T} ».</div>}
+        {e && (
+          <div style={{marginTop:12,display:"flex",flexDirection:"column",gap:10}}>
+            <div style={{padding:"10px 12px",border:`1px solid ${C.border}`,borderRadius:10,background:C.bg1}}>
+              <div style={{fontSize:10,fontWeight:600,color:C.gold,letterSpacing:.4,marginBottom:8}}>PLAN DE TRADE</div>
+              <div style={{display:"flex",justifyContent:"space-between",fontSize:11,marginBottom:8}}>
+                <span style={{color:C.text3}}>Zone d'achat</span>
+                <span style={{fontWeight:700,color:C.green}}>{bz&&(bz.low!=null||bz.high!=null)?((bz.low!=null?bz.low:"?")+" – "+(bz.high!=null?bz.high:"?")):"—"}</span>
+              </div>
+              <div style={{fontSize:10,color:C.text3,textTransform:"uppercase",letterSpacing:1,margin:"4px 0 5px"}}>Objectifs de vente</div>
+              {st.length===0 ? <div style={{fontSize:11,color:C.text3,fontStyle:"italic"}}>Aucun.</div> :
+                <div style={{display:"flex",flexDirection:"column",gap:4}}>
+                  {st.map((sx,i)=>(<div key={i} style={{display:"flex",justifyContent:"space-between",fontSize:11}}><span style={{color:C.text3}}>Cible {i+1}</span><span style={{fontWeight:700,color:C.red}}>{sx&&sx.price!=null?sx.price:"—"}</span></div>))}
+                </div>}
+            </div>
+            <div style={{padding:"10px 12px",border:`1px solid ${C.border}`,borderRadius:10,background:C.bg1}}>
+              <div style={{fontSize:10,fontWeight:600,color:C.gold,letterSpacing:.4,marginBottom:8,display:"flex",alignItems:"center",gap:6}}><Icon name="bell" size={12} color={C.gold}/>ALERTE DE PRIX</div>
+              <div style={{display:"flex",justifyContent:"space-between",fontSize:11}}>
+                <span style={{color:C.text3}}>Seuil d'alerte (prix sous lequel notifier)</span>
+                <span style={{fontWeight:700,color:e.alertBelow!=null?C.text:C.text3}}>{e.alertBelow!=null?e.alertBelow:"—"}</span>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   const trades = T?getTickerTrades(T):[];
-  const suggestions = T && trades.length===0 ? tradeTickers().filter(x=>x.indexOf(T)>=0).slice(0,8) : [];
   let buyQ=0,buyV=0,sellQ=0;
   trades.forEach(t=>{ const qy=Math.abs(t.qty||0),p=t.price||0; if(t.side==="BUY"){buyQ+=qy;buyV+=qy*p;} else if(t.side==="SELL"){sellQ+=qy;} });
   const netQ=buyQ-sellQ, pru=buyQ>0?buyV/buyQ:null;
-  const plan = (withPlan && T) ? (()=>{ try{ const arr=JSON.parse(localStorage.getItem("cgi_watchlist_direct")||"[]"); return Array.isArray(arr)?(arr.find(x=>String(x.ticker||"").toUpperCase().trim()===T)||null):null; }catch(e){return null;} })() : null;
   return (
     <div style={{marginBottom:16}}>
-      <div style={{display:"flex",alignItems:"center",gap:8,border:`1px solid ${C.border2}`,borderRadius:C.radiusSm||8,padding:"8px 11px",background:C.bg1}}>
-        <Icon name="search" size={15} color={C.text2}/>
-        <input value={q} onChange={e=>setQ(e.target.value)} placeholder="Rechercher un ticker…" style={{flex:1,background:"transparent",border:"none",outline:"none",color:C.text,fontSize:13,fontFamily:C.font}}/>
-        {q?<button onClick={()=>setQ("")} style={{background:"none",border:"none",cursor:"pointer",color:C.text3,padding:0,display:"flex"}}><Icon name="x" size={14}/></button>:null}
-      </div>
-      {suggestions.length>0 && (
-        <div style={{display:"flex",flexWrap:"wrap",gap:6,marginTop:8}}>
-          {suggestions.map(s=>(<button key={s} onClick={()=>setQ(s)} style={lxBtn({style:{padding:"4px 10px",fontSize:11}})}>{s}</button>))}
-        </div>
-      )}
-      {T && trades.length===0 && suggestions.length===0 && (
-        <div style={{marginTop:10,fontSize:12,color:C.text3,fontStyle:"italic"}}>Aucun trade pour « {T} ».</div>
-      )}
+      {SearchBox}{Sugg}
+      {T && trades.length===0 && suggestions.length===0 && <div style={{marginTop:10,fontSize:12,color:C.text3,fontStyle:"italic"}}>Aucun trade pour « {T} ».</div>}
       {T && trades.length>0 && (
         <div style={{marginTop:12}}>
           <div style={{display:"flex",gap:16,flexWrap:"wrap",marginBottom:10,fontSize:12}}>
@@ -8367,16 +8463,6 @@ function TickerSearchPanel({withPlan=false}){
             {pru!=null && <span style={{color:C.text2}}>PRU <b style={{color:C.text}}>{pru.toFixed(2)}</b></span>}
             <span style={{color:C.text2}}>Trades <b style={{color:C.text}}>{trades.length}</b></span>
           </div>
-          {withPlan && (
-            <div style={{marginBottom:12,fontSize:11,padding:"8px 11px",border:`1px solid ${C.border}`,borderRadius:8,background:C.bg1}}>
-              {plan ? (
-                <span style={{color:C.text2}}>
-                  Plan : <span style={{color:C.green}}>achat {plan.buyZone?((plan.buyZone.low??"?")+"–"+(plan.buyZone.high??"?")):"—"}</span>
-                  {(plan.sellTargets&&plan.sellTargets.length)?<span> · <span style={{color:C.red}}>cibles {plan.sellTargets.map(s=>s.price).filter(x=>x!=null).join(", ")}</span></span>:null}
-                </span>
-              ) : <span style={{fontStyle:"italic",color:C.text3}}>Aucun plan dans la watchlist pour ce ticker.</span>}
-            </div>
-          )}
           <div style={{display:"flex",flexDirection:"column",gap:7}}>
             {trades.slice().reverse().map((t,i)=>(
               <div key={t.id||i} style={{display:"flex",alignItems:"center",gap:8,fontSize:11,borderBottom:`1px solid ${C.border}`,paddingBottom:7}}>
