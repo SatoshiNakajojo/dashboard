@@ -133,7 +133,7 @@ const FAMILY_ICONS = {
 
 /* Titre d'onglet — police luxe Cinzel champagne + sous-titre petites capitales */
 function PageTitle({title, sub}){
-  return React.createElement("div",{style:{marginBottom:18}},
+  return React.createElement("div",{style:{marginBottom:18,textAlign:"center"}},
     React.createElement("div",{style:{fontFamily:"'Cinzel',Georgia,serif",fontSize:20,fontWeight:600,letterSpacing:2.5,color:C.gold,lineHeight:1.15}}, title),
     sub ? React.createElement("div",{style:{fontSize:9,letterSpacing:4,color:C.text2,textTransform:"uppercase",marginTop:6}}, sub) : null
   );
@@ -792,7 +792,7 @@ function applyPrices(prices, usdEur, effSrc){
 }
 
 // Date locale UTC+11 (Nouvelle-Calédonie)
-const APP_VERSION = "v6.18";
+const APP_VERSION = "v6.19";
 // v4.5 — fix NICK : NICK.AS n'existe pas chez Yahoo, le bon symbole EUR est NICK.MI (Milan)
 try{ if(typeof YF_MAP!=="undefined" && YF_MAP){ YF_MAP.NICK="NICK.MI"; } }catch(e){}
 const NC_OFFSET_MS = 11 * 60 * 60 * 1000;
@@ -3615,6 +3615,7 @@ function PageOverview({chartData,onSnapshot,eur,setEur,hidden,setHidden,EFF,refr
   const _CM_PO=liveCM||CRYPTO_MONTHLY;
   const [chartTF, setChartTF] = useState("YTD");
   const [heroTF, setHeroTF] = useState("1M"); // #18 — timeframe du hero (sparkline + delta)
+  const [heroTFOpen, setHeroTFOpen] = useState(false); // #18 — menu déroulant timeframe
   const [sparkData, setSparkData] = useState([]);
   const cur = eur ? "€" : "$";
   const inv = 94064 * (EFF||CURRENT).usdEur;
@@ -3688,8 +3689,10 @@ function PageOverview({chartData,onSnapshot,eur,setEur,hidden,setHidden,EFF,refr
   const _ue = _effSrc.usdEur;
   const _mkPerf = (name,color,valUSD,inv) => {
     const valEUR = valUSD*_ue;
-    const pct = inv>0 ? valEUR/inv - 1 : 0;
-    const pnlEUR = Math.round(valEUR - inv);
+    const fond = name==="Crypto" ? "CGIC" : "CGIS";
+    let pct = fundPeriodPerf(fond, _hcut, (typeof CRYPTO_MONTHLY!=="undefined"?CRYPTO_MONTHLY:null), (typeof STOCKS_MONTHLY!=="undefined"?STOCKS_MONTHLY:null), valEUR);
+    if(pct==null) pct = inv>0 ? valEUR/inv - 1 : 0;   // fallback depuis création
+    const pnlEUR = Math.round(valEUR - valEUR/(1+pct));   // gain sur la période
     const pnl = eur ? pnlEUR : Math.round(pnlEUR/_ue);
     const up  = pct>=0;
     const pts = _spark.map((v,i)=>{ if(v==null)return null; let t=(v-_smn)/_srng; if(!up)t=1-t; return `${(i/_hn*150).toFixed(1)},${(36-t*28).toFixed(1)}`; }).filter(Boolean).join(" ");
@@ -3725,11 +3728,21 @@ function PageOverview({chartData,onSnapshot,eur,setEur,hidden,setHidden,EFF,refr
           </span>
           <span style={{fontSize:10,color:C.text3,letterSpacing:1.5}}>{_HTF_LABEL[heroTF]||heroTF}</span>
         </div>
-        {/* #18 — sélecteur de timeframe du hero */}
-        <div style={{display:"flex",gap:5,marginTop:16}}>
-          {["1S","1M","3M","YTD","1A","2A","ALL"].map(tf=>(
-            <button key={tf} onClick={()=>setHeroTF(tf)} style={lxBtn({active:heroTF===tf,accent:C.gold,style:{flex:1,minWidth:0,padding:"5px 0",fontSize:10}})}>{tf}</button>
-          ))}
+        {/* #18 — sélecteur de timeframe (menu déroulant) */}
+        <div style={{position:"relative",marginTop:16,display:"inline-block"}}>
+          <button onClick={()=>setHeroTFOpen(o=>!o)} style={lxBtn({active:heroTFOpen,accent:C.gold,style:{padding:"6px 13px",fontSize:11,gap:7}})}>
+            {_HTF_LABEL[heroTF]||heroTF} <span style={{fontSize:8,opacity:.8,transition:"transform .15s",display:"inline-block",transform:heroTFOpen?"rotate(180deg)":"none"}}>▼</span>
+          </button>
+          {heroTFOpen && (
+            <div style={{position:"absolute",top:"100%",left:0,marginTop:6,zIndex:30,background:C.bg2,border:`1px solid ${C.border2}`,borderRadius:C.radiusSm||10,padding:5,minWidth:150,boxShadow:"0 10px 28px rgba(0,0,0,0.45)"}}>
+              {["1S","1M","3M","YTD","1A","2A","ALL"].map(tf=>(
+                <button key={tf} onClick={()=>{setHeroTF(tf);setHeroTFOpen(false);}}
+                  style={{display:"block",width:"100%",textAlign:"left",background:heroTF===tf?C.gold+"22":"transparent",border:"none",borderRadius:7,color:heroTF===tf?C.gold:C.text,fontSize:12.5,padding:"8px 11px",cursor:"pointer",fontFamily:C.font}}>
+                  {_HTF_LABEL[tf]}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
@@ -3746,14 +3759,14 @@ function PageOverview({chartData,onSnapshot,eur,setEur,hidden,setHidden,EFF,refr
             <div key={i} style={{display:"flex",alignItems:"center",gap:10,fontSize:13}}>
               <span style={{width:9,height:9,borderRadius:3,flexShrink:0,background:a.color}}/>
               <span style={{flex:1,color:C.text}}>{a.name}</span>
-              <span style={{color:C.text2,fontVariantNumeric:"tabular-nums"}}>{a.pct.toFixed(0)} % · {msk(fmt(a.eurv)+" €",hidden)}</span>
+              <span style={{color:C.text2,fontVariantNumeric:"tabular-nums"}}>{a.pct.toFixed(0)} % · {msk(cur+fmt(Math.round(eur?a.eurv:a.eurv/_ue)),hidden)}</span>
             </div>
           ))}
         </div>
       </div>
 
       {/* ════ PERFORMANCE ════ */}
-      <div style={{fontSize:10,letterSpacing:4,color:C.text2,textTransform:"uppercase",padding:"22px 20px 12px"}}>Performance des fonds · depuis création</div>
+      <div style={{fontSize:10,letterSpacing:4,color:C.text2,textTransform:"uppercase",padding:"22px 20px 12px"}}>Performance des fonds · {_HTF_LABEL[heroTF]||heroTF}</div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,padding:"0 20px 6px"}}>
         {_perf.map((p,i)=>(
           <div key={i} style={{border:`1px solid ${C.border}`,borderRadius:12,padding:"12px 12px 10px",background:C.bg1}}>
@@ -4325,13 +4338,6 @@ function PageStats({chartData, hidden=false, EFF, eur=false, liveDD, src, liveIn
         ))}
       </div>
 
-      {/* ── #23 Mode barres : Mensuel (année) / Annuel (comparaison) ── */}
-      <div style={{display:"flex",gap:6,marginBottom:barMode==="month"?12:16}}>
-        {[["month","Mensuel"],["year","Annuel"]].map(([k,l])=>(
-          <button key={k} onClick={()=>setBarMode(k)} style={lxBtn({active:barMode===k,accent:catColor,style:{flex:1,padding:"6px 0",fontSize:11}})}>{l}</button>
-        ))}
-      </div>
-
       {/* ── Sélecteur année (mode mensuel uniquement) ── */}
       {barMode==="month" && (
       <div style={{display:"flex",gap:6,marginBottom:16,flexWrap:"wrap"}}>
@@ -4533,6 +4539,13 @@ function PageStats({chartData, hidden=false, EFF, eur=false, liveDD, src, liveIn
           </>
         );
       })()}
+
+      {/* ── #23/#31 Toggle Mensuel / Annuel — sous le graphe ── */}
+      <div style={{display:"flex",gap:6,marginBottom:18,marginTop:2}}>
+        {[["month","Mensuel"],["year","Annuel"]].map(([k,l])=>(
+          <button key={k} onClick={()=>setBarMode(k)} style={lxBtn({active:barMode===k,accent:catColor,style:{flex:1,padding:"9px 0",fontSize:12}})}>{l}</button>
+        ))}
+      </div>
 
       {/* ── Tableau mensuel détail ── */}
       {barMode==="month" && data&&(
@@ -11227,6 +11240,13 @@ function App(){
                 ["v5.4","Cash dip IBKR (USD/EUR), synchro watchlist multi-appareils corrigée, météo Telegram même app fermée, accueil à jour au lancement (dernier KV), boutons accent or, bouton actualiser refait."],
                 ["v5.0","Recalcul des positions depuis les transactions + application au portefeuille (actions, cash dip), synchro IBKR automatique."],
                 ["v4.19","NICK fiabilisé (fenêtre 3 mois pour titres illiquides) + logos de secours gratuits (Parqet)."],
+                ["v6.19","Home : timeframe en menu déroulant + P&L des fonds qui suit la période ; Stats : toggle Mensuel/Annuel sous le graphe ; titres centrés ; Répartition en devise ; écran de chargement (version + barre constante)."],
+                ["v6.15","P&L unifié partout (Home = JCGI = Stats) via composition des rendements mensuels — fin des valeurs aberrantes/identiques."],
+                ["v6.11","Stats branché sur les données live (plus de Total périmé) ; modal fonds : capital net IN−OUT."],
+                ["v6.09","Stats : barres avec dégradé + reflet, courbe « P&L cumulé » avec timeframe."],
+                ["v6.05","JCGI base 100 : couleurs re-séparées, séries vides masquées, données assainies."],
+                ["v6.03","Correctif P&L CGIC/CGIS (capital net investi) + données mensuelles Stats."],
+                ["v6.0","Refonte LUXE : thème Onyx & Champagne, titres Cinzel, bloc position + historique de trades, recherches ticker, mode annuel, logos ETH/LCL."],
                 ["v4.17","Panneau « Positions calculées » : reconstitution des positions depuis le journal de transactions."],
                 ["v4.16","Timeframes intraday, sélection/suppression/recoloration des tracés, repli multi-symboles."],
                 ["v4.15","Couche de dessin fiabilisée (capture dédiée) + rafraîchissement auto de la date locale."],
