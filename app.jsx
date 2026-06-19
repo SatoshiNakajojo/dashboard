@@ -792,7 +792,7 @@ function applyPrices(prices, usdEur, effSrc){
 }
 
 // Date locale UTC+11 (Nouvelle-Calédonie)
-const APP_VERSION = "v6.08";
+const APP_VERSION = "v6.09";
 // v4.5 — fix NICK : NICK.AS n'existe pas chez Yahoo, le bon symbole EUR est NICK.MI (Milan)
 try{ if(typeof YF_MAP!=="undefined" && YF_MAP){ YF_MAP.NICK="NICK.MI"; } }catch(e){}
 const NC_OFFSET_MS = 11 * 60 * 60 * 1000;
@@ -4045,6 +4045,7 @@ function PageStats({chartData, hidden=false, EFF, eur=false, liveDD, src, liveIn
   const[yr,setYr]=useState("2026");
   const[cat,setCat]=useState("total"); // crypto | stocks | total
   const[view,setView]=useState("bars"); // bars | table
+  const[pnlTF,setPnlTF]=useState("ALL"); // #9 — timeframe du P&L% cumulé
 
   // ── Taux USD/EUR historique par date (lit liveDD ou DD global) ────────────
   const _DD_ST = liveDD || DD;
@@ -4291,7 +4292,62 @@ function PageStats({chartData, hidden=false, EFF, eur=false, liveDD, src, liveIn
         </div>
       )}
 
-      {/* ── Graphique barres mensuelles ── */}
+      {/* ── #9 P&L % cumulé dans le temps (multi-années + timeframe) ── */}
+      {view==="bars" && (()=>{
+        const map = cat==="crypto"?CRYPTO_MONTHLY:cat==="stocks"?STOCKS_MONTHLY:TOTAL_MONTHLY;
+        const years = Object.keys(map||{}).filter(y=>/^\d{4}$/.test(y)).sort();
+        const pts=[];
+        years.forEach(y=>{
+          const d=getMonthlyData(cat,y); if(!d||!d.m) return;
+          d.m.forEach((ml,i)=>{
+            const bom=d.bom&&d.bom[i], pnl=d.pnl&&d.pnl[i], inv=d.inv&&d.inv[i];
+            if(ml && pnl!=null){ const base=(bom||0)+(inv||0); if(base>0) pts.push({label:ml+" "+String(y).slice(2), ret:pnl/base}); }
+          });
+        });
+        if(pts.length<2) return null;
+        let acc=1; const cum=pts.map(p=>{ acc*=(1+p.ret); return {label:p.label, v:(acc-1)}; });
+        const TFS=[["3M",3],["6M",6],["1A",12],["2A",24],["ALL",9999]];
+        const nShow = pnlTF==="ALL"?cum.length:Math.min(cum.length, (TFS.find(t=>t[0]===pnlTF)||["",cum.length])[1]);
+        const show = cum.slice(-nShow);
+        const W=320,H=120,PADX=6,PADY=14;
+        const vals=show.map(p=>p.v);
+        let mn=Math.min(...vals,0), mx=Math.max(...vals,0); if(mn===mx){mn-=0.01;mx+=0.01;}
+        const x=i=>PADX + i*(W-2*PADX)/Math.max(1,show.length-1);
+        const y=v=>PADY + (mx-v)/(mx-mn)*(H-2*PADY);
+        const linePts=show.map((p,i)=>`${x(i)},${y(p.v)}`).join(" ");
+        const areaPts=`${x(0)},${y(mn)} `+linePts+` ${x(show.length-1)},${y(mn)}`;
+        const last=show[show.length-1].v, up=last>=0;
+        const lineCol=up?catColor:C.red;
+        const y0=y(0);
+        return(
+          <>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",margin:"4px 0 10px"}}>
+            <span style={{fontSize:10,color:C.text2,letterSpacing:4,textTransform:"uppercase"}}>P&L cumulé · {cat==="crypto"?"Crypto":cat==="stocks"?"Actions":"Total"}</span>
+            <span style={{fontSize:17,fontWeight:700,fontFamily:"'Cormorant Garamond',serif",color:lineCol}}>{(last>=0?"+":"")+(last*100).toFixed(1)}%</span>
+          </div>
+          <div style={{...crd(),marginBottom:10}}>
+            <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{display:"block",overflow:"visible"}}>
+              <defs>
+                <linearGradient id="pnlArea" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={lineCol} stopOpacity="0.28"/>
+                  <stop offset="100%" stopColor={lineCol} stopOpacity="0"/>
+                </linearGradient>
+              </defs>
+              {mn<0&&mx>0 && <line x1={PADX} y1={y0} x2={W-PADX} y2={y0} stroke={C.border} strokeWidth={0.7} strokeDasharray="3 3"/>}
+              <polygon points={areaPts} fill="url(#pnlArea)"/>
+              <polyline points={linePts} fill="none" stroke={lineCol} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round"/>
+              <circle cx={x(show.length-1)} cy={y(last)} r={3} fill={lineCol}/>
+            </svg>
+          </div>
+          <div style={{display:"flex",gap:6,marginBottom:18}}>
+            {TFS.map(([lbl])=>(
+              <button key={lbl} onClick={()=>setPnlTF(lbl)} style={lxBtn({active:pnlTF===lbl,accent:catColor,style:{flex:1,padding:"5px 0",fontSize:10}})}>{lbl}</button>
+            ))}
+          </div>
+          </>
+        );
+      })()}
+
       {data&&(()=>{
         const vals = realPct;
         // P&L converti pour les labels des barres
@@ -4306,6 +4362,20 @@ function PageStats({chartData, hidden=false, EFF, eur=false, liveDD, src, liveIn
           <div style={{fontSize:10,color:C.text2,margin:"4px 0 12px",letterSpacing:4,textTransform:"uppercase"}}>Performance mensuelle {safeYr} — {cat==="crypto"?"Crypto":cat==="stocks"?"Actions":"Total"} {eur?"€":"$"}</div>
           <div style={{...crd(),marginBottom:14}}>
             <svg width="100%" viewBox={`0 0 ${W} ${TOTAL_H}`} style={{overflow:"visible",display:"block"}}>
+              <defs>
+                <linearGradient id="stbPos" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={catColor} stopOpacity="1"/>
+                  <stop offset="100%" stopColor={catColor} stopOpacity="0.82"/>
+                </linearGradient>
+                <linearGradient id="stbNeg" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={C.red} stopOpacity="0.82"/>
+                  <stop offset="100%" stopColor={C.red} stopOpacity="1"/>
+                </linearGradient>
+                <linearGradient id="stbGloss" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#FFFFFF" stopOpacity="0.30"/>
+                  <stop offset="55%" stopColor="#FFFFFF" stopOpacity="0"/>
+                </linearGradient>
+              </defs>
               <line x1={4} y1={MIDLINE} x2={W-4} y2={MIDLINE} stroke={C.border} strokeWidth={0.8}/>
               {data.m.map((m,i)=>{
                 const v=vals[i], pnl=pnlsC[i];
@@ -4326,7 +4396,9 @@ function PageStats({chartData, hidden=false, EFF, eur=false, liveDD, src, liveIn
                 return(
                   <g key={i}>
                     <rect x={bx(i)} y={barY} width={barW} height={barH}
-                      fill={col} opacity={1} rx={2}/>
+                      fill={isPos?"url(#stbPos)":"url(#stbNeg)"} rx={2}/>
+                    <rect x={bx(i)} y={barY} width={barW} height={barH}
+                      fill="url(#stbGloss)" rx={2}/>
                     <text x={cx} y={lblY} textAnchor="middle"
                       fill={col} fontSize={6.5} fontWeight="800">
                       {fmtP(v,0)}
