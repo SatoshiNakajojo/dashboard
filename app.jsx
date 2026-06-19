@@ -792,7 +792,7 @@ function applyPrices(prices, usdEur, effSrc){
 }
 
 // Date locale UTC+11 (Nouvelle-Calédonie)
-const APP_VERSION = "v6.11";
+const APP_VERSION = "v6.12";
 // v4.5 — fix NICK : NICK.AS n'existe pas chez Yahoo, le bon symbole EUR est NICK.MI (Milan)
 try{ if(typeof YF_MAP!=="undefined" && YF_MAP){ YF_MAP.NICK="NICK.MI"; } }catch(e){}
 const NC_OFFSET_MS = 11 * 60 * 60 * 1000;
@@ -4046,6 +4046,7 @@ function PageStats({chartData, hidden=false, EFF, eur=false, liveDD, src, liveIn
   const[cat,setCat]=useState("total"); // crypto | stocks | total
   const[view,setView]=useState("bars"); // bars | table
   const[pnlTF,setPnlTF]=useState("ALL"); // #9 — timeframe du P&L% cumulé
+  const[barMode,setBarMode]=useState("month"); // #23 — barres par mois (année sélectionnée) ou par année
 
   // ── Taux USD/EUR historique par date (lit liveDD ou DD global) ────────────
   const _DD_ST = liveDD || DD;
@@ -4269,12 +4270,21 @@ function PageStats({chartData, hidden=false, EFF, eur=false, liveDD, src, liveIn
         ))}
       </div>
 
-      {/* ── Sélecteur année ── */}
+      {/* ── #23 Mode barres : Mensuel (année) / Annuel (comparaison) ── */}
+      <div style={{display:"flex",gap:6,marginBottom:barMode==="month"?12:16}}>
+        {[["month","Mensuel"],["year","Annuel"]].map(([k,l])=>(
+          <button key={k} onClick={()=>setBarMode(k)} style={lxBtn({active:barMode===k,accent:catColor,style:{flex:1,padding:"6px 0",fontSize:11}})}>{l}</button>
+        ))}
+      </div>
+
+      {/* ── Sélecteur année (mode mensuel uniquement) ── */}
+      {barMode==="month" && (
       <div style={{display:"flex",gap:6,marginBottom:16,flexWrap:"wrap"}}>
         {years.map(y=>(
           <button key={y} onClick={()=>setYr(y)} style={lxBtn({active:safeYr===y,accent:catColor,style:{flex:1,padding:"6px 0",fontSize:11}})}>{y}</button>
         ))}
       </div>
+      )}
 
       {/* ── Résumé annuel ── */}
       {data&&(
@@ -4349,7 +4359,7 @@ function PageStats({chartData, hidden=false, EFF, eur=false, liveDD, src, liveIn
         );
       })()}
 
-      {data&&(()=>{
+      {barMode==="month" && data&&(()=>{
         const vals = realPct;
         // P&L converti pour les labels des barres
         const pnlsC = data.m.map((_,i)=>cvtPNL(i));
@@ -4424,8 +4434,53 @@ function PageStats({chartData, hidden=false, EFF, eur=false, liveDD, src, liveIn
         );
       })()}
 
+      {/* ── #23 Graphe ANNUEL : une barre par année (comparaison) ── */}
+      {barMode==="year" && (()=>{
+        const map = cat==="crypto"?(liveCM||CRYPTO_MONTHLY):cat==="stocks"?(liveSM||STOCKS_MONTHLY):(liveTM||TOTAL_MONTHLY);
+        const yrs = Object.keys(map||{}).filter(y=>/^\d{4}$/.test(y)).sort();
+        const rows = yrs.map(y=>{
+          const d=getMonthlyData(cat,y); let acc=1, any=false;
+          if(d&&d.m) d.m.forEach((ml,i)=>{ const b=d.bom&&d.bom[i],p=d.pnl&&d.pnl[i],iv=d.inv&&d.inv[i];
+            if(ml&&p!=null){ const base=(b||0)+(iv||0); if(base>0){ acc*=(1+p/base); any=true; } } });
+          return {y, v:any?acc-1:null};
+        }).filter(r=>r.v!=null);
+        if(rows.length<1) return null;
+        const W=320,HTOP=62,HBOT=62,HLAB=16,MID=HTOP,TH=HTOP+HBOT+HLAB+6;
+        const mx=Math.max(...rows.map(r=>Math.abs(r.v)),.01);
+        const slot=(W-12)/rows.length, bw=Math.min(44, slot-10);
+        const bx=i=>6+i*slot+(slot-bw)/2;
+        return(
+          <>
+          <div style={{fontSize:10,color:C.text2,margin:"4px 0 12px",letterSpacing:4,textTransform:"uppercase"}}>Performance annuelle — {catLabel} {eur?"€":"$"}</div>
+          <div style={{...crd(),marginBottom:16}}>
+            <svg width="100%" viewBox={`0 0 ${W} ${TH}`} style={{overflow:"visible",display:"block"}}>
+              <defs>
+                <linearGradient id="styPos" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={catColor} stopOpacity="1"/><stop offset="100%" stopColor={catColor} stopOpacity="0.82"/></linearGradient>
+                <linearGradient id="styNeg" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={C.red} stopOpacity="0.82"/><stop offset="100%" stopColor={C.red} stopOpacity="1"/></linearGradient>
+                <linearGradient id="styGloss" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#FFFFFF" stopOpacity="0.30"/><stop offset="55%" stopColor="#FFFFFF" stopOpacity="0"/></linearGradient>
+              </defs>
+              <line x1={4} y1={MID} x2={W-4} y2={MID} stroke={C.border} strokeWidth={0.8}/>
+              {rows.map((r,i)=>{
+                const isPos=r.v>=0, h=Math.max(2,Math.abs(r.v)/mx*(HTOP-10));
+                const by=isPos?MID-h:MID, col=isPos?catColor:C.red;
+                const lblY=isPos?MID-h-4:MID+h+12;
+                return(
+                  <g key={r.y}>
+                    <rect x={bx(i)} y={by} width={bw} height={h} fill={isPos?"url(#styPos)":"url(#styNeg)"} rx={3}/>
+                    <rect x={bx(i)} y={by} width={bw} height={h} fill="url(#styGloss)" rx={3}/>
+                    <text x={bx(i)+bw/2} y={lblY} textAnchor="middle" fill={col} fontSize={9.5} fontWeight="800">{(r.v>=0?"+":"")+(r.v*100).toFixed(0)+"%"}</text>
+                    <text x={bx(i)+bw/2} y={MID+HBOT+HLAB-2} textAnchor="middle" fill={C.text2} fontSize={9} fontWeight="600">{r.y}</text>
+                  </g>
+                );
+              })}
+            </svg>
+          </div>
+          </>
+        );
+      })()}
+
       {/* ── Tableau mensuel détail ── */}
-      {data&&(
+      {barMode==="month" && data&&(
         <>
         <div style={{fontSize:10,color:C.text2,letterSpacing:4,textTransform:"uppercase",margin:"6px 0 12px"}}>Détail mensuel</div>
         <div style={{...crd(),marginBottom:14,padding:"10px 8px"}}>
