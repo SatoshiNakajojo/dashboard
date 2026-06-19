@@ -792,7 +792,7 @@ function applyPrices(prices, usdEur, effSrc){
 }
 
 // Date locale UTC+11 (Nouvelle-Calédonie)
-const APP_VERSION = "v6.09";
+const APP_VERSION = "v6.11";
 // v4.5 — fix NICK : NICK.AS n'existe pas chez Yahoo, le bon symbole EUR est NICK.MI (Milan)
 try{ if(typeof YF_MAP!=="undefined" && YF_MAP){ YF_MAP.NICK="NICK.MI"; } }catch(e){}
 const NC_OFFSET_MS = 11 * 60 * 60 * 1000;
@@ -4041,7 +4041,7 @@ function deriveInvArray(category, year, mArr, invArr){
   for(let i=0;i<n;i++){ const v=byMonth[startMI+i]; out.push(v?Math.round(v):0); }
   return out;
 }
-function PageStats({chartData, hidden=false, EFF, eur=false, liveDD, src, liveInv}){
+function PageStats({chartData, hidden=false, EFF, eur=false, liveDD, src, liveInv, liveCM, liveSM, liveTM}){
   const[yr,setYr]=useState("2026");
   const[cat,setCat]=useState("total"); // crypto | stocks | total
   const[view,setView]=useState("bars"); // bars | table
@@ -4083,9 +4083,10 @@ function PageStats({chartData, hidden=false, EFF, eur=false, liveDD, src, liveIn
 
   // ── Fusionne les données historiques avec les snapshots récents ────────────
   const getMonthlyData = (category, year) => {
-    const base = category==="crypto" ? CRYPTO_MONTHLY[year]
-                : category==="stocks" ? STOCKS_MONTHLY[year]
-                : TOTAL_MONTHLY[year];
+    const _CM = liveCM||CRYPTO_MONTHLY, _SM = liveSM||STOCKS_MONTHLY, _TM = liveTM||TOTAL_MONTHLY;
+    const base = category==="crypto" ? _CM[year]
+                : category==="stocks" ? _SM[year]
+                : _TM[year];
     if(!base) return null;
     const result = {...base};
     // v25.08 Phase 5 (D2) — colonne Investi derivee de cgi_inv (reproduit l'historique +
@@ -4188,7 +4189,7 @@ function PageStats({chartData, hidden=false, EFF, eur=false, liveDD, src, liveIn
   };
 
   const years = ["2020","2021","2022","2023","2024","2025","2026"].filter(y=>
-    (cat==="crypto"&&CRYPTO_MONTHLY[y])||(cat==="stocks"&&STOCKS_MONTHLY[y])||(cat==="total"&&TOTAL_MONTHLY[y])
+    (cat==="crypto"&&(liveCM||CRYPTO_MONTHLY)[y])||(cat==="stocks"&&(liveSM||STOCKS_MONTHLY)[y])||(cat==="total"&&(liveTM||TOTAL_MONTHLY)[y])
   );
   const safeYr = years.includes(yr) ? yr : years[years.length-1] || "2026";
   const data = getMonthlyData(cat, safeYr);
@@ -4294,7 +4295,7 @@ function PageStats({chartData, hidden=false, EFF, eur=false, liveDD, src, liveIn
 
       {/* ── #9 P&L % cumulé dans le temps (multi-années + timeframe) ── */}
       {view==="bars" && (()=>{
-        const map = cat==="crypto"?CRYPTO_MONTHLY:cat==="stocks"?STOCKS_MONTHLY:TOTAL_MONTHLY;
+        const map = cat==="crypto"?(liveCM||CRYPTO_MONTHLY):cat==="stocks"?(liveSM||STOCKS_MONTHLY):(liveTM||TOTAL_MONTHLY);
         const years = Object.keys(map||{}).filter(y=>/^\d{4}$/.test(y)).sort();
         const pts=[];
         years.forEach(y=>{
@@ -4852,17 +4853,20 @@ function FondDetailModal({fond, EFF, liveInv, liveDD, liveGC, eur, onClose}){
   const [fs,setFs] = useState(false);
   const src = EFF||CURRENT;
   const usdEur = src.usdEur||0.86;
-  const cours$ = isC ? src.gdbC : src.gdbS;
-  const coursEur = cours$ * usdEur;
+  const _gp = (typeof calcGdbPrices==="function") ? calcGdbPrices(src) : {};
+  const valueNowUSD = isC ? (_gp.gdbCfondsUSD!=null?_gp.gdbCfondsUSD:(src.crypto?src.crypto.total:0))
+                          : (_gp.gdbSfondsUSD!=null?_gp.gdbSfondsUSD:0);
   const inv = (liveInv||INV_SEED_OK).filter(function(m){return m.fonds===fond;});
-  // Detention par investisseur (parts nettes)
-  const byH = {}; inv.forEach(function(m){ byH[m.holder]=(byH[m.holder]||0)+(m.shares||0); });
+  const _sign = function(m){ return m.io==="OUT" ? -1 : 1; };
+  // Détention par investisseur (parts NETTES = IN − OUT)
+  const byH = {}; inv.forEach(function(m){ byH[m.holder]=(byH[m.holder]||0)+_sign(m)*(m.shares||0); });
   const totalParts = Object.keys(byH).reduce(function(a,h){return a+byH[h];},0);
   const holders = Object.keys(byH).map(function(h){return {h:h, sh:byH[h], pct: totalParts?byH[h]/totalParts:0};})
     .filter(function(x){return Math.abs(x.sh)>0.01;}).sort(function(a,b){return b.sh-a.sh;});
-  // Option A : base = capital net investi
-  const netInvested = inv.reduce(function(a,m){return a+(m.montant||0);},0);
-  const valueNow = coursEur * totalParts;
+  // Capital net investi (IN − OUT) vs valeur actuelle réelle du fonds en €
+  const netInvested = inv.reduce(function(a,m){return a+_sign(m)*(m.montant||0);},0);
+  const valueNow = (valueNowUSD||0) * usdEur;
+  const coursEur = totalParts ? valueNow/totalParts : 0;   // NAV par part (€), base 100 à la création
   const pru = totalParts ? netInvested/totalParts : 0;
   const pnl = valueNow - netInvested;
   const pnlPct = netInvested ? pnl/netInvested : 0;
@@ -10881,7 +10885,7 @@ function App(){
       <div style={{padding:"0 16px"}}>
         {tab===0 && <PageOverview chartData={chartData} onSnapshot={()=>setShowSnap(true)} {...liveProps} liveDD={liveDD} liveCM={liveCM} liveGDBS={liveGDBS} liveGC={gcEff} chosenSource={chosenSource} iconDbVersion={iconDbVersion} bumpIconDb={bumpIconDb}/>}
         {tab===1 && <PageAllocation hidden={hidden} EFF={EFF} eur={eur} setEur={setEur} iconDbVersion={iconDbVersion} bumpIconDb={bumpIconDb}/>}
-        {tab===2 && <PageStats chartData={chartData} hidden={hidden} EFF={EFF} eur={eur} liveDD={liveDD} src={EFF||CURRENT} liveInv={liveInv}/>}
+        {tab===2 && <PageStats chartData={chartData} hidden={hidden} EFF={EFF} eur={eur} liveDD={liveDD} src={EFF||CURRENT} liveInv={liveInv} liveCM={liveCM} liveSM={liveSM} liveTM={liveTM}/>}
         {tab===3 && <PageGDB chartData={chartData} hidden={hidden} EFF={EFF} eur={eur} liveGSB={liveGSB} liveGDBS={liveGDBS} liveBench={liveBench} liveGC={gcEff} liveDD={liveDD} liveInv={liveInv}/>}
         {tab===6 && <PageWatchlist EFF={EFF} hidden={hidden}/>}
         {tab===5 && <PageLegend txns={txns} liveFutures={liveFutures} hidden={hidden} eur={eur} EFF={EFF} liveIbkrAnnex={liveIbkrAnnex}/>}
