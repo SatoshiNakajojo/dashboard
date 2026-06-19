@@ -792,7 +792,7 @@ function applyPrices(prices, usdEur, effSrc){
 }
 
 // Date locale UTC+11 (Nouvelle-Calédonie)
-const APP_VERSION = "v6.13";
+const APP_VERSION = "v6.14";
 // v4.5 — fix NICK : NICK.AS n'existe pas chez Yahoo, le bon symbole EUR est NICK.MI (Milan)
 try{ if(typeof YF_MAP!=="undefined" && YF_MAP){ YF_MAP.NICK="NICK.MI"; } }catch(e){}
 const NC_OFFSET_MS = 11 * 60 * 60 * 1000;
@@ -917,6 +917,21 @@ function tradeTickers(){
   return [...new Set(getAllTxns().map(t=>t&&t.ticker).filter(Boolean).map(x=>String(x).toUpperCase().trim()))].sort();
 }
 // Apparie ventes ↔ achats en FIFO → P&L réalisé, % et durée de détention par vente (#21)
+// Perf période d'un fonds via NAV réelle = valeur du fonds (€, série DD) ÷ parts cumulées (INV).
+// Source de vérité unique (Home + JCGI). Remplace l'ancien calcul GDBS mono-ligne.
+function fundNavPerf(fond, dateStr, dd, inv, curValUSD, usdEur){
+  dd = dd||(typeof DD!=="undefined"?DD:[]); inv = inv||(typeof INV_SEED_OK!=="undefined"?INV_SEED_OK:[]);
+  const GP = (typeof GDB_S_NB_PARTS!=="undefined")?GDB_S_NB_PARTS:287;
+  const partsAt = ds => { let sh=0; inv.forEach(m=>{ if(m && m.fonds===fond && String(m.date)<=ds) sh+=(m.io==="OUT"?-1:1)*(m.shares||0); }); return sh; };
+  const valAt = ds => { let row=null; for(let i=dd.length-1;i>=0;i--){ if(dd[i][0]<=ds){ row=dd[i]; break; } } if(!row) return null;
+    if(fond==="CGIC") return row[1]!=null?row[1]:null;
+    return (row[4]!=null && row[5]!=null) ? row[4]*GP*row[5] : null; };
+  const navAt = ds => { const v=valAt(ds), p=partsAt(ds); return (v!=null && p>0) ? v/p : null; };
+  const pNow = partsAt("9999-12-31");
+  const navNow = (pNow>0 && curValUSD!=null) ? (curValUSD*usdEur)/pNow : null;
+  const a = navAt(dateStr);
+  return (a!=null && navNow!=null && a>0) ? navNow/a - 1 : null;
+}
 function fifoEnrich(trades){
   const lots=[]; // file FIFO des achats {qty,price,date}
   return trades.map(t=>{
@@ -2933,20 +2948,12 @@ function PerfStrip({eur, EFF}){
   const _gsNow = calcGdbPrices(_src).gdbS;
   // Variation : en $ = ratio pur, en € = corrigé du taux de change
   const _gcPerf = d => {
-    const r=_gdbsAt(d); if(!r||!r[2]) return null;
-    if(eur){
-      const usdEurRef = _usdEurAt(d);
-      return parseFloat((((_gcNow*usdEurNow)/(r[2]*usdEurRef))-1).toFixed(4));
-    }
-    return parseFloat((_gcNow/r[2]-1).toFixed(4));
+    const t=new Date(Date.now()+NC_OFFSET_MS); t.setDate(t.getUTCDate()-d); const ds=t.toISOString().slice(0,10);
+    return fundNavPerf("CGIC", ds, _DD, INV_SEED_OK, calcGdbPrices(_src).gdbCfondsUSD, usdEurNow);
   };
   const _gsPerf = d => {
-    const r=_gdbsAt(d); if(!r||!r[1]) return null;
-    if(eur){
-      const usdEurRef = _usdEurAt(d);
-      return parseFloat((((_gsNow*usdEurNow)/(r[1]*usdEurRef))-1).toFixed(4));
-    }
-    return parseFloat((_gsNow/r[1]-1).toFixed(4));
+    const t=new Date(Date.now()+NC_OFFSET_MS); t.setDate(t.getUTCDate()-d); const ds=t.toISOString().slice(0,10);
+    return fundNavPerf("CGIS", ds, _DD, INV_SEED_OK, calcGdbPrices(_src).gdbSfondsUSD, usdEurNow);
   };
   // GDB prices depuis _GDBS
   const _gdbs26 = _GDBS.filter(r=>r[0]>='2026-01-01');
@@ -3640,13 +3647,22 @@ function PageOverview({chartData,onSnapshot,eur,setEur,hidden,setHidden,EFF,refr
   const _alloc = Object.values(_po_agg).filter(c=>c.usd>0)
     .map(c=>({...c, pct:c.usd/_allocTot*100, eurv:Math.round(c.usd*_effSrc.usdEur)}))
     .sort((a,b)=>b.usd-a.usd);
-  const _perf = _alloc.filter(c=>c.name!=="Cash").slice(0,2).map(c=>{
-    const pct = c.investi>0 ? c.pnl/c.investi : 0;
-    const pnl = eur?Math.round(c.pnl*_effSrc.usdEur):c.pnl;
+  // Cartes Crypto / Actions : MÊME P&L que JCGI (capital net investi INV vs valeur actuelle) — cohérence garantie
+  const _netFundPO = f => { let m=0; (typeof INV_SEED_OK!=="undefined"?INV_SEED_OK:[]).forEach(x=>{ if(x&&x.fonds===f) m+=(x.io==="OUT"?-1:1)*(x.montant||0); }); return m; };
+  const _cgicInv = _netFundPO("CGIC"), _cgisInv = _netFundPO("CGIS");
+  const _cryptoUSD = (_po_agg["Crypto"]&&_po_agg["Crypto"].usd)||0;
+  const _stocksUSD = ["Indices","Picking","Or"].reduce((a,n)=>a+((_po_agg[n]&&_po_agg[n].usd)||0),0);
+  const _ue = _effSrc.usdEur;
+  const _mkPerf = (name,color,valUSD,inv) => {
+    const valEUR = valUSD*_ue;
+    const pct = inv>0 ? valEUR/inv - 1 : 0;
+    const pnlEUR = Math.round(valEUR - inv);
+    const pnl = eur ? pnlEUR : Math.round(pnlEUR/_ue);
     const up  = pct>=0;
     const pts = _spark.map((v,i)=>{ if(v==null)return null; let t=(v-_smn)/_srng; if(!up)t=1-t; return `${(i/_hn*150).toFixed(1)},${(36-t*28).toFixed(1)}`; }).filter(Boolean).join(" ");
-    return {name:c.name,color:c.color,pct,pnl,up,pts};
-  });
+    return {name,color,pct,pnl,up,pts};
+  };
+  const _perf = [ _mkPerf("Crypto",C.btc,_cryptoUSD,_cgicInv), _mkPerf("Actions",C.blue,_stocksUSD,_cgisInv) ];
 
   return(
     <div style={{margin:"0 -16px"}}>
@@ -3698,7 +3714,7 @@ function PageOverview({chartData,onSnapshot,eur,setEur,hidden,setHidden,EFF,refr
       </div>
 
       {/* ════ PERFORMANCE ════ */}
-      <div style={{fontSize:10,letterSpacing:4,color:C.text2,textTransform:"uppercase",padding:"22px 20px 12px"}}>Performance · 30 jours</div>
+      <div style={{fontSize:10,letterSpacing:4,color:C.text2,textTransform:"uppercase",padding:"22px 20px 12px"}}>Performance des fonds · depuis création</div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,padding:"0 20px 6px"}}>
         {_perf.map((p,i)=>(
           <div key={i} style={{border:`1px solid ${C.border}`,borderRadius:12,padding:"12px 12px 10px",background:C.bg1}}>
@@ -5040,22 +5056,11 @@ function PageGDB(
   const d30  = TF["1M"];
   const dytd = TF["YTD"];
 
-  // Perf période via NAV réelle = valeur du fonds (€, depuis DD) ÷ parts cumulées (INV).
-  // Remplace l'ancien calcul GDBS (série mono-ligne → 1J/1S/1M/YTD identiques).
+  // Perf période via NAV réelle (helper global fundNavPerf) — source de vérité unique.
+  const _gpNow = (typeof calcGdbPrices==="function") ? calcGdbPrices(src) : {};
   const _INV_PERF = liveInv || INV_SEED_OK;
-  const _partsAt = (fond, dstr) => { let sh=0; _INV_PERF.forEach(m=>{ if(m && m.fonds===fond && String(m.date)<=dstr) sh+=(m.io==="OUT"?-1:1)*(m.shares||0); }); return sh; };
-  const _partsNow = fond => _INV_PERF.reduce((a,m)=>a+((m&&m.fonds===fond)?(m.io==="OUT"?-1:1)*(m.shares||0):0),0);
-  const _fundValAtEUR = (fond, dstr) => {
-    let row=null; for(let i=_DD.length-1;i>=0;i--){ if(_DD[i][0]<=dstr){ row=_DD[i]; break; } }
-    if(!row) return null;
-    if(fond==="CGIC") return row[1]!=null?row[1]:null;                                  // cryptoEUR
-    return (row[4]!=null && row[5]!=null) ? row[4]*GDB_S_NB_PARTS*row[5] : null;        // CGIS €
-  };
-  const _navAt = (fond, dstr) => { const v=_fundValAtEUR(fond,dstr), p=_partsAt(fond,dstr); return (v!=null && p>0) ? v/p : null; };
-  const _navNow = fond => { const p=_partsNow(fond); const vUSD=(fond==="CGIC"?gcFonds:gsFonds); return (p>0 && vUSD!=null) ? (vUSD*usdEurNow)/p : null; };
-  const _perfPeriod = (fond, d) => { const a=_navAt(fond,d), n=_navNow(fond); return (a!=null && n!=null && a>0) ? n/a-1 : null; };
-  const gsPerf = d => _perfPeriod("CGIS", d);
-  const gcPerf = d => _perfPeriod("CGIC", d);
+  const gcPerf = d => fundNavPerf("CGIC", d, _DD, _INV_PERF, (_gpNow.gdbCfondsUSD!=null?_gpNow.gdbCfondsUSD:(src.crypto?src.crypto.total:0)), usdEurNow);
+  const gsPerf = d => fundNavPerf("CGIS", d, _DD, _INV_PERF, (_gpNow.gdbSfondsUSD!=null?_gpNow.gdbSfondsUSD:0), usdEurNow);
   // Depuis création CGIC : 10€ = 10.88$ au 25 mars 2020
   const GC_CREATION_USD = 10.88;
   const GC_CREATION_DATE = "2020-03-25";
@@ -5072,13 +5077,13 @@ function PageGDB(
 
   // (gcPerfAllTime / gsPerfAllTime sont calculés plus bas depuis INV_SEED — voir bloc "P&L fonds")
 
-  const gsYTD = gsPerf(dytd);
-
   const {gdbS: gcS_calc, gdbC: gcC_calc, gdbSfondsUSD, gdbCfondsUSD} = calcGdbPrices(src);
   const gcQty   = FUND_PARTS.C;
   const gcFonds = Math.round(gdbCfondsUSD != null ? gdbCfondsUSD : src.crypto.total);
   const gsQty   = FUND_PARTS.S;
   const gsFonds = Math.round(gdbSfondsUSD || (src.stocks.items.filter(x=>x.cat!=="Cash").reduce((s,x)=>s+x.val,0) + (src.stocks.items.find(x=>x.t==="EURO")?.val||0)));
+
+  const gsYTD = gsPerf(dytd);   // après gsFonds (évite le TDZ : gcPerf/gsPerf lisent gcFonds/gsFonds)
 
   // ── P&L fonds depuis INV_SEED (capital net investi) — remplace l'ancien GDBS (indice base-100, cassé) ──
   const _INV_GDB = liveInv || INV_SEED_OK;
