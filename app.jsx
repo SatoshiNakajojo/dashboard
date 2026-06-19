@@ -792,7 +792,7 @@ function applyPrices(prices, usdEur, effSrc){
 }
 
 // Date locale UTC+11 (Nouvelle-Calédonie)
-const APP_VERSION = "v6.16";
+const APP_VERSION = "v6.18";
 // v4.5 — fix NICK : NICK.AS n'existe pas chez Yahoo, le bon symbole EUR est NICK.MI (Milan)
 try{ if(typeof YF_MAP!=="undefined" && YF_MAP){ YF_MAP.NICK="NICK.MI"; } }catch(e){}
 const NC_OFFSET_MS = 11 * 60 * 60 * 1000;
@@ -3233,7 +3233,7 @@ const BANK_LOGOS = {
   AI:      "https://upload.wikimedia.org/wikipedia/fr/thumb/3/38/Logo_Air_Liquide.svg/200px-Logo_Air_Liquide.svg.png",
   JEDI:    "https://cdn.getmimo.com/uploads/2024/01/Mimo_Logo_250x250.png",
   // Banque FR + cryptos (fallback fiable, parqet ne les a pas)
-  LCL:     "https://logo.clearbit.com/lcl.fr",
+  LCL:     "https://www.google.com/s2/favicons?sz=128&domain=lcl.fr",
   ETH:     "https://assets.coingecko.com/coins/images/279/large/ethereum.png",
   BTC:     "https://assets.coingecko.com/coins/images/1/large/bitcoin.png",
 };
@@ -3614,6 +3614,7 @@ function PageOverview({chartData,onSnapshot,eur,setEur,hidden,setHidden,EFF,refr
   const _DD_PO=liveDD||DD;
   const _CM_PO=liveCM||CRYPTO_MONTHLY;
   const [chartTF, setChartTF] = useState("YTD");
+  const [heroTF, setHeroTF] = useState("1M"); // #18 — timeframe du hero (sparkline + delta)
   const [sparkData, setSparkData] = useState([]);
   const cur = eur ? "€" : "$";
   const inv = 94064 * (EFF||CURRENT).usdEur;
@@ -3634,8 +3635,14 @@ function PageOverview({chartData,onSnapshot,eur,setEur,hidden,setHidden,EFF,refr
   // ─── LUXE overview : hero · répartition · performance (maquette v2) ───
   const _po_today = todayNC();
   const _po_rows = _DD_PO.filter(r=>r[0]<=_po_today && r[2]!=null);
-  const _po_cut  = new Date(Date.now()+NC_OFFSET_MS-33*864e5).toISOString().slice(0,10);
-  let _spark = _po_rows.filter(r=>r[0]>=_po_cut).map(r=>r[2]);
+  const _HTF_DAYS = {"1S":7,"1M":30,"3M":90,"1A":365,"2A":730,"ALL":999999};
+  const _HTF_LABEL = {"1S":"7 jours","1M":"30 jours","3M":"3 mois","YTD":"depuis janv.","1A":"1 an","2A":"2 ans","ALL":"tout l'historique"};
+  const _hcut = (()=>{
+    if(heroTF==="YTD") return new Date((new Date(Date.now()+NC_OFFSET_MS)).getUTCFullYear(),0,1).toISOString().slice(0,10);
+    const d=_HTF_DAYS[heroTF]||30;
+    return new Date(Date.now()+NC_OFFSET_MS-d*864e5).toISOString().slice(0,10);
+  })();
+  let _spark = _po_rows.filter(r=>r[0]>=_hcut).map(r=>r[2]);
   if(_spark.length<2) _spark = _po_rows.slice(-12).map(r=>r[2]);
   if(_spark.length) _spark[_spark.length-1] = _sumEUR;
   const _sv  = _spark.filter(v=>v!=null);
@@ -3645,8 +3652,7 @@ function PageOverview({chartData,onSnapshot,eur,setEur,hidden,setHidden,EFF,refr
   const _hn  = Math.max(1,_spark.length-1);
   const _heroPts = _spark.map((v,i)=> v==null?null:`${(i/_hn*120).toFixed(1)},${(30-((v-_smn)/_srng)*26).toFixed(1)}`).filter(Boolean).join(" ");
   const _po_delta = (()=>{
-    const t=new Date(Date.now()+NC_OFFSET_MS); t.setUTCDate(t.getUTCDate()-30);
-    const ds=t.toISOString().slice(0,10);
+    const ds=_hcut;
     let ref=null,bd=Infinity;
     for(const r of _DD_PO){ if(!r[0]||r[2]==null) continue; const d=Math.abs(new Date(r[0])-new Date(ds)); if(d<bd){bd=d;ref=r;} }
     if(!ref) return {pnl:0,pct:0};
@@ -3717,7 +3723,13 @@ function PageOverview({chartData,onSnapshot,eur,setEur,hidden,setHidden,EFF,refr
           <span style={{display:"inline-flex",alignItems:"center",gap:6,fontSize:12,color:_dUp?C.green:C.red,fontVariantNumeric:"tabular-nums",border:`1px solid ${(_dUp?C.green:C.red)}47`,borderRadius:999,padding:"4px 11px"}}>
             {_dUp?"▲":"▼"} {fmtP(_po_delta.pct)} · {_dUp?"+":"-"}{cur}{msk(fmt(Math.abs(_po_delta.pnl)),hidden)}
           </span>
-          <span style={{fontSize:10,color:C.text3,letterSpacing:1.5}}>30 jours</span>
+          <span style={{fontSize:10,color:C.text3,letterSpacing:1.5}}>{_HTF_LABEL[heroTF]||heroTF}</span>
+        </div>
+        {/* #18 — sélecteur de timeframe du hero */}
+        <div style={{display:"flex",gap:5,marginTop:16}}>
+          {["1S","1M","3M","YTD","1A","2A","ALL"].map(tf=>(
+            <button key={tf} onClick={()=>setHeroTF(tf)} style={lxBtn({active:heroTF===tf,accent:C.gold,style:{flex:1,minWidth:0,padding:"5px 0",fontSize:10}})}>{tf}</button>
+          ))}
         </div>
       </div>
 
