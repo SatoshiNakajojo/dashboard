@@ -792,7 +792,7 @@ function applyPrices(prices, usdEur, effSrc){
 }
 
 // Date locale UTC+11 (Nouvelle-Calédonie)
-const APP_VERSION = "v6.21";
+const APP_VERSION = "v6.22";
 // v4.5 — fix NICK : NICK.AS n'existe pas chez Yahoo, le bon symbole EUR est NICK.MI (Milan)
 try{ if(typeof YF_MAP!=="undefined" && YF_MAP){ YF_MAP.NICK="NICK.MI"; } }catch(e){}
 const NC_OFFSET_MS = 11 * 60 * 60 * 1000;
@@ -9596,15 +9596,34 @@ function App(){
   const[eur,setEur]=useState(false);
   const[hidden,setHidden]=useState(false);
   const[live,setLive]=useState(()=>{
-    // #24 — au boot, partir du dernier snapshot SAUVEGARDÉ (localStorage) s'il est plus récent
-    // que le build embarqué, pour afficher la bonne date avant l'actualisation auto.
+    // #24 — au tout premier rendu, reconstruire l'état depuis le dernier snapshot LOCAL
+    // (positions sauvegardées), exactement comme le boot local le fait en différé.
+    // Évite le flash de la valeur embarquée ($140K) avant l'actualisation.
+    try{
+      const lvPort=lsv9Get('cgi_portfolio'), lvCryp=lsv9Get('cgi_crypto'), lvStk=lsv9Get('cgi_stocks'), lvBank=lsv9Get('cgi_bank');
+      const lvGDBS=lsv9Get('cgi_gdbs');
+      const lastLocalGDBS=(Array.isArray(lvGDBS)&&lvGDBS.length)?lvGDBS[lvGDBS.length-1]:null;
+      if(lvPort && lvCryp && lvStk && lvBank){
+        const uE=CURRENT.usdEur, eU=1/uE;
+        const cryptoT=lvCryp.total||(lvCryp.items||[]).reduce((s,x)=>s+(x.val||0),0);
+        const stocksT=lvStk.total||(lvStk.items||[]).reduce((s,x)=>s+(x.val||0),0);
+        const bankUSD=Math.round((lvBank.totalEUR||0)*eU);
+        const totalUSD=cryptoT+stocksT+bankUSD;
+        const newLive={...CURRENT,date:lvPort.date||CURRENT.date,totalUSD,totalEUR:Math.round(totalUSD*uE),usdEur:uE,eurUsd:eU,
+          crypto:{...CURRENT.crypto,...lvCryp},stocks:{...CURRENT.stocks,...lvStk},bank:{...CURRENT.bank,...lvBank},
+          portfolio:{...lvPort},_fromSnapshot:lvPort.date};
+        const gS=(lastLocalGDBS&&lastLocalGDBS[1])||calcGdbPrices(newLive).gdbS;
+        const gC=(lastLocalGDBS&&lastLocalGDBS[2])||calcGdbPrices(newLive).gdbC;
+        return {...newLive, gdbS:gS, gdbC:gC};
+      }
+    }catch(e){}
+    // Repli : dernier snapshot DD sauvegardé (ou build embarqué)
     let _DDb = DD, _GDBSb = GDBS;
     try{ const sd=lsv9Get('cgi_dd');   if(Array.isArray(sd)&&sd.length)  _DDb=sd;   }catch(e){}
     try{ const sg=lsv9Get('cgi_gdbs'); if(Array.isArray(sg)&&sg.length)  _GDBSb=sg; }catch(e){}
     const lastDD = _DDb.length > 0 ? _DDb[_DDb.length-1] : null;
     const lastGDBS = _GDBSb.length > 0 ? _GDBSb[_GDBSb.length-1] : null;
     if(lastDD && lastDD[0] > CURRENT.date){
-      // [date, cryptoEUR, totalEUR, btcLive, gdbS, usdEur]
       const usdEur  = lastDD[5] || CURRENT.usdEur;
       const eurUsd  = 1/usdEur;
       const btcPrice = lastDD[3] || CURRENT.btcPrice;
@@ -9612,14 +9631,7 @@ function App(){
       const gdbC    = lastGDBS ? lastGDBS[2] : CURRENT.gdbC;
       const totalEUR = lastDD[2] || CURRENT.totalEUR;
       const totalUSD = Math.round(totalEUR * eurUsd);
-      return {
-        ...CURRENT,
-        date: lastDD[0],
-        usdEur, eurUsd, btcPrice,
-        gdbS, gdbC,
-        totalEUR, totalUSD,
-        _fromSnapshot: lastDD[0],
-      };
+      return {...CURRENT, date: lastDD[0], usdEur, eurUsd, btcPrice, gdbS, gdbC, totalEUR, totalUSD, _fromSnapshot: lastDD[0]};
     }
     return {...CURRENT};
   });
