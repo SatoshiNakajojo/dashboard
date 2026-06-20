@@ -792,7 +792,7 @@ function applyPrices(prices, usdEur, effSrc){
 }
 
 // Date locale UTC+11 (Nouvelle-Calédonie)
-const APP_VERSION = "v6.22";
+const APP_VERSION = "v6.23";
 // v4.5 — fix NICK : NICK.AS n'existe pas chez Yahoo, le bon symbole EUR est NICK.MI (Milan)
 try{ if(typeof YF_MAP!=="undefined" && YF_MAP){ YF_MAP.NICK="NICK.MI"; } }catch(e){}
 const NC_OFFSET_MS = 11 * 60 * 60 * 1000;
@@ -9596,9 +9596,13 @@ function App(){
   const[eur,setEur]=useState(false);
   const[hidden,setHidden]=useState(false);
   const[live,setLive]=useState(()=>{
-    // #24 — au tout premier rendu, reconstruire l'état depuis le dernier snapshot LOCAL
-    // (positions sauvegardées), exactement comme le boot local le fait en différé.
-    // Évite le flash de la valeur embarquée ($140K) avant l'actualisation.
+    // #24 — relire en priorité le DERNIER ÉTAT AFFICHÉ (cache local écrit à chaque mise à jour).
+    // Garantit que la vue d'arrivée = dernier snapshot vu, sans flash de la valeur embarquée.
+    try{
+      const raw=localStorage.getItem('cgi_live_cache');
+      if(raw){ const c=JSON.parse(raw); if(c && c.date && c.totalUSD!=null) return {...CURRENT, ...c}; }
+    }catch(e){}
+    // Repli : reconstruire depuis les positions locales sauvegardées
     try{
       const lvPort=lsv9Get('cgi_portfolio'), lvCryp=lsv9Get('cgi_crypto'), lvStk=lsv9Get('cgi_stocks'), lvBank=lsv9Get('cgi_bank');
       const lvGDBS=lsv9Get('cgi_gdbs');
@@ -9635,6 +9639,15 @@ function App(){
     }
     return {...CURRENT};
   });
+  // #24 — persiste le dernier état affiché pour un boot instantané au prochain lancement
+  useEffect(()=>{
+    try{
+      if(live && live.date){
+        const c={date:live.date,totalUSD:live.totalUSD,totalEUR:live.totalEUR,usdEur:live.usdEur,eurUsd:live.eurUsd,btcPrice:live.btcPrice,gdbS:live.gdbS,gdbC:live.gdbC,crypto:live.crypto,stocks:live.stocks,bank:live.bank,portfolio:live.portfolio,_fromSnapshot:live._fromSnapshot};
+        localStorage.setItem('cgi_live_cache', JSON.stringify(c));
+      }
+    }catch(e){}
+  },[live]);
   const[refreshing,setRefreshing]=useState(false);
   const[refreshedAt,setRefreshedAt]=useState(null);
   const[refreshErr,setRefreshErr]=useState(null);
