@@ -792,7 +792,7 @@ function applyPrices(prices, usdEur, effSrc){
 }
 
 // Date locale UTC+11 (Nouvelle-Calédonie)
-const APP_VERSION = "v6.20";
+const APP_VERSION = "v6.21";
 // v4.5 — fix NICK : NICK.AS n'existe pas chez Yahoo, le bon symbole EUR est NICK.MI (Milan)
 try{ if(typeof YF_MAP!=="undefined" && YF_MAP){ YF_MAP.NICK="NICK.MI"; } }catch(e){}
 const NC_OFFSET_MS = 11 * 60 * 60 * 1000;
@@ -9596,10 +9596,13 @@ function App(){
   const[eur,setEur]=useState(false);
   const[hidden,setHidden]=useState(false);
   const[live,setLive]=useState(()=>{
-    // Si DD contient des snapshots plus récents que le build (CURRENT.date),
-    // appliquer les valeurs du dernier snapshot pour afficher les données à jour
-    const lastDD = DD.length > 0 ? DD[DD.length-1] : null;
-    const lastGDBS = GDBS.length > 0 ? GDBS[GDBS.length-1] : null;
+    // #24 — au boot, partir du dernier snapshot SAUVEGARDÉ (localStorage) s'il est plus récent
+    // que le build embarqué, pour afficher la bonne date avant l'actualisation auto.
+    let _DDb = DD, _GDBSb = GDBS;
+    try{ const sd=lsv9Get('cgi_dd');   if(Array.isArray(sd)&&sd.length)  _DDb=sd;   }catch(e){}
+    try{ const sg=lsv9Get('cgi_gdbs'); if(Array.isArray(sg)&&sg.length)  _GDBSb=sg; }catch(e){}
+    const lastDD = _DDb.length > 0 ? _DDb[_DDb.length-1] : null;
+    const lastGDBS = _GDBSb.length > 0 ? _GDBSb[_GDBSb.length-1] : null;
     if(lastDD && lastDD[0] > CURRENT.date){
       // [date, cryptoEUR, totalEUR, btcLive, gdbS, usdEur]
       const usdEur  = lastDD[5] || CURRENT.usdEur;
