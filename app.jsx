@@ -792,7 +792,7 @@ function applyPrices(prices, usdEur, effSrc){
 }
 
 // Date locale UTC+11 (Nouvelle-Calédonie)
-const APP_VERSION = "v6.19";
+const APP_VERSION = "v6.20";
 // v4.5 — fix NICK : NICK.AS n'existe pas chez Yahoo, le bon symbole EUR est NICK.MI (Milan)
 try{ if(typeof YF_MAP!=="undefined" && YF_MAP){ YF_MAP.NICK="NICK.MI"; } }catch(e){}
 const NC_OFFSET_MS = 11 * 60 * 60 * 1000;
@@ -4115,6 +4115,8 @@ function PageStats({chartData, hidden=false, EFF, eur=false, liveDD, src, liveIn
   const[view,setView]=useState("bars"); // bars | table
   const[pnlTF,setPnlTF]=useState("ALL"); // #9 — timeframe du P&L% cumulé
   const[barMode,setBarMode]=useState("month"); // #23 — barres par mois (année sélectionnée) ou par année
+  const[rangeFrom,setRangeFrom]=useState(""); // #13 — fourchette de dates perso
+  const[rangeTo,setRangeTo]=useState("");
 
   // ── Taux USD/EUR historique par date (lit liveDD ou DD global) ────────────
   const _DD_ST = liveDD || DD;
@@ -4645,6 +4647,47 @@ function PageStats({chartData, hidden=false, EFF, eur=false, liveDD, src, liveIn
           </div>
         </>
       )}
+
+      {/* ── #13 Période personnalisée → graphe sur mesure (valeur totale, DD) ── */}
+      <div style={{fontSize:10,color:C.text2,letterSpacing:4,textTransform:"uppercase",margin:"22px 0 12px",textAlign:"center"}}>Période personnalisée</div>
+      <div style={{display:"flex",gap:8,marginBottom:12,alignItems:"center"}}>
+        <input type="date" value={rangeFrom} onChange={e=>setRangeFrom(e.target.value)} style={{flex:1,background:C.bg2,border:`1px solid ${C.border2}`,borderRadius:8,color:C.text,fontSize:12,padding:"7px 9px",fontFamily:C.font,colorScheme:"dark"}}/>
+        <span style={{color:C.text3,fontSize:12}}>→</span>
+        <input type="date" value={rangeTo} onChange={e=>setRangeTo(e.target.value)} style={{flex:1,background:C.bg2,border:`1px solid ${C.border2}`,borderRadius:8,color:C.text,fontSize:12,padding:"7px 9px",fontFamily:C.font,colorScheme:"dark"}}/>
+      </div>
+      {(()=>{
+        if(!rangeFrom || !rangeTo) return <div style={{...crd(),marginBottom:14,textAlign:"center",color:C.text3,fontSize:12,padding:"22px 12px"}}>Choisis une date de début et de fin.</div>;
+        const lo=rangeFrom<rangeTo?rangeFrom:rangeTo, hi=rangeFrom<rangeTo?rangeTo:rangeFrom;
+        const rows=_DD_ST.filter(r=>r&&r[0]&&r[2]!=null && r[0]>=lo && r[0]<=hi);
+        if(rows.length<2) return <div style={{...crd(),marginBottom:14,textAlign:"center",color:C.text3,fontSize:12,padding:"22px 12px"}}>Pas assez de données sur cette période.</div>;
+        const ue=(src&&src.usdEur)||0.92;
+        const vals=rows.map(r=>eur?r[2]:r[2]/ue);
+        const first=vals[0], lastV=vals[vals.length-1];
+        const pct=first>0?lastV/first-1:0, up=pct>=0, lineCol=up?catColor:C.red;
+        const delta=Math.round(lastV-first);
+        const W=320,H=120,PADX=6,PADY=14;
+        let mn=Math.min(...vals), mx=Math.max(...vals); if(mn===mx){mn-=1;mx+=1;}
+        const x=i=>PADX+i*(W-2*PADX)/Math.max(1,vals.length-1);
+        const y=v=>PADY+(mx-v)/(mx-mn)*(H-2*PADY);
+        const line=vals.map((v,i)=>`${x(i)},${y(v)}`).join(" ");
+        const area=`${x(0)},${y(mn)} `+line+` ${x(vals.length-1)},${y(mn)}`;
+        return (
+          <div style={{marginBottom:16}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline",margin:"0 2px 10px"}}>
+              <span style={{fontSize:11,color:C.text3}}>{rows.length} jours</span>
+              <span style={{fontSize:16,fontWeight:700,fontFamily:"'Cormorant Garamond',serif",color:lineCol}}>{(up?"+":"")+(pct*100).toFixed(1)}% · {up?"+":"-"}{(eur?"€":"$")}{hidden?"•••":Math.abs(delta).toLocaleString("fr-FR")}</span>
+            </div>
+            <div style={{...crd()}}>
+              <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{display:"block",overflow:"visible"}}>
+                <defs><linearGradient id="rngArea" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={lineCol} stopOpacity="0.28"/><stop offset="100%" stopColor={lineCol} stopOpacity="0"/></linearGradient></defs>
+                <polygon points={area} fill="url(#rngArea)"/>
+                <polyline points={line} fill="none" stroke={lineCol} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round"/>
+                <circle cx={x(vals.length-1)} cy={y(lastV)} r={3} fill={lineCol}/>
+              </svg>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
