@@ -792,7 +792,7 @@ function applyPrices(prices, usdEur, effSrc){
 }
 
 // Date locale UTC+11 (Nouvelle-Calédonie)
-const APP_VERSION = "v6.24";
+const APP_VERSION = "v6.25";
 // v4.5 — fix NICK : NICK.AS n'existe pas chez Yahoo, le bon symbole EUR est NICK.MI (Milan)
 try{ if(typeof YF_MAP!=="undefined" && YF_MAP){ YF_MAP.NICK="NICK.MI"; } }catch(e){}
 const NC_OFFSET_MS = 11 * 60 * 60 * 1000;
@@ -9600,7 +9600,9 @@ function App(){
     // Garantit que la vue d'arrivée = dernier snapshot vu, sans flash de la valeur embarquée.
     try{
       const raw=localStorage.getItem('cgi_live_cache');
-      if(raw){ const c=JSON.parse(raw); if(c && (c.crypto || c.totalUSD!=null)) return {...CURRENT, ...c}; }
+      if(raw){ const c=JSON.parse(raw); if(c && c.portfolio && Array.isArray(c.portfolio.items) && c.portfolio.items.length){
+        return {...CURRENT, ...c, portfolio:{...CURRENT.portfolio, items:c.portfolio.items}};
+      }}
     }catch(e){}
     // Repli : reconstruire depuis les positions locales sauvegardées
     try{
@@ -9639,11 +9641,13 @@ function App(){
     }
     return {...CURRENT};
   });
-  // #24 — persiste le dernier état affiché pour un boot instantané au prochain lancement
+  // #24 — persiste le dernier état affiché (portfolio.items = source de vérité de buildSections)
   useEffect(()=>{
     try{
-      if(live && (live.crypto || live.stocks)){
-        const c={date:live.date||null,totalUSD:live.totalUSD,totalEUR:live.totalEUR,usdEur:live.usdEur,eurUsd:live.eurUsd,btcPrice:live.btcPrice,gdbS:live.gdbS,gdbC:live.gdbC,crypto:live.crypto,stocks:live.stocks,bank:live.bank,portfolio:live.portfolio,_fromSnapshot:live._fromSnapshot};
+      const pit = live && live.portfolio && live.portfolio.items;
+      if(Array.isArray(pit) && pit.length){
+        const slim = pit.map(x=>({t:x.t,cat:x.cat,qty:x.qty,pa:x.pa,live:x.live,val:x.val,valEUR:x.valEUR,pnl:x.pnl,pct:x.pct}));
+        const c={date:live.date||null,usdEur:live.usdEur,eurUsd:live.eurUsd,btcPrice:live.btcPrice,gdbS:live.gdbS,gdbC:live.gdbC,totalUSD:live.totalUSD,totalEUR:live.totalEUR,_fromSnapshot:live._fromSnapshot,portfolio:{items:slim}};
         localStorage.setItem('cgi_live_cache', JSON.stringify(c));
       }
     }catch(e){}
