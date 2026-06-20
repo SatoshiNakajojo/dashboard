@@ -792,7 +792,7 @@ function applyPrices(prices, usdEur, effSrc){
 }
 
 // Date locale UTC+11 (Nouvelle-Calédonie)
-const APP_VERSION = "v6.23";
+const APP_VERSION = "v6.24";
 // v4.5 — fix NICK : NICK.AS n'existe pas chez Yahoo, le bon symbole EUR est NICK.MI (Milan)
 try{ if(typeof YF_MAP!=="undefined" && YF_MAP){ YF_MAP.NICK="NICK.MI"; } }catch(e){}
 const NC_OFFSET_MS = 11 * 60 * 60 * 1000;
@@ -9600,7 +9600,7 @@ function App(){
     // Garantit que la vue d'arrivée = dernier snapshot vu, sans flash de la valeur embarquée.
     try{
       const raw=localStorage.getItem('cgi_live_cache');
-      if(raw){ const c=JSON.parse(raw); if(c && c.date && c.totalUSD!=null) return {...CURRENT, ...c}; }
+      if(raw){ const c=JSON.parse(raw); if(c && (c.crypto || c.totalUSD!=null)) return {...CURRENT, ...c}; }
     }catch(e){}
     // Repli : reconstruire depuis les positions locales sauvegardées
     try{
@@ -9642,8 +9642,8 @@ function App(){
   // #24 — persiste le dernier état affiché pour un boot instantané au prochain lancement
   useEffect(()=>{
     try{
-      if(live && live.date){
-        const c={date:live.date,totalUSD:live.totalUSD,totalEUR:live.totalEUR,usdEur:live.usdEur,eurUsd:live.eurUsd,btcPrice:live.btcPrice,gdbS:live.gdbS,gdbC:live.gdbC,crypto:live.crypto,stocks:live.stocks,bank:live.bank,portfolio:live.portfolio,_fromSnapshot:live._fromSnapshot};
+      if(live && (live.crypto || live.stocks)){
+        const c={date:live.date||null,totalUSD:live.totalUSD,totalEUR:live.totalEUR,usdEur:live.usdEur,eurUsd:live.eurUsd,btcPrice:live.btcPrice,gdbS:live.gdbS,gdbC:live.gdbC,crypto:live.crypto,stocks:live.stocks,bank:live.bank,portfolio:live.portfolio,_fromSnapshot:live._fromSnapshot};
         localStorage.setItem('cgi_live_cache', JSON.stringify(c));
       }
     }catch(e){}
