@@ -1,4 +1,4 @@
-// seeds.js — CREUSOT GLOBAL INVESTMENTS
+// seeds.js — J.C. GLOBAL INVESTMENTS
 // Données personnalisées — généré automatiquement.
 // NE PAS MODIFIER À LA MAIN.
 
