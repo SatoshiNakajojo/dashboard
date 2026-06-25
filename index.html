@@ -57,24 +57,33 @@
     <div class="bar"><i id="bar-fill"></i></div>
     <div class="pct" id="bar-pct">0&nbsp;%</div>
     <div class="tagline">Private Wealth</div>
-    <div class="loader-ver" id="loader-ver" style="margin-top:14px;font-size:9px;letter-spacing:3px;color:#6B6456;opacity:0;animation:fadeUp 1.4s 1s ease-out forwards;">v6.80</div>
+    <div class="loader-ver" id="loader-ver" style="margin-top:14px;font-size:9px;letter-spacing:3px;color:#6B6456;opacity:0;animation:fadeUp 1.4s 1s ease-out forwards;">v6.82</div>
   </div>
   <div id="root"></div>
 
   <script>
-    // ─── Barre de progression LINÉAIRE (vitesse constante) ────────────────
+    // ─── Barre de progression NON-LINÉAIRE (#15) ─────────────────────────
+    // Vive au départ, RALENTIT en approchant ~92% (plafond souple), creep
+    // imperceptible 92→96%, puis FINITION franche/accélérée vers 100% (ready).
     (function(){
       var shown=0, ready=false, last=null;
-      var RATE1 = 95/4200;   // 0→95% à vitesse constante (~4.2s)
-      var RATE2 = 4/9000;    // 95→99% : creep lent (jamais figé)
+      var CEIL = 92;          // plafond souple avant 'ready'
+      var EASE_T = 2300;      // constante de temps de la décélération (ms)
+      var CREEP = 4/14000;    // 92→96% : creep très lent, jamais figé
       window.__cgiProg=function(){};
       window.__cgiCreep=function(){};
       function tick(ts){
         if(last===null) last=ts;
-        var dt=ts-last; last=ts;
-        if(ready){ shown = Math.min(100, shown + (100-shown)*0.25 + 0.6); }
-        else if(shown<95){ shown = Math.min(95, shown + RATE1*dt); }
-        else { shown = Math.min(99, shown + RATE2*dt); }
+        var dt=Math.min(64, ts-last); last=ts;
+        if(ready){
+          // accélère vers 100% (pas minimal garanti → pas de rampe)
+          shown = Math.min(100, shown + Math.max(2.4, (100-shown)*0.45));
+        } else if(shown < CEIL){
+          // ease-out : grand pas quand loin du plafond, petit pas en approchant
+          shown = Math.min(CEIL, shown + (CEIL-shown)*(dt/EASE_T));
+        } else {
+          shown = Math.min(96, shown + CREEP*dt);
+        }
         var fill=document.getElementById('bar-fill'), pct=document.getElementById('bar-pct');
         if(fill) fill.style.width=shown.toFixed(1)+'%';
         if(pct) pct.textContent=Math.round(shown)+'\u00A0%';
@@ -103,7 +112,7 @@
   <script src="seeds.js?v=2.07"></script>
   <script>window.__cgiProg(62)</script>
   <!-- app.jsx : compile par Babel de maniere asynchrone apres ce point -->
-  <script type="text/babel" data-presets="react" src="app.jsx?v=6.80"></script>
+  <script type="text/babel" data-presets="react" src="app.jsx?v=6.82"></script>
   <script>window.__cgiProg(72); window.__cgiCreep();</script>
 </body>
 </html>
