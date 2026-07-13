@@ -52,7 +52,7 @@
     @keyframes logoExit{0%{transform:translateY(0) scale(1);filter:drop-shadow(0 12px 42px rgba(201,168,106,.18)) brightness(1)}45%{transform:translateY(-14px) scale(1.045);filter:drop-shadow(0 22px 64px rgba(201,168,106,.5)) brightness(1.22)}100%{transform:translateY(-22px) scale(1.03);filter:drop-shadow(0 18px 54px rgba(201,168,106,.32)) brightness(1.05)}}
     #loader.exit .app-logo{animation:logoExit 1.05s cubic-bezier(.22,.8,.3,1) forwards;}
     #loader.exit .bar,#loader.exit .pct,#loader.exit .tagline,#loader.exit .loader-ver{opacity:0 !important;transition:opacity .4s ease-out;}
-    #loader.exit{transition:opacity .6s ease .75s;}
+    #loader.exit{transition:opacity .55s ease;} /* #131b — délai retiré : l'orchestration est en JS (le display:none coupait la transition retardée) */
   </style>
 </head>
 <body>
@@ -63,7 +63,7 @@
     <div class="bar"><i id="bar-fill"></i></div>
     <div class="pct" id="bar-pct">0&nbsp;%</div>
     <div class="tagline">Private Wealth</div>
-    <div class="loader-ver" id="loader-ver" style="margin-top:14px;font-size:9px;letter-spacing:3px;color:#6B6456;opacity:0;animation:fadeUp 1.4s 1s ease-out forwards;">v7.65</div>
+    <div class="loader-ver" id="loader-ver" style="margin-top:14px;font-size:9px;letter-spacing:3px;color:#6B6456;opacity:0;animation:fadeUp 1.4s 1s ease-out forwards;">v7.66</div>
   </div>
   <div id="root"></div>
 
@@ -100,11 +100,12 @@
         ready=true;
         var l=document.getElementById('loader');
         if(l && l.style.display!=='none'){
-          /* #131 — séquence de sortie : classe .exit (logo qui s'élève + éclat), puis fondu, puis retrait */
+          /* #131b — séquence de sortie ré-orchestrée : .exit (logo qui s'élève + éclat, 1,05 s),
+             PUIS fondu (0,55 s), PUIS retrait — le display:none ne coupe plus l'animation. */
           setTimeout(function(){
             l.classList.add('exit');
-            setTimeout(function(){ l.style.opacity='0'; setTimeout(function(){ l.style.display='none'; },650); }, 800);
-          }, 260);
+            setTimeout(function(){ l.style.opacity='0'; setTimeout(function(){ l.style.display='none'; },600); }, 1150);
+          }, 200);
         }
       };
       setTimeout(function(){ if(window.__hideLoader) window.__hideLoader(); }, 30000);
@@ -124,7 +125,7 @@
   <script src="seeds.js?v=2.07"></script>
   <script>window.__cgiProg(62)</script>
   <!-- app.jsx : compile par Babel de maniere asynchrone apres ce point -->
-  <script type="text/babel" data-presets="react" src="app.jsx?v=7.65"></script>
+  <script type="text/babel" data-presets="react" src="app.jsx?v=7.66"></script>
   <script>window.__cgiProg(72); window.__cgiCreep();</script>
   <!-- #88 — Service worker : garantit le chargement de la dernière version (network-first).
        Recharge automatiquement quand une nouvelle version est activée. -->
@@ -136,7 +137,7 @@
       if(refreshing) return; refreshing=true; location.reload();
     });
     window.addEventListener("load", function(){
-      navigator.serviceWorker.register("sw.js?v=7.65").then(function(reg){
+      navigator.serviceWorker.register("sw.js?v=7.66").then(function(reg){
         // vérifier une mise à jour à chaque ouverture
         try{ reg.update(); }catch(e){}
         function promote(w){ if(w) w.postMessage("SKIP_WAITING"); }
