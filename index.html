@@ -63,7 +63,7 @@
     <div class="bar"><i id="bar-fill"></i></div>
     <div class="pct" id="bar-pct">0&nbsp;%</div>
     <div class="tagline">Private Wealth</div>
-    <div class="loader-ver" id="loader-ver" style="margin-top:14px;font-size:9px;letter-spacing:3px;color:#6B6456;opacity:0;animation:fadeUp 1.4s 1s ease-out forwards;">v7.69</div>
+    <div class="loader-ver" id="loader-ver" style="margin-top:14px;font-size:9px;letter-spacing:3px;color:#6B6456;opacity:0;animation:fadeUp 1.4s 1s ease-out forwards;">v7.70</div>
   </div>
   <div id="root"></div>
 
@@ -125,7 +125,7 @@
   <script src="seeds.js?v=2.07"></script>
   <script>window.__cgiProg(62)</script>
   <!-- app.jsx : compile par Babel de maniere asynchrone apres ce point -->
-  <script type="text/babel" data-presets="react" src="app.jsx?v=7.69"></script>
+  <script type="text/babel" data-presets="react" src="app.jsx?v=7.70"></script>
   <script>window.__cgiProg(72); window.__cgiCreep();</script>
   <!-- #88 — Service worker : garantit le chargement de la dernière version (network-first).
        Recharge automatiquement quand une nouvelle version est activée. -->
@@ -133,21 +133,19 @@
   (function(){
     if(!("serviceWorker" in navigator)) return;
     var refreshing=false;
+    // #140 — reload UNIQUEMENT si un contrôleur existait DÉJÀ (vraie mise à jour en session), jamais au
+    // premier contrôle (install initial). Combiné à la suppression de skipWaiting()+auto-promote, ça
+    // supprime la boucle de rechargement. La nouvelle version s'applique à la prochaine ouverture.
+    var hadController = !!navigator.serviceWorker.controller;
     navigator.serviceWorker.addEventListener("controllerchange", function(){
+      if(!hadController) { hadController=true; return; }
       if(refreshing) return; refreshing=true; location.reload();
     });
     window.addEventListener("load", function(){
-      navigator.serviceWorker.register("sw.js?v=7.69").then(function(reg){
-        // vérifier une mise à jour à chaque ouverture
-        try{ reg.update(); }catch(e){}
-        function promote(w){ if(w) w.postMessage("SKIP_WAITING"); }
-        if(reg.waiting) promote(reg.waiting);
-        reg.addEventListener("updatefound", function(){
-          var nw=reg.installing;
-          if(nw) nw.addEventListener("statechange", function(){
-            if(nw.state==="installed" && navigator.serviceWorker.controller) promote(nw);
-          });
-        });
+      navigator.serviceWorker.register("sw.js?v=7.70").then(function(reg){
+        try{ reg.update(); }catch(e){}   // vérifier une mise à jour à l'ouverture (une seule fois)
+        // #140 — plus d'auto-promote (postMessage SKIP_WAITING) : le SW en attente n'est PAS forcé à
+        // s'activer en pleine session → aucun reload intempestif. Il prendra la main à la prochaine ouverture.
       }).catch(function(){});
     });
   })();

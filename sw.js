@@ -9,7 +9,7 @@
    tombait dans la branche « autres ressources » cache-first : le PC servait alors
    éternellement une ancienne réponse /read en cache et n'adoptait jamais le cash
    matelas modifié sur un autre appareil. */
-var CACHE = "jcgi-shell-v2"; // bump v2 : purge l'ancien cache (dont d'éventuelles réponses /read figées)
+var CACHE = "jcgi-shell-v3"; // #140 bump v3 : purge l'ancien SW « skipWaiting » qui rechargeait en boucle
 var SHELL_RE = /\/(index\.html|app\.jsx|seeds\.js|manifest\.json)(\?|$)/;
 
 // Domaines d'API à ne JAMAIS mettre en cache (toujours réseau)
@@ -18,7 +18,9 @@ function isApi(url) {
 }
 
 self.addEventListener("install", function (e) {
-  self.skipWaiting(); // activer immédiatement la nouvelle version
+  // #140 — NE PLUS appeler skipWaiting() ici : l'activation forcée à chaque install déclenchait
+  // controllerchange → location.reload() en boucle (app qui « se recharge toute seule » ~5 min sur iOS).
+  // La nouvelle version attend en « waiting » et s'active à la prochaine ouverture (ou via SKIP_WAITING manuel).
 });
 
 self.addEventListener("activate", function (e) {
