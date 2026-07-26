@@ -4568,17 +4568,16 @@ function SectionRow({section, open, onToggle, hidden=false, eur=false, usdEur=0.
       <button
         onClick={onToggle}
         style={{
-          width:"100%", background: open ? color+"18" : C.bg1,
-          border:`1px solid ${open ? color+"55" : C.border}`,
-          borderRadius: open ? "12px 12px 0 0" : 12,
+          width:"100%", background: open ? color+"18" : C.bg2,
+          borderRadius: open ? "14px 14px 0 0" : 14,
           padding:"12px 14px", cursor:"pointer", display:"flex",
           alignItems:"center", gap:12, transition:"all .18s",
         }}
       >
-        {/* Icon — carré bordé, logo filaire (style boutons du bandeau) */}
+        {/* Icon — pastille pleine teintée, logo filaire */}
         <div style={{
-          width:38, height:38, borderRadius:C.radiusSm||8, flexShrink:0,
-          background:"transparent", border:`1px solid ${open ? color : C.border2}`,
+          width:38, height:38, borderRadius:10, flexShrink:0,
+          background:color+"18",
           display:"flex", alignItems:"center", justifyContent:"center",
           color:color, transition:"all .18s",
         }}><Icon name={FAMILY_ICONS[n]||"grid"} size={19} color={color}/></div>
@@ -4612,8 +4611,7 @@ function SectionRow({section, open, onToggle, hidden=false, eur=false, usdEur=0.
       {/* Expanded detail panel */}
       {open && (
         <div style={{
-          background: C.bg2, border:`1px solid ${color+"44"}`,
-          borderTop:"none", borderRadius:"0 0 12px 12px",
+          background: C.bg2, borderRadius:"0 0 14px 14px",
           overflow:"hidden",
         }}>
           {/* Line items */}
