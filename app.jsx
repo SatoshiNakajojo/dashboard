@@ -6969,7 +6969,11 @@ function PageStats({chartData, hidden=false, EFF, eur=false, liveDD, src, liveIn
         if(!r) continue;
         let eomEUR = null;
         if(category==="crypto")      eomEUR = r[1];
-        else if(category==="total")  eomEUR = r[2];
+        // v7.85 — une ligne DD avec crypto=null est un snapshot INCOMPLET (le wallet crypto n'avait
+        // pas pu être chargé) : son "total" a été calculé sans le crypto, donc structurellement faux.
+        // On ignore ces lignes pour le Total plutôt que de propager une valeur tronquée (cause du
+        // faux -24,8% de mai / +21,5% de juin au lieu du -7,9% réel).
+        else if(category==="total")  eomEUR = (r[1]!=null) ? r[2] : null;
         else if(category==="stocks") eomEUR = (r[4]!=null && r[5]!=null) ? Math.round(r[4]*GDB_S_NB_PARTS*r[5]) : null;
         if(eomEUR!=null) result.eom[mi] = eomEUR;
       }
