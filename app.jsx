@@ -4555,8 +4555,8 @@ function SectionRow({section, open, onToggle, hidden=false, eur=false, usdEur=0.
   const cv    = v => { const n=parseFloat(v); return isNaN(n)?0: eur ? Math.round(n * usdEur) : Math.round(n); };
   const cvPnl = v => { const n=parseFloat(v); return isNaN(n)?0: eur ? Math.round(n * usdEur) : Math.round(n); };
   const cur   = eur ? "€" : "$";
-  const fmtV  = v => { const n=cv(v); return (n<0?"-":"")+cur+fmtK(Math.abs(n)); };
-  const fmtP2 = v => { const n=parseFloat(v); return isNaN(n)?"—":(n>=0?"+":"")+cur+fmtK(Math.abs(cvPnl(n))); };
+  const fmtV  = v => { const n=cv(v); return (n<0?"-":"")+cur+(n?fmtK(Math.abs(n)):"0"); };
+  const fmtP2 = v => { const n=parseFloat(v); if(isNaN(n))return"—"; const c=cvPnl(n); return c===0?"—":(n>=0?"+":"")+cur+fmtK(Math.abs(c)); };
   const fmtPrice = (n, rate=1) => { const v=n*rate; return v>=100 ? Math.round(v).toLocaleString("fr-FR") : v.toFixed(2); };
   const fmtLive = v => { const n=parseFloat(v); return isNaN(n)?"—":(eur ? "€"+fmtPrice(n,usdEur) : "$"+fmtPrice(n)); };
   const fmtPA   = v => { const n=parseFloat(v); return isNaN(n)?"—":(eur ? "€"+fmtPrice(n,usdEur) : "$"+fmtPrice(n)); };
@@ -6176,7 +6176,7 @@ function PageOverview({chartData,onSnapshot,onImportCsv,eur,setEur,hidden,setHid
             )}
           </div>
           <span style={{display:"inline-flex",alignItems:"center",gap:6,fontSize:12,color:_bUp?C.green:C.red,fontVariantNumeric:"tabular-nums",border:`1px solid ${(_bUp?C.green:C.red)}47`,borderRadius:999,padding:"4px 11px",whiteSpace:"nowrap"}}>
-            {_bUp?"▲":"▼"} {fmtP(_blendPct)} · {_bUp?"+":"-"}{cur}{msk(fmt(Math.abs(_blendPnl)),hidden)}
+            {_bUp?"▲":"▼"} {fmtP(_blendPct)} · {_bUp?"+":"-"}{cur}{msk(Math.abs(_blendPnl)?fmt(Math.abs(_blendPnl)):"0",hidden)}
           </span>
         </div>
       </div>
@@ -6229,7 +6229,7 @@ function PageOverview({chartData,onSnapshot,onImportCsv,eur,setEur,hidden,setHid
                   </>
                 ) : (
                   <>
-                    <div style={{fontFamily:"'Cormorant Garamond',Georgia,serif",fontSize:20,color:C.text,fontVariantNumeric:"tabular-nums",lineHeight:1.1}}>{msk(cur+fmt(Math.round(eur?c.valEUR:c.valEUR/_ue)),hidden)}</div>
+                    <div style={{fontFamily:"'Cormorant Garamond',Georgia,serif",fontSize:20,color:C.text,fontVariantNumeric:"tabular-nums",lineHeight:1.1}}>{(()=>{const _v=Math.round(eur?c.valEUR:c.valEUR/_ue);return msk(cur+(_v?fmt(_v):"0"),hidden);})()}</div>
                     <div style={{fontSize:11,fontVariantNumeric:"tabular-nums",marginTop:1,color:Math.abs(c.dEUR)<1?C.text3:(c.up?C.green:C.red)}}>{Math.abs(c.dEUR)<1?"stable":((c.up?"▲ +":"▼ -")+cur+msk(fmt(Math.abs(Math.round(eur?c.dEUR:c.dEUR/_ue))),hidden))}</div>
                   </>
                 )}
