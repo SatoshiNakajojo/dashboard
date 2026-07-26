@@ -4566,7 +4566,7 @@ function SectionRow({section, open, onToggle, hidden=false, eur=false, usdEur=0.
         onClick={onToggle}
         style={{
           width:"100%", background: open ? color+"18" : C.bg1,
-          border:`1px solid ${open ? color+"55" : C.border}`,
+          border: open ? `1px solid ${color+"55"}` : "none",
           borderRadius: open ? "12px 12px 0 0" : 12,
           padding:"12px 14px", cursor:"pointer", display:"flex",
           alignItems:"center", gap:12, transition:"all .18s",
