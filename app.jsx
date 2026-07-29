@@ -10809,7 +10809,7 @@ function BtcIndicators(){
   const[btcSig,setBtcSig]=useState(null);
   const[btcSigL,setBtcSigL]=useState(false);
   const[btcSigE,setBtcSigE]=useState(null);
-  const[btcOpen,setBtcOpen]=useState({});
+  const[btcSelected,setBtcSelected]=useState(null); // #142 — un seul indicateur "déplié" à la fois (mosaïque + panneau de détail)
   function num(v,d){ if(v==null||isNaN(v))return "—"; return Number(v).toLocaleString("fr-FR",{maximumFractionDigits:d!=null?d:2}); }
   function btcHeatColor(h){ return h==null?C.gray:(h<40?C.green:(h<60?C.gold:(h<80?C.orange:C.red))); }
 
@@ -10899,7 +10899,6 @@ function BtcIndicators(){
   var grad="linear-gradient(90deg,"+C.green+" 0%,"+C.green+" 28%,"+C.gold+" 50%,"+C.orange+" 72%,"+C.red+" 100%)";
   var byKey={}; (d.indicators||[]).forEach(function(o){ byKey[o.key]=o; });
   var groups=[["Cycle & valorisation",["ma2y","mayer","picycle","picyclebot","ma200w","rainbow","ahr999"]],["Tendance & momentum",["bmsb","ema918","rsiw"]],["On-chain",["puell","hashribbons","mvrvz","nupl","sthmvrv","rhodl","reserverisk","asopr","vdd"]],["Sentiment",["feargreed"]]];
-  var tog=function(k){ setBtcOpen(function(p){ var n=Object.assign({},p); n[k]=!p[k]; return n; }); };
   var maj=d.ts?new Date(d.ts).toLocaleString("fr-FR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}):"—";
 
   btcBlock = React.createElement("div",null,
@@ -10923,31 +10922,35 @@ function BtcIndicators(){
       React.createElement("div",{style:{fontSize:10,color:C.text2,marginTop:10,fontWeight:600}},"BTC $"+num(d.price,0)+" · "+d.nIndicators+"/"+(d.indicators||[]).length+" indicateurs · maj "+maj)
     ),
     groups.map(function(g,gi){
-      return React.createElement("div",{key:gi,style:{marginBottom:14}},
+      var keysWithData=g[1].filter(function(k){return byKey[k];});
+      if(!keysWithData.length) return null;
+      var selO = (btcSelected && g[1].indexOf(btcSelected)>=0) ? byKey[btcSelected] : null;
+      return React.createElement("div",{key:gi,style:{marginBottom:16}},
         React.createElement("div",{style:{fontSize:10,fontWeight:700,color:C.text3,textTransform:"uppercase",letterSpacing:0.5,marginBottom:8}},g[0]),
-        React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:8}},
-          g[1].map(function(k){
-            var o=byKey[k]; if(!o) return null; var open=!!btcOpen[k];
-            return React.createElement("div",{key:k,style:{background:C.bg1,border:"1px solid "+C.border,borderLeft:"3px solid "+o.color,borderRadius:10,overflow:"hidden"}},
-              React.createElement("div",{onClick:function(){tog(k);},style:{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 12px",cursor:"pointer",gap:8}},
-                React.createElement("div",{style:{minWidth:0}},
-                  React.createElement("div",{style:{fontSize:13,fontWeight:700,color:C.text}},o.name),
-                  React.createElement("div",{style:{fontSize:10,color:o.color,marginTop:2,fontWeight:600}},o.zone)
-                ),
-                React.createElement("div",{style:{display:"flex",alignItems:"center",gap:10,flexShrink:0}},
-                  React.createElement("span",{style:{fontSize:15,fontWeight:600,color:C.text}},o.value),
-                  React.createElement("span",{style:{width:9,height:9,borderRadius:"50%",background:o.color,flexShrink:0}}),
-                  React.createElement("span",{style:{fontSize:10,color:C.text3}},open?"▾":"▸")
-                )
+        React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}},
+          keysWithData.map(function(k){
+            var o=byKey[k]; var selected=btcSelected===k;
+            return React.createElement("button",{key:k,onClick:function(){setBtcSelected(function(p){return p===k?null:k;});},
+              style:{textAlign:"left",cursor:"pointer",fontFamily:C.font,background:selected?o.color+"14":C.bg1,border:"1px solid "+(selected?o.color+"77":C.border),borderRadius:C.radiusSm||8,padding:"9px 10px",display:"flex",flexDirection:"column",gap:4,minWidth:0}},
+              React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",gap:6}},
+                React.createElement("span",{style:{fontSize:10,fontWeight:700,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}},o.name),
+                React.createElement("span",{style:{width:7,height:7,borderRadius:"50%",background:o.color,flexShrink:0}})
               ),
-              open&&React.createElement("div",{style:{padding:"0 12px 12px",borderTop:"1px solid "+C.border}},
-                o.heat!=null&&React.createElement("div",{style:{position:"relative",height:6,borderRadius:4,margin:"12px 0 6px",background:grad}},
-                  React.createElement("div",{style:{position:"absolute",top:-3,left:"calc("+Math.max(0,Math.min(100,o.heat))+"% - 6px)",width:12,height:12,borderRadius:"50%",background:"#fff",border:"2px solid "+C.bg,boxShadow:"0 0 0 1px "+C.border}})
-                ),
-                React.createElement("div",{style:{fontSize:12,color:C.text2,lineHeight:1.55,marginTop:8}},o.explain)
-              )
+              React.createElement("div",{style:{fontFamily:"'Cormorant Garamond',Georgia,serif",fontSize:19,fontWeight:600,color:o.color,lineHeight:1.1}},o.value),
+              React.createElement("div",{style:{fontSize:9,color:C.text3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}},o.zone)
             );
           })
+        ),
+        selO && React.createElement("div",{style:{background:C.bg2,border:"1px solid "+selO.color+"55",borderRadius:C.radiusSm||8,padding:"12px 14px",marginTop:8}},
+          React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}},
+            React.createElement("span",{style:{fontSize:13,fontWeight:700,color:C.text}},selO.name),
+            React.createElement("span",{style:{fontSize:11,fontWeight:700,color:selO.color,textAlign:"right"}},selO.zone)
+          ),
+          selO.heat!=null&&React.createElement("div",{style:{position:"relative",height:6,borderRadius:4,margin:"10px 0"}},
+            React.createElement("div",{style:{position:"absolute",inset:0,borderRadius:4,background:grad}}),
+            React.createElement("div",{style:{position:"absolute",top:-3,left:"calc("+Math.max(0,Math.min(100,selO.heat))+"% - 6px)",width:12,height:12,borderRadius:"50%",background:"#fff",border:"2px solid "+C.bg,boxShadow:"0 0 0 1px "+C.border}})
+          ),
+          React.createElement("div",{style:{fontSize:12,color:C.text2,lineHeight:1.55,marginTop:4}},selO.explain)
         )
       );
     }),
@@ -11009,7 +11012,7 @@ function TickerRecoBlock({source}){
   var CASHLIKE={USD:1,EURO:1,KUCOIN:1,CASH:1,LCL:1,BCI:1,DEBLOCK:1};
   var [tickers,setTickers]=useState([]);
   var [scores,setScores]=useState({});
-  var [open,setOpen]=useState({});
+  var [selected,setSelected]=useState(null); // #142 — un seul ticker "déplié" à la fois (mosaïque + panneau de détail)
 
   useEffect(function(){
     var arr=[];
@@ -11051,41 +11054,42 @@ function TickerRecoBlock({source}){
   },[tickers.join("|")]);
 
   if(!tickers.length) return null;
-  var tog=function(t){ setOpen(function(p){ var n=Object.assign({},p); n[t]=!p[t]; return n; }); };
+  var selS = selected ? scores[selected] : null;
+  var selValid = selS && selS!=="error";
 
   return React.createElement("div",{style:{marginTop:22}},
     React.createElement("div",{style:{fontSize:10,fontWeight:700,color:C.text3,textTransform:"uppercase",letterSpacing:0.5,marginBottom:8}},label),
-    React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:8}},
+    React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}},
       tickers.map(function(t){
         var s=scores[t];
         var loading = s===undefined;
         var errored = s==="error";
-        var openT=!!open[t];
+        var isSel=selected===t;
         var heat=(!loading&&!errored)?s.heat:null;
         var color=marketHeatColor(heat);
         var reco=marketReco(heat);
-        return React.createElement("div",{key:t,style:{background:C.bg1,border:"1px solid "+C.border,borderLeft:"3px solid "+color,borderRadius:C.radiusSm||8,overflow:"hidden"}},
-          React.createElement("div",{onClick:function(){ if(!loading&&!errored) tog(t); },style:{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 12px",cursor:(!loading&&!errored)?"pointer":"default",gap:8}},
-            React.createElement("div",{style:{minWidth:0}},
-              React.createElement("div",{style:{fontSize:13,fontWeight:700,color:C.text}},t),
-              React.createElement("div",{style:{fontSize:10,color:color,marginTop:2,fontWeight:600}},loading?"Chargement…":errored?"Indisponible":reco)
-            ),
-            React.createElement("div",{style:{display:"flex",alignItems:"center",gap:10,flexShrink:0}},
-              (!loading&&!errored)?React.createElement("span",{style:{fontFamily:"'Cormorant Garamond',Georgia,serif",fontSize:15,fontWeight:600,color:C.text}},s.price!=null?("$"+s.price.toLocaleString("fr-FR",{maximumFractionDigits:2})):"—"):null,
-              (!loading&&!errored)?React.createElement("span",{style:{width:9,height:9,borderRadius:"50%",background:color,flexShrink:0}}):null,
-              React.createElement("span",{style:{fontSize:10,color:C.text3}},loading?"":errored?"":(openT?"▾":"▸"))
-            )
+        return React.createElement("button",{key:t,onClick:function(){ if(!loading&&!errored) setSelected(function(p){return p===t?null:t;}); },
+          style:{textAlign:"left",cursor:(!loading&&!errored)?"pointer":"default",fontFamily:C.font,background:isSel?color+"14":C.bg1,border:"1px solid "+(isSel?color+"77":C.border),borderRadius:C.radiusSm||8,padding:"9px 10px",display:"flex",flexDirection:"column",gap:4,minWidth:0}},
+          React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",gap:6}},
+            React.createElement("span",{style:{fontSize:11,fontWeight:700,color:C.text}},t),
+            React.createElement("span",{style:{width:7,height:7,borderRadius:"50%",background:color,flexShrink:0}})
           ),
-          openT&&!loading&&!errored&&React.createElement("div",{style:{padding:"0 12px 12px",borderTop:"1px solid "+C.border}},
-            React.createElement("div",{style:{fontSize:11,color:C.text2,lineHeight:1.7,marginTop:10}},
-              "RSI(14) : ", React.createElement("b",{style:{color:C.text}},s.rsi!=null?s.rsi.toFixed(0):"—"),
-              " · Vs SMA200 : ", React.createElement("b",{style:{color:C.text}},s.smaRatio!=null?((s.smaRatio>=1?"+":"")+((s.smaRatio-1)*100).toFixed(1)+"%"):"—"),
-              " · Rang 52 sem. : ", React.createElement("b",{style:{color:C.text}},s.rangePos!=null?s.rangePos.toFixed(0)+"%":"—"),
-              " · Momentum 1M : ", React.createElement("b",{style:{color:C.text}},s.mom!=null?((s.mom>=0?"+":"")+s.mom.toFixed(1)+"%"):"—")
-            )
-          )
+          React.createElement("div",{style:{fontSize:10,color:color,fontWeight:600}},loading?"Chargement…":errored?"Indisponible":reco),
+          (!loading&&!errored)?React.createElement("div",{style:{fontFamily:"'Cormorant Garamond',Georgia,serif",fontSize:15,fontWeight:600,color:C.text,marginTop:1}},s.price!=null?("$"+s.price.toLocaleString("fr-FR",{maximumFractionDigits:2})):"—"):null
         );
       })
+    ),
+    selValid && React.createElement("div",{style:{background:C.bg2,border:"1px solid "+marketHeatColor(selS.heat)+"55",borderRadius:C.radiusSm||8,padding:"12px 14px",marginTop:8}},
+      React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,marginBottom:4}},
+        React.createElement("span",{style:{fontSize:13,fontWeight:700,color:C.text}},selected),
+        React.createElement("span",{style:{fontSize:11,fontWeight:700,color:marketHeatColor(selS.heat)}},marketReco(selS.heat))
+      ),
+      React.createElement("div",{style:{fontSize:11,color:C.text2,lineHeight:1.7,marginTop:8}},
+        "RSI(14) : ", React.createElement("b",{style:{color:C.text}},selS.rsi!=null?selS.rsi.toFixed(0):"—"),
+        " · Vs SMA200 : ", React.createElement("b",{style:{color:C.text}},selS.smaRatio!=null?((selS.smaRatio>=1?"+":"")+((selS.smaRatio-1)*100).toFixed(1)+"%"):"—"),
+        " · Rang 52 sem. : ", React.createElement("b",{style:{color:C.text}},selS.rangePos!=null?selS.rangePos.toFixed(0)+"%":"—"),
+        " · Momentum 1M : ", React.createElement("b",{style:{color:C.text}},selS.mom!=null?((selS.mom>=0?"+":"")+selS.mom.toFixed(1)+"%"):"—")
+      )
     ),
     React.createElement("div",{style:{fontSize:9,color:C.text3,lineHeight:1.5,marginTop:8}},"Score technique générique (RSI, écart à la SMA200, rang sur 52 semaines, momentum 1 mois) — Yahoo Finance. Ne constitue pas un conseil en investissement.")
   );
