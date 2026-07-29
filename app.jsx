@@ -4566,7 +4566,7 @@ function SectionRow({section, open, onToggle, hidden=false, eur=false, usdEur=0.
         onClick={onToggle}
         style={{
           width:"100%", background: open ? color+"18" : C.bg1,
-          border:`1px solid ${open ? color+"55" : C.border}`,
+          border: open ? `1px solid ${color+"55"}` : "none",
           borderRadius: open ? "12px 12px 0 0" : 12,
           padding:"12px 14px", cursor:"pointer", display:"flex",
           alignItems:"center", gap:12, transition:"all .18s",
@@ -6951,7 +6951,11 @@ function PageStats({chartData, hidden=false, EFF, eur=false, liveDD, src, liveIn
         if(!r) continue;
         let eomEUR = null;
         if(category==="crypto")      eomEUR = r[1];
-        else if(category==="total")  eomEUR = r[2];
+        // v7.85 — une ligne DD avec crypto=null est un snapshot INCOMPLET (le wallet crypto n'avait
+        // pas pu être chargé) : son "total" a été calculé sans le crypto, donc structurellement faux.
+        // On ignore ces lignes pour le Total plutôt que de propager une valeur tronquée (cause du
+        // faux -24,8% de mai / +21,5% de juin au lieu du -7,9% réel).
+        else if(category==="total")  eomEUR = (r[1]!=null) ? r[2] : null;
         else if(category==="stocks") eomEUR = (r[4]!=null && r[5]!=null) ? Math.round(r[4]*GDB_S_NB_PARTS*r[5]) : null;
         if(eomEUR!=null) result.eom[mi] = eomEUR;
       }
