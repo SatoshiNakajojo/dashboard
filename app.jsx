@@ -117,6 +117,7 @@ const ICON_PATHS = {
   target:'<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.4"/>',
   wallet:'<rect x="2.5" y="6" width="19" height="12" rx="2.5"/><path d="M6 9.5v5M18 9.5v5"/><circle cx="12" cy="12" r="2.4"/>',
   pulse:'<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>',
+  percent:'<circle cx="7" cy="7" r="2.6"/><circle cx="17" cy="17" r="2.6"/><line x1="19" y1="5" x2="5" y2="19"/>',
 };
 function Icon({name,size=20,color="currentColor",sw=1.5,style}){
   return React.createElement("svg",{
@@ -10884,12 +10885,16 @@ function BtcIndicators(){
   }
   useEffect(function(){ loadBtc(false); },[]);
 
-  if(btcSigL && !btcSig) return React.createElement("div",{style:{textAlign:"center",color:C.text3,fontSize:12,padding:"30px 0"}},"Chargement des indicateurs BTC…");
-  if(btcSigE && !btcSig) return React.createElement("div",{style:{background:C.red+"11",border:"1px solid "+C.red+"44",borderRadius:10,padding:12,color:C.red,fontSize:12}},
+  // #141 — le bloc BTC et les recommandations Portefeuille/Tracking sont INDÉPENDANTS : un échec du
+  // fetch /btc-signals ne doit plus faire disparaître les deux nouvelles sections (avant : un seul
+  // "return" précoce empêchait TOUT rendu, y compris les recos qui n'ont rien à voir avec le BTC).
+  var btcBlock=null;
+  if(btcSigL && !btcSig) btcBlock=React.createElement("div",{style:{textAlign:"center",color:C.text3,fontSize:12,padding:"30px 0"}},"Chargement des indicateurs BTC…");
+  else if(btcSigE && !btcSig) btcBlock=React.createElement("div",{style:{background:C.red+"11",border:"1px solid "+C.red+"44",borderRadius:10,padding:12,color:C.red,fontSize:12}},
     "Erreur : "+btcSigE,
     React.createElement("button",{onClick:function(){loadBtc(true);},style:{marginLeft:8,background:"none",border:"1px solid "+C.red+"66",borderRadius:6,color:C.red,fontSize:11,padding:"2px 8px",cursor:"pointer"}},"Réessayer")
   );
-  if(!btcSig) return null;
+  else if(btcSig){
   var d=btcSig;
   var grad="linear-gradient(90deg,"+C.green+" 0%,"+C.green+" 28%,"+C.gold+" 50%,"+C.orange+" 72%,"+C.red+" 100%)";
   var byKey={}; (d.indicators||[]).forEach(function(o){ byKey[o.key]=o; });
@@ -10897,16 +10902,16 @@ function BtcIndicators(){
   var tog=function(k){ setBtcOpen(function(p){ var n=Object.assign({},p); n[k]=!p[k]; return n; }); };
   var maj=d.ts?new Date(d.ts).toLocaleString("fr-FR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}):"—";
 
-  return React.createElement("div",null,
-    React.createElement("div",{style:{background:d.recoColor+"18",border:"1px solid "+d.recoColor+"55",borderRadius:14,padding:"14px 16px",marginBottom:16}},
+  btcBlock = React.createElement("div",null,
+    React.createElement("div",{style:{background:d.recoColor+"18",border:"1px solid "+d.recoColor+"55",borderRadius:C.radius||14,padding:"14px 16px",marginBottom:16}},
       React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}},
         React.createElement("div",null,
           React.createElement("div",{style:{fontSize:9,color:C.text3,textTransform:"uppercase",letterSpacing:0.5}},"Recommandation"),
-          React.createElement("div",{style:{fontSize:28,fontWeight:600,color:d.recoColor,lineHeight:1.1,marginTop:3}},d.reco||"—")
+          React.createElement("div",{style:{fontFamily:"'Cormorant Garamond',Georgia,serif",fontSize:30,fontWeight:600,color:d.recoColor,lineHeight:1.1,marginTop:3}},d.reco||"—")
         ),
         React.createElement("div",{style:{textAlign:"right"}},
           React.createElement("div",{style:{fontSize:9,color:C.text3,textTransform:"uppercase",letterSpacing:0.5}},"Surchauffe"),
-          React.createElement("div",{style:{fontSize:24,fontWeight:600,color:d.recoColor,lineHeight:1.1,marginTop:3}},d.aggHeat!=null?Math.round(d.aggHeat):"—",React.createElement("span",{style:{fontSize:12,fontWeight:600,color:C.text2}},"/100"))
+          React.createElement("div",{style:{fontFamily:"'Cormorant Garamond',Georgia,serif",fontSize:26,fontWeight:600,color:d.recoColor,lineHeight:1.1,marginTop:3}},d.aggHeat!=null?Math.round(d.aggHeat):"—",React.createElement("span",{style:{fontFamily:C.font,fontSize:12,fontWeight:600,color:C.text2}},"/100"))
         )
       ),
       React.createElement("div",{style:{position:"relative",height:8,borderRadius:5,marginTop:12,background:grad}},
@@ -10947,6 +10952,142 @@ function BtcIndicators(){
       );
     }),
     React.createElement("div",{style:{fontSize:10,color:C.text3,lineHeight:1.5,marginTop:6,padding:"0 2px"}},"Agrégat mécanique d'indicateurs publics (prix, on-chain, sentiment) à visée éducative. Ce n'est pas un conseil en investissement.")
+  );
+  }
+
+  return React.createElement("div",null,
+    btcBlock,
+    React.createElement(TickerRecoBlock,{key:"reco-portfolio",source:"portfolio"}),
+    React.createElement(TickerRecoBlock,{key:"reco-tracking",source:"tracking"})
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// CGI — Recommandations génériques (Mon Portefeuille / Suivi) — indicateurs.
+// Contrairement au BTC, ces tickers n'ont pas de données on-chain : le score
+// "surchauffe" est un score technique générique (RSI14, écart à la SMA200,
+// rang dans le range 52 semaines, momentum 1 mois), calculé côté client à
+// partir de /yahoo-chart (déjà utilisé par TickerModal — aucun nouvel appel
+// serveur nécessaire). Mêmes seuils/couleurs que la recommandation BTC.
+// ══════════════════════════════════════════════════════════════════════════════
+function marketHeatColor(h){ return h==null?C.gray:(h<40?C.green:(h<60?C.gold:(h<80?C.orange:C.red))); }
+function marketReco(h){ return h==null?"—":(h<25?"Acheter":h<40?"Accumuler":h<60?"Conserver":h<80?"Alléger":"Vendre"); }
+
+async function fetchGenericTechnical(sym){
+  var url=CF_WORKER_URL+"/yahoo-chart?symbol="+encodeURIComponent(sym)+"&interval=1d&range=1y&no_logo=1";
+  var r=await fetch(url,{headers:{"X-Auth-Key":CF_AUTH_KEY},signal:AbortSignal.timeout(15000)});
+  var d=await r.json();
+  if(d&&d.error) throw new Error(d.error);
+  var candles=(d.candles||[]).filter(function(c){return c&&c.c!=null;});
+  if(candles.length<30) return null;
+  var closes=candles.map(function(c){return c.c;});
+  var n=closes.length, last=closes[n-1];
+  var rsi=null;
+  if(n>=15){
+    var g=0,l=0;
+    for(var i=n-14;i<n;i++){ var dd=closes[i]-closes[i-1]; if(dd>0) g+=dd; else l-=dd; }
+    var ag=g/14, al=l/14;
+    rsi = al===0?100:100-100/(1+ag/al);
+  }
+  var smaN=Math.min(200,n);
+  var sma=closes.slice(n-smaN).reduce(function(a,b){return a+b;},0)/smaN;
+  var smaRatio=sma?last/sma:null;
+  var smaHeat=smaRatio==null?null:Math.max(0,Math.min(100,(smaRatio-0.75)/(1.35-0.75)*100));
+  var win=closes.slice(-Math.min(252,n));
+  var hi=Math.max.apply(null,win), lo=Math.min.apply(null,win);
+  var rangePos=hi>lo?(last-lo)/(hi-lo)*100:null;
+  var idxM=Math.max(0,n-22), ref=closes[idxM];
+  var mom=ref?((last-ref)/ref*100):null;
+  var momHeat=mom==null?null:Math.max(0,Math.min(100,(mom+20)/40*100));
+  var parts=[rsi,smaHeat,rangePos,momHeat].filter(function(v){return v!=null;});
+  var heat=parts.length?parts.reduce(function(a,b){return a+b;},0)/parts.length:null;
+  return {price:last, rsi:rsi, smaRatio:smaRatio, rangePos:rangePos, mom:mom, heat:heat};
+}
+
+function TickerRecoBlock({source}){
+  var label = source==="portfolio" ? "Mon portefeuille" : "Suivi (Tracking)";
+  var CASHLIKE={USD:1,EURO:1,KUCOIN:1,CASH:1,LCL:1,BCI:1,DEBLOCK:1};
+  var [tickers,setTickers]=useState([]);
+  var [scores,setScores]=useState({});
+  var [open,setOpen]=useState({});
+
+  useEffect(function(){
+    var arr=[];
+    try{
+      if(source==="portfolio"){
+        var port=lsv9Get('cgi_portfolio');
+        ((port&&port.items)||[]).forEach(function(it){
+          var t=String(it.t||"").toUpperCase().trim();
+          if(!t||CASHLIKE[t]) return;
+          if(it.cat==="Cash Matelas"||it.cat==="Cash") return;
+          if(!((it.qty||0)>0)) return;
+          if(arr.indexOf(t)<0) arr.push(t);
+        });
+      } else {
+        var wl=lsv9Get('cgi_watchlist')||[];
+        (Array.isArray(wl)?wl:[]).forEach(function(e){
+          var t=String((e&&e.ticker)||"").toUpperCase().trim();
+          if(t&&arr.indexOf(t)<0) arr.push(t);
+        });
+      }
+    }catch(e){}
+    setTickers(arr.slice(0,15));
+  },[source]);
+
+  useEffect(function(){
+    if(!tickers.length) return;
+    var cancelled=false;
+    tickers.forEach(function(t){
+      var sym=(typeof YF_MAP!=="undefined"&&YF_MAP[t])||t;
+      fetchGenericTechnical(sym).then(function(res){
+        if(cancelled) return;
+        setScores(function(p){ var n=Object.assign({},p); n[t]=res||"error"; return n; });
+      }).catch(function(){
+        if(cancelled) return;
+        setScores(function(p){ var n=Object.assign({},p); n[t]="error"; return n; });
+      });
+    });
+    return function(){ cancelled=true; };
+  },[tickers.join("|")]);
+
+  if(!tickers.length) return null;
+  var tog=function(t){ setOpen(function(p){ var n=Object.assign({},p); n[t]=!p[t]; return n; }); };
+
+  return React.createElement("div",{style:{marginTop:22}},
+    React.createElement("div",{style:{fontSize:10,fontWeight:700,color:C.text3,textTransform:"uppercase",letterSpacing:0.5,marginBottom:8}},label),
+    React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:8}},
+      tickers.map(function(t){
+        var s=scores[t];
+        var loading = s===undefined;
+        var errored = s==="error";
+        var openT=!!open[t];
+        var heat=(!loading&&!errored)?s.heat:null;
+        var color=marketHeatColor(heat);
+        var reco=marketReco(heat);
+        return React.createElement("div",{key:t,style:{background:C.bg1,border:"1px solid "+C.border,borderLeft:"3px solid "+color,borderRadius:C.radiusSm||8,overflow:"hidden"}},
+          React.createElement("div",{onClick:function(){ if(!loading&&!errored) tog(t); },style:{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"10px 12px",cursor:(!loading&&!errored)?"pointer":"default",gap:8}},
+            React.createElement("div",{style:{minWidth:0}},
+              React.createElement("div",{style:{fontSize:13,fontWeight:700,color:C.text}},t),
+              React.createElement("div",{style:{fontSize:10,color:color,marginTop:2,fontWeight:600}},loading?"Chargement…":errored?"Indisponible":reco)
+            ),
+            React.createElement("div",{style:{display:"flex",alignItems:"center",gap:10,flexShrink:0}},
+              (!loading&&!errored)?React.createElement("span",{style:{fontFamily:"'Cormorant Garamond',Georgia,serif",fontSize:15,fontWeight:600,color:C.text}},s.price!=null?("$"+s.price.toLocaleString("fr-FR",{maximumFractionDigits:2})):"—"):null,
+              (!loading&&!errored)?React.createElement("span",{style:{width:9,height:9,borderRadius:"50%",background:color,flexShrink:0}}):null,
+              React.createElement("span",{style:{fontSize:10,color:C.text3}},loading?"":errored?"":(openT?"▾":"▸"))
+            )
+          ),
+          openT&&!loading&&!errored&&React.createElement("div",{style:{padding:"0 12px 12px",borderTop:"1px solid "+C.border}},
+            React.createElement("div",{style:{fontSize:11,color:C.text2,lineHeight:1.7,marginTop:10}},
+              "RSI(14) : ", React.createElement("b",{style:{color:C.text}},s.rsi!=null?s.rsi.toFixed(0):"—"),
+              " · Vs SMA200 : ", React.createElement("b",{style:{color:C.text}},s.smaRatio!=null?((s.smaRatio>=1?"+":"")+((s.smaRatio-1)*100).toFixed(1)+"%"):"—"),
+              " · Rang 52 sem. : ", React.createElement("b",{style:{color:C.text}},s.rangePos!=null?s.rangePos.toFixed(0)+"%":"—"),
+              " · Momentum 1M : ", React.createElement("b",{style:{color:C.text}},s.mom!=null?((s.mom>=0?"+":"")+s.mom.toFixed(1)+"%"):"—")
+            )
+          )
+        );
+      })
+    ),
+    React.createElement("div",{style:{fontSize:9,color:C.text3,lineHeight:1.5,marginTop:8}},"Score technique générique (RSI, écart à la SMA200, rang sur 52 semaines, momentum 1 mois) — Yahoo Finance. Ne constitue pas un conseil en investissement.")
   );
 }
 
@@ -11090,9 +11231,9 @@ function MacroView(){
   if(!mkt) return null;
   var p=mkt.pulse||{}, treas=mkt.treasury||[], sectors=(mkt.sectors||[]).slice().sort(function(a,b){ return (b.pct==null?-999:b.pct)-(a.pct==null?-999:a.pct); });
   var pulseCard=function(label,val,sub,color){
-    return React.createElement("div",{style:{flex:1,background:C.bg1,border:"1px solid "+C.border,borderRadius:10,padding:"10px 12px"}},
+    return React.createElement("div",{style:{flex:1,background:C.bg1,border:"1px solid "+C.border,borderRadius:C.radius||12,padding:"10px 12px"}},
       React.createElement("div",{style:{fontSize:9,color:C.text3,textTransform:"uppercase",letterSpacing:0.5}},label),
-      React.createElement("div",{style:{fontSize:20,fontWeight:600,color:color||C.text,marginTop:3}},val),
+      React.createElement("div",{style:{fontFamily:"'Cormorant Garamond',Georgia,serif",fontSize:24,fontWeight:600,color:color||C.text,marginTop:3}},val),
       sub?React.createElement("div",{style:{fontSize:10,color:C.text2,marginTop:1}},sub):null
     );
   };
@@ -11106,7 +11247,7 @@ function MacroView(){
       React.createElement("div",{style:{fontSize:9,color:C.text3,textTransform:"uppercase",letterSpacing:0.5,marginBottom:8}},"Taux souverains US"),
       React.createElement("div",{style:{display:"flex",gap:8}},
         treas.map(function(t){
-          return React.createElement("div",{key:t.symbol,style:{flex:1,background:C.bg1,border:"1px solid "+C.border,borderRadius:10,padding:"8px 10px",textAlign:"center"}},
+          return React.createElement("div",{key:t.symbol,style:{flex:1,background:C.bg1,border:"1px solid "+C.border,borderRadius:C.radius||12,padding:"8px 10px",textAlign:"center"}},
             React.createElement("div",{style:{fontSize:9,color:C.text3}},t.label),
             React.createElement("div",{style:{fontSize:16,fontWeight:600,color:C.text,marginTop:2}},t.price!=null?t.price.toFixed(2)+"%":"—"),
             React.createElement("div",{style:{fontSize:9,color:cgiPctColor(t.pct),marginTop:1}},t.pct!=null?cgiPctFmt(t.pct):"")
@@ -11236,16 +11377,18 @@ function FlowMap(){
         " — sorties de ",React.createElement("span",{style:{color:C.red,fontWeight:700}},outflow.join(" & ")),"."
       )
     ),
-    React.createElement("div",{style:{display:"flex",gap:6,background:C.bg2,borderRadius:9,padding:3}},
+    React.createElement("div",{style:{display:"flex",gap:8}},
       [["w1","1 sem"],["m1","1 mois"],["m3","3 mois"]].map(function(h){
-        return React.createElement("button",{key:h[0],onClick:function(){setHz(h[0]);},style:{flex:1,padding:"6px 0",borderRadius:7,fontSize:11,fontWeight:700,border:"none",cursor:"pointer",background:hz===h[0]?C.btc:"transparent",color:hz===h[0]?"#000":C.gray}},h[1]);
+        var active=hz===h[0];
+        return React.createElement("button",{key:h[0],onClick:function(){setHz(h[0]);},style:lxBtn({active:active,style:{flex:1,padding:"7px 0"}})},h[1]);
       })
     ),
     React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:6}},
       items.map(function(c){
         var v=c.perf[hz]; var w=Math.min(48,Math.abs(v||0)/maxAbs*48);
+        var mono=(c.symbol||"").replace(/[^A-Za-z]/g,"").slice(0,3).toUpperCase();
         return React.createElement("div",{key:c.symbol,style:{display:"flex",alignItems:"center",gap:8}},
-          React.createElement("span",{style:{fontSize:15,width:22,textAlign:"center",flexShrink:0}},c.emoji),
+          React.createElement("span",{style:{fontSize:8,fontWeight:700,width:26,height:26,borderRadius:C.radiusSm||8,textAlign:"center",lineHeight:"26px",flexShrink:0,background:C.gold+"18",color:C.gold}},mono),
           React.createElement("span",{style:{fontSize:12,color:C.text,width:96,flexShrink:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}},c.name),
           React.createElement("div",{style:{flex:1,height:16,position:"relative",background:C.bg1,borderRadius:4,overflow:"hidden"}},
             React.createElement("div",{style:{position:"absolute",top:0,bottom:0,left:"50%",width:(v>=0?w:0)+"%",background:C.green+"aa"}}),
@@ -11265,12 +11408,16 @@ function FlowMap(){
 // ══════════════════════════════════════════════════════════════════════════════
 function MarketDash(){
   const[tab,setTab]=useState("macro");
-  var tabs=[["macro","🌐 Macro"],["btc","₿ Indicateurs"],["movers","📈 Top/Flop"],["funding","💸 Funding"],["flows","🌍 Flux"]];
+  var tabs=[["macro","grid","Macro"],["btc","coin","Indicateurs"],["movers","chart","Top/Flop"],["funding","percent","Funding"],["flows","repeat","Flux"]];
   return React.createElement("div",null,
     React.createElement("div",{style:{display:"flex",gap:6,marginBottom:14,overflowX:"auto",paddingBottom:2}},
       tabs.map(function(t){
+        var active=tab===t[0];
         return React.createElement("button",{key:t[0],onClick:function(){setTab(t[0]);},
-          style:{background:tab===t[0]?C.btc:C.bg1,color:tab===t[0]?"#000":C.text2,border:"1px solid "+(tab===t[0]?C.btc:C.border),borderRadius:8,padding:"6px 14px",fontSize:12,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap",flexShrink:0}},t[1]);
+          style:lxBtn({active:active,style:{gap:6,whiteSpace:"nowrap",flexShrink:0}})},
+          React.createElement(Icon,{name:t[1],size:14,color:active?C.gold:C.text2}),
+          t[2]
+        );
       })
     ),
     tab==="macro"&&React.createElement(MacroView,null),
