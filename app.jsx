@@ -116,6 +116,7 @@ const ICON_PATHS = {
   layers:'<path d="M12 2 2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>',
   target:'<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.4"/>',
   wallet:'<rect x="2.5" y="6" width="19" height="12" rx="2.5"/><path d="M6 9.5v5M18 9.5v5"/><circle cx="12" cy="12" r="2.4"/>',
+  pulse:'<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>',
 };
 function Icon({name,size=20,color="currentColor",sw=1.5,style}){
   return React.createElement("svg",{
@@ -5868,7 +5869,7 @@ if(typeof window!=="undefined") window.__cgiCloud = cgiCloudInspect;
 /* ═══════════════════════════════════════════════════════════
    PAGE OVERVIEW
 ═══════════════════════════════════════════════════════════ */
-function PageOverview({chartData,onSnapshot,onImportCsv,eur,setEur,hidden,setHidden,EFF,refreshing,handleRefresh,refreshedAt,refreshErr,fromSnapshot,gistSync,liveDD,liveCM,liveGDBS,liveGC,chosenSource,iconDbVersion=0,bumpIconDb}){
+function PageOverview({chartData,onSnapshot,onImportCsv,eur,setEur,hidden,setHidden,EFF,refreshing,handleRefresh,refreshedAt,refreshErr,fromSnapshot,gistSync,liveDD,liveCM,liveGDBS,liveGC,chosenSource,iconDbVersion=0,bumpIconDb,setTab}){
   const _DD_PO=liveDD||DD;
   const _CM_PO=liveCM||CRYPTO_MONTHLY;
   const [chartTF, setChartTF] = useState("YTD");
@@ -6254,6 +6255,20 @@ function PageOverview({chartData,onSnapshot,onImportCsv,eur,setEur,hidden,setHid
           </button>
         </div>
       </div>
+
+      {/* ════ Accès History & Tracking — retirés du bandeau du bas, disponibles ici ════ */}
+      {setTab && (
+        <div style={{padding:"10px 20px 2px"}}>
+          <div style={{display:"flex",gap:10}}>
+            <button onClick={()=>setTab(5)} style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:7,padding:"10px 0",borderRadius:C.radius||12,border:`1px solid ${C.border2}`,background:"transparent",color:C.text2,fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:C.font}}>
+              <Icon name="list" size={15}/> History
+            </button>
+            <button onClick={()=>setTab(6)} style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:7,padding:"10px 0",borderRadius:C.radius||12,border:`1px solid ${C.border2}`,background:"transparent",color:C.text2,fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:C.font}}>
+              <Icon name="search" size={15}/> Tracking
+            </button>
+          </div>
+        </div>
+      )}
       <div style={{textAlign:"center",fontSize:9,color:C.text3,opacity:.4,marginTop:4,paddingBottom:8,letterSpacing:.5,pointerEvents:"none"}}>{APP_VERSION}</div>
 
     </div>
@@ -9399,9 +9414,9 @@ function SnapshotModal({onSave, onClose, EFF}){
 /* ═══════════════════════════════════════════════════════════
    ROOT APP
 ═══════════════════════════════════════════════════════════ */
-const TABS=["Home","Portfolio","Stats","JCGI","Data","History","Tracking"];
+const TABS=["Home","Portfolio","Stats","JCGI","Data","History","Tracking","Market"];
 const ICONS=["◎","◑","▲","◈","⬡","♛","◉"];
-const NAV_ICONS=["home","pie","chart","gem","grid","list","search"];
+const NAV_ICONS=["home","pie","chart","gem","grid","list","search","pulse"];
 
 /* ── Global API keys (from Power Query in Excel) ── */
 
@@ -11273,6 +11288,17 @@ function MarketDash(){
     tab==="movers"&&React.createElement(MoversView,null),
     tab==="funding"&&React.createElement(FundingView,null),
     tab==="flows"&&React.createElement(FlowMap,null)
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// CGI — PageMarket : nouvel onglet "Market" — enveloppe MarketDash (jusque-là
+// jamais branché à la navigation) derrière le titre standard des pages.
+// ══════════════════════════════════════════════════════════════════════════════
+function PageMarket(){
+  return React.createElement("div",null,
+    React.createElement(PageTitle,{title:"Market",sub:"Sentiment, secteurs & flux de capitaux"}),
+    React.createElement(MarketDash,null)
   );
 }
 
@@ -15402,12 +15428,13 @@ function App(){
       </div>
       {/* ── Pull-to-refresh retiré (LOT1) ── */}
       <div style={{padding:"0 16px"}}>
-        {tab===0 && <PageOverview chartData={chartData} onSnapshot={()=>setShowSnap(true)} {...liveProps} liveDD={liveDD} liveCM={liveCM} liveGDBS={liveGDBS} liveGC={gcEff} chosenSource={chosenSource} iconDbVersion={iconDbVersion} bumpIconDb={bumpIconDb}/>}
+        {tab===0 && <PageOverview chartData={chartData} onSnapshot={()=>setShowSnap(true)} {...liveProps} liveDD={liveDD} liveCM={liveCM} liveGDBS={liveGDBS} liveGC={gcEff} chosenSource={chosenSource} iconDbVersion={iconDbVersion} bumpIconDb={bumpIconDb} setTab={setTab}/>}
         {tab===1 && <PageAllocation hidden={hidden} EFF={EFF} eur={eur} setEur={setEur} iconDbVersion={iconDbVersion} bumpIconDb={bumpIconDb} liveOk={liveOk} onTrade={()=>setShowTrade(true)} txns={txnsEff} ibkrTrades={ibkrTrades}/>}
         {tab===2 && <PageStats chartData={chartData} hidden={hidden} EFF={EFF} eur={eur} liveDD={liveDD} src={EFF||CURRENT} liveInv={liveInv} liveCM={liveCM} liveSM={liveSM} liveTM={liveTM}/>}
         {tab===3 && <PageGDB chartData={chartData} hidden={hidden} EFF={EFF} eur={eur} liveGSB={liveGSB} liveGDBS={liveGDBS} liveBench={liveBench} liveGC={gcEff} liveDD={liveDD} liveInv={liveInv}/>}
         {tab===6 && <PageWatchlist EFF={EFF} hidden={hidden}/>}
         {tab===5 && <PageLegend txns={txnsEff} liveFutures={liveFutures} hidden={hidden} eur={eur} EFF={EFF} liveIbkrAnnex={liveIbkrAnnex} ibkrTrades={ibkrTrades} onImportCsv={()=>setShowCexImport(true)}/>}
+        {tab===7 && <PageMarket/>}
         {tab===4 && <PageData EFF={EFF} hidden={hidden} txns={txns} addTxn={addTxn} delTxn={delTxn} applyPositions={applyPositionsFromTxns} chartData={chartData} kvRefreshTick={kvRefreshTick}
           liveDD={liveDD} liveGDBS={liveGDBS} liveGC={gcEff} liveGSB={liveGSB}
           handleRefresh={handleRefresh} refreshing={refreshing} gistSync={gistSync} onOpenKvDiag={()=>setShowGistDiag(true)}
@@ -15415,15 +15442,23 @@ function App(){
         {/* Buy & Sell accessible via bouton flottant uniquement */}
       </div>
       <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:430,background:C.bg,borderTop:`1px solid ${C.border}`,display:"flex",padding:"8px 0 20px",zIndex:100}}>
-        {TABS.map((lb,i)=>(
-          (i===4||i===0) ? null : (
-          <button key={i} onClick={()=>setTab(i)} style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:4,height:52,padding:"4px 2px",background:"none",border:"none",cursor:"pointer",color:tab===i?C.gold:C.text3,transition:"color .15s"}}>
-            {i===3
-              ? <img src={APP_LOGO} alt="JCGI" style={{width:40,height:33,objectFit:"contain",marginTop:-4,opacity:tab===i?1:.5,transition:"opacity .15s"}}/>
-              : <Icon name={NAV_ICONS[i]} size={21}/>}
-            <span style={{fontSize:9,fontWeight:700,lineHeight:1,display:"block"}}>{lb}</span>
+        {/* Bandeau reconstruit : JCGI au centre, Portfolio/Stats de part et d'autre,
+            Market et Réglages aux extrémités. History/Tracking restent accessibles
+            depuis le bas de l'écran Accueil. */}
+        {[
+          {i:7, lb:"Market"},
+          {i:1, lb:"Portfolio"},
+          {i:3, lb:"JCGI"},
+          {i:2, lb:"Stats"},
+          {settings:true, lb:"Réglages"},
+        ].map((it,k)=>(
+          <button key={k} onClick={()=>it.settings ? setShowSettings(true) : setTab(it.i)}
+            style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:4,height:52,padding:"4px 2px",background:"none",border:"none",cursor:"pointer",color:(!it.settings&&tab===it.i)?C.gold:C.text3,transition:"color .15s"}}>
+            {it.i===3
+              ? <img src={APP_LOGO} alt="JCGI" style={{width:40,height:33,objectFit:"contain",marginTop:-4,opacity:tab===it.i?1:.5,transition:"opacity .15s"}}/>
+              : <Icon name={it.settings ? "gear" : NAV_ICONS[it.i]} size={21}/>}
+            <span style={{fontSize:9,fontWeight:700,lineHeight:1,display:"block"}}>{it.lb}</span>
           </button>
-          )
         ))}
       </div>
       {/* Buy & Sell accessible via snapshot uniquement */}
