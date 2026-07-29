@@ -5869,7 +5869,7 @@ if(typeof window!=="undefined") window.__cgiCloud = cgiCloudInspect;
 /* ═══════════════════════════════════════════════════════════
    PAGE OVERVIEW
 ═══════════════════════════════════════════════════════════ */
-function PageOverview({chartData,onSnapshot,onImportCsv,eur,setEur,hidden,setHidden,EFF,refreshing,handleRefresh,refreshedAt,refreshErr,fromSnapshot,gistSync,liveDD,liveCM,liveGDBS,liveGC,chosenSource,iconDbVersion=0,bumpIconDb,setTab}){
+function PageOverview({chartData,onSnapshot,onImportCsv,eur,setEur,hidden,setHidden,EFF,refreshing,handleRefresh,refreshedAt,refreshErr,fromSnapshot,gistSync,liveDD,liveCM,liveGDBS,liveGC,chosenSource,iconDbVersion=0,bumpIconDb,setTab,setShowSettings}){
   const _DD_PO=liveDD||DD;
   const _CM_PO=liveCM||CRYPTO_MONTHLY;
   const [chartTF, setChartTF] = useState("YTD");
@@ -6244,31 +6244,21 @@ function PageOverview({chartData,onSnapshot,onImportCsv,eur,setEur,hidden,setHid
         })()}
       </div>
 
-      {/* ════ Accès détail (graphe complet + CGIC/CGIS) ════ */}
-      <div style={{padding:"6px 20px 2px"}}>
-        <div style={{display:"flex",gap:10}}>
-          <button onClick={onSnapshot} style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:7,padding:"10px 0",borderRadius:C.radius||12,border:`1px solid ${C.border2}`,background:"transparent",color:C.text2,fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:C.font}}>
-            <Icon name="camera" size={15}/> Snapshot
+      {/* ════ Snapshot / Rafraîchir / History / Réglages — même design que le bandeau du bas ════ */}
+      <div style={{display:"flex",marginTop:10,borderTop:`1px solid ${C.border}`,paddingTop:2}}>
+        {[
+          {icon:"camera", lb:"Snapshot", onClick:onSnapshot},
+          {icon:"refresh", lb:refreshing?"…":"Rafraîchir", onClick:handleRefresh, disabled:refreshing},
+          {icon:"list", lb:"History", onClick:setTab&&(()=>setTab(5))},
+          {icon:"gear", lb:"Réglages", onClick:setShowSettings&&(()=>setShowSettings(true))},
+        ].map((it,k)=>(
+          <button key={k} onClick={it.onClick} disabled={it.disabled}
+            style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:4,height:52,padding:"4px 2px",background:"none",border:"none",cursor:it.disabled?"default":"pointer",color:C.text3,opacity:it.disabled?.6:1,transition:"color .15s"}}>
+            <Icon name={it.icon} size={21}/>
+            <span style={{fontSize:9,fontWeight:700,lineHeight:1,display:"block"}}>{it.lb}</span>
           </button>
-          <button onClick={handleRefresh} disabled={refreshing} style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:7,padding:"10px 0",borderRadius:C.radius||12,border:`1px solid ${C.border2}`,background:"transparent",color:C.text2,fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:C.font,opacity:refreshing?.6:1}}>
-            <Icon name="refresh" size={15}/> {refreshing?"…":"Rafraîchir"}
-          </button>
-        </div>
+        ))}
       </div>
-
-      {/* ════ Accès History & Tracking — retirés du bandeau du bas, disponibles ici ════ */}
-      {setTab && (
-        <div style={{padding:"10px 20px 2px"}}>
-          <div style={{display:"flex",gap:10}}>
-            <button onClick={()=>setTab(5)} style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:7,padding:"10px 0",borderRadius:C.radius||12,border:`1px solid ${C.border2}`,background:"transparent",color:C.text2,fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:C.font}}>
-              <Icon name="list" size={15}/> History
-            </button>
-            <button onClick={()=>setTab(6)} style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",gap:7,padding:"10px 0",borderRadius:C.radius||12,border:`1px solid ${C.border2}`,background:"transparent",color:C.text2,fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:C.font}}>
-              <Icon name="search" size={15}/> Tracking
-            </button>
-          </div>
-        </div>
-      )}
       <div style={{textAlign:"center",fontSize:9,color:C.text3,opacity:.4,marginTop:4,paddingBottom:8,letterSpacing:.5,pointerEvents:"none"}}>{APP_VERSION}</div>
 
     </div>
@@ -15428,7 +15418,7 @@ function App(){
       </div>
       {/* ── Pull-to-refresh retiré (LOT1) ── */}
       <div style={{padding:"0 16px"}}>
-        {tab===0 && <PageOverview chartData={chartData} onSnapshot={()=>setShowSnap(true)} {...liveProps} liveDD={liveDD} liveCM={liveCM} liveGDBS={liveGDBS} liveGC={gcEff} chosenSource={chosenSource} iconDbVersion={iconDbVersion} bumpIconDb={bumpIconDb} setTab={setTab}/>}
+        {tab===0 && <PageOverview chartData={chartData} onSnapshot={()=>setShowSnap(true)} {...liveProps} liveDD={liveDD} liveCM={liveCM} liveGDBS={liveGDBS} liveGC={gcEff} chosenSource={chosenSource} iconDbVersion={iconDbVersion} bumpIconDb={bumpIconDb} setTab={setTab} setShowSettings={setShowSettings}/>}
         {tab===1 && <PageAllocation hidden={hidden} EFF={EFF} eur={eur} setEur={setEur} iconDbVersion={iconDbVersion} bumpIconDb={bumpIconDb} liveOk={liveOk} onTrade={()=>setShowTrade(true)} txns={txnsEff} ibkrTrades={ibkrTrades}/>}
         {tab===2 && <PageStats chartData={chartData} hidden={hidden} EFF={EFF} eur={eur} liveDD={liveDD} src={EFF||CURRENT} liveInv={liveInv} liveCM={liveCM} liveSM={liveSM} liveTM={liveTM}/>}
         {tab===3 && <PageGDB chartData={chartData} hidden={hidden} EFF={EFF} eur={eur} liveGSB={liveGSB} liveGDBS={liveGDBS} liveBench={liveBench} liveGC={gcEff} liveDD={liveDD} liveInv={liveInv}/>}
@@ -15442,21 +15432,21 @@ function App(){
         {/* Buy & Sell accessible via bouton flottant uniquement */}
       </div>
       <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:430,background:C.bg,borderTop:`1px solid ${C.border}`,display:"flex",padding:"8px 0 20px",zIndex:100}}>
-        {/* Bandeau reconstruit : JCGI au centre, Portfolio/Stats de part et d'autre,
-            Market et Réglages aux extrémités. History/Tracking restent accessibles
-            depuis le bas de l'écran Accueil. */}
+        {/* Bandeau : Portfolio – Stats – JCGI (centre) – Market – Tracking.
+            Snapshot/Rafraîchir/History/Réglages sont accessibles depuis le bas
+            de l'écran Accueil (même style visuel que ce bandeau). */}
         {[
-          {i:7, lb:"Market"},
           {i:1, lb:"Portfolio"},
-          {i:3, lb:"JCGI"},
           {i:2, lb:"Stats"},
-          {settings:true, lb:"Réglages"},
+          {i:3, lb:"JCGI"},
+          {i:7, lb:"Market"},
+          {i:6, lb:"Tracking"},
         ].map((it,k)=>(
-          <button key={k} onClick={()=>it.settings ? setShowSettings(true) : setTab(it.i)}
-            style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:4,height:52,padding:"4px 2px",background:"none",border:"none",cursor:"pointer",color:(!it.settings&&tab===it.i)?C.gold:C.text3,transition:"color .15s"}}>
+          <button key={k} onClick={()=>setTab(it.i)}
+            style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:4,height:52,padding:"4px 2px",background:"none",border:"none",cursor:"pointer",color:tab===it.i?C.gold:C.text3,transition:"color .15s"}}>
             {it.i===3
               ? <img src={APP_LOGO} alt="JCGI" style={{width:40,height:33,objectFit:"contain",marginTop:-4,opacity:tab===it.i?1:.5,transition:"opacity .15s"}}/>
-              : <Icon name={it.settings ? "gear" : NAV_ICONS[it.i]} size={21}/>}
+              : <Icon name={NAV_ICONS[it.i]} size={21}/>}
             <span style={{fontSize:9,fontWeight:700,lineHeight:1,display:"block"}}>{it.lb}</span>
           </button>
         ))}
