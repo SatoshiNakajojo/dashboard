@@ -10874,10 +10874,12 @@ function useBtcSignals(){
           if(oc.asopr!=null){ var h=oc.asopr; patch("asopr",h.toFixed(3),cl(h,0.97,1.06),h<1?"Vendeurs en perte — capitulation":h>1.04?"Prise de profit soutenue":"Neutre"); }
           if(oc.vdd!=null){ var j=oc.vdd; patch("vdd",j.toFixed(2),cl(j,0.6,2.9),j<0.6?"Faible — bottom":j>2.9?"Distribution — top":"Neutre"); }
           ind.forEach(function(o){ o.color=btcHeatColor(o.heat); });
+          var indActions=((d.indicatorsActions||[]).map(function(o){ var c=Object.assign({},o); c.color=btcHeatColor(c.heat); return c; }));
+          var indMacro=((d.indicatorsMacro||[]).map(function(o){ var c=Object.assign({},o); c.color=btcHeatColor(c.heat); return c; }));
           var sw=0,swh=0,nok=0; ind.forEach(function(o){ if(o.heat!=null){ sw+=o.weight; swh+=o.heat*o.weight; nok++; } });
           var ah=sw>0?swh/sw:null;
           var reco=ah==null?null:(ah<25?"Acheter":ah<40?"Accumuler":ah<60?"Conserver":ah<80?"Alléger":"Vendre");
-          setBtcSig(Object.assign({},d,{indicators:ind,aggHeat:ah,reco:reco,recoColor:btcHeatColor(ah),nIndicators:nok}));
+          setBtcSig(Object.assign({},d,{indicators:ind,indicatorsActions:indActions,indicatorsMacro:indMacro,aggHeat:ah,reco:reco,recoColor:btcHeatColor(ah),nIndicators:nok}));
           setBtcSigL(false);
         };
         fetchOnchainBtc(noCache).then(finish).catch(function(){ finish({}); });
@@ -10934,69 +10936,88 @@ function PageMarketHome(){
   );
 }
 
+// #145 — mosaïque + panneau de détail génériques, réutilisés pour les 3 catégories
+// d'indicateurs (Crypto par sous-groupe, Actions et Santé globale du marché à plat).
+function renderIndicatorMosaic(items,selectedKey,onSelect,grad){
+  if(!items||!items.length) return null;
+  var selO=null; items.forEach(function(o){ if(o.key===selectedKey) selO=o; });
+  return React.createElement("div",null,
+    React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}},
+      items.map(function(o){
+        var selected=selectedKey===o.key;
+        return React.createElement("button",{key:o.key,onClick:function(){onSelect(selected?null:o.key);},
+          style:{textAlign:"left",cursor:"pointer",fontFamily:C.font,background:selected?o.color+"14":C.bg1,border:"1px solid "+(selected?o.color+"77":C.border),borderRadius:C.radiusSm||8,padding:"9px 10px",display:"flex",flexDirection:"column",gap:4,minWidth:0}},
+          React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",gap:6}},
+            React.createElement("span",{style:{fontSize:10,fontWeight:700,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}},o.name),
+            React.createElement("span",{style:{width:7,height:7,borderRadius:"50%",background:o.color,flexShrink:0}})
+          ),
+          React.createElement("div",{style:{fontFamily:"'Cormorant Garamond',Georgia,serif",fontSize:19,fontWeight:600,color:o.color,lineHeight:1.1}},o.value),
+          React.createElement("div",{style:{fontSize:9,color:C.text3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}},o.zone)
+        );
+      })
+    ),
+    selO && React.createElement("div",{style:{background:C.bg2,border:"1px solid "+selO.color+"55",borderRadius:C.radiusSm||8,padding:"12px 14px",marginTop:8}},
+      React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}},
+        React.createElement("span",{style:{fontSize:13,fontWeight:700,color:C.text}},selO.name),
+        React.createElement("span",{style:{fontSize:11,fontWeight:700,color:selO.color,textAlign:"right"}},selO.zone)
+      ),
+      selO.heat!=null&&React.createElement("div",{style:{position:"relative",height:6,borderRadius:4,margin:"10px 0"}},
+        React.createElement("div",{style:{position:"absolute",inset:0,borderRadius:4,background:grad}}),
+        React.createElement("div",{style:{position:"absolute",top:-3,left:"calc("+Math.max(0,Math.min(100,selO.heat))+"% - 6px)",width:12,height:12,borderRadius:"50%",background:"#fff",border:"2px solid "+C.bg,boxShadow:"0 0 0 1px "+C.border}})
+      ),
+      React.createElement("div",{style:{fontSize:12,color:C.text2,lineHeight:1.55,marginTop:4}},selO.explain)
+    )
+  );
+}
+
 function BtcIndicators(){
   var bs=useBtcSignals();
   var btcSig=bs.btcSig, btcSigL=bs.btcSigL, btcSigE=bs.btcSigE, loadBtc=bs.reload;
   const[btcSelected,setBtcSelected]=useState(null); // #142 — un seul indicateur "déplié" à la fois (mosaïque + panneau de détail)
+  const[actSelected,setActSelected]=useState(null);
+  const[macroSelected,setMacroSelected]=useState(null);
 
-  // #141 — le bloc BTC et les recommandations Portefeuille/Tracking sont INDÉPENDANTS : un échec du
-  // fetch /btc-signals ne doit plus faire disparaître les deux nouvelles sections (avant : un seul
-  // "return" précoce empêchait TOUT rendu, y compris les recos qui n'ont rien à voir avec le BTC).
-  var btcBlock=null;
-  if(btcSigL && !btcSig) btcBlock=React.createElement("div",{style:{textAlign:"center",color:C.text3,fontSize:12,padding:"30px 0"}},"Chargement des indicateurs BTC…");
-  else if(btcSigE && !btcSig) btcBlock=React.createElement("div",{style:{background:C.red+"11",border:"1px solid "+C.red+"44",borderRadius:10,padding:12,color:C.red,fontSize:12}},
+  // #145 — les 3 catégories (Crypto / Actions / Santé globale du marché) viennent du MÊME
+  // fetch /btc-signals : un seul état de chargement/erreur suffit ici (contrairement à #141
+  // où deux fetches réellement indépendants justifiaient deux early-returns séparés).
+  if(btcSigL && !btcSig) return React.createElement("div",{style:{textAlign:"center",color:C.text3,fontSize:12,padding:"30px 0"}},"Chargement des indicateurs…");
+  if(btcSigE && !btcSig) return React.createElement("div",{style:{background:C.red+"11",border:"1px solid "+C.red+"44",borderRadius:10,padding:12,color:C.red,fontSize:12}},
     "Erreur : "+btcSigE,
     React.createElement("button",{onClick:function(){loadBtc(true);},style:{marginLeft:8,background:"none",border:"1px solid "+C.red+"66",borderRadius:6,color:C.red,fontSize:11,padding:"2px 8px",cursor:"pointer"}},"Réessayer")
   );
-  else if(btcSig){
+  if(!btcSig) return null;
+
   var d=btcSig;
   var grad="linear-gradient(90deg,"+C.green+" 0%,"+C.green+" 28%,"+C.gold+" 50%,"+C.orange+" 72%,"+C.red+" 100%)";
   var byKey={}; (d.indicators||[]).forEach(function(o){ byKey[o.key]=o; });
-  var groups=[["Cycle & valorisation",["ma2y","mayer","picycle","picyclebot","ma200w","rainbow","ahr999"]],["Tendance & momentum",["bmsb","ema918","rsiw"]],["On-chain",["puell","hashribbons","mvrvz","nupl","sthmvrv","rhodl","reserverisk","asopr","vdd"]],["Sentiment",["feargreed"]]];
+  var groups=[["Cycle & valorisation",["ma2y","mayer","picycle","picyclebot","ma200w","rainbow","ahr999"]],["Tendance & momentum",["bmsb","ema918","rsiw"]],["On-chain",["puell","hashribbons","mvrvz","nupl","sthmvrv","rhodl","reserverisk","asopr","vdd"]],["Sentiment",["feargreed","btcdom"]]];
 
-  btcBlock = React.createElement("div",null,
+  var cryptoBlock = React.createElement("div",null,
     groups.map(function(g,gi){
-      var keysWithData=g[1].filter(function(k){return byKey[k];});
-      if(!keysWithData.length) return null;
-      var selO = (btcSelected && g[1].indexOf(btcSelected)>=0) ? byKey[btcSelected] : null;
+      var items=g[1].map(function(k){return byKey[k];}).filter(Boolean);
+      if(!items.length) return null;
+      var groupSel=(btcSelected && g[1].indexOf(btcSelected)>=0)?btcSelected:null;
       return React.createElement("div",{key:gi,style:{marginBottom:16}},
         React.createElement("div",{style:{fontSize:10,fontWeight:700,color:C.text3,textTransform:"uppercase",letterSpacing:0.5,marginBottom:8}},g[0]),
-        React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}},
-          keysWithData.map(function(k){
-            var o=byKey[k]; var selected=btcSelected===k;
-            return React.createElement("button",{key:k,onClick:function(){setBtcSelected(function(p){return p===k?null:k;});},
-              style:{textAlign:"left",cursor:"pointer",fontFamily:C.font,background:selected?o.color+"14":C.bg1,border:"1px solid "+(selected?o.color+"77":C.border),borderRadius:C.radiusSm||8,padding:"9px 10px",display:"flex",flexDirection:"column",gap:4,minWidth:0}},
-              React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",gap:6}},
-                React.createElement("span",{style:{fontSize:10,fontWeight:700,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}},o.name),
-                React.createElement("span",{style:{width:7,height:7,borderRadius:"50%",background:o.color,flexShrink:0}})
-              ),
-              React.createElement("div",{style:{fontFamily:"'Cormorant Garamond',Georgia,serif",fontSize:19,fontWeight:600,color:o.color,lineHeight:1.1}},o.value),
-              React.createElement("div",{style:{fontSize:9,color:C.text3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}},o.zone)
-            );
-          })
-        ),
-        selO && React.createElement("div",{style:{background:C.bg2,border:"1px solid "+selO.color+"55",borderRadius:C.radiusSm||8,padding:"12px 14px",marginTop:8}},
-          React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}},
-            React.createElement("span",{style:{fontSize:13,fontWeight:700,color:C.text}},selO.name),
-            React.createElement("span",{style:{fontSize:11,fontWeight:700,color:selO.color,textAlign:"right"}},selO.zone)
-          ),
-          selO.heat!=null&&React.createElement("div",{style:{position:"relative",height:6,borderRadius:4,margin:"10px 0"}},
-            React.createElement("div",{style:{position:"absolute",inset:0,borderRadius:4,background:grad}}),
-            React.createElement("div",{style:{position:"absolute",top:-3,left:"calc("+Math.max(0,Math.min(100,selO.heat))+"% - 6px)",width:12,height:12,borderRadius:"50%",background:"#fff",border:"2px solid "+C.bg,boxShadow:"0 0 0 1px "+C.border}})
-          ),
-          React.createElement("div",{style:{fontSize:12,color:C.text2,lineHeight:1.55,marginTop:4}},selO.explain)
-        )
+        renderIndicatorMosaic(items,groupSel,setBtcSelected,grad)
       );
     }),
     React.createElement("div",{style:{fontSize:10,color:C.text3,lineHeight:1.5,marginTop:6,padding:"0 2px"}},"Agrégat mécanique d'indicateurs publics (prix, on-chain, sentiment) à visée éducative. Ce n'est pas un conseil en investissement.")
   );
-  }
+
+  var indActions=d.indicatorsActions||[], indMacro=d.indicatorsMacro||[];
 
   return React.createElement("div",null,
-    React.createElement("div",{style:{fontSize:10,fontWeight:700,color:C.text3,textTransform:"uppercase",letterSpacing:0.5,marginBottom:8}},"Vue macro"),
-    React.createElement(MacroView,null),
-    React.createElement("div",{style:{fontSize:10,fontWeight:700,color:C.text3,textTransform:"uppercase",letterSpacing:0.5,margin:"20px 0 8px"}},"Cycle Bitcoin"),
-    btcBlock
+    React.createElement("div",{style:{fontSize:10,fontWeight:700,color:C.text3,textTransform:"uppercase",letterSpacing:0.5,marginBottom:8}},"Crypto"),
+    cryptoBlock,
+    indActions.length>0 && React.createElement("div",{style:{marginTop:20}},
+      React.createElement("div",{style:{fontSize:10,fontWeight:700,color:C.text3,textTransform:"uppercase",letterSpacing:0.5,marginBottom:8}},"Actions"),
+      renderIndicatorMosaic(indActions,actSelected,setActSelected,grad)
+    ),
+    indMacro.length>0 && React.createElement("div",{style:{marginTop:20}},
+      React.createElement("div",{style:{fontSize:10,fontWeight:700,color:C.text3,textTransform:"uppercase",letterSpacing:0.5,marginBottom:8}},"Santé globale du marché"),
+      renderIndicatorMosaic(indMacro,macroSelected,setMacroSelected,grad)
+    )
   );
 }
 
@@ -11447,7 +11468,7 @@ function FlowMap(){
 // ══════════════════════════════════════════════════════════════════════════════
 function MarketDash(){
   const[tab,setTab]=useState("home");
-  var tabs=[["home","home","Home"],["btc","coin","Indicateurs"],["flows","repeat","Flux"],["movers","chart","Top/Flop"],["funding","percent","Funding"]];
+  var tabs=[["home","home","Home"],["btc","coin","Indicateurs"],["flows","repeat","Flux"],["movers","chart","Top/Flop"]];
   return React.createElement("div",null,
     React.createElement("div",{style:{display:"flex",gap:6,marginBottom:14,overflowX:"auto",paddingBottom:2}},
       tabs.map(function(t){
@@ -11462,8 +11483,7 @@ function MarketDash(){
     tab==="home"&&React.createElement(PageMarketHome,null),
     tab==="btc"&&React.createElement(BtcIndicators,null),
     tab==="flows"&&React.createElement(FlowMap,null),
-    tab==="movers"&&React.createElement(MoversView,null),
-    tab==="funding"&&React.createElement(FundingView,null)
+    tab==="movers"&&React.createElement(MoversView,null)
   );
 }
 
