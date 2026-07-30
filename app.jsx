@@ -5969,21 +5969,10 @@ function PageOverview({chartData,onSnapshot,onImportCsv,eur,setEur,hidden,setHid
   const _srng= (_smx-_smn)||1;
   const _hn  = Math.max(1,_spark.length-1);
   const _heroPts = _spark.map((v,i)=> v==null?null:`${(i/_hn*120).toFixed(1)},${(30-((v-_smn)/_srng)*26).toFixed(1)}`).filter(Boolean).join(" ");
-  const _po_delta = (()=>{
-    // #150 — fenêtre courte : total depuis les snapshots (cohérent avec les cartes crypto/actions)
-    var sd=_snapDelta("t", heroTF);
-    if(sd){ var pnlEUR=sd.endEUR-sd.startEUR; var pnlV=eur?pnlEUR:Math.round(pnlEUR/(_effSrc.usdEur||0.92)); return {pnl:pnlV, pct:sd.startEUR?pnlEUR/sd.startEUR:0}; }
-    const ds=_hcut;
-    let ref=null,bd=Infinity;
-    for(const r of _DD_PO){ if(!r[0]||r[2]==null) continue; const d=Math.abs(new Date(r[0])-new Date(ds)); if(d<bd){bd=d;ref=r;} }
-    if(!ref) return {pnl:0,pct:0};
-    const startEUR=ref[2];
-    if(eur){ const pnl=_sumEUR-startEUR; return {pnl,pct:startEUR?pnl/startEUR:0}; }
-    const ueRef=ref[5]||_effSrc.usdEur;
-    const startUSD=Math.round(startEUR/ueRef);
-    const pnl=_sumUSD-startUSD; return {pnl,pct:startUSD?pnl/startUSD:0};
-  })();
-  const _dUp = (_po_delta.pct||0)>=0;
+  // #167 — l'ancien calcul _po_delta/_dUp (delta du hero) était mort : ni l'un ni l'autre n'étaient
+  // lus par le rendu (_blendPct/_blendPnl/_bUp, dérivés de _sdTot plus bas, sont les seuls affichés).
+  // Il calculait pourtant un delta DIFFÉRENT du badge réellement affiché — code mort qui aurait pu
+  // induire en erreur un futur ajout ("pourquoi deux calculs différents pour la même chose ?").
   // #61 — RÉPARTITION dérivée du modèle unique (mêmes catégories que le total)
   const _CAT_COLOR = {Crypto:C.btc, Indices:C.blue, Picking:C.teal, Or:C.gold, Cash:C.gray};
   const _po_agg = {};
@@ -6205,13 +6194,17 @@ function PageOverview({chartData,onSnapshot,onImportCsv,eur,setEur,hidden,setHid
       <div style={{fontSize:10,letterSpacing:4,color:C.text2,textTransform:"uppercase",textAlign:"center",padding:"10px 20px 6px"}}>Performance des fonds · {_HTF_LABEL[heroTF]||heroTF}</div>
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,padding:"0 20px 2px"}}>
         {(function(){
-          var polyFor=function(field){ var r=_snapDelta(field, heroTF); return (r&&r.rows&&r.rows.length>=2)?_polyOf(r.rows.map(function(s){return {v:s[field], d:s.d};}),150,26,18):""; };
+          // #167 — chiffre, delta ET mini-courbe DOIVENT venir du MÊME appel _snapDelta (comme pour
+          // les cartes Cryptos/Stocks, cf. #153) : avant, le gros chiffre lisait le dernier snapshot
+          // brut (potentiellement périmé de plusieurs jours sans clic sur "Snapshot"), le delta lisait
+          // le solde LIVE du jour (pour le matelas), et la mini-courbe un TROISIÈME appel sans le live
+          // — la carte pouvait raconter 3 valeurs différentes pour 3 éléments d'un même bloc.
           var mkCash=function(name, field, color){
-            var r=_snapDelta(field, heroTF, field==="cb"?_liveCbEUR:null); // #166 — matelas : solde live
-            var valEUR=null; try{ var last=_snapSeries[_snapSeries.length-1]; valEUR=last&&last[field]; }catch(e){}
-            if(valEUR==null && r) valEUR=r.endEUR;
+            var r=_snapDelta(field, heroTF, field==="cb"?_liveCbEUR:null); // #166 — matelas : solde live ; dip : pas de source live isolée
+            var valEUR=r?r.endEUR:0;
             var dEUR=r?(r.endEUR-r.startEUR):0;
-            return {name:name, color:color, kind:"cash", valEUR:(valEUR||0), dEUR:dEUR, up:dEUR>=0, pts:polyFor(field)};
+            var pts=(r&&r.rows&&r.rows.length>=2)?_polyOf(r.rows.map(function(s){return {v:s[field], d:s.d};}),150,26,18):"";
+            return {name:name, color:color, kind:"cash", valEUR:(valEUR||0), dEUR:dEUR, up:dEUR>=0, pts:pts};
           };
           var cards=[
             {name:_perf[0].name, color:_perf[0].color, kind:"perf", pct:_perf[0].pct, pnl:_perf[0].pnl, up:_perf[0].up, pts:_perf[0].pts},
@@ -10891,6 +10884,72 @@ function useBtcSignals(){
   return {btcSig:btcSig, btcSigL:btcSigL, btcSigE:btcSigE, reload:loadBtc};
 }
 
+// #168 — BILANS : synthèse textuelle (quelques lignes) par domaine (crypto/actions/santé
+// globale) et par actif détenu/suivi, avec une consigne d'action (acheter/conserver/vendre).
+// Réutilise EXACTEMENT les mêmes seuils/couleurs que les mosaïques d'indicateurs (aucune
+// nouvelle échelle) — le bilan n'est qu'une mise en mots de ce que la mosaïque montre déjà.
+function bilanGuidance(reco){
+  if(reco==="Acheter") return "zone basse : accumulation à envisager selon votre stratégie.";
+  if(reco==="Accumuler") return "zone plutôt favorable à l'accumulation progressive.";
+  if(reco==="Conserver") return "zone neutre : conserver les positions, pas de signal fort dans un sens ou l'autre.";
+  if(reco==="Alléger") return "signes de surchauffe : envisager d'alléger progressivement plutôt que de renforcer.";
+  if(reco==="Vendre") return "surchauffe marquée : prudence, une prise de profits partielle est à envisager.";
+  return "données insuffisantes pour conclure.";
+}
+function _bilanCap(s){ return s?(s.charAt(0).toUpperCase()+s.slice(1)):s; }
+// Bilan d'une CATÉGORIE d'indicateurs (crypto / actions / santé globale) : température +
+// les 2-3 signaux qui pèsent le plus dans l'écart à la neutralité (50), pondérés par leur poids.
+function buildCategoryBilan(items, label){
+  var withHeat=(items||[]).filter(function(o){ return o&&o.heat!=null&&isFinite(o.heat); });
+  if(!withHeat.length) return null;
+  var sw=0,swh=0; withHeat.forEach(function(o){ var w=o.weight||1; sw+=w; swh+=o.heat*w; });
+  var heat=sw>0?swh/sw:null;
+  if(heat==null) return null;
+  var reco=marketReco(heat), color=marketHeatColor(heat);
+  var top=withHeat.slice().sort(function(a,b){ return (b.weight||1)*Math.abs(b.heat-50)-((a.weight||1)*Math.abs(a.heat-50)); }).slice(0,3);
+  var drivers=top.map(function(o){ return o.name+" ("+(o.zone||o.value)+")"; }).join(", ");
+  var text="Température "+label+" : "+reco+" (surchauffe "+Math.round(heat)+"/100 sur "+withHeat.length+"/"+(items.length)+" indicateurs). Signaux dominants : "+drivers+". "+_bilanCap(bilanGuidance(reco));
+  return {heat:heat, reco:reco, color:color, n:withHeat.length, total:items.length, text:text};
+}
+// Bilan d'un ACTIF détenu/suivi, à partir du score technique générique de fetchGenericTechnical.
+function buildAssetBilan(ticker, s){
+  if(!s||s.heat==null||!isFinite(s.heat)) return null;
+  var reco=marketReco(s.heat);
+  var bits=[];
+  if(s.rsi!=null) bits.push("RSI(14) à "+s.rsi.toFixed(0)+(s.rsi>70?" (surachat)":s.rsi<30?" (survente)":" (neutre)"));
+  if(s.smaRatio!=null) bits.push("prix "+(s.smaRatio>=1?(((s.smaRatio-1)*100).toFixed(1)+"% au-dessus"):(((1-s.smaRatio)*100).toFixed(1)+"% en dessous"))+" de sa moyenne 200 jours");
+  if(s.rangePos!=null) bits.push("positionné à "+s.rangePos.toFixed(0)+"% de son range annuel");
+  if(s.mom!=null) bits.push("momentum 1 mois "+(s.mom>=0?"+":"")+s.mom.toFixed(1)+"%");
+  var text="Bilan "+ticker+" : "+reco+". "+(bits.length?_bilanCap(bits.join(", "))+". ":"")+_bilanCap(bilanGuidance(reco));
+  return {reco:reco, color:marketHeatColor(s.heat), text:text};
+}
+// Bloc visuel "hero" partagé (même habillage que la carte Recommandation BTC) pour les
+// bilans de catégorie affichés sur la page Home du Market.
+function CategoryBilanHero({label, bilan, sub}){
+  if(!bilan) return null;
+  var grad="linear-gradient(90deg,"+C.green+" 0%,"+C.green+" 28%,"+C.gold+" 50%,"+C.orange+" 72%,"+C.red+" 100%)";
+  return React.createElement("div",{style:{background:bilan.color+"18",border:"1px solid "+bilan.color+"55",borderRadius:C.radius||14,padding:"14px 16px",marginBottom:16}},
+    React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}},
+      React.createElement("div",null,
+        React.createElement("div",{style:{fontSize:9,color:C.text3,textTransform:"uppercase",letterSpacing:0.5}},label),
+        React.createElement("div",{style:{fontFamily:"'Cormorant Garamond',Georgia,serif",fontSize:26,fontWeight:600,color:bilan.color,lineHeight:1.1,marginTop:3}},bilan.reco||"—")
+      ),
+      React.createElement("div",{style:{textAlign:"right"}},
+        React.createElement("div",{style:{fontSize:9,color:C.text3,textTransform:"uppercase",letterSpacing:0.5}},"Surchauffe"),
+        React.createElement("div",{style:{fontFamily:"'Cormorant Garamond',Georgia,serif",fontSize:22,fontWeight:600,color:bilan.color,lineHeight:1.1,marginTop:3}},Math.round(bilan.heat),React.createElement("span",{style:{fontFamily:C.font,fontSize:11,fontWeight:600,color:C.text2}},"/100"))
+      )
+    ),
+    React.createElement("div",{style:{position:"relative",height:7,borderRadius:5,marginTop:12,background:grad}},
+      React.createElement("div",{style:{position:"absolute",top:-3,left:"calc("+Math.max(0,Math.min(100,bilan.heat))+"% - 6.5px)",width:13,height:13,borderRadius:"50%",background:"#fff",border:"2px solid "+C.bg,boxShadow:"0 0 0 1px "+C.border}})
+    ),
+    React.createElement("div",{style:{display:"flex",justifyContent:"space-between",fontSize:9,color:C.text3,marginTop:6}},
+      React.createElement("span",null,"Acheter"),React.createElement("span",null,"Conserver"),React.createElement("span",null,"Vendre")
+    ),
+    sub&&React.createElement("div",{style:{fontSize:10,color:C.text2,marginTop:10,fontWeight:600}},sub),
+    React.createElement("div",{style:{fontSize:11.5,color:C.text2,lineHeight:1.6,marginTop:10}},bilan.text)
+  );
+}
+
 // #143 — page "Home" du Market : carte Recommandation BTC (déplacée depuis Indicateurs) +
 // recommandations Mon portefeuille / Suivi (Tracking).
 function PageMarketHome(){
@@ -10898,7 +10957,7 @@ function PageMarketHome(){
   var btcSig=bs.btcSig, btcSigL=bs.btcSigL, btcSigE=bs.btcSigE, loadBtc=bs.reload;
   function num(v,d){ if(v==null||isNaN(v))return "—"; return Number(v).toLocaleString("fr-FR",{maximumFractionDigits:d!=null?d:2}); }
 
-  var heroBlock=null;
+  var heroBlock=null, actionsBilan=null, macroBilan=null;
   if(btcSigL && !btcSig) heroBlock=React.createElement("div",{style:{textAlign:"center",color:C.text3,fontSize:12,padding:"30px 0"}},"Chargement des indicateurs BTC…");
   else if(btcSigE && !btcSig) heroBlock=React.createElement("div",{style:{background:C.red+"11",border:"1px solid "+C.red+"44",borderRadius:10,padding:12,color:C.red,fontSize:12}},
     "Erreur : "+btcSigE,
@@ -10908,6 +10967,7 @@ function PageMarketHome(){
     var d=btcSig;
     var grad="linear-gradient(90deg,"+C.green+" 0%,"+C.green+" 28%,"+C.gold+" 50%,"+C.orange+" 72%,"+C.red+" 100%)";
     var maj=d.ts?new Date(d.ts).toLocaleString("fr-FR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}):"—";
+    var bilanCrypto=buildCategoryBilan(d.indicators, "Crypto");
     heroBlock = React.createElement("div",{style:{background:d.recoColor+"18",border:"1px solid "+d.recoColor+"55",borderRadius:C.radius||14,padding:"14px 16px",marginBottom:16}},
       React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}},
         React.createElement("div",null,
@@ -10925,12 +10985,17 @@ function PageMarketHome(){
       React.createElement("div",{style:{display:"flex",justifyContent:"space-between",fontSize:9,color:C.text3,marginTop:6}},
         React.createElement("span",null,"Acheter"),React.createElement("span",null,"Conserver"),React.createElement("span",null,"Vendre")
       ),
-      React.createElement("div",{style:{fontSize:10,color:C.text2,marginTop:10,fontWeight:600}},"BTC $"+num(d.price,0)+" · "+d.nIndicators+"/"+(d.indicators||[]).length+" indicateurs · maj "+maj)
+      React.createElement("div",{style:{fontSize:10,color:C.text2,marginTop:10,fontWeight:600}},"BTC $"+num(d.price,0)+" · "+d.nIndicators+"/"+(d.indicators||[]).length+" indicateurs · maj "+maj),
+      bilanCrypto&&React.createElement("div",{style:{fontSize:11.5,color:C.text2,lineHeight:1.6,marginTop:10,paddingTop:10,borderTop:"1px solid "+d.recoColor+"33"}},bilanCrypto.text)
     );
+    actionsBilan=buildCategoryBilan(d.indicatorsActions, "Actions");
+    macroBilan=buildCategoryBilan(d.indicatorsMacro, "Santé globale du marché");
   }
 
   return React.createElement("div",null,
     heroBlock,
+    actionsBilan&&React.createElement(CategoryBilanHero,{label:"Actions",bilan:actionsBilan}),
+    macroBilan&&React.createElement(CategoryBilanHero,{label:"Santé globale du marché",bilan:macroBilan}),
     React.createElement(TickerRecoBlock,{key:"reco-portfolio",source:"portfolio"}),
     React.createElement(TickerRecoBlock,{key:"reco-tracking",source:"tracking"})
   );
@@ -10938,25 +11003,28 @@ function PageMarketHome(){
 
 // #145 — mosaïque + panneau de détail génériques, réutilisés pour les 3 catégories
 // d'indicateurs (Crypto par sous-groupe, Actions et Santé globale du marché à plat).
+// #146 — le panneau de détail s'affiche désormais APRÈS LA RANGÉE contenant la tuile
+// cliquée (et non plus une seule fois en bas de toute la mosaïque) : sur les grandes
+// catégories à plat (Actions/Santé globale, 20 indicateurs), cliquer une tuile en haut
+// ouvrait un panneau tout en bas, invisible sans scroller loin — d'où l'impression que
+// "rien ne se passe". Chaque rangée de 2 gère désormais son propre panneau.
 function renderIndicatorMosaic(items,selectedKey,onSelect,grad){
   if(!items||!items.length) return null;
-  var selO=null; items.forEach(function(o){ if(o.key===selectedKey) selO=o; });
-  return React.createElement("div",null,
-    React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}},
-      items.map(function(o){
-        var selected=selectedKey===o.key;
-        return React.createElement("button",{key:o.key,onClick:function(){onSelect(selected?null:o.key);},
-          style:{textAlign:"left",cursor:"pointer",fontFamily:C.font,background:selected?o.color+"14":C.bg1,border:"1px solid "+(selected?o.color+"77":C.border),borderRadius:C.radiusSm||8,padding:"9px 10px",display:"flex",flexDirection:"column",gap:4,minWidth:0}},
-          React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",gap:6}},
-            React.createElement("span",{style:{fontSize:10,fontWeight:700,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}},o.name),
-            React.createElement("span",{style:{width:7,height:7,borderRadius:"50%",background:o.color,flexShrink:0}})
-          ),
-          React.createElement("div",{style:{fontFamily:"'Cormorant Garamond',Georgia,serif",fontSize:19,fontWeight:600,color:o.color,lineHeight:1.1}},o.value),
-          React.createElement("div",{style:{fontSize:9,color:C.text3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}},o.zone)
-        );
-      })
-    ),
-    selO && React.createElement("div",{style:{background:C.bg2,border:"1px solid "+selO.color+"55",borderRadius:C.radiusSm||8,padding:"12px 14px",marginTop:8}},
+  var rows=[]; for(var i=0;i<items.length;i+=2) rows.push(items.slice(i,i+2));
+  var tile=function(o){
+    var selected=selectedKey===o.key;
+    return React.createElement("button",{key:o.key,onClick:function(){onSelect(selected?null:o.key);},
+      style:{textAlign:"left",cursor:"pointer",fontFamily:C.font,background:selected?o.color+"14":C.bg1,border:"1px solid "+(selected?o.color+"77":C.border),borderRadius:C.radiusSm||8,padding:"9px 10px",display:"flex",flexDirection:"column",gap:4,minWidth:0}},
+      React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",gap:6}},
+        React.createElement("span",{style:{fontSize:10,fontWeight:700,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}},o.name),
+        React.createElement("span",{style:{width:7,height:7,borderRadius:"50%",background:o.color,flexShrink:0}})
+      ),
+      React.createElement("div",{style:{fontFamily:"'Cormorant Garamond',Georgia,serif",fontSize:19,fontWeight:600,color:o.color,lineHeight:1.1}},o.value),
+      React.createElement("div",{style:{fontSize:9,color:C.text3,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}},o.zone)
+    );
+  };
+  var detail=function(selO){
+    return React.createElement("div",{style:{background:C.bg2,border:"1px solid "+selO.color+"55",borderRadius:C.radiusSm||8,padding:"12px 14px",marginTop:8}},
       React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}},
         React.createElement("span",{style:{fontSize:13,fontWeight:700,color:C.text}},selO.name),
         React.createElement("span",{style:{fontSize:11,fontWeight:700,color:selO.color,textAlign:"right"}},selO.zone)
@@ -10965,8 +11033,21 @@ function renderIndicatorMosaic(items,selectedKey,onSelect,grad){
         React.createElement("div",{style:{position:"absolute",inset:0,borderRadius:4,background:grad}}),
         React.createElement("div",{style:{position:"absolute",top:-3,left:"calc("+Math.max(0,Math.min(100,selO.heat))+"% - 6px)",width:12,height:12,borderRadius:"50%",background:"#fff",border:"2px solid "+C.bg,boxShadow:"0 0 0 1px "+C.border}})
       ),
-      React.createElement("div",{style:{fontSize:12,color:C.text2,lineHeight:1.55,marginTop:4}},selO.explain)
-    )
+      selO.heat!=null&&React.createElement("div",{style:{display:"flex",justifyContent:"space-between",fontSize:8,color:C.text3,marginTop:-6,marginBottom:8}},
+        React.createElement("span",null,"Bas"),React.createElement("span",null,"Neutre"),React.createElement("span",null,"Surchauffe")
+      ),
+      React.createElement("div",{style:{fontSize:12,color:C.text2,lineHeight:1.55}},selO.explain),
+      React.createElement("div",{style:{fontSize:12,color:selO.color,lineHeight:1.55,marginTop:8,fontWeight:600}},"Lecture actuelle : "+(selO.zone||"—")+" (valeur "+selO.value+")")
+    );
+  };
+  return React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:8}},
+    rows.map(function(row,ri){
+      var selO=null; row.forEach(function(o){ if(o.key===selectedKey) selO=o; });
+      return React.createElement("div",{key:ri},
+        React.createElement("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}, row.map(tile)),
+        selO && detail(selO)
+      );
+    })
   );
 }
 
@@ -11145,7 +11226,8 @@ function TickerRecoBlock({source}){
         " · Vs SMA200 : ", React.createElement("b",{style:{color:C.text}},selS.smaRatio!=null?((selS.smaRatio>=1?"+":"")+((selS.smaRatio-1)*100).toFixed(1)+"%"):"—"),
         " · Rang 52 sem. : ", React.createElement("b",{style:{color:C.text}},selS.rangePos!=null?selS.rangePos.toFixed(0)+"%":"—"),
         " · Momentum 1M : ", React.createElement("b",{style:{color:C.text}},selS.mom!=null?((selS.mom>=0?"+":"")+selS.mom.toFixed(1)+"%"):"—")
-      )
+      ),
+      (function(){ var ab=buildAssetBilan(selected, selS); return ab&&React.createElement("div",{style:{fontSize:11.5,color:C.text2,lineHeight:1.6,marginTop:10,paddingTop:10,borderTop:"1px solid "+marketHeatColor(selS.heat)+"33"}},ab.text); })()
     ),
     React.createElement("div",{style:{fontSize:9,color:C.text3,lineHeight:1.5,marginTop:8}},"Score technique générique (RSI, écart à la SMA200, rang sur 52 semaines, momentum 1 mois) — Yahoo Finance. Ne constitue pas un conseil en investissement.")
   );
