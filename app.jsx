@@ -1678,8 +1678,8 @@ function cgiHomeSeries(EFF, opts){
   const allD = Object.keys(Object.assign({}, cMap, sMap)).sort();
   const totalS = allD.map(d=>({d, v:(cMap[d]||0)+(sMap[d]||0)}));
 
-  const DAYS={"D":1,"3D":3,"1S":7,"1M":30,"3M":90,"1A":365,"ALL":999999};
-  const LABELS={"D":"1 jour","3D":"3 jours","1S":"7 jours","1M":"30 jours","3M":"3 mois","YTD":"depuis janv.","1A":"1 an","ALL":"tout"};
+  const DAYS={"D":1,"3D":3,"1S":7,"1M":30,"3M":90,"1A":365,"2A":730,"5A":1825,"ALL":999999};
+  const LABELS={"D":"1 jour","3D":"3 jours","1S":"7 jours","1M":"30 jours","3M":"3 mois","YTD":"depuis janv.","1A":"1 an","2A":"2 ans","5A":"5 ans","ALL":"tout"};
   const NCo = (typeof NC_OFFSET_MS!=="undefined"?NC_OFFSET_MS:0);
   function cutOf(tf){
     if(tf==="YTD"){ const d=new Date(Date.now()+NCo); return new Date(d.getUTCFullYear(),0,1).toISOString().slice(0,10); }
@@ -1690,7 +1690,7 @@ function cgiHomeSeries(EFF, opts){
   const OVR = (()=>{ const o=lsv9Get("cgi_home_ovr"); return (o&&typeof o==="object")?o:{}; })();
   const ovrKey = (scope,tf,field)=> scope+":"+tf+":"+field;
   const ovrGet = (scope,tf,field)=>{ const v=OVR[ovrKey(scope,tf,field)]; return (v==null||isNaN(v))?null:Number(v); };
-  const ORDER=["D","3D","1S","1M","3M","YTD","1A","ALL"];
+  const ORDER=["D","3D","1S","1M","3M","YTD","1A","2A","5A","ALL"];
   function apportsOf(MAP, fromD, toD){
     let a=0; const yrs=Object.keys(MAP||{}).filter(y=>/^\d{4}$/.test(y)).sort();
     yrs.forEach(y=>{ const d=MAP[y]; if(!d||!d.inv) return;
@@ -5899,8 +5899,8 @@ function PageOverview({chartData,onSnapshot,onImportCsv,eur,setEur,hidden,setHid
   // ─── LUXE overview : hero · répartition · performance (maquette v2) ───
   const _po_today = todayNC();
   const _po_rows = _DD_PO.filter(r=>r[0]<=_po_today && r[2]!=null);
-  const _HTF_DAYS = {"D":1,"3D":3,"1S":7,"1M":30,"3M":90,"1A":365,"2A":730,"ALL":999999};
-  const _HTF_LABEL = {"D":"1 jour","3D":"3 jours","1S":"7 jours","1M":"30 jours","3M":"3 mois","YTD":"depuis janv.","1A":"1 an","2A":"2 ans","ALL":"tout l'historique"};
+  const _HTF_DAYS = {"D":1,"3D":3,"1S":7,"1M":30,"3M":90,"1A":365,"2A":730,"5A":1825,"ALL":999999};
+  const _HTF_LABEL = {"D":"1 jour","3D":"3 jours","1S":"7 jours","1M":"30 jours","3M":"3 mois","YTD":"depuis janv.","1A":"1 an","2A":"2 ans","5A":"5 ans","ALL":"tout l'historique"};
   const _hcut = (()=>{
     if(heroTF==="YTD") return new Date((new Date(Date.now()+NC_OFFSET_MS)).getUTCFullYear(),0,1).toISOString().slice(0,10);
     const d=_HTF_DAYS[heroTF]||30;
@@ -5996,7 +5996,7 @@ function PageOverview({chartData,onSnapshot,onImportCsv,eur,setEur,hidden,setHid
   const _HS = cgiHomeSeries(EFF, {CM:(typeof liveCM!=="undefined"&&liveCM)?liveCM:(typeof CRYPTO_MONTHLY!=="undefined"?CRYPTO_MONTHLY:{}), SM:(typeof liveSM!=="undefined"&&liveSM)?liveSM:(typeof STOCKS_MONTHLY!=="undefined"?STOCKS_MONTHLY:{})});
   // #158 — liste canonique fixe (le « 1 jour » avait disparu : _HS.available, basé sur l'ancienne série
   // mensuelle, excluait « D » ; les snapshots couvrent désormais toutes les fenêtres courtes).
-  const _TF_LIST = ["D","3D","1S","1M","3M","YTD","1A","ALL"];
+  const _TF_LIST = ["D","3D","1S","1M","3M","YTD","1A","2A","5A","ALL"];
   React.useEffect(()=>{ if(_TF_LIST.indexOf(heroTF)<0) setHeroTF(_TF_LIST[_TF_LIST.length-1]); }, [_TF_LIST.join(","), heroTF]);
   const _heroRow = _HS.rows.find(r=>r.tf===heroTF) || _HS.rows[_HS.rows.length-1];
   // #95 — L'abscisse doit être proportionnelle au TEMPS, pas au rang du point. La série mélange des
@@ -6017,7 +6017,6 @@ function PageOverview({chartData,onSnapshot,onImportCsv,eur,setEur,hidden,setHid
       return `${x.toFixed(1)},${y.toFixed(1)}`;
     }).join(" ");
   };
-  const _blendHeroPts = _polyOf(_HS.adjWin("total", heroTF), 120, 30, 26);
   // #87 — agrégat des positions (= base du P&L Portfolio), calculé avant les métriques hero.
   const _posAgg = (()=>{ try{
     const _e=EFF||CURRENT; const _it=[].concat((_e.crypto&&_e.crypto.items)||[], (_e.stocks&&_e.stocks.items)||[]);
@@ -10971,7 +10970,7 @@ function PageMarketHome(){
     heroBlock = React.createElement("div",{style:{background:d.recoColor+"18",border:"1px solid "+d.recoColor+"55",borderRadius:C.radius||14,padding:"14px 16px",marginBottom:16}},
       React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}},
         React.createElement("div",null,
-          React.createElement("div",{style:{fontSize:9,color:C.text3,textTransform:"uppercase",letterSpacing:0.5}},"Recommandation"),
+          React.createElement("div",{style:{fontSize:9,color:C.text3,textTransform:"uppercase",letterSpacing:0.5}},"Crypto"),
           React.createElement("div",{style:{fontFamily:"'Cormorant Garamond',Georgia,serif",fontSize:30,fontWeight:600,color:d.recoColor,lineHeight:1.1,marginTop:3}},d.reco||"—")
         ),
         React.createElement("div",{style:{textAlign:"right"}},
@@ -11493,8 +11492,16 @@ function CongressView(){
 // ══════════════════════════════════════════════════════════════════════════════
 // CGI — FlowMap : rotation des capitaux par momentum (backend /market/flows)
 // ══════════════════════════════════════════════════════════════════════════════
+// #169 — étoffe la page Flux : 20 classes d'actifs (au lieu de 8 : ajoute les 8
+// secteurs S&P 500, zone euro/Japon, émergents, crédit high-yield, argent), 6
+// fenêtres temporelles (au lieu de 3 : ajoute 6 mois/1 an/2 ans), et un panneau
+// de détail par actif (comparatif des 6 fenêtres) au clic — même pattern que
+// les mosaïques d'indicateurs.
+var FLOW_HZ_LIST=[["w1","1 sem"],["m1","1 mois"],["m3","3 mois"],["m6","6 mois"],["y1","1 an"],["y2","2 ans"]];
+var FLOW_HZ_LABEL={w1:"1 semaine",m1:"1 mois",m3:"3 mois",m6:"6 mois",y1:"1 an",y2:"2 ans"};
 function FlowMap(){
   const[fl,setFl]=useState(null);const[flL,setFlL]=useState(false);const[flE,setFlE]=useState(null);const[hz,setHz]=useState("m1");
+  const[selSym,setSelSym]=useState(null);
   function load(nc){ setFlL(true);setFlE(null);
     fetch(CF_WORKER_URL+"/market/flows"+(nc?"?no_cache=1":""),{headers:{"X-Auth-Key":CF_AUTH_KEY},signal:AbortSignal.timeout(30000)})
       .then(function(r){return r.json();}).then(function(d){ if(d&&d.error)setFlE(String(d.error)); else setFl(d); setFlL(false); })
@@ -11508,40 +11515,57 @@ function FlowMap(){
   var pCol=function(p){ return p==null?C.text3:(p>=0?C.green:C.red); };
   var pFmt=function(p){ return p==null?"—":(p>=0?"+":"")+p.toFixed(1)+"%"; };
   var maxAbs=Math.max.apply(null,items.map(function(c){return Math.abs(c.perf[hz]||0);}).concat([1]));
-  var inflow=items.slice(0,2).map(function(c){return c.name;});
-  var outflow=items.slice(-2).map(function(c){return c.name;}).reverse();
-  var hzLabel={w1:"1 semaine",m1:"1 mois",m3:"3 mois"}[hz];
+  var inflow=items.slice(0,3).map(function(c){return c.name;});
+  var outflow=items.slice(-3).map(function(c){return c.name;}).reverse();
+  var hzLabel=FLOW_HZ_LABEL[hz]||hz;
+  var selC=selSym?items.find(function(c){return c.symbol===selSym;})||(fl.classes||[]).find(function(c){return c.symbol===selSym;}):null;
   return React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:14}},
     React.createElement("div",{style:{background:C.bg1,border:"1px solid "+C.border,borderRadius:12,padding:"12px 14px"}},
       React.createElement("div",{style:{fontSize:9,color:C.text3,textTransform:"uppercase",letterSpacing:0.5,marginBottom:6}},"Où va l'argent ("+hzLabel+")"),
       React.createElement("div",{style:{fontSize:13,color:C.text,lineHeight:1.6}},
-        "Entrées vers ",React.createElement("span",{style:{color:C.green,fontWeight:700}},inflow.join(" & ")),
-        " — sorties de ",React.createElement("span",{style:{color:C.red,fontWeight:700}},outflow.join(" & ")),"."
+        "Entrées vers ",React.createElement("span",{style:{color:C.green,fontWeight:700}},inflow.join(", ")),
+        " — sorties de ",React.createElement("span",{style:{color:C.red,fontWeight:700}},outflow.join(", ")),"."
       )
     ),
-    React.createElement("div",{style:{display:"flex",gap:8}},
-      [["w1","1 sem"],["m1","1 mois"],["m3","3 mois"]].map(function(h){
+    React.createElement("div",{style:{display:"flex",gap:6,overflowX:"auto",paddingBottom:2}},
+      FLOW_HZ_LIST.map(function(h){
         var active=hz===h[0];
-        return React.createElement("button",{key:h[0],onClick:function(){setHz(h[0]);},style:lxBtn({active:active,style:{flex:1,padding:"7px 0"}})},h[1]);
+        return React.createElement("button",{key:h[0],onClick:function(){setHz(h[0]);},style:lxBtn({active:active,style:{flex:"1 0 auto",padding:"7px 10px",whiteSpace:"nowrap"}})},h[1]);
       })
     ),
     React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:6}},
       items.map(function(c){
         var v=c.perf[hz]; var w=Math.min(48,Math.abs(v||0)/maxAbs*48);
         var mono=(c.symbol||"").replace(/[^A-Za-z]/g,"").slice(0,3).toUpperCase();
-        return React.createElement("div",{key:c.symbol,style:{display:"flex",alignItems:"center",gap:8}},
-          React.createElement("span",{style:{fontSize:8,fontWeight:700,width:26,height:26,borderRadius:C.radiusSm||8,textAlign:"center",lineHeight:"26px",flexShrink:0,background:C.gold+"18",color:C.gold}},mono),
-          React.createElement("span",{style:{fontSize:12,color:C.text,width:96,flexShrink:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}},c.name),
-          React.createElement("div",{style:{flex:1,height:16,position:"relative",background:C.bg1,borderRadius:4,overflow:"hidden"}},
-            React.createElement("div",{style:{position:"absolute",top:0,bottom:0,left:"50%",width:(v>=0?w:0)+"%",background:C.green+"aa"}}),
-            React.createElement("div",{style:{position:"absolute",top:0,bottom:0,right:"50%",width:(v<0?w:0)+"%",background:C.red+"aa"}}),
-            React.createElement("div",{style:{position:"absolute",top:0,bottom:0,left:"50%",width:1,background:C.border}})
+        var isSel=selSym===c.symbol;
+        return React.createElement("div",{key:c.symbol},
+          React.createElement("button",{onClick:function(){setSelSym(function(p){return p===c.symbol?null:c.symbol;});},
+            style:{display:"flex",alignItems:"center",gap:8,width:"100%",background:isSel?C.gold+"0f":"transparent",border:"none",borderRadius:8,padding:"3px 4px",cursor:"pointer",fontFamily:C.font}},
+            React.createElement("span",{style:{fontSize:8,fontWeight:700,width:26,height:26,borderRadius:C.radiusSm||8,textAlign:"center",lineHeight:"26px",flexShrink:0,background:C.gold+"18",color:C.gold}},mono),
+            React.createElement("span",{style:{fontSize:12,color:C.text,width:96,flexShrink:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",textAlign:"left"}},c.name),
+            React.createElement("div",{style:{flex:1,height:16,position:"relative",background:C.bg1,borderRadius:4,overflow:"hidden"}},
+              React.createElement("div",{style:{position:"absolute",top:0,bottom:0,left:"50%",width:(v>=0?w:0)+"%",background:C.green+"aa"}}),
+              React.createElement("div",{style:{position:"absolute",top:0,bottom:0,right:"50%",width:(v<0?w:0)+"%",background:C.red+"aa"}}),
+              React.createElement("div",{style:{position:"absolute",top:0,bottom:0,left:"50%",width:1,background:C.border}})
+            ),
+            React.createElement("span",{style:{fontSize:12,fontWeight:700,color:pCol(v),width:56,textAlign:"right",flexShrink:0}},pFmt(v))
           ),
-          React.createElement("span",{style:{fontSize:12,fontWeight:700,color:pCol(v),width:56,textAlign:"right",flexShrink:0}},pFmt(v))
+          isSel && selC && React.createElement("div",{style:{background:C.bg2,border:"1px solid "+C.border2,borderRadius:C.radiusSm||8,padding:"10px 12px",margin:"6px 0 2px"}},
+            React.createElement("div",{style:{fontSize:12,fontWeight:700,color:C.text,marginBottom:6}},(selC.emoji?selC.emoji+" ":"")+selC.name+" ("+selC.symbol+")"),
+            React.createElement("div",{style:{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:6}},
+              FLOW_HZ_LIST.map(function(h){
+                var pv=selC.perf&&selC.perf[h[0]];
+                return React.createElement("div",{key:h[0],style:{textAlign:"center"}},
+                  React.createElement("div",{style:{fontSize:8,color:C.text3,textTransform:"uppercase",letterSpacing:0.3}},h[1]),
+                  React.createElement("div",{style:{fontSize:13,fontWeight:700,color:pCol(pv),marginTop:2}},pFmt(pv))
+                );
+              })
+            )
+          )
         );
       })
     ),
-    React.createElement("div",{style:{fontSize:9,color:C.text3,lineHeight:1.5}},"Momentum relatif (perf. des proxies de classes d'actifs), pas des flux de capitaux réels. Indicatif."),
+    React.createElement("div",{style:{fontSize:9,color:C.text3,lineHeight:1.5}},"Momentum relatif (perf. des proxies de classes d'actifs — actions, secteurs, obligations, crédit, devises, matières premières, bitcoin), pas des flux de capitaux réels. Indicatif."),
     React.createElement("div",{style:{fontSize:8,color:C.text3,textAlign:"right"}},"Yahoo · maj "+(fl.ts?new Date(fl.ts).toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"}):"—"))
   );
 }
