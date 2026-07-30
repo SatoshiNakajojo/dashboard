@@ -10805,12 +10805,13 @@ function LWChart(props){
 // JCGI — BtcIndicators : dashboard d'indicateurs BTC
 //   backend /btc-signals (prix, Puell, Hash Ribbons, F&G) + on-chain client (bitcoin-data.com)
 // ══════════════════════════════════════════════════════════════════════════════
-function BtcIndicators(){
+// #143 — logique de fetch /btc-signals partagée entre PageMarketHome (carte Recommandation) et
+// BtcIndicators (détail des indicateurs) : deux composants montés indépendamment, chacun avec son
+// propre état, mais le code de récupération/patch n'est écrit qu'une fois.
+function useBtcSignals(){
   const[btcSig,setBtcSig]=useState(null);
   const[btcSigL,setBtcSigL]=useState(false);
   const[btcSigE,setBtcSigE]=useState(null);
-  const[btcSelected,setBtcSelected]=useState(null); // #142 — un seul indicateur "déplié" à la fois (mosaïque + panneau de détail)
-  function num(v,d){ if(v==null||isNaN(v))return "—"; return Number(v).toLocaleString("fr-FR",{maximumFractionDigits:d!=null?d:2}); }
   function btcHeatColor(h){ return h==null?C.gray:(h<40?C.green:(h<60?C.gold:(h<80?C.orange:C.red))); }
 
   function fetchOnchainBtc(force){
@@ -10885,24 +10886,27 @@ function BtcIndicators(){
   }
   useEffect(function(){ loadBtc(false); },[]);
 
-  // #141 — le bloc BTC et les recommandations Portefeuille/Tracking sont INDÉPENDANTS : un échec du
-  // fetch /btc-signals ne doit plus faire disparaître les deux nouvelles sections (avant : un seul
-  // "return" précoce empêchait TOUT rendu, y compris les recos qui n'ont rien à voir avec le BTC).
-  var btcBlock=null;
-  if(btcSigL && !btcSig) btcBlock=React.createElement("div",{style:{textAlign:"center",color:C.text3,fontSize:12,padding:"30px 0"}},"Chargement des indicateurs BTC…");
-  else if(btcSigE && !btcSig) btcBlock=React.createElement("div",{style:{background:C.red+"11",border:"1px solid "+C.red+"44",borderRadius:10,padding:12,color:C.red,fontSize:12}},
+  return {btcSig:btcSig, btcSigL:btcSigL, btcSigE:btcSigE, reload:loadBtc};
+}
+
+// #143 — page "Home" du Market : carte Recommandation BTC (déplacée depuis Indicateurs) +
+// recommandations Mon portefeuille / Suivi (Tracking).
+function PageMarketHome(){
+  var bs=useBtcSignals();
+  var btcSig=bs.btcSig, btcSigL=bs.btcSigL, btcSigE=bs.btcSigE, loadBtc=bs.reload;
+  function num(v,d){ if(v==null||isNaN(v))return "—"; return Number(v).toLocaleString("fr-FR",{maximumFractionDigits:d!=null?d:2}); }
+
+  var heroBlock=null;
+  if(btcSigL && !btcSig) heroBlock=React.createElement("div",{style:{textAlign:"center",color:C.text3,fontSize:12,padding:"30px 0"}},"Chargement des indicateurs BTC…");
+  else if(btcSigE && !btcSig) heroBlock=React.createElement("div",{style:{background:C.red+"11",border:"1px solid "+C.red+"44",borderRadius:10,padding:12,color:C.red,fontSize:12}},
     "Erreur : "+btcSigE,
     React.createElement("button",{onClick:function(){loadBtc(true);},style:{marginLeft:8,background:"none",border:"1px solid "+C.red+"66",borderRadius:6,color:C.red,fontSize:11,padding:"2px 8px",cursor:"pointer"}},"Réessayer")
   );
   else if(btcSig){
-  var d=btcSig;
-  var grad="linear-gradient(90deg,"+C.green+" 0%,"+C.green+" 28%,"+C.gold+" 50%,"+C.orange+" 72%,"+C.red+" 100%)";
-  var byKey={}; (d.indicators||[]).forEach(function(o){ byKey[o.key]=o; });
-  var groups=[["Cycle & valorisation",["ma2y","mayer","picycle","picyclebot","ma200w","rainbow","ahr999"]],["Tendance & momentum",["bmsb","ema918","rsiw"]],["On-chain",["puell","hashribbons","mvrvz","nupl","sthmvrv","rhodl","reserverisk","asopr","vdd"]],["Sentiment",["feargreed"]]];
-  var maj=d.ts?new Date(d.ts).toLocaleString("fr-FR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}):"—";
-
-  btcBlock = React.createElement("div",null,
-    React.createElement("div",{style:{background:d.recoColor+"18",border:"1px solid "+d.recoColor+"55",borderRadius:C.radius||14,padding:"14px 16px",marginBottom:16}},
+    var d=btcSig;
+    var grad="linear-gradient(90deg,"+C.green+" 0%,"+C.green+" 28%,"+C.gold+" 50%,"+C.orange+" 72%,"+C.red+" 100%)";
+    var maj=d.ts?new Date(d.ts).toLocaleString("fr-FR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}):"—";
+    heroBlock = React.createElement("div",{style:{background:d.recoColor+"18",border:"1px solid "+d.recoColor+"55",borderRadius:C.radius||14,padding:"14px 16px",marginBottom:16}},
       React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}},
         React.createElement("div",null,
           React.createElement("div",{style:{fontSize:9,color:C.text3,textTransform:"uppercase",letterSpacing:0.5}},"Recommandation"),
@@ -10920,7 +10924,37 @@ function BtcIndicators(){
         React.createElement("span",null,"Acheter"),React.createElement("span",null,"Conserver"),React.createElement("span",null,"Vendre")
       ),
       React.createElement("div",{style:{fontSize:10,color:C.text2,marginTop:10,fontWeight:600}},"BTC $"+num(d.price,0)+" · "+d.nIndicators+"/"+(d.indicators||[]).length+" indicateurs · maj "+maj)
-    ),
+    );
+  }
+
+  return React.createElement("div",null,
+    heroBlock,
+    React.createElement(TickerRecoBlock,{key:"reco-portfolio",source:"portfolio"}),
+    React.createElement(TickerRecoBlock,{key:"reco-tracking",source:"tracking"})
+  );
+}
+
+function BtcIndicators(){
+  var bs=useBtcSignals();
+  var btcSig=bs.btcSig, btcSigL=bs.btcSigL, btcSigE=bs.btcSigE, loadBtc=bs.reload;
+  const[btcSelected,setBtcSelected]=useState(null); // #142 — un seul indicateur "déplié" à la fois (mosaïque + panneau de détail)
+
+  // #141 — le bloc BTC et les recommandations Portefeuille/Tracking sont INDÉPENDANTS : un échec du
+  // fetch /btc-signals ne doit plus faire disparaître les deux nouvelles sections (avant : un seul
+  // "return" précoce empêchait TOUT rendu, y compris les recos qui n'ont rien à voir avec le BTC).
+  var btcBlock=null;
+  if(btcSigL && !btcSig) btcBlock=React.createElement("div",{style:{textAlign:"center",color:C.text3,fontSize:12,padding:"30px 0"}},"Chargement des indicateurs BTC…");
+  else if(btcSigE && !btcSig) btcBlock=React.createElement("div",{style:{background:C.red+"11",border:"1px solid "+C.red+"44",borderRadius:10,padding:12,color:C.red,fontSize:12}},
+    "Erreur : "+btcSigE,
+    React.createElement("button",{onClick:function(){loadBtc(true);},style:{marginLeft:8,background:"none",border:"1px solid "+C.red+"66",borderRadius:6,color:C.red,fontSize:11,padding:"2px 8px",cursor:"pointer"}},"Réessayer")
+  );
+  else if(btcSig){
+  var d=btcSig;
+  var grad="linear-gradient(90deg,"+C.green+" 0%,"+C.green+" 28%,"+C.gold+" 50%,"+C.orange+" 72%,"+C.red+" 100%)";
+  var byKey={}; (d.indicators||[]).forEach(function(o){ byKey[o.key]=o; });
+  var groups=[["Cycle & valorisation",["ma2y","mayer","picycle","picyclebot","ma200w","rainbow","ahr999"]],["Tendance & momentum",["bmsb","ema918","rsiw"]],["On-chain",["puell","hashribbons","mvrvz","nupl","sthmvrv","rhodl","reserverisk","asopr","vdd"]],["Sentiment",["feargreed"]]];
+
+  btcBlock = React.createElement("div",null,
     groups.map(function(g,gi){
       var keysWithData=g[1].filter(function(k){return byKey[k];});
       if(!keysWithData.length) return null;
@@ -10959,9 +10993,10 @@ function BtcIndicators(){
   }
 
   return React.createElement("div",null,
-    btcBlock,
-    React.createElement(TickerRecoBlock,{key:"reco-portfolio",source:"portfolio"}),
-    React.createElement(TickerRecoBlock,{key:"reco-tracking",source:"tracking"})
+    React.createElement("div",{style:{fontSize:10,fontWeight:700,color:C.text3,textTransform:"uppercase",letterSpacing:0.5,marginBottom:8}},"Vue macro"),
+    React.createElement(MacroView,null),
+    React.createElement("div",{style:{fontSize:10,fontWeight:700,color:C.text3,textTransform:"uppercase",letterSpacing:0.5,margin:"20px 0 8px"}},"Cycle Bitcoin"),
+    btcBlock
   );
 }
 
@@ -11411,8 +11446,8 @@ function FlowMap(){
 // CGI — MarketDash : conteneur à onglets du dashboard marché
 // ══════════════════════════════════════════════════════════════════════════════
 function MarketDash(){
-  const[tab,setTab]=useState("macro");
-  var tabs=[["macro","grid","Macro"],["btc","coin","Indicateurs"],["movers","chart","Top/Flop"],["funding","percent","Funding"],["flows","repeat","Flux"]];
+  const[tab,setTab]=useState("home");
+  var tabs=[["home","home","Home"],["btc","coin","Indicateurs"],["flows","repeat","Flux"],["movers","chart","Top/Flop"],["funding","percent","Funding"]];
   return React.createElement("div",null,
     React.createElement("div",{style:{display:"flex",gap:6,marginBottom:14,overflowX:"auto",paddingBottom:2}},
       tabs.map(function(t){
@@ -11424,11 +11459,11 @@ function MarketDash(){
         );
       })
     ),
-    tab==="macro"&&React.createElement(MacroView,null),
+    tab==="home"&&React.createElement(PageMarketHome,null),
     tab==="btc"&&React.createElement(BtcIndicators,null),
+    tab==="flows"&&React.createElement(FlowMap,null),
     tab==="movers"&&React.createElement(MoversView,null),
-    tab==="funding"&&React.createElement(FundingView,null),
-    tab==="flows"&&React.createElement(FlowMap,null)
+    tab==="funding"&&React.createElement(FundingView,null)
   );
 }
 
