@@ -10966,11 +10966,11 @@ function PageMarketHome(){
     var d=btcSig;
     var grad="linear-gradient(90deg,"+C.green+" 0%,"+C.green+" 28%,"+C.gold+" 50%,"+C.orange+" 72%,"+C.red+" 100%)";
     var maj=d.ts?new Date(d.ts).toLocaleString("fr-FR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}):"—";
-    var bilanCrypto=buildCategoryBilan(d.indicators, "Crypto");
+    var bilanCrypto=buildCategoryBilan(d.indicators, "Cryptos");
     heroBlock = React.createElement("div",{style:{background:d.recoColor+"18",border:"1px solid "+d.recoColor+"55",borderRadius:C.radius||14,padding:"14px 16px",marginBottom:16}},
       React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}},
         React.createElement("div",null,
-          React.createElement("div",{style:{fontSize:9,color:C.text3,textTransform:"uppercase",letterSpacing:0.5}},"Crypto"),
+          React.createElement("div",{style:{fontSize:9,color:C.text3,textTransform:"uppercase",letterSpacing:0.5}},"Cryptos"),
           React.createElement("div",{style:{fontFamily:"'Cormorant Garamond',Georgia,serif",fontSize:30,fontWeight:600,color:d.recoColor,lineHeight:1.1,marginTop:3}},d.reco||"—")
         ),
         React.createElement("div",{style:{textAlign:"right"}},
@@ -11351,8 +11351,8 @@ function MoversView(){
     );
   };
   return React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:16}},
-    block("Crypto — 24 h",cr.gainers,cr.losers),
-    block("Actions US — jour",st.gainers,st.losers),
+    block("Crypto (top 100) — 24 h",cr.gainers,cr.losers),
+    block("Actions US (S&P 500, Nasdaq-100, portefeuille & suivi) — jour",st.gainers,st.losers),
     React.createElement("div",{style:{fontSize:8,color:C.text3,textAlign:"right"}},"CoinGecko + Yahoo · maj "+(mov.ts?new Date(mov.ts).toLocaleTimeString("fr-FR",{hour:"2-digit",minute:"2-digit"}):"—"))
   );
 }
