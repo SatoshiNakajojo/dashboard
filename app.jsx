@@ -5943,8 +5943,15 @@ function PageOverview({chartData,onSnapshot,onImportCsv,eur,setEur,hidden,setHid
     else if(tf==="ALL") cut="1970-01-01";
     else { want={"D":1,"3D":3,"1S":7,"1M":30,"3M":90,"1A":365,"2A":730}[tf]; if(!want) return null;
            cut=new Date(new Date(endDate).getTime()-want*864e5).toISOString().slice(0,10); }
+    // #177 — CAUSE de « depuis janv. démarre le 7 juin » : pour YTD/ALL, quand aucun snapshot
+    // n'existait avant le cut demandé (1er janvier, ou "le début"), le code substituait le tout
+    // premier snapshot DISPONIBLE (arr[0]) — sans rapport avec la vraie date demandée. Idem pour
+    // "ALL" sur les cartes qui n'avaient pas la garde _isAll (badge, cartes Cryptos/Stocks : elles
+    // l'avaient déjà pour ALL, mais pas pour YTD). Comportement uniforme désormais pour TOUTES les
+    // fenêtres : pas de snapshot assez ancien → null → repli sur l'historique complet (_po_rows /
+    // _HS), qui lui applique le VRAI cutoff (_hcut / cutOf), lui-même déjà correct pour YTD/ALL.
     var prev=null; for(var i=arr.length-1;i>=0;i--){ if(arr[i].d<=cut){ prev=arr[i]; break; } }
-    if(!prev){ if(tf==="ALL"||tf==="YTD") prev=arr[0]; else return null; }
+    if(!prev) return null;
     var b=val(prev); if(!b||!endEUR) return null;
     if(want){ // garde-fou : écart réel proche de la fenêtre demandée
       var span=(new Date(endDate)-new Date(prev.d))/864e5;
