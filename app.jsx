@@ -6078,6 +6078,14 @@ function PageOverview({chartData,onSnapshot,onImportCsv,eur,setEur,hidden,setHid
     : ((_isAll && _posAgg.invUSD>0)
     ? (eur ? Math.round(_posAgg.pnlUSD*_ue) : _posAgg.pnlUSD)
     : (eur ? _netPnlEUR : Math.round(_netPnlEUR/_ue)));
+  // #178 — transparence brut/apports/net : le montant affiché est le gain NET des apports (ce
+  // que le portefeuille a VRAIMENT rapporté, hors argent que tu as toi-même déposé) — sur une
+  // fenêtre longue avec des dépôts réguliers, ce chiffre est logiquement bien plus petit que la
+  // simple différence de valeur. Sans le détail, ce petit montant peut sembler faux ; cette ligne
+  // montre le calcul (brut − apports = net) pour que ce soit vérifiable d'un coup d'œil.
+  const _showApportsDetail = !_sdTot && !(_isAll && _posAgg.invUSD>0) && Math.abs(_heroRow.total.apports||0)>1;
+  const _rawChangePnl = eur ? Math.round(_heroRow.total.pnl||0) : Math.round((_heroRow.total.pnl||0)/_ue);
+  const _apportsPnl = eur ? Math.round(_heroRow.total.apports||0) : Math.round((_heroRow.total.apports||0)/_ue);
   // #96 — Le POURCENTAGE des cartes de fonds doit être un rendement pondéré par le TEMPS (TWR),
   // obtenu par composition des rendements mensuels (fundPeriodPerf, la méthode « officielle » déjà
   // utilisée par l'onglet JCGI et Stats). L'ancienne formule money-weighted, (fin − début − apports)
@@ -6217,6 +6225,11 @@ function PageOverview({chartData,onSnapshot,onImportCsv,eur,setEur,hidden,setHid
             {_bUp?"▲":"▼"} {fmtP(_blendPct)} · {_bUp?"+":"-"}{cur}{msk(fmt(Math.abs(_blendPnl)),hidden)}
           </span>
         </div>
+        {_showApportsDetail && (
+          <div style={{textAlign:"right",fontSize:10,color:C.text3,marginTop:6,fontVariantNumeric:"tabular-nums"}}>
+            Brut {_rawChangePnl>=0?"+":""}{cur}{msk(fmt(Math.abs(_rawChangePnl)),hidden)} · Apports {_apportsPnl>=0?"+":""}{cur}{msk(fmt(Math.abs(_apportsPnl)),hidden)} · Net {_bUp?"+":"-"}{cur}{msk(fmt(Math.abs(_blendPnl)),hidden)}
+          </div>
+        )}
       </div>
 
       {/* ════ RÉPARTITION ════ */}
