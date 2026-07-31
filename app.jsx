@@ -5952,7 +5952,13 @@ function PageOverview({chartData,onSnapshot,onImportCsv,eur,setEur,hidden,setHid
   const _liveCbEUR = (function(){ try{ var b=(_effSrc.bank&&_effSrc.bank.breakdown)||{}; return Object.keys(b).reduce(function(a,k){ return a+(b[k]||0); },0); }catch(e){ return 0; } })();
   const _liveCgEUR = (_model.cryptoUSD||0)*(_effSrc.usdEur||0.92); // (_ue est déclaré plus bas — on prend la source)
   const _liveActEUR = Math.max(0, (_sumEUR||0) - _liveCgEUR - _liveCbEUR);
-  const _tWin = _snapDelta("t", heroTF, _sumEUR); // #165 — courbe et badge sur la même fenêtre (fin = aujourd'hui)
+  // #175 — "tout l'historique" ne doit JAMAIS passer par _snapDelta : pour tf==="ALL", ce
+  // dernier renvoie une fenêtre bornée au tout premier Snapshot MANUEL (cgi_snapshots), pas
+  // au vrai début de l'historique (DD, souvent bien antérieur) — la courbe "ALL" ne montrait
+  // donc que depuis la première fois où le bouton Snapshot avait été utilisé. Le badge (_sdTot
+  // plus bas) excluait déjà "ALL" de ce chemin ; la courbe ne le faisait pas. Même garde ici.
+  const _isAll = (heroTF==="ALL");
+  const _tWin = _isAll ? null : _snapDelta("t", heroTF, _sumEUR); // #165 — courbe et badge sur la même fenêtre (fin = aujourd'hui)
   if(_tWin && _tWin.rows && _tWin.rows.length>=2){
     _sparkRows = _tWin.rows.map(function(s){ return [s.d, null, s.t]; });
     _spark = _tWin.rows.map(function(s){ return s.t; });
@@ -6035,7 +6041,7 @@ function PageOverview({chartData,onSnapshot,onImportCsv,eur,setEur,hidden,setHid
     let pnl=0, inv=0; _it.forEach(x=>{ if(x&&x.cat!=="Cash"&&x.cat!=="Cash Matelas"){ pnl+=(x.pnl||0); inv+=((x.pa||0)*(x.qty||0)); } });
     return {pnlUSD:pnl, invUSD:inv, pct:(inv>0?pnl/inv:null)};
   }catch(e){ return {pnlUSD:0,invUSD:0,pct:null}; } })();
-  const _isAll = (heroTF==="ALL");
+  // #175 — _isAll est désormais déclaré plus haut (nécessaire dès le calcul de _tWin)
   // #162 CAUSE RACINE du « 1J/3J/7J à côté de la plaque » : le badge total utilisait _heroRow.total.perf
   // (perf MENSUELLE money-weighted) alors que les CARTES utilisent les snapshots → deux sources qui ne
   // concordent pas. Le badge lit désormais le delta snapshot du total (t = crypto+stocks+cash matelas),
@@ -6065,7 +6071,8 @@ function PageOverview({chartData,onSnapshot,onImportCsv,eur,setEur,hidden,setHid
     const field=(key==="crypto")?"cg":(key==="stocks")?"act":null;
     let pct=null, netEUR=null;
     // #153 — priorité snapshots : pct ET montant € de la MÊME paire → ils coïncident toujours
-    const _sr = field ? _snapDelta(field, heroTF, (key==="crypto")?_liveCgEUR:(key==="stocks")?_liveActEUR:null) : null; // #166 — live décomposé comme les snapshots
+    // #175 — jamais en "ALL" : _snapDelta bornerait au premier Snapshot manuel, pas au vrai début
+    const _sr = (field && !_isAll) ? _snapDelta(field, heroTF, (key==="crypto")?_liveCgEUR:(key==="stocks")?_liveActEUR:null) : null; // #166 — live décomposé comme les snapshots
     if(_sr){ pct=_sr.pct; netEUR=_sr.endEUR-_sr.startEUR; } // #155/#166 — même paire, live décomposé
     try{
       const fond=_fundKey(key);
