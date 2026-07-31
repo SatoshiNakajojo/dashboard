@@ -10922,9 +10922,41 @@ function buildAssetBilan(ticker, s){
   var text="Bilan "+ticker+" : "+reco+". "+(bits.length?_bilanCap(bits.join(", "))+". ":"")+_bilanCap(bilanGuidance(reco));
   return {reco:reco, color:marketHeatColor(s.heat), text:text};
 }
+// #173 — mini-courbe "température dans le temps" (surchauffe 0-100), réutilisée pour
+// les 3 catégories et pour chaque actif détenu/suivi.
+function MiniHeatSparkline({points,color}){
+  if(!points||points.length<2) return null;
+  var mn=Math.min.apply(null,points), mx=Math.max.apply(null,points), rng=(mx-mn)||1;
+  var n=points.length-1;
+  var pts=points.map(function(v,i){ return (i/n*100).toFixed(1)+","+(24-((v-mn)/rng)*20).toFixed(1); }).join(" ");
+  return React.createElement("svg",{width:"100%",height:26,viewBox:"0 0 100 26",preserveAspectRatio:"none",style:{display:"block",marginTop:8,overflow:"visible"}},
+    React.createElement("polyline",{points:pts,fill:"none",stroke:color,strokeWidth:1.3,vectorEffect:"non-scaling-stroke",strokeLinecap:"round",strokeLinejoin:"round"})
+  );
+}
+// #173 — écart entre l'allocation réelle et la cible (cgi_alloc_targets), pour donner
+// au bilan une lecture "faut-il VRAIMENT agir, ou est-ce déjà à la bonne place ?".
+function buildAllocGapText(actualPct,targetPct){
+  if(actualPct==null||targetPct==null) return null;
+  var diff=actualPct-targetPct;
+  var word=Math.abs(diff)<1.5?"proche de la cible":(diff>0?"au-dessus de la cible":"en dessous de la cible");
+  return "Allocation : "+actualPct.toFixed(0)+"% du portefeuille (cible "+targetPct.toFixed(0)+"%) — "+word+".";
+}
+// #173 — historique quotidien des bilans (/bilan-history), même pattern découplé que
+// useBtcSignals : chaque consommateur (PageMarketHome, TickerRecoBlock) fait son propre
+// appel, léger (une seule clé KV, pas de calcul lourd côté serveur pour cette lecture).
+function useBilanHistory(){
+  const[hist,setHist]=useState([]);
+  useEffect(function(){
+    fetch(CF_WORKER_URL+"/bilan-history",{headers:{"X-Auth-Key":CF_AUTH_KEY},signal:AbortSignal.timeout(15000)})
+      .then(function(r){return r.json();})
+      .then(function(d){ if(d&&Array.isArray(d.history)) setHist(d.history); })
+      .catch(function(){});
+  },[]);
+  return hist;
+}
 // Bloc visuel "hero" partagé (même habillage que la carte Recommandation BTC) pour les
 // bilans de catégorie affichés sur la page Home du Market.
-function CategoryBilanHero({label, bilan, sub}){
+function CategoryBilanHero({label, bilan, sub, allocGap, sparkVals}){
   if(!bilan) return null;
   var grad="linear-gradient(90deg,"+C.green+" 0%,"+C.green+" 28%,"+C.gold+" 50%,"+C.orange+" 72%,"+C.red+" 100%)";
   return React.createElement("div",{style:{background:bilan.color+"18",border:"1px solid "+bilan.color+"55",borderRadius:C.radius||14,padding:"14px 16px",marginBottom:16}},
@@ -10945,16 +10977,31 @@ function CategoryBilanHero({label, bilan, sub}){
       React.createElement("span",null,"Acheter"),React.createElement("span",null,"Conserver"),React.createElement("span",null,"Vendre")
     ),
     sub&&React.createElement("div",{style:{fontSize:10,color:C.text2,marginTop:10,fontWeight:600}},sub),
+    sparkVals&&sparkVals.length>=2&&React.createElement(MiniHeatSparkline,{points:sparkVals,color:bilan.color}),
+    allocGap&&React.createElement("div",{style:{fontSize:10.5,color:C.text3,marginTop:8}},allocGap),
     React.createElement("div",{style:{fontSize:11.5,color:C.text2,lineHeight:1.6,marginTop:10}},bilan.text)
   );
 }
 
 // #143 — page "Home" du Market : carte Recommandation BTC (déplacée depuis Indicateurs) +
 // recommandations Mon portefeuille / Suivi (Tracking).
-function PageMarketHome(){
+function PageMarketHome({EFF}){
   var bs=useBtcSignals();
   var btcSig=bs.btcSig, btcSigL=bs.btcSigL, btcSigE=bs.btcSigE, loadBtc=bs.reload;
+  var bilanHist=useBilanHistory(); // #173 — historique quotidien, pour les mini-courbes de température
   function num(v,d){ if(v==null||isNaN(v))return "—"; return Number(v).toLocaleString("fr-FR",{maximumFractionDigits:d!=null?d:2}); }
+  function sparkOf(field){ return bilanHist.map(function(h){ return h&&h[field]&&h[field].heat; }).filter(function(v){ return v!=null&&isFinite(v); }); }
+
+  // #173 — écart à l'allocation cible (cgi_alloc_targets) : Crypto correspond 1:1 à la
+  // catégorie "Crypto" du modèle ; Actions (indicateurs de marché actions) correspond à
+  // la somme Indices+Picking+Or du modèle (= "stocksUSD", même regroupement que le Home).
+  var _model=computePortfolioModel(EFF||CURRENT);
+  var _allocTargets=(function(){ try{ var t=lsv9Get('cgi_alloc_targets'); return (t&&typeof t==='object')?t:{}; }catch(e){ return {}; } })();
+  var _cryptoActualPct=_model.totalUSD>0?(_model.cryptoUSD/_model.totalUSD*100):null;
+  var _cryptoTargetPct=_allocTargets["Crypto"]!=null?_allocTargets["Crypto"]:null;
+  var _stocksActualPct=_model.totalUSD>0?(_model.stocksUSD/_model.totalUSD*100):null;
+  var _stocksTargetKeys=["Indices","Picking","Or"].filter(function(k){ return _allocTargets[k]!=null; });
+  var _stocksTargetPct=_stocksTargetKeys.length?_stocksTargetKeys.reduce(function(s,k){ return s+_allocTargets[k]; },0):null;
 
   var heroBlock=null, actionsBilan=null, macroBilan=null;
   if(btcSigL && !btcSig) heroBlock=React.createElement("div",{style:{textAlign:"center",color:C.text3,fontSize:12,padding:"30px 0"}},"Chargement des indicateurs BTC…");
@@ -10964,37 +11011,22 @@ function PageMarketHome(){
   );
   else if(btcSig){
     var d=btcSig;
-    var grad="linear-gradient(90deg,"+C.green+" 0%,"+C.green+" 28%,"+C.gold+" 50%,"+C.orange+" 72%,"+C.red+" 100%)";
     var maj=d.ts?new Date(d.ts).toLocaleString("fr-FR",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"}):"—";
     var bilanCrypto=buildCategoryBilan(d.indicators, "Cryptos");
-    heroBlock = React.createElement("div",{style:{background:d.recoColor+"18",border:"1px solid "+d.recoColor+"55",borderRadius:C.radius||14,padding:"14px 16px",marginBottom:16}},
-      React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}},
-        React.createElement("div",null,
-          React.createElement("div",{style:{fontSize:9,color:C.text3,textTransform:"uppercase",letterSpacing:0.5}},"Cryptos"),
-          React.createElement("div",{style:{fontFamily:"'Cormorant Garamond',Georgia,serif",fontSize:30,fontWeight:600,color:d.recoColor,lineHeight:1.1,marginTop:3}},d.reco||"—")
-        ),
-        React.createElement("div",{style:{textAlign:"right"}},
-          React.createElement("div",{style:{fontSize:9,color:C.text3,textTransform:"uppercase",letterSpacing:0.5}},"Surchauffe"),
-          React.createElement("div",{style:{fontFamily:"'Cormorant Garamond',Georgia,serif",fontSize:26,fontWeight:600,color:d.recoColor,lineHeight:1.1,marginTop:3}},d.aggHeat!=null?Math.round(d.aggHeat):"—",React.createElement("span",{style:{fontFamily:C.font,fontSize:12,fontWeight:600,color:C.text2}},"/100"))
-        )
-      ),
-      React.createElement("div",{style:{position:"relative",height:8,borderRadius:5,marginTop:12,background:grad}},
-        d.aggHeat!=null&&React.createElement("div",{style:{position:"absolute",top:-3,left:"calc("+Math.max(0,Math.min(100,d.aggHeat))+"% - 7px)",width:14,height:14,borderRadius:"50%",background:"#fff",border:"2px solid "+C.bg,boxShadow:"0 0 0 1px "+C.border}})
-      ),
-      React.createElement("div",{style:{display:"flex",justifyContent:"space-between",fontSize:9,color:C.text3,marginTop:6}},
-        React.createElement("span",null,"Acheter"),React.createElement("span",null,"Conserver"),React.createElement("span",null,"Vendre")
-      ),
-      React.createElement("div",{style:{fontSize:10,color:C.text2,marginTop:10,fontWeight:600}},"BTC $"+num(d.price,0)+" · "+d.nIndicators+"/"+(d.indicators||[]).length+" indicateurs · maj "+maj),
-      bilanCrypto&&React.createElement("div",{style:{fontSize:11.5,color:C.text2,lineHeight:1.6,marginTop:10,paddingTop:10,borderTop:"1px solid "+d.recoColor+"33"}},bilanCrypto.text)
-    );
+    heroBlock = React.createElement(CategoryBilanHero,{
+      label:"Cryptos", bilan:bilanCrypto,
+      sub:"BTC $"+num(d.price,0)+" · "+d.nIndicators+"/"+(d.indicators||[]).length+" indicateurs · maj "+maj,
+      allocGap:buildAllocGapText(_cryptoActualPct,_cryptoTargetPct),
+      sparkVals:sparkOf("crypto")
+    });
     actionsBilan=buildCategoryBilan(d.indicatorsActions, "Actions");
     macroBilan=buildCategoryBilan(d.indicatorsMacro, "Santé globale du marché");
   }
 
   return React.createElement("div",null,
     heroBlock,
-    actionsBilan&&React.createElement(CategoryBilanHero,{label:"Actions",bilan:actionsBilan}),
-    macroBilan&&React.createElement(CategoryBilanHero,{label:"Santé globale du marché",bilan:macroBilan}),
+    actionsBilan&&React.createElement(CategoryBilanHero,{label:"Actions",bilan:actionsBilan,allocGap:buildAllocGapText(_stocksActualPct,_stocksTargetPct),sparkVals:sparkOf("actions")}),
+    macroBilan&&React.createElement(CategoryBilanHero,{label:"Santé globale du marché",bilan:macroBilan,sparkVals:sparkOf("macro")}),
     React.createElement(TickerRecoBlock,{key:"reco-portfolio",source:"portfolio"}),
     React.createElement(TickerRecoBlock,{key:"reco-tracking",source:"tracking"})
   );
@@ -11149,6 +11181,7 @@ function TickerRecoBlock({source}){
   var [tickers,setTickers]=useState([]);
   var [scores,setScores]=useState({});
   var [selected,setSelected]=useState(null); // #142 — un seul ticker "déplié" à la fois (mosaïque + panneau de détail)
+  var bilanHist=useBilanHistory(); // #173 — historique quotidien, pour la mini-courbe de l'actif sélectionné
 
   useEffect(function(){
     var arr=[];
@@ -11226,6 +11259,10 @@ function TickerRecoBlock({source}){
         " · Rang 52 sem. : ", React.createElement("b",{style:{color:C.text}},selS.rangePos!=null?selS.rangePos.toFixed(0)+"%":"—"),
         " · Momentum 1M : ", React.createElement("b",{style:{color:C.text}},selS.mom!=null?((selS.mom>=0?"+":"")+selS.mom.toFixed(1)+"%"):"—")
       ),
+      (function(){
+        var tkSpark=bilanHist.map(function(h){ return h&&h.assets&&h.assets[selected]&&h.assets[selected].heat; }).filter(function(v){ return v!=null&&isFinite(v); });
+        return tkSpark.length>=2&&React.createElement(MiniHeatSparkline,{points:tkSpark,color:marketHeatColor(selS.heat)});
+      })(),
       (function(){ var ab=buildAssetBilan(selected, selS); return ab&&React.createElement("div",{style:{fontSize:11.5,color:C.text2,lineHeight:1.6,marginTop:10,paddingTop:10,borderTop:"1px solid "+marketHeatColor(selS.heat)+"33"}},ab.text); })()
     ),
     React.createElement("div",{style:{fontSize:9,color:C.text3,lineHeight:1.5,marginTop:8}},"Score technique générique (RSI, écart à la SMA200, rang sur 52 semaines, momentum 1 mois) — Yahoo Finance. Ne constitue pas un conseil en investissement.")
@@ -11572,7 +11609,7 @@ function FlowMap(){
 
 // CGI — MarketDash : conteneur à onglets du dashboard marché
 // ══════════════════════════════════════════════════════════════════════════════
-function MarketDash(){
+function MarketDash({EFF}){
   const[tab,setTab]=useState("home");
   var tabs=[["home","home","Home"],["btc","coin","Indicateurs"],["flows","repeat","Flux"],["movers","chart","Top/Flop"]];
   return React.createElement("div",null,
@@ -11586,7 +11623,7 @@ function MarketDash(){
         );
       })
     ),
-    tab==="home"&&React.createElement(PageMarketHome,null),
+    tab==="home"&&React.createElement(PageMarketHome,{EFF:EFF}),
     tab==="btc"&&React.createElement(BtcIndicators,null),
     tab==="flows"&&React.createElement(FlowMap,null),
     tab==="movers"&&React.createElement(MoversView,null)
@@ -11597,10 +11634,10 @@ function MarketDash(){
 // CGI — PageMarket : nouvel onglet "Market" — enveloppe MarketDash (jusque-là
 // jamais branché à la navigation) derrière le titre standard des pages.
 // ══════════════════════════════════════════════════════════════════════════════
-function PageMarket(){
+function PageMarket({EFF}){
   return React.createElement("div",null,
     React.createElement(PageTitle,{title:"Market",sub:"Sentiment, secteurs & flux de capitaux"}),
-    React.createElement(MarketDash,null)
+    React.createElement(MarketDash,{EFF:EFF})
   );
 }
 
@@ -15736,7 +15773,7 @@ function App(){
         {tab===3 && <PageGDB chartData={chartData} hidden={hidden} EFF={EFF} eur={eur} liveGSB={liveGSB} liveGDBS={liveGDBS} liveBench={liveBench} liveGC={gcEff} liveDD={liveDD} liveInv={liveInv}/>}
         {tab===6 && <PageWatchlist EFF={EFF} hidden={hidden}/>}
         {tab===5 && <PageLegend txns={txnsEff} liveFutures={liveFutures} hidden={hidden} eur={eur} EFF={EFF} liveIbkrAnnex={liveIbkrAnnex} ibkrTrades={ibkrTrades} onImportCsv={()=>setShowCexImport(true)}/>}
-        {tab===7 && <PageMarket/>}
+        {tab===7 && <PageMarket EFF={EFF}/>}
         {tab===4 && <PageData EFF={EFF} hidden={hidden} txns={txns} addTxn={addTxn} delTxn={delTxn} applyPositions={applyPositionsFromTxns} chartData={chartData} kvRefreshTick={kvRefreshTick}
           liveDD={liveDD} liveGDBS={liveGDBS} liveGC={gcEff} liveGSB={liveGSB}
           handleRefresh={handleRefresh} refreshing={refreshing} gistSync={gistSync} onOpenKvDiag={()=>setShowGistDiag(true)}
