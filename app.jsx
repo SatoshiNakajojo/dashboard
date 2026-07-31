@@ -5968,7 +5968,19 @@ function PageOverview({chartData,onSnapshot,onImportCsv,eur,setEur,hidden,setHid
   const _smx = _sv.length?Math.max(..._sv):1;
   const _srng= (_smx-_smn)||1;
   const _hn  = Math.max(1,_spark.length-1);
-  const _heroPts = _spark.map((v,i)=> v==null?null:`${(i/_hn*120).toFixed(1)},${(30-((v-_smn)/_srng)*26).toFixed(1)}`).filter(Boolean).join(" ");
+  // #174 — l'abscisse doit être proportionnelle au TEMPS, pas au rang du point (même bug que
+  // #95, corrigé alors pour _polyOf/_blendHeroPts mais jamais reporté sur _heroPts — LA courbe
+  // réellement affichée). Sans ça, une série qui mélange des points MENSUELS anciens et
+  // QUOTIDIENS récents comprime des années entières dans le même espace que quelques semaines
+  // récentes (ex. en 5 ans : ~2/3 de la largeur pour les 2 derniers mois seulement).
+  const _heroT0 = _sparkRows.length ? new Date(_sparkRows[0][0]).getTime() : NaN;
+  const _heroT1 = _sparkRows.length ? new Date(_sparkRows[_sparkRows.length-1][0]).getTime() : NaN;
+  const _heroSpan = (isFinite(_heroT0)&&isFinite(_heroT1)&&_heroT1>_heroT0) ? (_heroT1-_heroT0) : 0;
+  const _heroX = (i) => {
+    if(_heroSpan && _sparkRows[i]){ const tp=new Date(_sparkRows[i][0]).getTime(); if(isFinite(tp)) return (tp-_heroT0)/_heroSpan*120; }
+    return i/_hn*120;
+  };
+  const _heroPts = _spark.map((v,i)=> v==null?null:`${_heroX(i).toFixed(1)},${(30-((v-_smn)/_srng)*26).toFixed(1)}`).filter(Boolean).join(" ");
   // #167 — l'ancien calcul _po_delta/_dUp (delta du hero) était mort : ni l'un ni l'autre n'étaient
   // lus par le rendu (_blendPct/_blendPnl/_bUp, dérivés de _sdTot plus bas, sont les seuls affichés).
   // Il calculait pourtant un delta DIFFÉRENT du badge réellement affiché — code mort qui aurait pu
@@ -6126,10 +6138,20 @@ function PageOverview({chartData,onSnapshot,onImportCsv,eur,setEur,hidden,setHid
         )}
         {/* #43 — graphe pleine largeur · #115 — scrub tactile/souris (montant + date au doigt) */}
         {_heroPts && (function(){
-          const _hIdx=function(clientX, rect){ const rel=Math.min(1,Math.max(0,(clientX-rect.left)/Math.max(1,rect.width))); return Math.min(_spark.length-1, Math.max(0, Math.round(rel*(_spark.length-1)))); };
+          // #174 — le doigt/curseur suit désormais la même échelle TEMPORELLE que le tracé :
+          // on convertit la position X en date cible, puis on prend le point le plus proche
+          // de cette date (au lieu de supposer un espacement égal entre points).
+          const _hIdx=function(clientX, rect){
+            const rel=Math.min(1,Math.max(0,(clientX-rect.left)/Math.max(1,rect.width)));
+            if(!_heroSpan) return Math.min(_spark.length-1, Math.max(0, Math.round(rel*(_spark.length-1))));
+            const targetT=_heroT0+rel*_heroSpan;
+            let bestI=0, bestD=Infinity;
+            for(let i=0;i<_sparkRows.length;i++){ const ti=new Date(_sparkRows[i][0]).getTime(); if(!isFinite(ti)) continue; const dd=Math.abs(ti-targetT); if(dd<bestD){bestD=dd;bestI=i;} }
+            return bestI;
+          };
           const _hMove=function(e){ const el=e.currentTarget; const t=(e.touches&&(e.touches[0]||e.changedTouches[0]))||e; setHeroScrub({i:_hIdx(t.clientX, el.getBoundingClientRect())}); };
           const _hEnd=function(){ setHeroScrub(null); };
-          const cx=heroScrub? (heroScrub.i/Math.max(1,_spark.length-1))*120 : null;
+          const cx=heroScrub? _heroX(heroScrub.i) : null;
           const cv=heroScrub? _spark[heroScrub.i] : null;
           const cy=(cv!=null)? (30-((cv-_smn)/_srng)*26) : null;
           return (
