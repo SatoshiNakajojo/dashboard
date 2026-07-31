@@ -5909,8 +5909,21 @@ function PageOverview({chartData,onSnapshot,onImportCsv,eur,setEur,hidden,setHid
   // #148/#150 — DELTA COURT depuis les snapshots quotidiens. Champs : cg=crypto €, act=actions €, t=total €
   // (t ≈ cg+act+cash → total ET cartes réconcilient, même source). fundPeriodPerf/_DD_PO sont mensuels ou
   // à trous → « 1 jour » y valait la perf du mois. Ici on lit deux snapshots espacés du bon nombre de jours.
+  // #176 — comble les trous entre snapshots MANUELS (cgi_snapshots) avec le journal AUTOMATIQUE
+  // (cgi_daily, rempli tout seul à chaque ouverture du Home, cf. cgiRecordDaySnap). Avant, une
+  // fenêtre courte sans clic récent sur "Snapshot" (ex. pas de snapshot manuel entre J-7 et J-3)
+  // retombait sur EXACTEMENT le même point de départ pour "3 jours" et "7 jours" → deux courbes
+  // strictement identiques. Le journal ne couvre que t/crypto/actions (pas cash matelas/dip) ;
+  // un snapshot manuel du même jour reste prioritaire car plus complet (cb/cs en plus).
   const _snapSeries = React.useMemo(function(){
-    try{ var s=lsv9Get('cgi_snapshots'); return Array.isArray(s)?s.filter(function(x){return x&&x.d;}).sort(function(a,b){return a.d<b.d?-1:1;}):[]; }catch(e){ return []; }
+    try{
+      var manual=lsv9Get('cgi_snapshots'); manual=Array.isArray(manual)?manual:[];
+      var journal=lsv9Get('cgi_daily'); journal=Array.isArray(journal)?journal:[];
+      var byDate={};
+      manual.forEach(function(s){ if(s&&s.d) byDate[s.d]=s; });
+      journal.forEach(function(j){ if(j&&j.d&&!byDate[j.d]) byDate[j.d]={d:j.d, t:j.t, cg:j.c, act:j.s}; });
+      return Object.keys(byDate).map(function(d){ return byDate[d]; }).sort(function(a,b){ return a.d<b.d?-1:1; });
+    }catch(e){ return []; }
   },[]);
   const _snapDelta = (field, tf, liveEUR) => {
     // #165 — la fenêtre se termine AUJOURD'HUI (valeur live), pas au dernier snapshot : sans nouveau
