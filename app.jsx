@@ -6221,7 +6221,7 @@ function PageOverview({chartData,onSnapshot,onImportCsv,eur,setEur,hidden,setHid
         </div>
         {_showApportsDetail && (
           <div style={{textAlign:"right",fontSize:10,color:C.text3,marginTop:6,fontVariantNumeric:"tabular-nums"}}>
-            Brut {_rawChangePnl>=0?"+":""}{cur}{msk(fmt(Math.abs(_rawChangePnl)),hidden)} · Apports {_apportsPnl>=0?"+":""}{cur}{msk(fmt(Math.abs(_apportsPnl)),hidden)} · Net {_bUp?"+":"-"}{cur}{msk(fmt(Math.abs(_blendPnl)),hidden)}
+            Brut {_rawChangePnl>=0?"+":"-"}{cur}{msk(fmt(Math.abs(_rawChangePnl)),hidden)} · Apports {_apportsPnl>=0?"+":"-"}{cur}{msk(fmt(Math.abs(_apportsPnl)),hidden)} · Net {_bUp?"+":"-"}{cur}{msk(fmt(Math.abs(_blendPnl)),hidden)}
           </div>
         )}
       </div>
