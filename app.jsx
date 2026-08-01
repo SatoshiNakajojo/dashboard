@@ -1548,8 +1548,8 @@ function tradeTickers(){
 // Perf période d'un fonds = composition des rendements mensuels (CRYPTO_MONTHLY/STOCKS_MONTHLY),
 // même base que Stats (cohérent). Mois courant injecté depuis la valeur live (€).
 // Source de vérité unique : Home + JCGI + Stats utilisent la même logique.
-function fundPeriodPerf(fond, fromDateStr, cm, sm, liveValEUR){
-  const MAP = fond==="CGIC" ? cm : sm;
+function fundPeriodPerf(fond, fromDateStr, cm, sm, liveValEUR, tm){
+  const MAP = fond==="CGIC" ? cm : (fond==="CGIS" ? sm : (fond==="TOTAL" ? tm : sm));
   if(!MAP) return null;
   const now = new Date(Date.now()+11*3600*1000);
   const curY = String(now.getFullYear()), curMI = now.getMonth();
@@ -5892,7 +5892,7 @@ if(typeof window!=="undefined") window.__cgiCloud = cgiCloudInspect;
 /* ═══════════════════════════════════════════════════════════
    PAGE OVERVIEW
 ═══════════════════════════════════════════════════════════ */
-function PageOverview({chartData,onSnapshot,onImportCsv,eur,setEur,hidden,setHidden,EFF,refreshing,handleRefresh,refreshedAt,refreshErr,fromSnapshot,gistSync,liveDD,liveCM,liveGDBS,liveGC,chosenSource,iconDbVersion=0,bumpIconDb,setTab,setShowSettings}){
+function PageOverview({chartData,onSnapshot,onImportCsv,eur,setEur,hidden,setHidden,EFF,refreshing,handleRefresh,refreshedAt,refreshErr,fromSnapshot,gistSync,liveDD,liveCM,liveSM,liveTM,liveGDBS,liveGC,chosenSource,iconDbVersion=0,bumpIconDb,setTab,setShowSettings}){
   const _DD_PO=liveDD||DD;
   const _CM_PO=liveCM||CRYPTO_MONTHLY;
   const [chartTF, setChartTF] = useState("YTD");
@@ -6086,8 +6086,17 @@ function PageOverview({chartData,onSnapshot,onImportCsv,eur,setEur,hidden,setHid
   // exactement la même fenêtre de dates dès que "5 ans" recouvre tout l'historique disponible.
   // "ALL" utilise désormais EXACTEMENT le même calcul que les 9 autres fenêtres de la page.
   const _sdTot = _isAll ? null : _snapDelta("t", heroTF, _sumEUR); // #165 — fin de fenêtre = valeur live du jour
+  // #182b — même cause que #96 (déjà corrigé pour les cartes Cryptos/Stocks, jamais pour le %
+  // total) : _heroRow.total.perf est money-weighted, (fin−début−apports)/(début+apports), qui
+  // suppose que TOUS les apports sont versés le premier jour. Sur une fenêtre longue avec des
+  // dépôts étalés, ça ÉCRASE le rendement réel (cf. #96 : « +25 % au lieu de 75,33 % chez IBKR »).
+  // Le % total utilise désormais le même TWR (composition des rendements mensuels de cgi_tm) que
+  // les cartes de fonds — cohérent, et surtout non biaisé par le calendrier des dépôts.
+  const _tm = (typeof liveTM!=="undefined"&&liveTM)?liveTM:(typeof TOTAL_MONTHLY!=="undefined"?TOTAL_MONTHLY:{});
+  const _twrTotal = fundPeriodPerf("TOTAL", _HS.cutOf(heroTF), null, null, _HS.live.total, _tm);
   const _blendPct = _sdTot ? (_sdTot.startEUR ? (_sdTot.endEUR-_sdTot.startEUR)/_sdTot.startEUR : 0)
-                    : ((_heroRow.total.perf!=null) ? _heroRow.total.perf : ((_heroRow.total.pct!=null)?_heroRow.total.pct:0));
+                    : ((_twrTotal!=null) ? _twrTotal
+                    : ((_heroRow.total.perf!=null) ? _heroRow.total.perf : ((_heroRow.total.pct!=null)?_heroRow.total.pct:0)));
   const _bUp = _blendPct>=0;
   const _blendCur = eur ? _sumEUR : _sumUSD;
   // #75 — P&L net = plus-value réelle (brut − apports), cohérent avec le % money-weighted
@@ -6206,7 +6215,7 @@ function PageOverview({chartData,onSnapshot,onImportCsv,eur,setEur,hidden,setHid
           const cv=heroScrub? _spark[heroScrub.i] : null;
           const cy=(cv!=null)? (30-((cv-_smn)/_srng)*26) : null;
           return (
-            <svg width="100%" height="38" viewBox="0 0 120 34" preserveAspectRatio="none"
+            <svg width="100%" height="50" viewBox="0 0 120 34" preserveAspectRatio="none"
               style={{display:"block",overflow:"visible",marginTop:10,touchAction:"pan-y"}}
               onMouseMove={_hMove} onMouseLeave={_hEnd}
               onTouchStart={_hMove} onTouchMove={_hMove} onTouchEnd={_hEnd} onTouchCancel={_hEnd}>
@@ -14303,7 +14312,14 @@ function App(){
     return function(){ clearTimeout(id); };
   },[ready]);
 
-  const liveProps = {eur, setEur, hidden, setHidden, EFF, refreshing, handleRefresh, refreshedAt, refreshErr, fromSnapshot: live?._fromSnapshot||null, gistSync, liveDD, liveGDBS, liveGC, liveGSB, liveCM};
+  // #182 — liveSM/liveTM manquaient ici : PageOverview les référence bien (cgiHomeSeries), mais
+  // comme ils n'étaient JAMAIS passés en prop, `typeof liveSM!=="undefined"` valait toujours
+  // false à l'intérieur du composant (aucune variable liveSM en portée) → repli PERMANENT sur le
+  // seed STOCKS_MONTHLY figé dans le code, jamais les vraies données actions live/cloud. Le total
+  // "Patrimoine" (Home) calculait donc sa moitié "actions" sur des données obsolètes depuis le
+  // début. liveCM, lui, était bien un prop déclaré — d'où l'écart passé inaperçu (crypto correct,
+  // actions muet).
+  const liveProps = {eur, setEur, hidden, setHidden, EFF, refreshing, handleRefresh, refreshedAt, refreshErr, fromSnapshot: live?._fromSnapshot||null, gistSync, liveDD, liveGDBS, liveGC, liveGSB, liveCM, liveSM, liveTM};
 
   // ── Préchargement au démarrage — charge local + KV en parallèle ──────────
   useEffect(()=>{
