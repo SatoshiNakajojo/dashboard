@@ -1691,14 +1691,25 @@ function cgiHomeSeries(EFF, opts){
   const ovrKey = (scope,tf,field)=> scope+":"+tf+":"+field;
   const ovrGet = (scope,tf,field)=>{ const v=OVR[ovrKey(scope,tf,field)]; return (v==null||isNaN(v))?null:Number(v); };
   const ORDER=["D","3D","1S","1M","3M","YTD","1A","2A","5A","ALL"];
-  function apportsOf(MAP, fromD, toD){
-    let a=0; const yrs=Object.keys(MAP||{}).filter(y=>/^\d{4}$/.test(y)).sort();
-    yrs.forEach(y=>{ const d=MAP[y]; if(!d||!d.inv) return;
-      d.inv.forEach((iv,i)=>{ if(!iv) return; const ds=y+"-"+String(i+1).padStart(2,"0")+"-28"; if(ds>fromD && ds<=toD) a+=iv; });
-    });
-    return Math.round(a);
+  // #181 — les apports viennent DIRECTEMENT de cgi_inv (le registre manuel de nouvel argent
+  // investi — "IN"/"OUT", saisi à la main), plus jamais de la colonne "inv" reconstruite des
+  // séries mensuelles CM/SM. Cette dernière était déduite du COÛT des transactions d'achat
+  // (__cgiInvFromBuys) : elle comptait donc aussi les SWAPS internes (vendre X pour acheter Y)
+  // comme de l'argent neuf, gonflant les apports et écrasant le gain net affiché — alors que
+  // seuls les mouvements cgi_inv représentent du capital réellement entré/sorti.
+  function apportsOf(fund, fromD, toD){
+    try{
+      const inv=lsv9Get('cgi_inv'); if(!Array.isArray(inv)) return 0;
+      let a=0;
+      inv.forEach(r=>{
+        if(!r||!r.date) return;
+        if(fund && r.fonds!==fund) return;
+        if(!(r.date>fromD && r.date<=toD)) return;
+        a += (r.io==="OUT"?-1:1)*(r.montant||0);
+      });
+      return Math.round(a);
+    }catch(e){ return 0; }
   }
-  const MAP_OF = scope => scope==="crypto"?CM : (scope==="stocks"?SM : null);
   function adjWindow(scope, tf){
     const w = windowOf(SER[scope]||[], tf).map(p=>({d:p.d, v:p.v}));
     if(w.length>=2){
@@ -1712,7 +1723,7 @@ function cgiHomeSeries(EFF, opts){
     if(w.length<2) return {n:w.length, start:(w[0]?w[0].v:null), end:(w.length?w[w.length-1].v:null), pct:null, pnl:null, apports:0, perf:null, ok:false, win:w};
     const s=w[0].v, e=w[w.length-1].v;
     let ap=ovrGet(scope,tf,"apports");
-    if(ap==null){ ap = (scope==="total") ? (apportsOf(CM, w[0].d, today)+apportsOf(SM, w[0].d, today)) : apportsOf(MAP_OF(scope), w[0].d, today); }
+    if(ap==null){ const fund=(scope==="crypto")?"CGIC":(scope==="stocks")?"CGIS":null; ap = apportsOf(fund, w[0].d, today); }
     const net=e-s-ap, base=(s+ap)||1;
     return {n:w.length, start:s, end:e, pct:(s>0?e/s-1:null), pnl:Math.round(e-s), apports:Math.round(ap), perf:(base>0?net/base:null), ok:true, win:w};
   }
