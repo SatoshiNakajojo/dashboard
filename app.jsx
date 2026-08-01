@@ -6215,7 +6215,7 @@ function PageOverview({chartData,onSnapshot,onImportCsv,eur,setEur,hidden,setHid
           const cv=heroScrub? _spark[heroScrub.i] : null;
           const cy=(cv!=null)? (30-((cv-_smn)/_srng)*26) : null;
           return (
-            <svg width="100%" height="50" viewBox="0 0 120 34" preserveAspectRatio="none"
+            <svg width="100%" height="64" viewBox="0 0 120 34" preserveAspectRatio="none"
               style={{display:"block",overflow:"visible",marginTop:10,touchAction:"pan-y"}}
               onMouseMove={_hMove} onMouseLeave={_hEnd}
               onTouchStart={_hMove} onTouchMove={_hMove} onTouchEnd={_hEnd} onTouchCancel={_hEnd}>
