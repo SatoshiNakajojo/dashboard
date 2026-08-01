@@ -6055,35 +6055,29 @@ function PageOverview({chartData,onSnapshot,onImportCsv,eur,setEur,hidden,setHid
       return `${x.toFixed(1)},${y.toFixed(1)}`;
     }).join(" ");
   };
-  // #87 — agrégat des positions (= base du P&L Portfolio), calculé avant les métriques hero.
-  const _posAgg = (()=>{ try{
-    const _e=EFF||CURRENT; const _it=[].concat((_e.crypto&&_e.crypto.items)||[], (_e.stocks&&_e.stocks.items)||[]);
-    let pnl=0, inv=0; _it.forEach(x=>{ if(x&&x.cat!=="Cash"&&x.cat!=="Cash Matelas"){ pnl+=(x.pnl||0); inv+=((x.pa||0)*(x.qty||0)); } });
-    return {pnlUSD:pnl, invUSD:inv, pct:(inv>0?pnl/inv:null)};
-  }catch(e){ return {pnlUSD:0,invUSD:0,pct:null}; } })();
-  // #175 — _isAll est désormais déclaré plus haut (nécessaire dès le calcul de _tWin)
-  // #162 CAUSE RACINE du « 1J/3J/7J à côté de la plaque » : le badge total utilisait _heroRow.total.perf
-  // (perf MENSUELLE money-weighted) alors que les CARTES utilisent les snapshots → deux sources qui ne
-  // concordent pas. Le badge lit désormais le delta snapshot du total (t = crypto+stocks+cash matelas),
-  // donc il ÉGALE la somme des cartes. En « tout l'historique », on garde le money-weighted aligné sur Portfolio.
+  // #179 — CAUSE du « 5 ans ≠ tout l'historique alors qu'ils ont la même date de départ » :
+  // "ALL" utilisait un calcul DIFFÉRENT de toutes les autres fenêtres — le P&L non réalisé vs
+  // coût d'achat des positions COURANTES (_posAgg, pour matcher l'onglet Portfolio), au lieu du
+  // money-weighted net des apports (_heroRow.total.perf/pnl-apports) utilisé par YTD/1A/2A/5A/etc.
+  // Ces deux méthodes répondent à des questions différentes (P&L non réalisé actuel vs performance
+  // réelle du capital investi sur la période) et divergent — d'où deux chiffres différents pour
+  // exactement la même fenêtre de dates dès que "5 ans" recouvre tout l'historique disponible.
+  // "ALL" utilise désormais EXACTEMENT le même calcul que les 9 autres fenêtres de la page.
   const _sdTot = _isAll ? null : _snapDelta("t", heroTF, _sumEUR); // #165 — fin de fenêtre = valeur live du jour
   const _blendPct = _sdTot ? (_sdTot.startEUR ? (_sdTot.endEUR-_sdTot.startEUR)/_sdTot.startEUR : 0)
-                    : ((_isAll && _posAgg.pct!=null) ? _posAgg.pct
-                    : ((_heroRow.total.perf!=null) ? _heroRow.total.perf : ((_heroRow.total.pct!=null)?_heroRow.total.pct:0)));
+                    : ((_heroRow.total.perf!=null) ? _heroRow.total.perf : ((_heroRow.total.pct!=null)?_heroRow.total.pct:0));
   const _bUp = _blendPct>=0;
   const _blendCur = eur ? _sumEUR : _sumUSD;
   // #75 — P&L net = plus-value réelle (brut − apports), cohérent avec le % money-weighted
   const _netPnlEUR = (_heroRow.total.pnl||0) - (_heroRow.total.apports||0);
   const _blendPnl = _sdTot ? (eur ? Math.round(_sdTot.endEUR-_sdTot.startEUR) : Math.round((_sdTot.endEUR-_sdTot.startEUR)/_ue))
-    : ((_isAll && _posAgg.invUSD>0)
-    ? (eur ? Math.round(_posAgg.pnlUSD*_ue) : _posAgg.pnlUSD)
-    : (eur ? _netPnlEUR : Math.round(_netPnlEUR/_ue)));
+    : (eur ? _netPnlEUR : Math.round(_netPnlEUR/_ue));
   // #178 — transparence brut/apports/net : le montant affiché est le gain NET des apports (ce
   // que le portefeuille a VRAIMENT rapporté, hors argent que tu as toi-même déposé) — sur une
   // fenêtre longue avec des dépôts réguliers, ce chiffre est logiquement bien plus petit que la
   // simple différence de valeur. Sans le détail, ce petit montant peut sembler faux ; cette ligne
   // montre le calcul (brut − apports = net) pour que ce soit vérifiable d'un coup d'œil.
-  const _showApportsDetail = !_sdTot && !(_isAll && _posAgg.invUSD>0) && Math.abs(_heroRow.total.apports||0)>1;
+  const _showApportsDetail = !_sdTot && Math.abs(_heroRow.total.apports||0)>1;
   const _rawChangePnl = eur ? Math.round(_heroRow.total.pnl||0) : Math.round((_heroRow.total.pnl||0)/_ue);
   const _apportsPnl = eur ? Math.round(_heroRow.total.apports||0) : Math.round((_heroRow.total.apports||0)/_ue);
   // #96 — Le POURCENTAGE des cartes de fonds doit être un rendement pondéré par le TEMPS (TWR),
