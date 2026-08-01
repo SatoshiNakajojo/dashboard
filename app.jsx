@@ -2528,7 +2528,7 @@ try{ if(typeof window!=="undefined") window.__cgiMonthlyFix=__cgiMonthlyFix; }ca
 // Puis recalcul bom/pnl/pct (bom=eom du mois précédent, pnl=eom−bom−inv, pct=pnl/bom). Montre avant/après.
 //   __cgiInvFromBuys()      → tableaux, n'écrit rien
 //   __cgiInvFromBuys(true)  → écrit cgi_cm + cgi_sm au cloud, puis RECHARGER
-async function __cgiInvFromBuys(apply, stocksMode){ // stocksMode: "none" (défaut) | "net" (achats−ventes)
+async function __cgiInvFromBuys(apply, stocksMode, cryptoMode){ // stocksMode: "none" (défaut) | "net" (achats−ventes) ; cryptoMode: "net" (défaut) | "gross" (achats bruts, ancien comportement)
   try{
     var FROM="2026-03"; // début de la reprise
     var ue=(typeof _EFF_LIVE!=="undefined"&&_EFF_LIVE&&_EFF_LIVE.usdEur)|| (typeof CURRENT!=="undefined"&&CURRENT.usdEur) ||0.92;
@@ -2549,7 +2549,7 @@ async function __cgiInvFromBuys(apply, stocksMode){ // stocksMode: "none" (défa
         var ym=String(t.date).slice(0,7); m[ym]=(m[ym]||0)+costEUR(t); });
       return m;
     };
-    var depC=byMonth(isCrypto), depS_gross=byMonth(isStock);
+    var depC_gross=byMonth(isCrypto), depS_gross=byMonth(isStock);
     // #163b — ACTIONS : les achats IBKR sont majoritairement financés par des VENTES (rotation), pas par des
     // virements. Compter les achats BRUTS donnait des aberrations (mai : 38 786 € d'achats → −154 %).
     // On calcule le NET (achats − ventes) : seul un net positif correspond à de l'argent neuf.
@@ -2558,6 +2558,15 @@ async function __cgiInvFromBuys(apply, stocksMode){ // stocksMode: "none" (défa
     var depS_net={}; Object.keys(depS_gross).forEach(function(ym){ var n=depS_gross[ym]-(sellsS[ym]||0); if(n>0) depS_net[ym]=n; });
     // mode actions : "none" (défaut, aucun apport — CGIS n'a pas reçu de virement) ou "net"
     var depS = (stocksMode==="net") ? depS_net : {};
+    // #180 — CRYPTO souffre du MÊME biais que les actions (#163b), jamais corrigé ici : un achat
+    // crypto financé par la vente d'une AUTRE crypto (rotation BTC↔ETH, prise de profit puis rachat,
+    // rééquilibrage...) n'est pas de l'argent neuf, mais était compté en BRUT comme un apport —
+    // surestimant les apports totaux et donc sous-estimant le gain net affiché sur le Home. On calcule
+    // désormais le NET (achats − ventes) pour la crypto aussi, comme pour les actions (mode par défaut).
+    var sellsC={}; all.forEach(function(t){ if(!t||String(t.side||"").toUpperCase()!=="SELL") return; if(String(t.date||"")<FROM+"-01") return; if(!isCrypto(t)) return;
+      var ym=String(t.date).slice(0,7); sellsC[ym]=(sellsC[ym]||0)+costEUR(t); });
+    var depC_net={}; Object.keys(depC_gross).forEach(function(ym){ var n=depC_gross[ym]-(sellsC[ym]||0); if(n>0) depC_net[ym]=n; });
+    var depC = (cryptoMode==="gross") ? depC_gross : depC_net;
     function apply1(mapKey, deps){
       var MAP=lsv9Get(mapKey); if(!MAP) return {rows:[],MAP:null};
       var yrs=Object.keys(MAP).filter(function(y){return /^\d{4}$/.test(y);}).sort();
@@ -2581,7 +2590,9 @@ async function __cgiInvFromBuys(apply, stocksMode){ // stocksMode: "none" (défa
     }
     var rC=apply1('cgi_cm',depC), rS=apply1('cgi_sm',depS);
     console.info("═══ OPTION A — dépôts reconstruits depuis le coût des achats (à partir de "+FROM+") ═══");
-    console.info("CGIC (crypto) — dépôts mensuels €/mois :", Object.keys(depC).sort().map(function(k){return k+":"+Math.round(depC[k]);}).join("  "));
+    console.info("CGIC (crypto) — mode « "+(cryptoMode==="gross"?"achats bruts (ancien comportement)":"net achats−ventes")+" ». Achats BRUTS (rotation incluse) :", Object.keys(depC_gross).sort().map(function(k){return k+":"+Math.round(depC_gross[k]);}).join("  "));
+    console.info("CGIC — net achats−ventes (= argent neuf éventuel) :", Object.keys(depC_net).sort().map(function(k){return k+":"+Math.round(depC_net[k]);}).join("  ")||"aucun");
+    console.info("CGIC — apports retenus :", Object.keys(depC).sort().map(function(k){return k+":"+Math.round(depC[k]);}).join("  "));
     try{ console.table(rC.rows); }catch(e){}
     console.info("CGIS (actions) — mode « "+(stocksMode==="net"?"net achats−ventes":"aucun apport")+" ». Achats BRUTS (rotation, NON retenus) :", Object.keys(depS_gross).sort().map(function(k){return k+":"+Math.round(depS_gross[k]);}).join("  "));
     console.info("CGIS — net achats−ventes (= argent neuf éventuel) :", Object.keys(depS_net).sort().map(function(k){return k+":"+Math.round(depS_net[k]);}).join("  ")||"aucun");
