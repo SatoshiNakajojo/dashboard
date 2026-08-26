@@ -11752,6 +11752,14 @@ function PageWatchlist({ EFF, hidden }){
   const[showTools,setShowTools]=useState(false);  // v4.7 — menu Outils (News/Tech/Indicateurs)
   const[showIndic,setShowIndic]=useState(false);  // v4.7 — feuille indicateurs BTC
   const[pickMode,setPickMode] =useState(null);   // "low"|"high"|"sell"|null
+  // v4.8 — Recherche par conditions (scan IA du marché mondial), déclenchée depuis le bouton +
+  const[addMode,setAddMode]         = useState("manual"); // "manual"|"screener"
+  const[screenerConds,setScreenerConds] = useState([{id:1,text:""}]);
+  const[screenerBusy,setScreenerBusy]   = useState(false);
+  const[screenerMsg,setScreenerMsg]     = useState("");
+  const[screenerError,setScreenerError] = useState("");
+  const[screenerResults,setScreenerResults] = useState([]);
+  const[screenerOpenIdx,setScreenerOpenIdx] = useState(null); // index du candidat déplié
   // v4.0 LOT2 — backfill best-effort des logos manquants (1× par session)
   useEffect(function(){
     var missing=(list||[]).map(function(e){return e.ticker;})
@@ -12060,6 +12068,11 @@ function PageWatchlist({ EFF, hidden }){
       sellTargets:[{price:"",note:""}],
       conditions:blankConds(3),
       risks:""});
+    setAddMode("manual");
+    setScreenerConds([{id:1,text:""}]);
+    setScreenerResults([]);
+    setScreenerError("");
+    setScreenerMsg("");
     setModal("add");
   }
   function openEdit(e){
@@ -12173,6 +12186,183 @@ function PageWatchlist({ EFF, hidden }){
     setTechMsg("✓ "+totV+"/"+totC+" condition(s) technique(s) validée(s)");
     setTimeout(function(){setTechMsg("");},5000);
   }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // v4.8 — RECHERCHE PAR CONDITIONS (scan IA du marché mondial)
+  // L'IA (Claude + recherche web, côté Worker) propose des tickers candidats à
+  // partir de conditions libres (jusqu'à 10) ; l'app revérifie ensuite ELLE-MÊME,
+  // avec de vraies données Yahoo Finance, les critères chiffrables qu'elle sait
+  // reconnaître (% de l'ATH, ancienneté de l'historique, tendance hebdo depuis la
+  // création). Les autres conditions (secteur, thème...) restent du jugement IA.
+  // ══════════════════════════════════════════════════════════════════════════
+  function addScreenerCond(){
+    setScreenerConds(function(p){
+      if(p.length>=10) return p;
+      return p.concat([{id:Date.now(),text:""}]);
+    });
+  }
+  function removeScreenerCond(idx){
+    setScreenerConds(function(p){ var a=[...p]; a.splice(idx,1); return a; });
+  }
+  function updateScreenerCond(idx,text){
+    setScreenerConds(function(p){ var a=[...p]; a[idx]={...a[idx],text:text}; return a; });
+  }
+  function addScreenerPreset(text){
+    setScreenerConds(function(p){
+      var empty=p.findIndex(function(c){return !c.text||!c.text.trim();});
+      if(empty>=0){ var a=[...p]; a[empty]={...a[empty],text:text}; return a; }
+      if(p.length>=10) return p;
+      return p.concat([{id:Date.now(),text:text}]);
+    });
+  }
+
+  // Reconnaît le TYPE d'une condition libre pour savoir si on peut la vérifier
+  // avec des données réelles (sinon elle reste "jugement IA" 🤖).
+  function screenerClassifyCond(text){
+    var t=(text||"").toLowerCase();
+    var athM = t.match(/(\d{1,3})\s*%[^%]{0,30}\b(ath|plus haut historique|sommet|précédent haut|all\s*time\s*high)/)
+      || t.match(/\b(ath|plus haut historique|sommet|all\s*time\s*high)\b[^%]{0,30}(\d{1,3})\s*%/);
+    if(athM){ var n=parseInt(athM[1]||athM[2],10); if(!isNaN(n)&&n>0&&n<=100) return {kind:"ath",target:n}; }
+    var histM = t.match(/(\d{1,2})\s*(?:\+)?\s*an(?:s|née|nées)?\b/);
+    if(histM && /(historique|cote|coté|cotée|existe|listé|listée|lancé|lancée|création|ancienneté|données)/.test(t)){
+      var y=parseInt(histM[1],10); if(!isNaN(y)&&y>0) return {kind:"history",years:y};
+    }
+    if(/(hebdo|hebdomadaire|weekly)/.test(t) && /(hauss|uptrend|montant|croissant)/.test(t)){
+      return {kind:"uptrend"};
+    }
+    if(/(hauss|uptrend)/.test(t) && /(création|origine|introduction|depuis toujours|ipo|lancement)/.test(t)){
+      return {kind:"uptrend"};
+    }
+    return {kind:"info"};
+  }
+  // Régression linéaire simple : true si la tendance des clôtures est haussière
+  // ET que le dernier cours dépasse le tout premier (depuis la création).
+  function screenerTrendUp(closes){
+    var n=closes.length; if(n<10) return null;
+    var sumX=0,sumY=0,sumXY=0,sumXX=0;
+    for(var i=0;i<n;i++){ sumX+=i; sumY+=closes[i]; sumXY+=i*closes[i]; sumXX+=i*i; }
+    var denom=(n*sumXX-sumX*sumX); if(!denom) return null;
+    var slope=(n*sumXY-sumX*sumY)/denom;
+    return slope>0 && closes[n-1]>closes[0];
+  }
+  function screenerDomainGuess(sector){
+    var s=(sector||"").toLowerCase();
+    var map=[
+      [/intelligence artificielle|\bia\b|\bai\b|machine learning|deep learning/,"IA"],
+      [/défense|defense|armement|militaire/,"Défense"],
+      [/santé|health|pharma|biotech/,"Santé"],
+      [/énergie|energy|pétrole|gaz|solaire|nucléaire/,"Énergie"],
+      [/finance|banque|assurance/,"Finance"],
+      [/matières premières|commodit|mining|minier|métaux/,"Matières premières"],
+      [/consommation|retail|consumer/,"Consommation"],
+      [/immobilier|real estate|reit/,"Immobilier"],
+      [/or\b|gold/,"Or"],
+      [/crypto/,"Crypto"],
+      [/indice|index/,"Indices"],
+      [/tech|logiciel|software|semi-?conduct/,"Tech"],
+    ];
+    for(var i=0;i<map.length;i++){ if(map[i][0].test(s)) return map[i][1]; }
+    return "Autre";
+  }
+  // Résout le symbole Yahoo le plus probable pour un candidat IA.
+  function screenerYahooSymbol(cand){
+    if(cand.yahooSymbol) return cand.yahooSymbol;
+    var tk=(cand.ticker||"").toUpperCase().trim();
+    if((cand.market||"").toLowerCase()==="crypto" && !/-USD$/.test(tk)) return tk+"-USD";
+    return tk;
+  }
+  // Vérifie un candidat contre les conditions saisies, via l'historique hebdo Yahoo (1 seul appel).
+  async function verifyScreenerCandidate(cand, condTexts){
+    var ySym=screenerYahooSymbol(cand);
+    var checklist=condTexts.map(function(t){ return {text:t, kind:screenerClassifyCond(t).kind, ok:null, detail:""}; });
+    var out={...cand, ySym:ySym, dataOk:false, checklist:checklist, verifiedScore:0, verifiableTotal:0, infoCount:checklist.filter(function(c){return c.kind==="info";}).length};
+    try{
+      var r=await fetch(CF_WORKER_URL+"/yahoo-chart?symbol="+encodeURIComponent(ySym)+"&interval=1wk&range=max&no_logo=1",
+        {headers:{"X-Auth-Key":CF_AUTH_KEY},signal:AbortSignal.timeout(15000)});
+      var d=await r.json();
+      var candles=Array.isArray(d.candles)?d.candles:[];
+      if(candles.length<8) return out; // pas assez d'historique exploitable
+      var closes=candles.map(function(k){return k.c;}).filter(function(v){return v!=null;});
+      var highs=candles.map(function(k){return k.h!=null?k.h:k.c;}).filter(function(v){return v!=null;});
+      var last=closes[closes.length-1];
+      var ath=Math.max.apply(null,highs);
+      var firstT=candles[0].t, lastT=candles[candles.length-1].t;
+      var years=(lastT-firstT)/(365.25*24*3600*1000);
+      var pctOfAth=ath>0?(last/ath*100):null;
+      var up=screenerTrendUp(closes);
+      out.stats={ath:ath,last:last,pctOfAth:pctOfAth,years:years,uptrend:up,firstDate:new Date(firstT).toISOString().slice(0,10)};
+      var verified=0, verifiable=0;
+      out.checklist=condTexts.map(function(t){
+        var cls=screenerClassifyCond(t);
+        if(cls.kind==="ath"){
+          verifiable++;
+          var ok=pctOfAth!=null && Math.abs(pctOfAth-cls.target)<=15;
+          if(ok) verified++;
+          return {text:t,kind:"ath",ok:ok,detail:"Prix actuel à "+(pctOfAth!=null?pctOfAth.toFixed(0):"?")+"% de l'ATH ($"+ath.toLocaleString("fr-FR",{maximumFractionDigits:2})+")"};
+        }
+        if(cls.kind==="history"){
+          verifiable++;
+          var ok2=years>=cls.years;
+          if(ok2) verified++;
+          return {text:t,kind:"history",ok:ok2,detail:"Historique disponible : "+years.toFixed(1)+" an(s) (depuis "+out.stats.firstDate+")"};
+        }
+        if(cls.kind==="uptrend"){
+          verifiable++;
+          var ok3=up===true;
+          if(ok3) verified++;
+          return {text:t,kind:"uptrend",ok:ok3,detail:up==null?"Historique insuffisant pour juger la tendance":(up?"Tendance haussière confirmée depuis la création (hebdo)":"Pas de tendance haussière nette depuis la création")};
+        }
+        return {text:t,kind:"info",ok:null,detail:"Jugement IA (non revérifiable avec les prix seuls)"};
+      });
+      out.verifiedScore=verified; out.verifiableTotal=verifiable; out.dataOk=true;
+    }catch(e){ /* pas de données → candidat affiché sans checklist chiffrée */ }
+    return out;
+  }
+  async function runScreenerScan(){
+    var conds=(screenerConds||[]).map(function(c){return (c.text||"").trim();}).filter(Boolean);
+    if(!conds.length) return;
+    setScreenerBusy(true); setScreenerError(""); setScreenerResults([]); setScreenerOpenIdx(null);
+    setScreenerMsg("🤖 Recherche de tickers dans le monde entier (IA + web)…");
+    try{
+      var r=await fetch(CF_WORKER_URL+"/screener_scan",{
+        method:"POST", headers:{"Content-Type":"application/json","X-Auth-Key":CF_AUTH_KEY},
+        body:JSON.stringify({conditions:conds}), signal:AbortSignal.timeout(75000)
+      });
+      var d=await r.json();
+      if(!d.ok) throw new Error(d.error||("Échec du scan (HTTP "+r.status+")"));
+      var candidates=(Array.isArray(d.candidates)?d.candidates:[]).slice(0,12);
+      if(!candidates.length){ setScreenerMsg(""); setScreenerError("Aucun ticker trouvé pour ces conditions."); setScreenerBusy(false); return; }
+      setScreenerMsg("📊 Vérification des critères chiffrables sur "+candidates.length+" candidat(s)…");
+      var verified=[];
+      for(var i=0;i<candidates.length;i++){ verified.push(await verifyScreenerCandidate(candidates[i],conds)); }
+      verified.sort(function(a,b){ return (b.verifiedScore||0)-(a.verifiedScore||0); });
+      setScreenerResults(verified);
+      setScreenerMsg("");
+    }catch(e){
+      setScreenerError("Erreur : "+e.message);
+      setScreenerMsg("");
+    }
+    setScreenerBusy(false);
+  }
+  // Reprend un candidat IA dans le formulaire manuel classique (mêmes champs, même bouton Ajouter).
+  function pickScreenerCandidate(cand){
+    var conds=(screenerConds||[]).map(function(c){return (c.text||"").trim();}).filter(Boolean).map(function(t){
+      var found=(cand.checklist||[]).find(function(x){return x.text===t;});
+      return cgiMigrateCond({text:t, validated:!!(found&&found.ok===true), cat:"perso"});
+    });
+    var tk=(cand.ticker||"").toUpperCase().trim();
+    if(cand.ySym && cand.ySym!==tk && typeof YF_MAP!=="undefined"){
+      YF_MAP[tk]=cand.ySym;
+      try{ saveBase('cgi_yfmap',{...YF_MAP}); }catch(e){}
+    }
+    var descBits=[]; if(cand.note) descBits.push(cand.note); if(cand.exchange||cand.country) descBits.push("("+[cand.exchange,cand.country].filter(Boolean).join(" · ")+")");
+    setEditForm({ticker:tk, name:cand.name||tk, cat:(cand.market||"").toLowerCase()==="crypto"?"Crypto":"Picking",
+      fav:false, description:descBits.join(" "), domain:screenerDomainGuess(cand.sector),
+      buyZoneLow:"",buyZoneHigh:"",alertBuy:"",alertSell:"",sellTargets:[{price:"",note:""}],
+      conditions:conds.length?conds:blankConds(3), risks:""});
+    setAddMode("manual");
+  }
+
   function updateSell(idx,field,val){
     setEditForm(function(p){
       var st=[...(p.sellTargets||[])];st[idx]={...st[idx],[field]:val};return{...p,sellTargets:st};
@@ -12314,6 +12504,92 @@ function PageWatchlist({ EFF, hidden }){
       ),
       line2,
       cat==="technique"&&React.createElement("div",{style:{fontSize:10,color:grayC,fontStyle:"italic"}},"→ "+(c.text||cgiCondText(c)))
+    );
+  }
+
+  // ── v4.8 — Panneau « Recherche par conditions » (scan IA) dans le modal + ──
+  var SCREENER_PRESETS=[
+    "Prix actuel à environ 40% de son précédent ATH",
+    "Historique de prix disponible depuis plus de 5 ans",
+    "Secteur : Intelligence artificielle",
+    "Tendance haussière en bougies hebdomadaires depuis sa création",
+  ];
+  function screenerKindBadge(kind){
+    if(kind==="info") return {label:"🤖 IA",color:blueC};
+    return {label:"📊 chiffré",color:orangeC};
+  }
+  function renderScreenerPanel(){
+    var nonEmpty=(screenerConds||[]).filter(function(c){return c.text&&c.text.trim();});
+    return React.createElement("div",null,
+      React.createElement("div",{style:{fontSize:11,color:orangeC,fontWeight:700,marginBottom:6,letterSpacing:.5}},"CONDITIONS DE RECHERCHE (jusqu'à 10)"),
+      React.createElement("div",{style:{fontSize:10,color:grayC,marginBottom:10,lineHeight:1.4}},
+        "Décris librement chaque condition. L'IA scanne le marché mondial (actions + crypto) pour proposer des tickers candidats ; l'app revérifie ensuite avec de vraies données de prix ce qu'elle sait mesurer (% de l'ATH, ancienneté, tendance)."),
+      React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:6,marginBottom:8}},
+        (screenerConds||[]).map(function(c,i){
+          return React.createElement("div",{key:c.id||i,style:{display:"flex",gap:6,alignItems:"center"}},
+            React.createElement("span",{style:{fontSize:10,color:grayC,width:16,textAlign:"right",flexShrink:0}},String(i+1)),
+            React.createElement("input",{value:c.text||"",placeholder:"Ex: "+SCREENER_PRESETS[i%SCREENER_PRESETS.length],
+              onChange:function(ev){updateScreenerCond(i,ev.target.value);},style:{...inputStyle,flex:1}}),
+            React.createElement("button",{onClick:function(){removeScreenerCond(i);},style:{background:"none",border:"none",color:redC,fontSize:16,cursor:"pointer",padding:"0 4px",flexShrink:0}},"×")
+          );
+        })
+      ),
+      (screenerConds||[]).length<10&&React.createElement("button",{onClick:addScreenerCond,style:{background:"none",border:"1px solid "+borderC,borderRadius:6,padding:"4px 12px",color:blueC,fontSize:11,cursor:"pointer",marginBottom:10}},
+        "+ Ajouter une condition"),
+      React.createElement("div",{style:{display:"flex",flexWrap:"wrap",gap:6,marginBottom:14}},
+        SCREENER_PRESETS.map(function(p,i){
+          return React.createElement("button",{key:i,onClick:function(){addScreenerPreset(p);},
+            style:{background:"none",border:"1px solid "+borderC,borderRadius:999,padding:"4px 10px",color:grayC,fontSize:10,cursor:"pointer"}},"+ "+p);
+        })
+      ),
+      React.createElement("button",{onClick:runScreenerScan,disabled:screenerBusy||nonEmpty.length===0,
+        style:{width:"100%",background:screenerBusy?grayC:blueC,border:"none",borderRadius:10,padding:"12px",color:"#000",fontSize:14,fontWeight:600,cursor:(screenerBusy||nonEmpty.length===0)?"default":"pointer",opacity:(screenerBusy||nonEmpty.length===0)?.6:1,marginBottom:12}},
+        screenerBusy?"⟳ Scan en cours…":"🔍 Lancer le scan IA ("+nonEmpty.length+" condition"+(nonEmpty.length>1?"s":"")+")"),
+      screenerMsg&&React.createElement("div",{style:{fontSize:11,color:blueC,marginBottom:12,textAlign:"center"}},screenerMsg),
+      screenerError&&React.createElement("div",{style:{fontSize:11,color:redC,marginBottom:12,padding:"8px 10px",background:redC+"12",border:"1px solid "+redC+"44",borderRadius:8}},screenerError),
+
+      screenerResults.length>0&&React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:8,marginBottom:12}},
+        screenerResults.map(function(cand,idx){
+          var open=screenerOpenIdx===idx;
+          var total=(cand.checklist||[]).length;
+          return React.createElement("div",{key:idx,style:{border:"1px solid "+borderC,borderRadius:10,overflow:"hidden"}},
+            React.createElement("div",{onClick:function(){setScreenerOpenIdx(open?null:idx);},style:{padding:"10px 12px",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}},
+              React.createElement("div",{style:{minWidth:0}},
+                React.createElement("div",{style:{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}},
+                  React.createElement("span",{style:{fontSize:14,fontWeight:700,color:textC}},cand.ticker),
+                  cand.sector&&React.createElement("span",{style:{fontSize:9,background:blueC+"22",border:"1px solid "+blueC+"44",borderRadius:4,padding:"1px 6px",color:blueC}},cand.sector),
+                  !cand.dataOk&&React.createElement("span",{style:{fontSize:9,color:grayC,fontStyle:"italic"}},"⚠ données indisponibles")
+                ),
+                React.createElement("div",{style:{fontSize:11,color:grayC,marginTop:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}},cand.name||"")
+              ),
+              cand.dataOk&&total>0&&React.createElement("span",{style:{fontSize:12,fontWeight:700,flexShrink:0,color:cand.verifiedScore===cand.verifiableTotal&&cand.verifiableTotal>0?greenC:orangeC}},
+                cand.verifiedScore+"/"+cand.verifiableTotal+" ✓")
+            ),
+            open&&React.createElement("div",{style:{padding:"0 12px 12px",borderTop:"1px solid "+borderC}},
+              cand.note&&React.createElement("div",{style:{fontSize:11,color:grayC,fontStyle:"italic",margin:"10px 0"}},"🤖 "+cand.note),
+              React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:6,marginBottom:10}},
+                (cand.checklist||[]).map(function(ch,ci){
+                  var badge=screenerKindBadge(ch.kind);
+                  var icon=ch.ok===true?"✅":ch.ok===false?"❌":"🤖";
+                  return React.createElement("div",{key:ci,style:{fontSize:11,display:"flex",alignItems:"flex-start",gap:6}},
+                    React.createElement("span",{style:{flexShrink:0}},icon),
+                    React.createElement("div",null,
+                      React.createElement("div",{style:{color:textC}},ch.text),
+                      ch.detail&&React.createElement("div",{style:{color:grayC,fontSize:10}},ch.detail)
+                    )
+                  );
+                })
+              ),
+              React.createElement("div",{style:{display:"flex",gap:8}},
+                React.createElement("button",{onClick:function(ev){ev.stopPropagation();setViewT({ticker:cand.ticker,cat:(cand.market||"").toLowerCase()==="crypto"?"Crypto":"Picking"});},
+                  style:{flex:1,background:"none",border:"1px solid "+borderC,borderRadius:8,padding:"8px",color:blueC,fontSize:12,fontWeight:700,cursor:"pointer"}},"📊 Voir la fiche"),
+                React.createElement("button",{onClick:function(ev){ev.stopPropagation();pickScreenerCandidate(cand);},
+                  style:{flex:1,background:orangeC,border:"none",borderRadius:8,padding:"8px",color:"#000",fontSize:12,fontWeight:700,cursor:"pointer"}},"+ Ajouter")
+              )
+            )
+          );
+        })
+      )
     );
   }
 
@@ -12541,6 +12817,16 @@ function PageWatchlist({ EFF, hidden }){
           React.createElement("button",{onClick:closeModal,style:{background:"none",border:"none",color:grayC,fontSize:20,cursor:"pointer"}},"×")
         ),
 
+        // v4.8 — bascule Ajout manuel / Recherche par conditions (IA), uniquement à la création
+        modal==="add"&&React.createElement("div",{style:{display:"flex",gap:6,marginBottom:16}},
+          React.createElement("button",{onClick:function(){setAddMode("manual");},style:lxBtn({active:addMode==="manual",style:{flex:1,padding:"8px 0",fontSize:12}})},"✍️ Manuel"),
+          React.createElement("button",{onClick:function(){setAddMode("screener");},style:lxBtn({active:addMode==="screener",style:{flex:1,padding:"8px 0",fontSize:12}})},"🤖 Recherche par conditions")
+        ),
+
+        modal==="add"&&addMode==="screener"&&renderScreenerPanel(),
+
+        (modal==="edit"||addMode==="manual")&&React.createElement(React.Fragment,null,
+
         // Section: Identité
         React.createElement("div",{style:{fontSize:11,color:orangeC,fontWeight:700,marginBottom:8,letterSpacing:.5}},"IDENTITÉ"),
         modal==="add"&&React.createElement("div",{style:{marginBottom:10}},
@@ -12659,8 +12945,10 @@ function PageWatchlist({ EFF, hidden }){
         // Submit
         React.createElement("button",{onClick:submitForm,style:{width:"100%",background:orangeC,border:"none",borderRadius:10,padding:"12px",color:"#000",fontSize:14,fontWeight:600,cursor:"pointer"}},
           modal==="add"?"Ajouter à la watchlist":"Enregistrer")
-      )   
-    )      
+
+        ) /* fin Fragment manuel */
+      )
+    )
   ,document.body)
   );
 }
