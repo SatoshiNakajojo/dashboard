@@ -7045,8 +7045,14 @@ function PageStats({chartData, hidden=false, EFF, eur=false, liveDD, src, liveIn
         if(eomEUR!=null) result.eom[mi] = eomEUR;
       }
       // re-chaîner BOM = EOM du mois précédent (même frontière)
+      // #183 — la borne était `mi<curMI` : le MOIS EN COURS était donc exclu du re-chaînage et
+      // conservait le BOM figé au moment où sa ligne avait été créée. Or la boucle ci-dessus vient
+      // justement de RECALCULER depuis DD les EOM des mois révolus : le mois en cours restait donc
+      // raccroché à une ancienne valeur de juillet (constaté : BOM août 230 254 $ vs EOM juillet
+      // 187 486 $), ce qui faussait son P&L, son %, et par ricochet le total et la moyenne de
+      // l'année. `mi<=curMI` raccroche le mois en cours à la frontière corrigée.
       result.bom = [...(result.bom||[])];
-      for(let mi=1; mi<curMI; mi++){
+      for(let mi=1; mi<=curMI; mi++){
         if(result.eom[mi-1]!=null) result.bom[mi] = result.eom[mi-1];
       }
     }
