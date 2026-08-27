@@ -12336,11 +12336,26 @@ function PageWatchlist({ EFF, hidden }){
       });
       var d=await r.json();
       if(!d.ok) throw new Error(d.error||("Échec du scan (HTTP "+r.status+")"));
-      var candidates=(Array.isArray(d.candidates)?d.candidates:[]).slice(0,12);
+      var candidates=(Array.isArray(d.candidates)?d.candidates:[]).slice(0,30);
       if(!candidates.length){ setScreenerMsg(""); setScreenerError("Aucun ticker trouvé pour ces conditions."); setScreenerBusy(false); return; }
       setScreenerMsg("📊 Vérification des critères chiffrables sur "+candidates.length+" candidat(s)…");
-      var verified=[];
-      for(var i=0;i<candidates.length;i++){ verified.push(await verifyScreenerCandidate(candidates[i],conds)); }
+      // Vérification EN PARALLÈLE par vagues de 6 : en séquentiel, 30 candidats × un appel Yahoo
+      // chacun (jusqu'à 15 s) faisaient patienter plusieurs minutes. L'ordre d'origine (le plus
+      // pertinent d'abord, selon l'IA) est préservé, le tri par score s'appliquant ensuite.
+      var verified=new Array(candidates.length);
+      var POOL=6, next=0, done=0;
+      await Promise.all(Array.from({length:Math.min(POOL,candidates.length)},function(){
+        return (async function worker(){
+          while(true){
+            var i=next++;
+            if(i>=candidates.length) return;
+            verified[i]=await verifyScreenerCandidate(candidates[i],conds);
+            done++;
+            setScreenerMsg("📊 Vérification des critères chiffrables — "+done+"/"+candidates.length+"…");
+          }
+        })();
+      }));
+      verified=verified.filter(Boolean);
       verified.sort(function(a,b){ return (b.verifiedScore||0)-(a.verifiedScore||0); });
       setScreenerResults(verified);
       setScreenerMsg("");
@@ -14570,6 +14585,41 @@ function App(){
     } catch(e){ setRefreshErr({ok:[], fail:["Erreur réseau: "+e.message]}); }
     finally{ setRefreshing(false); }
   },[]);
+
+  // #184 — SYNCHRO IBKR À CHAQUE CHARGEMENT DE L'APP.
+  // Avant : /ibkr_sync n'était déclenché que par le cron du worker (4 fois/jour) ou avant l'envoi
+  // du baromètre → une position prise dans la journée n'apparaissait qu'au cron suivant. Ici on la
+  // déclenche à l'ouverture, en tâche de fond (jamais bloquant pour l'affichage) : le worker
+  // réconcilie les positions, réécrit cgi_ibkr_truth, puis on relit le KV et on recalcule.
+  // `purge` reste à 0 : on ne solde jamais automatiquement une ligne absente du rapport.
+  useEffect(function(){
+    var cancelled=false;
+    (async function(){
+      try{
+        var r=await fetch(CF_WORKER_URL+"/ibkr_sync?k="+encodeURIComponent(CF_AUTH_KEY),
+          { headers:{"X-Auth-Key":CF_AUTH_KEY}, cache:"no-store", signal:AbortSignal.timeout(45000) });
+        if(cancelled || !r.ok) return;
+        var d=await r.json().catch(function(){return null;});
+        if(cancelled || !d || d.ok===false){
+          if(d && d.error) console.info("[ibkr] synchro au chargement ignorée : "+d.error);
+          return;
+        }
+        console.info("[ibkr] synchro au chargement : "+(d.misesAJourQuantites!=null?d.misesAJourQuantites+" quantité(s) réalignée(s)":"ok"));
+        // Relire le cloud pour adopter la vérité fraîche, puis re-dériver les positions.
+        var rr=await fetch(CF_WORKER_URL+"/read?k="+encodeURIComponent(CF_AUTH_KEY)+"&_t="+Date.now(),
+          { headers:{"X-Auth-Key":CF_AUTH_KEY}, cache:"no-store", signal:AbortSignal.timeout(20000) });
+        if(cancelled || !rr.ok) return;
+        var kv=await rr.json().catch(function(){return null;});
+        if(cancelled || !kv) return;
+        if(kv.cgi_ibkr_truth && kv.cgi_ibkr_truth.ts){
+          try{ localStorage.setItem('cgi_ibkr_truth_direct', JSON.stringify(kv.cgi_ibkr_truth)); }catch(e){}
+        }
+        if(kv.cgi_txns && Array.isArray(kv.cgi_txns)){ try{ lsv9Set('cgi_txns', kv.cgi_txns); }catch(e){} }
+        if(!cancelled) handleRefresh();
+      }catch(e){ /* IBKR non configuré ou réseau indisponible : silencieux */ }
+    })();
+    return function(){ cancelled=true; };
+  },[handleRefresh]);
 
   // Merge live prices into effective CURRENT data
   // EFF = live est la source unique de vérité
