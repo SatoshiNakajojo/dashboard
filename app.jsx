@@ -3352,6 +3352,18 @@ const crd=(x={})=>({
   marginBottom:7,
   ...x,
 });
+// Armorial — variante PLATE de crd() : ni fond ni bordure, seulement un filet de tête.
+// Déployée écran par écran ; crd() lui-même est inchangé, donc aucun écran non traité ne bouge.
+const crdFlat=(x={})=>({
+  background:"transparent",
+  border:"none",
+  borderTop:`1px solid ${C.border}`,
+  borderRadius:0,
+  padding:"14px 2px 4px",
+  boxShadow:"none",
+  marginBottom:7,
+  ...x,
+});
 const Modal=({title,onClose,children})=>(
   <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.82)",display:"flex",alignItems:"flex-end",justifyContent:"center",zIndex:300}}>
     <div style={{background:C.bg1,borderRadius:"20px 20px 0 0",width:"100%",maxWidth:430,maxHeight:"92vh",overflowY:"auto",padding:"20px 20px 48px"}}>
@@ -6202,15 +6214,17 @@ function PageOverview({chartData,onSnapshot,onImportCsv,eur,setEur,hidden,setHid
     <div style={{margin:"0 -16px"}}>
 
       {/* ════ HERO ════ */}
-      <div style={{padding:"22px 20px 22px",borderBottom:`1px solid ${C.border}`}}>
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12}}>
-          <span style={{fontSize:10,letterSpacing:4,color:C.text2,textTransform:"uppercase",textAlign:"center"}}>Patrimoine total</span>
+      {/* Armorial — hero centré : le libellé en petites capitales coiffe le chiffre, l'œil de
+          masquage passe en position absolue pour ne pas décaler le centrage. */}
+      <div style={{padding:"24px 20px 22px",borderBottom:`1px solid ${C.border}`,position:"relative",textAlign:"center"}}>
+        <div style={{marginBottom:14}}>
+          <span style={{fontSize:9.5,letterSpacing:3.6,color:C.text2,textTransform:"uppercase"}}>Patrimoine total</span>
           <button onClick={()=>setHidden(!hidden)} title={hidden?"Afficher les montants":"Masquer les montants"}
-            style={{background:"none",border:"none",cursor:"pointer",color:C.text3,display:"flex",padding:0}}>
-            <Icon name={hidden?"eyeOff":"eye"} size={18}/>
+            style={{background:"none",border:"none",cursor:"pointer",color:C.text3,display:"flex",padding:0,position:"absolute",right:20,top:24}}>
+            <Icon name={hidden?"eyeOff":"eye"} size={17}/>
           </button>
         </div>
-        <div style={{fontFamily:"'Cormorant Garamond',Georgia,serif",fontWeight:400,fontSize:50,letterSpacing:1,color:C.text,fontVariantNumeric:"tabular-nums",lineHeight:1}}>
+        <div style={{fontFamily:"'Cormorant Garamond',Georgia,serif",fontWeight:600,fontSize:50,letterSpacing:1,color:C.text,fontVariantNumeric:"tabular-nums",lineHeight:1.04}}>
           {hidden
             ? "••••••"
             : (()=>{ // #115 — pendant le glissement : montant au point survolé (devise affichée conservée)
@@ -6329,8 +6343,13 @@ function PageOverview({chartData,onSnapshot,onImportCsv,eur,setEur,hidden,setHid
           ];
           return cards.map(function(c,i){
             return (
-              <div key={i} style={{border:`1px solid ${C.border}`,borderRadius:12,padding:"8px 10px 6px",background:C.bg1,minHeight:86,display:"flex",flexDirection:"column"}}>
-                <div style={{fontSize:11,color:C.text2,letterSpacing:1,marginBottom:2}}>{c.name}</div>
+              // Armorial : plus de carte bordée — un filet de tête, un bâtonnet de couleur pour
+              // l'identité du pôle, et le reste porté par l'espace et la typographie.
+              <div key={i} style={{borderTop:`1px solid ${C.border}`,borderRadius:0,padding:"11px 2px 6px",background:"transparent",minHeight:86,display:"flex",flexDirection:"column"}}>
+                <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:4}}>
+                  <span style={{width:2,height:11,borderRadius:1,background:c.color,flexShrink:0}}/>
+                  <span style={{fontSize:9.5,color:C.text2,letterSpacing:1.8,textTransform:"uppercase"}}>{c.name}</span>
+                </div>
                 {c.kind==="perf" ? (
                   <>
                     <div style={{fontFamily:"'Cormorant Garamond',Georgia,serif",fontSize:20,color:C.text,fontVariantNumeric:"tabular-nums",lineHeight:1.1}}>{fmtP(c.pct)}</div>
@@ -6665,16 +6684,17 @@ function PageAllocation({hidden, EFF, eur=false, setEur, iconDbVersion=0, bumpIc
                 d'un filet de clôture. Le chiffre gagne en présence sans que rien ne l'encadre. */}
             <div aria-hidden="true" style={{position:"absolute",inset:"-14% -12% 4%",pointerEvents:"none",
               background:`radial-gradient(58% 62% at 34% 46%, ${(C.blue||"#7891B4")}22, transparent 72%)`}}/>
-            <div style={{position:"relative",padding:"14px 4px 16px",display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12}}>
-              <div>
-                <div style={{fontFamily:"'Cormorant Garamond',Georgia,serif",fontWeight:600,fontSize:42,lineHeight:1,color:C.text,fontVariantNumeric:"tabular-nums"}}>
-                  {hidden?"••••••":<><span style={{color:C.gold,fontSize:24,verticalAlign:4,marginRight:2}}>{cur2b}</span>{fmt(totalDisplay)}</>}
-                </div>
-                <div style={{fontSize:12,color:C.text3,marginTop:6,fontVariantNumeric:"tabular-nums"}}>{msk(eur?"$"+fmt(totalUSD):"€"+fmt(totalEUR),hidden)}</div>
+            {/* Composition centrée de la maquette : libellé en petites capitales, chiffre en
+                Cormorant, contre-valeur puis performance — chacun sur sa ligne, rien à droite. */}
+            <div style={{position:"relative",padding:"18px 4px 20px",textAlign:"center"}}>
+              <div style={{fontSize:9,letterSpacing:3.4,textTransform:"uppercase",color:C.text2}}>Actifs sous gestion</div>
+              <div style={{fontFamily:"'Cormorant Garamond',Georgia,serif",fontWeight:600,fontSize:46,lineHeight:1.04,color:C.text,fontVariantNumeric:"tabular-nums",margin:"12px 0 5px"}}>
+                {hidden?"••••••":<><span style={{color:C.gold,fontSize:25,verticalAlign:5,marginRight:2}}>{cur2b}</span>{fmt(totalDisplay)}</>}
               </div>
-              <div style={{textAlign:"right"}}>
-                <div style={{fontFamily:"'Cormorant Garamond',Georgia,serif",fontSize:26,fontWeight:600,lineHeight:1,color:clr(sectionsPnl),fontVariantNumeric:"tabular-nums"}}>{hidden?"•••":(sectionsPnl>=0?"+":"")+cur2b+fmtK(Math.abs(eur?Math.round(sectionsPnl*(_src.usdEur||0.852)):sectionsPnl))}</div>
-                <div style={{fontSize:11,fontVariantNumeric:"tabular-nums",color:clr(sectionsPnl),marginTop:7,letterSpacing:.4}}>{fmtP(pnlPct)}</div>
+              <div style={{fontSize:12.5,color:C.text3,fontVariantNumeric:"tabular-nums"}}>{msk(eur?"$"+fmt(totalUSD):"€"+fmt(totalEUR),hidden)}</div>
+              <div style={{fontSize:12,marginTop:11,fontVariantNumeric:"tabular-nums",letterSpacing:.4,color:clr(sectionsPnl)}}>
+                {hidden?"•••":(sectionsPnl>=0?"▴ +":"▾ ")+cur2b+fmtK(Math.abs(eur?Math.round(sectionsPnl*(_src.usdEur||0.852)):sectionsPnl))}
+                <span style={{color:C.text3}}>{"  ·  "+fmtP(pnlPct)}</span>
               </div>
             </div>
             <div style={{borderTop:`1px solid ${C.border}`}}/>
@@ -7199,34 +7219,35 @@ function PageStats({chartData, hidden=false, EFF, eur=false, liveDD, src, liveIn
   return(
     <div>
       <PageTitle title="Stats" sub="Performance & saisonnalité"/>
-      {/* ── Sélecteur catégorie ── */}
-      <div style={{display:"flex",gap:8,marginBottom:12}}>
-        {[["crypto","₿ Crypto",C.btc],["stocks","↗ Actions",C.blue],["total","∑ Total",C.green]].map(([k,l,c])=>(
-          <button key={k} onClick={()=>setCat(k)} style={lxBtn({active:cat===k,accent:c,style:{flex:1,padding:"8px 4px"}})}>{l}</button>
+      {/* ── Sélecteur catégorie — onglets soulignés (Armorial) ── */}
+      <div style={{display:"flex",gap:0,marginBottom:14,borderBottom:`1px solid ${C.border}`}}>
+        {[["crypto","Crypto",C.btc],["stocks","Actions",C.blue],["total","Total",C.green]].map(([k,l,c])=>(
+          <button key={k} onClick={()=>setCat(k)} style={lxBtn({active:cat===k,accent:c,underline:true,style:{flex:1}})}>{l}</button>
         ))}
       </div>
 
       {/* ── Sélecteur année (mode mensuel uniquement) ── */}
       {barMode==="month" && (
-      <div style={{display:"flex",gap:6,marginBottom:16,flexWrap:"wrap"}}>
+      <div style={{display:"flex",gap:0,marginBottom:18,flexWrap:"wrap",borderBottom:`1px solid ${C.border}`}}>
         {years.map(y=>(
-          <button key={y} onClick={()=>setYr(y)} style={lxBtn({active:safeYr===y,accent:catColor,style:{flex:1,padding:"6px 0",fontSize:11}})}>{y}</button>
+          <button key={y} onClick={()=>setYr(y)} style={lxBtn({active:safeYr===y,accent:catColor,underline:true,style:{flex:1,fontSize:10.5,padding:"7px 0 8px",letterSpacing:1}})}>{y}</button>
         ))}
       </div>
       )}
 
-      {/* ── Résumé annuel ── */}
+      {/* ── Résumé annuel — quatre colonnes séparées par des filets, sans cartes ── */}
       {data&&(
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:6,marginBottom:14}}>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:0,marginBottom:16,
+          borderTop:`1px solid ${C.border}`,borderBottom:`1px solid ${C.border}`,padding:"12px 0"}}>
           {[
             ["P&L "+yr,cur+(ttlPnl>=0?"+":"")+Math.round(ttlPnl).toLocaleString("fr-FR"),ttlPnl>=0?C.green:C.red], // #127 — c'est le P&L de l'ANNÉE sélectionnée, pas depuis l'origine
             ["Moy./mois",fmtP(avgPct),avgPct>=0?C.green:C.red],
             ["Meilleur",bestI>=0?data.m[bestI]+" "+fmtP(realPct[bestI]):"—",C.green],
             ["Pire",worstI>=0?data.m[worstI]+" "+fmtP(realPct[worstI]):"—",C.red],
-          ].map(([l,v,c])=>(
-            <div key={l} style={{background:C.bg1,borderRadius:8,padding:"8px 6px",border:`1px solid ${C.border}`,textAlign:"center"}}>
-              <div style={{fontSize:8,color:C.text2,marginBottom:3}}>{l}</div>
-              <div style={{fontSize:11,fontWeight:600,color:c}}>{msk(v,hidden)}</div>
+          ].map(([l,v,c],i)=>(
+            <div key={l} style={{textAlign:"center",padding:"0 4px",borderLeft:i?`1px solid ${C.border}`:"none"}}>
+              <div style={{fontSize:8,letterSpacing:1.4,textTransform:"uppercase",color:C.text3,marginBottom:6}}>{l}</div>
+              <div style={{fontFamily:"'Cormorant Garamond',Georgia,serif",fontSize:17,fontWeight:600,color:c,fontVariantNumeric:"tabular-nums"}}>{msk(v,hidden)}</div>
             </div>
           ))}
         </div>
@@ -7268,7 +7289,7 @@ function PageStats({chartData, hidden=false, EFF, eur=false, liveDD, src, liveIn
               <button onClick={()=>setPnlFull(true)} title="Plein écran" style={{background:"transparent",border:`1px solid ${C.border}`,borderRadius:6,padding:"3px 8px",cursor:"pointer",fontSize:10,color:C.gray,lineHeight:1}}>⛶</button>
             </span>
           </div>
-          <div style={{...crd(),marginBottom:10}}>
+          <div style={{...crdFlat(),marginBottom:10}}>
             {/* #147 — valeur + date au survol */}
             <div style={{height:16,textAlign:"center",fontSize:11,color:pnlHover!=null?C.gold:C.text3,fontVariantNumeric:"tabular-nums",marginBottom:2}}>
               {pnlHover!=null && show[pnlHover]
@@ -7344,7 +7365,7 @@ function PageStats({chartData, hidden=false, EFF, eur=false, liveDD, src, liveIn
         return(
           <>
           <div style={{fontSize:10,color:C.text2,margin:"4px 0 12px",letterSpacing:4,textTransform:"uppercase",textAlign:"center"}}>Performance mensuelle {safeYr} — {cat==="crypto"?"Crypto":cat==="stocks"?"Actions":"Total"} {eur?"€":"$"}</div>
-          <div style={{...crd(),marginBottom:14}}>
+          <div style={{...crdFlat(),marginBottom:14}}>
             <svg width="100%" viewBox={`0 0 ${W} ${TOTAL_H}`} style={{overflow:"visible",display:"block"}}>
               <defs>
                 <linearGradient id="stbPos" x1="0" y1="0" x2="0" y2="1">
@@ -7425,7 +7446,7 @@ function PageStats({chartData, hidden=false, EFF, eur=false, liveDD, src, liveIn
         return(
           <>
           <div style={{fontSize:10,color:C.text2,margin:"4px 0 12px",letterSpacing:4,textTransform:"uppercase",textAlign:"center"}}>Performance annuelle — {catLabel} {eur?"€":"$"}</div>
-          <div style={{...crd(),marginBottom:16}}>
+          <div style={{...crdFlat(),marginBottom:16}}>
             <svg width="100%" viewBox={`0 0 ${W} ${TH}`} style={{overflow:"visible",display:"block"}}>
               <defs>
                 <linearGradient id="styPos" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={catColor} stopOpacity="1"/><stop offset="100%" stopColor={catColor} stopOpacity="0.82"/></linearGradient>
@@ -7453,9 +7474,9 @@ function PageStats({chartData, hidden=false, EFF, eur=false, liveDD, src, liveIn
       })()}
 
       {/* ── #23/#31 Toggle Mensuel / Annuel — sous le graphe ── */}
-      <div style={{display:"flex",gap:6,marginBottom:18,marginTop:2}}>
+      <div style={{display:"flex",gap:0,marginBottom:20,marginTop:2,borderBottom:`1px solid ${C.border}`}}>
         {[["month","Mensuel"],["year","Annuel"]].map(([k,l])=>(
-          <button key={k} onClick={()=>setBarMode(k)} style={lxBtn({active:barMode===k,accent:catColor,style:{flex:1,padding:"9px 0",fontSize:12}})}>{l}</button>
+          <button key={k} onClick={()=>setBarMode(k)} style={lxBtn({active:barMode===k,accent:catColor,underline:true,style:{flex:1}})}>{l}</button>
         ))}
       </div>
 
@@ -7463,7 +7484,7 @@ function PageStats({chartData, hidden=false, EFF, eur=false, liveDD, src, liveIn
       {barMode==="month" && data&&(
         <>
         <div style={{fontSize:10,color:C.text2,letterSpacing:4,textTransform:"uppercase",textAlign:"center",margin:"6px 0 12px"}}>Détail mensuel</div>
-        <div style={{...crd(),marginBottom:14,padding:"10px 8px"}}>
+        <div style={{...crdFlat(),marginBottom:14,padding:"10px 8px"}}>
           <div style={{overflowX:"auto"}}>
             <table style={{width:"100%",borderCollapse:"collapse",fontSize:10}}>
               <thead>
@@ -7542,7 +7563,7 @@ function PageStats({chartData, hidden=false, EFF, eur=false, liveDD, src, liveIn
         return (
           <>
           <div style={{fontSize:10,color:C.text2,letterSpacing:4,textTransform:"uppercase",textAlign:"center",margin:"6px 0 12px"}}>Détail annuel</div>
-          <div style={{...crd(),marginBottom:14,padding:"10px 8px"}}>
+          <div style={{...crdFlat(),marginBottom:14,padding:"10px 8px"}}>
             <div style={{overflowX:"auto"}}>
               <table style={{width:"100%",borderCollapse:"collapse",fontSize:10}}>
                 <thead><tr>{["Année","BOM","EOM","Investi",`P&L ${cur}`,"%"].map(function(h){return <th key={h} style={{padding:"4px 6px",color:C.text2,fontWeight:600,textAlign:h==="Année"?"left":"right",borderBottom:`1px solid ${C.border}`,fontSize:9}}>{h}</th>;})}</tr></thead>
@@ -7569,7 +7590,7 @@ function PageStats({chartData, hidden=false, EFF, eur=false, liveDD, src, liveIn
       {cat==="crypto"&&(
         <>
           <SH label="Saisonnalité historique — Crypto" color={C.btc}/>
-          <div style={{...crd(),marginBottom:14}}>
+          <div style={{...crdFlat(),marginBottom:14}}>
             <div style={{fontSize:9,color:C.text2,marginBottom:8}}>Performance mensuelle moyenne (2020–2026)</div>
             {(()=>{
               const mx2=Math.max(...SEAS_CRYPTO.pct.map(Math.abs),.01);
@@ -7631,7 +7652,7 @@ function PageStats({chartData, hidden=false, EFF, eur=false, liveDD, src, liveIn
               <span style={{fontSize:11,color:C.text3}}>{rows.length} jours</span>
               <span style={{fontSize:16,fontWeight:700,fontFamily:"'Cormorant Garamond',serif",color:lineCol}}>{(up?"+":"")+(pct*100).toFixed(1)}% · {up?"+":"-"}{(eur?"€":"$")}{hidden?"•••":Math.abs(delta).toLocaleString("fr-FR")}</span>
             </div>
-            <div style={{...crd()}}>
+            <div style={{...crdFlat()}}>
               <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{display:"block",overflow:"visible"}}>
                 <defs><linearGradient id="rngArea" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={lineCol} stopOpacity="0.28"/><stop offset="100%" stopColor={lineCol} stopOpacity="0"/></linearGradient></defs>
                 <polygon points={area} fill="url(#rngArea)"/>
@@ -16221,29 +16242,45 @@ function App(){
   if(!unlocked) return <PinLock onUnlock={()=>{ setDemo(false); setDemoMode(null); setUnlocked(true); }} onDemo={(kind)=>{ const k=kind||"masked"; setDemo(true); setDemoMode(k); setHidden(k==="masked"); setUnlocked(true); }}/>;
 
   return(
-    <div key={themeName} style={{fontFamily:C.font||"'-apple-system',sans-serif",background:C.bg,minHeight:"100vh",color:C.text,maxWidth:430,margin:"0 auto",paddingBottom:78,boxShadow:themeName==="midnight"?"0 0 80px rgba(180,100,240,.08)":themeName==="bitcoin"?"0 0 80px rgba(247,147,26,.06)":"none"}}>
+    <div key={themeName} style={{fontFamily:C.font||"'-apple-system',sans-serif",
+      background:C.bg,
+      // Armorial — le noir plat devient un dégradé azur très sombre : la page gagne en matière
+      // sans gagner en bruit. Attaché au défilement pour que la lueur reste en haut de l'écran.
+      backgroundImage: themeName==="armorial"
+        ? `radial-gradient(128% 62% at 50% -12%, ${(C.bg3||"#18202F")} 0%, ${C.bg} 58%)` : "none",
+      backgroundAttachment:"fixed",
+      minHeight:"100vh",color:C.text,maxWidth:430,margin:"0 auto",paddingBottom:78,boxShadow:themeName==="midnight"?"0 0 80px rgba(180,100,240,.08)":themeName==="bitcoin"?"0 0 80px rgba(247,147,26,.06)":"none"}}>
       {demo && (
         <div onClick={()=>{ setDemo(false); setDemoMode(null); setHidden(false); setUnlocked(false); }} style={{position:"fixed",top:8,left:"50%",transform:"translateX(-50%)",zIndex:99998,background:"rgba(201,168,106,.15)",border:"1px solid rgba(201,168,106,.5)",color:C.gold,fontSize:10,letterSpacing:2,textTransform:"uppercase",padding:"4px 12px",borderRadius:999,cursor:"pointer",backdropFilter:"blur(8px)",WebkitBackdropFilter:"blur(8px)"}}>{(demoMode==="small"?"Démo · ≈ 30 K$":demoMode==="large"?"Démo · ≈ 1,6 M$":"Mode démo")+" · toucher pour quitter"}</div>
       )}
       {bankToast && (
         <div style={{position:"fixed",bottom:80,left:"50%",transform:"translateX(-50%)",zIndex:99999,background:"rgba(20,22,28,.96)",border:`1px solid ${C.border2}`,color:C.text,fontSize:12.5,fontWeight:600,padding:"10px 18px",borderRadius:12,boxShadow:"0 8px 24px rgba(0,0,0,.4)",backdropFilter:"blur(8px)",WebkitBackdropFilter:"blur(8px)"}}>{bankToast}</div>
       )}
+      {/* Armorial — EN-TÊTE GRAVÉ : le blason est centré, la raison sociale en petites capitales
+          très espacées dessous, le tout fermé par un filet. C'est la signature de la direction
+          artistique : le blason ouvre l'écran comme l'en-tête d'un papier à lettres, au lieu
+          d'être posé dans un coin. Grille 3 colonnes pour que le centre reste centré quel que
+          soit le nombre de boutons à droite. */}
       <div style={{
-        padding:"13px 16px 11px 2px",display:"flex",alignItems:"center",justifyContent:"space-between",
+        padding:"12px 14px 10px",display:"grid",gridTemplateColumns:"1fr auto 1fr",alignItems:"center",
         position:"sticky",top:0,zIndex:100,
-        background:C.bg,
+        // Fond translucide + flou : laisse transparaître le dégradé azur de la page au lieu de
+        // poser une bande opaque qui casserait la continuité du fond.
+        background:(C.bg||"#070A0F")+"E6", borderBottom:`1px solid ${C.border}`,
         backdropFilter:"blur(12px)",WebkitBackdropFilter:"blur(12px)",
       }}>
-        {/* Gauche : logo cliquable -> accueil (comme la maquette) */}
-        <div onClick={()=>setTab(0)} data-snd="home" title="Accueil" style={{display:"flex",alignItems:"center",gap:1,cursor:"pointer",minWidth:0}}>
-          <img src={APP_LOGO} alt="J.C." style={{width:54,height:48,objectFit:"contain",flexShrink:0,filter:"drop-shadow(0 2px 7px rgba(0,0,0,.5))"}}/>
-          <span style={{fontFamily:"'Cormorant Garamond',Georgia,serif",fontSize:15,fontWeight:600,letterSpacing:2,lineHeight:1.05,color:C.text}}>
-            <span style={{color:C.gold}}>J.C.</span><br/>GLOBAL INV.
+        <div/>
+
+        {/* Centre : blason + raison sociale, cliquable -> accueil */}
+        <div onClick={()=>setTab(0)} data-snd="home" title="Accueil" style={{display:"flex",flexDirection:"column",alignItems:"center",gap:5,cursor:"pointer",minWidth:0}}>
+          <img src={APP_LOGO} alt="J.C. Global Investments" style={{width:38,height:34,objectFit:"contain",flexShrink:0,filter:"drop-shadow(0 3px 10px rgba(0,0,0,.55))"}}/>
+          <span style={{fontFamily:"'Cormorant Garamond',Georgia,serif",fontSize:10.5,fontWeight:600,letterSpacing:3.2,textIndent:3.2,lineHeight:1,color:C.text2,whiteSpace:"nowrap"}}>
+            <span style={{color:C.gold}}>J.C.</span> GLOBAL INVESTMENTS
           </span>
         </div>
 
         {/* Droite : notifications + reglages (#63 — Achat/Vente déplacé dans l'onglet Portfolio) */}
-        <div style={{display:"flex",gap:8,alignItems:"center"}}>
+        <div style={{display:"flex",gap:8,alignItems:"center",justifyContent:"flex-end"}}>
           <NotifBell inline/>
           <button onClick={()=>setShowSettings(true)} title="Reglages" style={{
             width:32,height:32,borderRadius:C.radiusSm||8,
