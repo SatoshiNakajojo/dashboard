@@ -3,6 +3,19 @@ const { useState, useEffect, useCallback, useRef } = React;
 
 /* ─── THEMES ─────────────────────────────────────────────── */
 const THEMES = {
+  armorial: {
+    // ⚜ ARMORIAL — palette PRÉLEVÉE sur le blason JCGI (échantillonnage des pixels du PNG) :
+    // azur de l'écu #16304F/#24486E, or de la couronne et des épis #C6A86B. Le blason cesse
+    // d'être un logo posé en haut de page pour devenir la source de tout le système.
+    // Neutres légèrement biaisés vers l'azur pour que fonds et accents forment un ensemble.
+    bg:"#070A0F",bg1:"#0C111A",bg2:"#111826",bg3:"#18202F",
+    border:"#1A212C",border2:"#26303F",
+    btc:"#C08B4F",blue:"#7891B4",teal:"#6E9E86",gold:"#C6A86B",
+    purple:"#9B8FC4",green:"#8FBCA4",red:"#C98A8A",orange:"#C6A86B",gray:"#8A8677",
+    text:"#EFE9DD",text2:"#8A8677",text3:"#565243",
+    name:"⚜ Armorial", font:"'Archivo','Helvetica Neue',Arial,sans-serif",
+    radius:10, radiusSm:6,
+  },
   luxe: {
     // ✦ Onyx & Champagne — family office. Neutres CHAUDS (taupe), famille de catégories cohérente.
     // Logique : champagne(gold)=marque/actif & Or · bronze(btc)=Crypto · ardoise(blue)=Indices
@@ -14377,14 +14390,22 @@ function App(){
   const[themeName,setThemeName]=useState(()=>{
     try{
       var saved=localStorage.getItem('cgi_theme');
-      // Bascule unique vers le nouveau thème LUXE (même si "dark" était sauvegardé)
+      // Bascule unique vers ARMORIAL (palette tirée du blason). Même mécanique que la bascule
+      // LUXE précédente : une seule fois, puis le choix de l'utilisateur fait foi — tous les
+      // autres thèmes restent disponibles dans les réglages.
+      if(!localStorage.getItem('cgi_armorial_v1')){
+        localStorage.setItem('cgi_armorial_v1','1');
+        localStorage.setItem('cgi_theme','armorial');
+        return 'armorial';
+      }
+      // Bascule unique vers le thème LUXE (héritage — conservée pour les anciens appareils)
       if(!localStorage.getItem('cgi_luxe_v1')){
         localStorage.setItem('cgi_luxe_v1','1');
         localStorage.setItem('cgi_theme','luxe');
         return 'luxe';
       }
-      return saved||'luxe';
-    }catch{ return 'luxe'; }
+      return saved||'armorial';
+    }catch{ return 'armorial'; }
   });
   const[showTheme,setShowTheme]=useState(false);
   const[showSettings,setShowSettings]=useState(false); // LOT1 — panneau réglages
