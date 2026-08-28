@@ -159,6 +159,22 @@ function lxBtn(opts){
   opts = opts || {};
   const active = !!opts.active;
   const accent = opts.accent || C.gold;
+  // Armorial — variante "onglet souligné" (opts.underline) : au lieu d'un bouton bordé, un simple
+  // filet sous l'élément actif. Déployée écran par écran ; les appels sans l'option gardent
+  // exactement l'ancien rendu, donc aucun écran n'est modifié par surprise.
+  if(opts.underline){
+    return {
+      display:"inline-flex",alignItems:"center",justifyContent:"center",gap:7,
+      padding: opts.padding || "9px 4px 10px",
+      borderRadius:0, fontFamily:C.font, fontSize: opts.fontSize||11.5, fontWeight:500,
+      letterSpacing:1.4, textTransform:"uppercase", cursor:"pointer",
+      transition:"color .15s, border-color .15s", whiteSpace:"nowrap",
+      background:"transparent", border:"none",
+      borderBottom:`1px solid ${active?accent:"transparent"}`, marginBottom:-1,
+      color: active ? accent : C.text2,
+      ...(opts.style||{}),
+    };
+  }
   return {
     display:"inline-flex",alignItems:"center",justifyContent:"center",gap:6,
     padding: opts.padding || "9px 13px",
@@ -4597,45 +4613,45 @@ function SectionRow({section, open, onToggle, hidden=false, eur=false, usdEur=0.
   const barPct  = Math.min(Math.max(pct, 0), 100);  // 0% si négatif, 100% max
 
   return(
-    <div style={{marginBottom:6}}>
-      {/* Header row — clickable */}
+    <div style={{marginBottom:0}}>
+      {/* Header row — clickable.
+          Armorial : plus de carte bordée. Un filet fin sépare les lignes, un bâtonnet de
+          couleur porte l'identité de la famille, et la valeur passe en Cormorant. La zone
+          cliquable et le comportement d'accordéon sont inchangés. */}
       <button
         onClick={onToggle}
         style={{
-          width:"100%", background: open ? color+"18" : C.bg1,
-          border: open ? `1px solid ${color+"55"}` : "none",
-          borderRadius: open ? "12px 12px 0 0" : 12,
-          padding:"12px 14px", cursor:"pointer", display:"flex",
-          alignItems:"center", gap:12, transition:"all .18s",
+          width:"100%", background: open ? color+"10" : "transparent",
+          border:"none", borderTop:`1px solid ${C.border}`, borderRadius:0,
+          padding:"14px 6px 13px", cursor:"pointer", display:"flex",
+          alignItems:"center", gap:12, transition:"background .18s",
         }}
       >
-        {/* Icon — carré bordé, logo filaire (style boutons du bandeau) */}
+        {/* Marqueur de famille — bâtonnet plein, plus discret qu'un carré bordé */}
         <div style={{
-          width:38, height:38, borderRadius:C.radiusSm||8, flexShrink:0,
-          background:"transparent", border:`1px solid ${open ? color : C.border2}`,
-          display:"flex", alignItems:"center", justifyContent:"center",
-          color:color, transition:"all .18s",
-        }}><Icon name={FAMILY_ICONS[n]||"grid"} size={19} color={color}/></div>
+          width:3, height:34, borderRadius:1, flexShrink:0,
+          background:color, opacity: open?1:.72, transition:"opacity .18s",
+        }}/>
 
         {/* Name + bar */}
         <div style={{flex:1, textAlign:"left"}}>
-          <div style={{display:"flex", justifyContent:"space-between", alignItems:"center"}}>
-            <span style={{fontSize:14, fontWeight:600, color: open ? color : C.text}}>{n}</span>
-            <div style={{display:"flex", alignItems:"center", gap:8}}>
-              <span style={{fontSize:11,fontWeight:700,color:totalPnl>=0?C.green:C.red}}>
+          <div style={{display:"flex", justifyContent:"space-between", alignItems:"baseline", gap:10}}>
+            <span style={{fontSize:13.5, fontWeight:500, letterSpacing:.6, color: open ? color : C.text}}>{n}</span>
+            <div style={{display:"flex", alignItems:"baseline", gap:9}}>
+              <span style={{fontSize:11,fontWeight:600,color:totalPnl>=0?C.green:C.red,fontVariantNumeric:"tabular-nums"}}>
                 {msk(fmtP2(totalPnl),hidden)}
               </span>
-              <span style={{fontSize:14,fontWeight:600,color:C.text}}>
+              <span style={{fontFamily:"'Cormorant Garamond',Georgia,serif",fontSize:21,fontWeight:600,color:C.text,fontVariantNumeric:"tabular-nums"}}>
                 {msk(fmtV(totalUSD),hidden)}
               </span>
             </div>
           </div>
-          <div style={{display:"flex", alignItems:"center", gap:8, marginTop:5}}>
-            <div style={{flex:1, background:C.bg3, borderRadius:3, height:4}}>
-              <div style={{height:4, borderRadius:3, background:color, width:barPct+"%", transition:"width .3s"}}/>
+          <div style={{display:"flex", alignItems:"center", gap:9, marginTop:6}}>
+            <div style={{flex:1, background:C.border, borderRadius:1, height:2}}>
+              <div style={{height:2, borderRadius:1, background:color, width:barPct+"%", transition:"width .3s"}}/>
             </div>
-            <span style={{fontSize:10, color:pct<0?C.red:color, fontWeight:700, flexShrink:0}}>{pct.toFixed(1)}%</span>
-            <span style={{fontSize:11, color: open?"#fff":C.text3, transition:"transform .2s",
+            <span style={{fontSize:10, color:pct<0?C.red:C.text3, fontWeight:500, flexShrink:0, fontVariantNumeric:"tabular-nums", letterSpacing:.3}}>{pct.toFixed(1)}%</span>
+            <span style={{fontSize:10, color: open?color:C.text3, transition:"transform .2s",
               display:"inline-block", transform: open?"rotate(180deg)":"rotate(0deg)"}}>
               ▾
             </span>
@@ -4646,8 +4662,8 @@ function SectionRow({section, open, onToggle, hidden=false, eur=false, usdEur=0.
       {/* Expanded detail panel */}
       {open && (
         <div style={{
-          background: C.bg2, border:`1px solid ${color+"44"}`,
-          borderTop:"none", borderRadius:"0 0 12px 12px",
+          background: color+"08", border:"none",
+          borderTop:"none", borderRadius:0,
           overflow:"hidden",
         }}>
           {/* Line items */}
@@ -6458,21 +6474,24 @@ function MarketStatus(){
   return (
     <div style={{marginTop:24,marginBottom:8}}>
       <div style={{fontSize:10,letterSpacing:4,color:C.text2,textTransform:"uppercase",textAlign:"center",margin:"4px 0 12px"}}>Bourses mondiales</div>
-      <div style={{border:`1px solid ${C.border}`,borderRadius:C.radius||12,background:C.bg1,overflow:"hidden"}}>
+      {/* Armorial : plus de bloc encadré — les places se lisent comme un registre, séparées
+          par un filet. Le nom de la place passe en italique Garamond, l'heure en chasse fixe. */}
+      <div>
         {rows.map((r,i)=>(
-          <div key={r.n} onClick={()=>setSel(r)} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",borderTop:i?`1px solid ${C.border}`:"none",cursor:"pointer"}}>
-            <span style={{fontSize:18,lineHeight:1}}>{r.flag}</span>
+          <div key={r.n} onClick={()=>setSel(r)} style={{display:"flex",alignItems:"center",gap:11,padding:"11px 6px",borderTop:`1px solid ${i?C.border:C.border}`,cursor:"pointer"}}>
+            <span style={{fontSize:17,lineHeight:1}}>{r.flag}</span>
             <div style={{flex:1,minWidth:0}}>
-              <div style={{fontSize:13,color:C.text,fontWeight:500}}>{r.n}</div>
-              <div style={{fontSize:10.5,color:C.text3,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{r.sub}</div>
+              <div style={{fontSize:13,color:C.text,fontWeight:500,letterSpacing:.4}}>{r.n}</div>
+              <div style={{fontFamily:"'Cormorant Garamond',Georgia,serif",fontStyle:"italic",fontSize:12.5,color:C.text3,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{r.sub}</div>
             </div>
             <div style={{textAlign:"right",marginRight:2}}>
-              <div style={{fontSize:12.5,color:C.text2,fontVariantNumeric:"tabular-nums"}}>{r.local}</div>
-              <div style={{fontSize:9.5,color:COL[r.state],letterSpacing:.3}}>{r.label}</div>
+              <div style={{fontSize:12.5,color:C.text2,fontVariantNumeric:"tabular-nums",letterSpacing:.3}}>{r.local}</div>
+              <div style={{fontSize:9,color:COL[r.state],letterSpacing:1.2,textTransform:"uppercase"}}>{r.label}</div>
             </div>
-            <span style={{width:9,height:9,borderRadius:999,background:COL[r.state],boxShadow:r.state==="open"?`0 0 6px ${COL[r.state]}`:"none",flexShrink:0}}/>
+            <span style={{width:6,height:6,borderRadius:999,background:COL[r.state],flexShrink:0}}/>
           </div>
         ))}
+        <div style={{borderTop:`1px solid ${C.border}`}}/>
       </div>
       <div style={{fontSize:9.5,color:C.text3,textAlign:"center",marginTop:8,opacity:.7}}>{nOpen} place{nOpen>1?"s":""} ouverte{nOpen>1?"s":""} · touchez une bourse pour le détail</div>
 
@@ -6641,35 +6660,40 @@ function PageAllocation({hidden, EFF, eur=false, setEur, iconDbVersion=0, bumpIc
         const pnlPct = investi>0?sectionsPnl/investi:0;
         const cur2b = eur?"€":"$";
         return(
-          <div style={{marginBottom:20}}>
-            <div style={{border:`1px solid ${C.border2}`,borderRadius:C.radius||12,padding:"18px 16px",display:"flex",justifyContent:"space-between",alignItems:"flex-start",background:C.bg1}}>
+          <div style={{marginBottom:18,position:"relative"}}>
+            {/* Armorial : le cadre disparaît au profit d'une lueur d'azur (le bleu de l'écu) et
+                d'un filet de clôture. Le chiffre gagne en présence sans que rien ne l'encadre. */}
+            <div aria-hidden="true" style={{position:"absolute",inset:"-14% -12% 4%",pointerEvents:"none",
+              background:`radial-gradient(58% 62% at 34% 46%, ${(C.blue||"#7891B4")}22, transparent 72%)`}}/>
+            <div style={{position:"relative",padding:"14px 4px 16px",display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12}}>
               <div>
-                <div style={{fontFamily:"'Cormorant Garamond',Georgia,serif",fontWeight:400,fontSize:40,lineHeight:1,color:C.text,fontVariantNumeric:"tabular-nums"}}>
+                <div style={{fontFamily:"'Cormorant Garamond',Georgia,serif",fontWeight:600,fontSize:42,lineHeight:1,color:C.text,fontVariantNumeric:"tabular-nums"}}>
                   {hidden?"••••••":<><span style={{color:C.gold,fontSize:24,verticalAlign:4,marginRight:2}}>{cur2b}</span>{fmt(totalDisplay)}</>}
                 </div>
                 <div style={{fontSize:12,color:C.text3,marginTop:6,fontVariantNumeric:"tabular-nums"}}>{msk(eur?"$"+fmt(totalUSD):"€"+fmt(totalEUR),hidden)}</div>
               </div>
               <div style={{textAlign:"right"}}>
-                <div style={{fontFamily:"'Cormorant Garamond',Georgia,serif",fontSize:26,lineHeight:1,color:clr(sectionsPnl),fontVariantNumeric:"tabular-nums"}}>{hidden?"•••":(sectionsPnl>=0?"+":"")+cur2b+fmtK(Math.abs(eur?Math.round(sectionsPnl*(_src.usdEur||0.852)):sectionsPnl))}</div>
-                <div style={{fontSize:11,fontVariantNumeric:"tabular-nums",color:clr(sectionsPnl),border:`1px solid ${clr(sectionsPnl)}47`,borderRadius:999,padding:"3px 10px",display:"inline-block",marginTop:8}}>{fmtP(pnlPct)}</div>
+                <div style={{fontFamily:"'Cormorant Garamond',Georgia,serif",fontSize:26,fontWeight:600,lineHeight:1,color:clr(sectionsPnl),fontVariantNumeric:"tabular-nums"}}>{hidden?"•••":(sectionsPnl>=0?"+":"")+cur2b+fmtK(Math.abs(eur?Math.round(sectionsPnl*(_src.usdEur||0.852)):sectionsPnl))}</div>
+                <div style={{fontSize:11,fontVariantNumeric:"tabular-nums",color:clr(sectionsPnl),marginTop:7,letterSpacing:.4}}>{fmtP(pnlPct)}</div>
               </div>
             </div>
+            <div style={{borderTop:`1px solid ${C.border}`}}/>
           </div>
         );
       })()}
 
       {/* #47 — sélecteur Détail/Allocation · #63 — Achat/Vente intercalé (plus compact) */}
-      <div style={{display:"flex",gap:8,marginBottom:16,alignItems:"stretch"}}>
-        <button onClick={()=>setMode("detail")} style={lxBtn({active:mode==="detail",style:{flex:1,padding:"9px 0",display:"flex",alignItems:"center",justifyContent:"center",gap:7}})}>
-          <span title={liveOk?"Cloud connecté · trades IBKR à jour":"Hors ligne ou trades non synchronisés"} style={{width:8,height:8,borderRadius:"50%",flexShrink:0,background:liveOk?"#22C55E":C.gray,boxShadow:liveOk?"0 0 6px #22C55E99":"none"}}/>
+      <div style={{display:"flex",gap:0,marginBottom:18,alignItems:"stretch",borderBottom:`1px solid ${C.border}`}}>
+        <button onClick={()=>setMode("detail")} style={lxBtn({active:mode==="detail",underline:true,style:{flex:1}})}>
+          <span title={liveOk?"Cloud connecté · trades IBKR à jour":"Hors ligne ou trades non synchronisés"} style={{width:6,height:6,borderRadius:"50%",flexShrink:0,background:liveOk?C.green:C.gray}}/>
           Live
         </button>
         {onTrade && (
-          <button onClick={onTrade} title="Achat / Vente" style={{flex:"0 0 auto",padding:"0 15px",display:"flex",alignItems:"center",justifyContent:"center",borderRadius:10,border:`1px solid ${C.gold}`,background:(C.gold||"#C9A86A")+"18",color:C.gold,cursor:"pointer",fontFamily:"inherit"}}>
-            <Icon name="repeat" size={16}/>
+          <button onClick={onTrade} title="Achat / Vente" style={{flex:"0 0 auto",padding:"0 18px",display:"flex",alignItems:"center",justifyContent:"center",border:"none",background:"transparent",color:C.gold,cursor:"pointer",fontFamily:"inherit"}}>
+            <Icon name="repeat" size={15}/>
           </button>
         )}
-        <button onClick={()=>setMode("ajust")} style={lxBtn({active:mode==="ajust",style:{flex:1,padding:"9px 0",display:"flex",alignItems:"center",justifyContent:"center",gap:7}})}>
+        <button onClick={()=>setMode("ajust")} style={lxBtn({active:mode==="ajust",underline:true,style:{flex:1}})}>
           Target
         </button>
       </div>
