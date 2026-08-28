@@ -3352,6 +3352,12 @@ const crd=(x={})=>({
   marginBottom:7,
   ...x,
 });
+// Armorial — dégradé de fond de la page, tiré de l'azur de l'écu (#16304F).
+// DÉFINI UNE SEULE FOIS : la page ET l'en-tête collant l'utilisent, avec le même ancrage
+// `fixed`. C'est ce qui garantit la continuité de couleur — deux expressions séparées
+// finiraient tôt ou tard par diverger et le bandeau du haut redeviendrait visible.
+const ARMORIAL_BG = "radial-gradient(132% 64% at 50% -10%, rgba(22,48,79,.62) 0%, rgba(22,48,79,.14) 42%, rgba(22,48,79,0) 68%)";
+const armorialBg = (themeName) => (themeName==="armorial" ? ARMORIAL_BG : "none");
 // Armorial — variante PLATE de crd() : ni fond ni bordure, seulement un filet de tête.
 // Déployée écran par écran ; crd() lui-même est inchangé, donc aucun écran non traité ne bouge.
 const crdFlat=(x={})=>({
@@ -16246,8 +16252,7 @@ function App(){
       background:C.bg,
       // Armorial — le noir plat devient un dégradé azur très sombre : la page gagne en matière
       // sans gagner en bruit. Attaché au défilement pour que la lueur reste en haut de l'écran.
-      backgroundImage: themeName==="armorial"
-        ? `radial-gradient(128% 62% at 50% -12%, ${(C.bg3||"#18202F")} 0%, ${C.bg} 58%)` : "none",
+      backgroundImage: armorialBg(themeName),
       backgroundAttachment:"fixed",
       minHeight:"100vh",color:C.text,maxWidth:430,margin:"0 auto",paddingBottom:78,boxShadow:themeName==="midnight"?"0 0 80px rgba(180,100,240,.08)":themeName==="bitcoin"?"0 0 80px rgba(247,147,26,.06)":"none"}}>
       {demo && (
@@ -16264,10 +16269,14 @@ function App(){
       <div style={{
         padding:"12px 14px 10px",display:"grid",gridTemplateColumns:"1fr auto 1fr",alignItems:"center",
         position:"sticky",top:0,zIndex:100,
-        // Fond translucide + flou : laisse transparaître le dégradé azur de la page au lieu de
-        // poser une bande opaque qui casserait la continuité du fond.
-        background:(C.bg||"#070A0F")+"E6", borderBottom:`1px solid ${C.border}`,
-        backdropFilter:"blur(12px)",WebkitBackdropFilter:"blur(12px)",
+        // Continuité de fond : l'en-tête reprend EXACTEMENT le même dégradé que la page, avec le
+        // même ancrage `fixed`. Les deux se calant sur le viewport, la portion peinte derrière
+        // l'en-tête coïncide au pixel près avec celle de la page — plus de bandeau noir en haut.
+        // Le fond reste opaque pour que le contenu défile invisiblement dessous.
+        backgroundColor:C.bg,
+        backgroundImage: armorialBg(themeName),
+        backgroundAttachment:"fixed",
+        borderBottom:`1px solid ${C.border}`,
       }}>
         <div/>
 
@@ -16834,6 +16843,10 @@ function App(){
             <div style={{fontSize:13,fontWeight:600,color:C.text,marginBottom:16}}>🎨 Thème de l'application</div>
             <div style={{display:"flex",flexDirection:"column",gap:10}}>
               {[
+                // La liste était codée en dur et omettait `armorial` ET `luxe` : une fois un autre
+                // thème choisi, il devenait impossible d'y revenir. Les deux sont rétablis ici.
+                ["armorial",  "⚜", "Azur & Or · Palette du blason JCGI"],
+                ["luxe",      "✦", "Onyx & Champagne · Family office"],
                 ["dark",      "🌑","Fond sombre · Optimal la nuit"],
                 ["arctic",    "☀️","Fond clair · Idéal en plein jour"],
                 ["bloomberg", "🖥","Terminal · Style Bloomberg Pro"],
