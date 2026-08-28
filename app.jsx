@@ -6309,7 +6309,7 @@ function PageOverview({chartData,onSnapshot,onImportCsv,eur,setEur,hidden,setHid
       {/* ════ RÉPARTITION ════ */}
       <div style={{fontSize:10,letterSpacing:4,color:C.text2,textTransform:"uppercase",textAlign:"center",padding:"20px 20px 12px"}}>Répartition</div>
       <div style={{padding:"0 20px 4px"}}>
-        <div style={{display:"flex",height:10,borderRadius:5,overflow:"hidden",marginBottom:14,background:C.bg2}}>
+        <div style={{display:"flex",height:4,borderRadius:2,overflow:"hidden",marginBottom:16,background:C.bg2}}>
           {_alloc.map((a,i)=>(
             <div key={i} style={{width:a.pct.toFixed(2)+"%",background:a.color}}/>
           ))}
@@ -6670,7 +6670,7 @@ function PageAllocation({hidden, EFF, eur=false, setEur, iconDbVersion=0, bumpIc
   return(
     <>
     <div>
-      <PageTitle title="Portfolio" sub="Allocation & positions"/>
+      <PageTitle title="Portfolio" sub="Actifs sous gestion"/>
 
       {/* ── TOTAL PORTEFEUILLE — toujours visible (Détail + Allocation) ── */}
       {(()=>{
@@ -6692,9 +6692,8 @@ function PageAllocation({hidden, EFF, eur=false, setEur, iconDbVersion=0, bumpIc
               background:`radial-gradient(58% 62% at 34% 46%, ${(C.blue||"#7891B4")}22, transparent 72%)`}}/>
             {/* Composition centrée de la maquette : libellé en petites capitales, chiffre en
                 Cormorant, contre-valeur puis performance — chacun sur sa ligne, rien à droite. */}
-            <div style={{position:"relative",padding:"18px 4px 20px",textAlign:"center"}}>
-              <div style={{fontSize:9,letterSpacing:3.4,textTransform:"uppercase",color:C.text2}}>Actifs sous gestion</div>
-              <div style={{fontFamily:"'Cormorant Garamond',Georgia,serif",fontWeight:600,fontSize:46,lineHeight:1.04,color:C.text,fontVariantNumeric:"tabular-nums",margin:"12px 0 5px"}}>
+            <div style={{position:"relative",padding:"0 4px 20px",textAlign:"center"}}>
+              <div style={{fontFamily:"'Cormorant Garamond',Georgia,serif",fontWeight:600,fontSize:46,lineHeight:1.04,color:C.text,fontVariantNumeric:"tabular-nums",margin:"0 0 5px"}}>
                 {hidden?"••••••":<><span style={{color:C.gold,fontSize:25,verticalAlign:5,marginRight:2}}>{cur2b}</span>{fmt(totalDisplay)}</>}
               </div>
               <div style={{fontSize:12.5,color:C.text3,fontVariantNumeric:"tabular-nums"}}>{msk(eur?"$"+fmt(totalUSD):"€"+fmt(totalEUR),hidden)}</div>
@@ -9557,7 +9556,6 @@ function SnapshotModal({onSave, onClose, EFF}){
 ═══════════════════════════════════════════════════════════ */
 const TABS=["Home","Portfolio","Stats","JCGI","Data","History","Tracking","Market"];
 const ICONS=["◎","◑","▲","◈","⬡","♛","◉"];
-const NAV_ICONS=["home","pie","chart","gem","grid","list","search","pulse"];
 
 /* ── Global API keys (from Power Query in Excel) ── */
 
@@ -16340,7 +16338,7 @@ function App(){
           liveCM={liveCM} liveSM={liveSM} liveTM={liveTM} liveBench={liveBench} liveInv={liveInv} liveFutures={liveFutures} liveIbkrAnnex={liveIbkrAnnex}/> }
         {/* Buy & Sell accessible via bouton flottant uniquement */}
       </div>
-      <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:430,background:C.bg,borderTop:`1px solid ${C.border}`,display:"flex",padding:"8px 0 20px",zIndex:100}}>
+      <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:430,background:C.bg,borderTop:`1px solid ${C.border}`,display:"flex",padding:"11px 0 22px",zIndex:100}}>
         {/* Bandeau : Portfolio – Stats – JCGI (centre) – Market – Tracking.
             Snapshot/Rafraîchir/History/Réglages sont accessibles depuis le bas
             de l'écran Accueil (même style visuel que ce bandeau). */}
@@ -16351,12 +16349,9 @@ function App(){
           {i:7, lb:"Market"},
           {i:6, lb:"Tracking"},
         ].map((it,k)=>(
-          <button key={k} onClick={()=>setTab(it.i)}
-            style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:4,height:52,padding:"4px 2px",background:"none",border:"none",cursor:"pointer",color:tab===it.i?C.gold:C.text3,transition:"color .15s"}}>
-            {it.i===3
-              ? <img src={APP_LOGO} alt="JCGI" style={{width:40,height:33,objectFit:"contain",marginTop:-4,opacity:tab===it.i?1:.5,transition:"opacity .15s"}}/>
-              : <Icon name={NAV_ICONS[it.i]} size={21}/>}
-            <span style={{fontSize:9,fontWeight:700,lineHeight:1,display:"block"}}>{it.lb}</span>
+          <button key={k} onClick={()=>setTab(it.i)} aria-current={tab===it.i?"page":undefined}
+            style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",height:34,padding:"4px 2px",background:"none",border:"none",cursor:"pointer",color:tab===it.i?C.gold:C.text3,transition:"color .15s"}}>
+            <span style={{fontFamily:C.font,fontSize:9,fontWeight:400,lineHeight:1,letterSpacing:1.8,textTransform:"uppercase",whiteSpace:"nowrap"}}>{it.lb}</span>
           </button>
         ))}
       </div>
