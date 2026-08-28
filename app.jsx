@@ -7858,9 +7858,9 @@ function GdbCompareChartGDB({tf:tfProp, onTFChange, liveGSB, liveGDBS, liveBench
     <>
       {/* TF selector — masqué quand la page pilote le timeframe (#70) */}
       {tfProp==null && (
-      <div style={{display:"flex",gap:6,marginBottom:12}}>
+      <div style={{display:"flex",gap:0,marginBottom:14,borderBottom:`1px solid ${C.border}`}}>
         {["1W","1M","MTD","YTD","1Y","2Y","ALL"].map(t=>(
-          <button key={t} onClick={()=>handleTF(t)} style={lxBtn({active:tf===t,style:{flex:1,padding:"6px 0",fontSize:10}})}>{t}</button>
+          <button key={t} onClick={()=>handleTF(t)} style={lxBtn({active:tf===t,underline:true,style:{flex:1,fontSize:10,letterSpacing:1,padding:"7px 0 8px"}})}>{t}</button>
         ))}
       </div>
       )}
@@ -8002,11 +8002,12 @@ function FondCard({label, cours, qty, fonds, color, hidden, eur, usdEur, perfAll
       <span style={{color}}>{titre}</span>{sousTitre&&<span style={{color:C.text3,letterSpacing:2}}>· {sousTitre}</span>}
     </div>
     <div onClick={onClick} style={{
-      background:C.bg1,
-      borderRadius:C.radius||12,
-      border:`1px solid ${C.border}`,
-      padding:"14px 14px",
-      marginBottom:16,
+      // Armorial : le fonds se lit comme une entrée de registre — un filet de tête, pas de cadre.
+      background:"transparent",
+      borderRadius:0,
+      borderTop:`1px solid ${C.border}`,
+      padding:"16px 2px 14px",
+      marginBottom:18,
       position:"relative",
       cursor:onClick?"pointer":"default",
     }}>
@@ -8044,14 +8045,14 @@ function FondCard({label, cours, qty, fonds, color, hidden, eur, usdEur, perfAll
 
       {/* #70 — sparkline + P&L unique au timeframe sélectionné en haut de page */}
       <div style={{display:"flex",alignItems:"stretch",gap:10}}>
-        <div style={{flex:1,background:C.bg2,borderRadius:8,border:`1px solid ${C.border}`,display:"flex",alignItems:"center",justifyContent:"center",padding:"6px 8px",minHeight:48}}>
+        <div style={{flex:1,background:"transparent",borderRadius:0,border:"none",display:"flex",alignItems:"center",justifyContent:"center",padding:"6px 8px",minHeight:48}}>
           {sparkPts
             ? <svg viewBox="0 0 100 30" preserveAspectRatio="none" style={{width:"100%",height:36}}>
                 <polyline points={sparkPts} fill="none" stroke={sparkUp?C.green:C.red} strokeWidth="1.6" vectorEffect="non-scaling-stroke" strokeLinecap="round" strokeLinejoin="round"/>
               </svg>
             : <span style={{fontSize:10,color:C.gray}}>Pas d'historique sur {tfLabel}</span>}
         </div>
-        <div style={{flex:"0 0 34%",background:C.bg2,borderRadius:8,border:`1px solid ${C.border}`,padding:"7px 0",textAlign:"center",display:"flex",flexDirection:"column",justifyContent:"center"}}>
+        <div style={{flex:"0 0 34%",background:"transparent",borderRadius:0,borderLeft:`1px solid ${C.border}`,padding:"7px 0",textAlign:"center",display:"flex",flexDirection:"column",justifyContent:"center"}}>
           <div style={{fontSize:9,color:C.gray,marginBottom:3,letterSpacing:.5}}>P&L · {tfLabel}</div>
           <div style={{fontSize:16,fontWeight:700,color:perf!=null?clr(perf):C.gray}}>
             {perf!=null?fmtP(perf):"—"}
@@ -8340,9 +8341,9 @@ function PageGDB(
       <PageTitle title="JCGI" sub="Fonds · CGIC & CGIS"/>
 
       {/* #70 — sélecteur de timeframe remonté en haut, pilote P&L + graphes de la page */}
-      <div style={{display:"flex",gap:6,marginBottom:14}}>
+      <div style={{display:"flex",gap:0,marginBottom:14,borderBottom:`1px solid ${C.border}`}}>
         {["1W","1M","MTD","YTD","1Y","2Y","ALL"].map(t=>(
-          <button key={t} onClick={()=>setBenchTF(t)} style={lxBtn({active:benchTF===t,style:{flex:1,padding:"7px 0",fontSize:10}})}>{t}</button>
+          <button key={t} onClick={()=>setBenchTF(t)} style={lxBtn({active:benchTF===t,underline:true,style:{flex:1,fontSize:10,letterSpacing:1,padding:"7px 0 8px"}})}>{t}</button>
         ))}
       </div>
 
@@ -11395,12 +11396,17 @@ function TickerRecoBlock({source}){
         var color=marketHeatColor(heat);
         var reco=marketReco(heat);
         return React.createElement("button",{key:t,onClick:function(){ if(!loading&&!errored) setSelected(function(p){return p===t?null:t;}); },
-          style:{textAlign:"left",cursor:(!loading&&!errored)?"pointer":"default",fontFamily:C.font,background:isSel?color+"14":C.bg1,border:"1px solid "+(isSel?color+"77":C.border),borderRadius:C.radiusSm||8,padding:"9px 10px",display:"flex",flexDirection:"column",gap:4,minWidth:0}},
+          // Armorial : tuile sans cadre — un filet de tête, et l'état porté par un bâtonnet
+          // de couleur à gauche plutôt que par une bordure teintée tout autour.
+          style:{textAlign:"left",cursor:(!loading&&!errored)?"pointer":"default",fontFamily:C.font,
+            background:isSel?color+"0E":"transparent",border:"none",borderTop:"1px solid "+C.border,
+            borderLeft:"2px solid "+(isSel?color:"transparent"),borderRadius:0,
+            padding:"10px 10px 11px",display:"flex",flexDirection:"column",gap:4,minWidth:0}},
           React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",gap:6}},
-            React.createElement("span",{style:{fontSize:11,fontWeight:700,color:C.text}},t),
-            React.createElement("span",{style:{width:7,height:7,borderRadius:"50%",background:color,flexShrink:0}})
+            React.createElement("span",{style:{fontSize:11,fontWeight:600,letterSpacing:.8,color:C.text}},t),
+            React.createElement("span",{style:{width:6,height:6,borderRadius:"50%",background:color,flexShrink:0}})
           ),
-          React.createElement("div",{style:{fontSize:10,color:color,fontWeight:600}},loading?"Chargement…":errored?"Indisponible":reco),
+          React.createElement("div",{style:{fontSize:9,color:color,letterSpacing:1.2,textTransform:"uppercase"}},loading?"Chargement…":errored?"Indisponible":reco),
           (!loading&&!errored)?React.createElement("div",{style:{fontFamily:"'Cormorant Garamond',Georgia,serif",fontSize:15,fontWeight:600,color:C.text,marginTop:1}},s.price!=null?("$"+s.price.toLocaleString("fr-FR",{maximumFractionDigits:2})):"—"):null
         );
       })
@@ -11770,12 +11776,12 @@ function MarketDash({EFF}){
   const[tab,setTab]=useState("home");
   var tabs=[["home","home","Home"],["btc","coin","Indicateurs"],["flows","repeat","Flux"],["movers","chart","Top/Flop"]];
   return React.createElement("div",null,
-    React.createElement("div",{style:{display:"flex",gap:6,marginBottom:14,overflowX:"auto",paddingBottom:2}},
+    React.createElement("div",{style:{display:"flex",gap:0,marginBottom:16,borderBottom:"1px solid "+C.border}},
       tabs.map(function(t){
         var active=tab===t[0];
         return React.createElement("button",{key:t[0],onClick:function(){setTab(t[0]);},
-          style:lxBtn({active:active,style:{gap:6,whiteSpace:"nowrap",flexShrink:0}})},
-          React.createElement(Icon,{name:t[1],size:14,color:active?C.gold:C.text2}),
+          style:lxBtn({active:active,underline:true,style:{flex:1,gap:6,whiteSpace:"nowrap",fontSize:10.5,letterSpacing:1}})},
+          React.createElement(Icon,{name:t[1],size:13,color:active?C.gold:C.text2}),
           t[2]
         );
       })
@@ -12522,6 +12528,15 @@ function PageWatchlist({ EFF, hidden }){
 
   var inputStyle={width:"100%",background:C.bg,border:"1px solid "+borderC,borderRadius:8,padding:"8px 10px",color:textC,fontSize:13,boxSizing:"border-box"};
   var labelStyle={display:"block",fontSize:11,color:grayC,marginBottom:4};
+  // Armorial — pastilles de texte qui remplacent les emoji de statut.
+  // Azur = un secteur, une catégorie (information). Or = ce qui appelle une décision.
+  // Puce héraldique : petit losange plein, remplace les emoji de statut (Armorial)
+  var _pucePrix=function(col){return {width:5,height:5,background:col,transform:"rotate(45deg)",flexShrink:0,display:"inline-block"};};
+  var chipBase={display:"inline-block",fontSize:8.5,letterSpacing:1.6,textTransform:"uppercase",
+    borderRadius:2,padding:"2px 6px",verticalAlign:1,whiteSpace:"nowrap"};
+  var chipAz={...chipBase,color:"#9FB8D6",border:"1px solid "+(C.blue||"#7891B4")+"66",background:(C.blue||"#7891B4")+"1A"};
+  var chipAu={...chipBase,color:C.gold,border:"1px solid "+C.gold+"66",background:C.gold+"1A"};
+  var chipMuted={...chipBase,color:grayC,border:"1px solid "+borderC,background:"transparent"};
 
   // ── v4.0 — carte condition structurée (catégorie → template paramétré / preset / libre) ──
   function optEl(v,l){ return React.createElement("option",{key:String(v),value:v},l); }
@@ -12690,9 +12705,9 @@ function PageWatchlist({ EFF, hidden }){
         React.createElement("button",{onClick:function(){setShowSearch(function(v){return !v;});},style:lxBtn({active:showSearch,style:{padding:"7px 10px"}})},React.createElement(Icon,{name:"search",size:15,color:showSearch?C.gold:C.text2})),
         React.createElement("button",{onClick:function(){setShowTools(function(v){return !v;});},style:lxBtn({active:showTools,style:{padding:"7px 11px",fontSize:11}})},"Outils ▾"),
         showTools&&React.createElement("div",{style:{position:"absolute",top:36,right:46,zIndex:50,background:cardBg,border:"1px solid "+borderC,borderRadius:10,padding:6,minWidth:170,boxShadow:"0 8px 24px #000a",display:"flex",flexDirection:"column",gap:2}},
-          React.createElement("button",{onClick:function(){setShowTools(false);fetchNews();},style:{background:"none",border:"none",textAlign:"left",padding:"9px 10px",color:blueC,fontSize:12,fontWeight:700,cursor:"pointer",borderRadius:6}},"📰 Analyser les news (IA)"),
-          React.createElement("button",{onClick:function(){setShowTools(false);verifyTechnicalAll();},disabled:techBusy,style:{background:"none",border:"none",textAlign:"left",padding:"9px 10px",color:techBusy?grayC:greenC,fontSize:12,fontWeight:700,cursor:"pointer",borderRadius:6}},techBusy?"📈 Vérification…":"📈 Vérifier le technique"),
-          React.createElement("button",{onClick:function(){setShowTools(false);setShowIndic(true);},style:{background:"none",border:"none",textAlign:"left",padding:"9px 10px",color:orangeC,fontSize:12,fontWeight:700,cursor:"pointer",borderRadius:6}},"📊 Indicateurs marché")
+          React.createElement("button",{onClick:function(){setShowTools(false);fetchNews();},style:{background:"none",border:"none",textAlign:"left",padding:"9px 10px",color:blueC,fontSize:12,fontWeight:700,cursor:"pointer",borderRadius:6}},"Analyser les news (IA)"),
+          React.createElement("button",{onClick:function(){setShowTools(false);verifyTechnicalAll();},disabled:techBusy,style:{background:"none",border:"none",textAlign:"left",padding:"9px 10px",color:techBusy?grayC:greenC,fontSize:12,fontWeight:700,cursor:"pointer",borderRadius:6}},techBusy?"Vérification en cours…":"Vérifier le technique"),
+          React.createElement("button",{onClick:function(){setShowTools(false);setShowIndic(true);},style:{background:"none",border:"none",textAlign:"left",padding:"9px 10px",color:orangeC,fontSize:12,fontWeight:700,cursor:"pointer",borderRadius:6}},"Indicateurs marché")
         ),
         React.createElement("button",{onClick:refreshPrices,disabled:loading,style:lxBtn({style:{padding:"7px 10px",opacity:loading?.6:1}})},React.createElement(Icon,{name:"refresh",size:15,color:C.text2})),
         React.createElement("button",{onClick:openAdd,style:lxBtn({active:true,style:{padding:"7px 12px"}})},React.createElement(Icon,{name:"plus",size:15}))
@@ -12703,7 +12718,7 @@ function PageWatchlist({ EFF, hidden }){
     showIndic&&ReactDOM.createPortal(
       React.createElement("div",{style:{position:"fixed",inset:0,zIndex:9996,background:C.bg,display:"flex",flexDirection:"column"}},
         React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"14px 16px",borderBottom:"1px solid "+borderC,flexShrink:0}},
-          React.createElement("div",{style:{fontSize:15,fontWeight:600,color:textC}},"📊 Indicateurs marché"),
+          React.createElement("div",{style:{fontSize:15,fontWeight:600,color:textC}},"Indicateurs marché"),
           React.createElement("button",{onClick:function(){setShowIndic(false);},style:{background:"none",border:"none",color:grayC,fontSize:24,cursor:"pointer",lineHeight:1}},"×")
         ),
         React.createElement("div",{style:{flex:1,overflowY:"auto",padding:"14px 16px 30px"}},
@@ -12717,14 +12732,14 @@ function PageWatchlist({ EFF, hidden }){
     techMsg&&React.createElement("div",{style:{margin:"0 16px 8px",padding:"6px 10px",background:greenC+"12",border:"1px solid "+greenC+"44",borderRadius:8,fontSize:11,color:greenC,fontWeight:600}},techMsg),
 
     // ── Filtres ──────────────────────────────────────────────────────────────
-    React.createElement("div",{style:{display:"flex",gap:6,padding:"0 16px 12px",overflowX:"auto"}},
-      [["all","Tous ("+list.length+")"],["fav","★ Favoris"],["alerte",alertCount?String(alertCount):""]].map(function(f){
+    React.createElement("div",{style:{display:"flex",gap:0,margin:"0 16px 4px",borderBottom:"1px solid "+borderC}},
+      [["all","Tous ("+list.length+")"],["fav","Favoris"],["alerte",alertCount?String(alertCount):""]].map(function(f){
         var active=filter===f[0];
         var acc=f[0]==="alerte"?redC:C.gold;
         var content=f[0]==="alerte"
-          ? React.createElement("span",{style:{display:"inline-flex",alignItems:"center",gap:5}},React.createElement(Icon,{name:"bell",size:13,color:active?acc:C.text2}),f[1])
+          ? React.createElement("span",{style:{display:"inline-flex",alignItems:"center",gap:5}},React.createElement(Icon,{name:"bell",size:12,color:active?acc:C.text2}),f[1])
           : f[1];
-        return React.createElement("button",{key:f[0],onClick:function(){setFilter(f[0]);},style:lxBtn({active:active,accent:acc,style:{padding:"6px 13px",fontSize:11,borderRadius:999}})},content);
+        return React.createElement("button",{key:f[0],onClick:function(){setFilter(f[0]);},style:lxBtn({active:active,accent:acc,underline:true,style:{flex:1}})},content);
       })
     ),
 
@@ -12743,40 +12758,46 @@ function PageWatchlist({ EFF, hidden }){
             var atBuyZone=price&&e.buyZone&&e.buyZone.low&&price<=e.buyZone.high&&price>=e.buyZone.low;
             var exp=expanded[e.id];
 
+            // Armorial : ligne de registre au lieu d'une carte bordée. L'état (alerte, zone
+            // d'achat) se lit sur un bâtonnet vertical à gauche plutôt que par un cadre coloré.
             return React.createElement("div",{key:e.id,style:{
-              background:inAlert?redC+"15":atBuyZone?greenC+"10":cardBg,
-              border:"1px solid "+(inAlert?redC:atBuyZone?greenC:e.fav?blueC+"66":borderC),
-              borderRadius:12,padding:"12px 14px"
+              background:inAlert?redC+"0C":atBuyZone?greenC+"09":"transparent",
+              borderTop:"1px solid "+borderC,
+              borderLeft:"2px solid "+(inAlert?redC:atBuyZone?greenC:e.fav?C.gold:"transparent"),
+              borderRadius:0,padding:"13px 12px 12px"
             }},
               // Row 1: info principale avec logo
               React.createElement("div",{style:{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:10}},
                 TickerAvatar(e, prices[e.ticker]),
                 React.createElement("div",{onClick:function(){setViewT(e);},style:{flex:1,cursor:"pointer"}}, // #119 — ouvre la fiche (courbe + plan)
                   React.createElement("div",{style:{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}},
-                    e.fav&&React.createElement("span",{style:{color:orangeC,fontSize:14}},"★"),
-                    React.createElement("span",{style:{fontSize:16,fontWeight:700,color:textC}},e.ticker),
-                    e.domain&&React.createElement("span",{style:{fontSize:9,background:blueC+"22",border:"1px solid "+blueC+"44",borderRadius:4,padding:"1px 6px",color:blueC}},e.domain),
-                    React.createElement("span",{style:{fontSize:9,background:borderC,borderRadius:4,padding:"1px 6px",color:grayC}},e.cat),
-                    condTotal>0&&React.createElement("span",{style:{fontSize:11,fontWeight:700,color:score===condTotal&&score>0?greenC:score>0?orangeC:grayC}},
-                      scoreEmoji(score,condTotal)+" "+score+"/"+condTotal),
-                    inAlert&&React.createElement("span",{style:{display:"inline-flex",alignItems:"center",gap:4,fontSize:10,fontWeight:600,color:redC,border:"1px solid "+redC+"55",borderRadius:C.radiusSm||8,padding:"2px 8px"}},React.createElement(Icon,{name:"bell",size:12,color:redC}),"ALERTE"),
-                    atBuyZone&&React.createElement("span",{style:{fontSize:11,color:greenC,fontWeight:700}},"✓ ZONE ACHAT")
+                    e.fav&&React.createElement("span",{style:{color:C.gold,fontSize:12}},"★"),
+                    React.createElement("span",{style:{fontSize:15,fontWeight:600,letterSpacing:.8,color:textC}},e.ticker),
+                    // Pastilles de texte : azur pour un secteur, or pour ce qui appelle une décision.
+                    e.domain&&React.createElement("span",{style:chipAz},e.domain),
+                    React.createElement("span",{style:chipMuted},e.cat),
+                    inAlert&&React.createElement("span",{style:chipAu},"alerte"),
+                    atBuyZone&&React.createElement("span",{style:chipAu},"zone d'achat")
                   ),
-                  React.createElement("div",{style:{fontSize:11,color:grayC,marginTop:2}},e.name)
+                  React.createElement("div",{style:{fontFamily:"'Cormorant Garamond',Georgia,serif",fontStyle:"italic",fontSize:12.5,color:grayC,marginTop:3}},e.name)
                 ),
-                React.createElement("div",{style:{textAlign:"right"}},
+                React.createElement("div",{style:{textAlign:"right",whiteSpace:"nowrap"}},
                   price!=null
-                    ? React.createElement("span",{style:{fontSize:17,fontWeight:600,color:textC}},"$"+price.toLocaleString("fr-FR",{maximumFractionDigits:2}))
-                    : React.createElement("span",{style:{fontSize:13,color:grayC}},loading?"...":"—")
+                    ? React.createElement("span",{style:{fontFamily:"'Cormorant Garamond',Georgia,serif",fontSize:21,fontWeight:600,color:textC,fontVariantNumeric:"tabular-nums"}},"$"+price.toLocaleString("fr-FR",{maximumFractionDigits:2}))
+                    : React.createElement("span",{style:{fontSize:13,color:grayC}},loading?"...":"—"),
+                  // Le score remplace les emoji 🔥/❄️/🚀 : une fraction lisible, en or quand tout
+                  // est validé, effacée sinon.
+                  condTotal>0&&React.createElement("div",{style:{fontSize:10.5,marginTop:3,letterSpacing:.4,fontVariantNumeric:"tabular-nums",
+                    color:(score===condTotal&&score>0)?C.gold:grayC}}, score+" / "+condTotal+" conditions")
                 )
               ),
 
               // Zones prix
               (e.buyZone||e.alertBuy||e.alertSell||(e.sellTargets&&e.sellTargets.length))&&React.createElement("div",{style:{display:"flex",flexWrap:"wrap",gap:8,marginTop:8}},
-                e.buyZone&&e.buyZone.low&&React.createElement("span",{style:{fontSize:10,color:greenC}},"🟢 Achat: $"+e.buyZone.low+"–$"+e.buyZone.high),
-                e.alertBuy&&React.createElement("span",{style:{fontSize:10,color:greenC}},"⬇️ Alerte achat: $"+e.alertBuy),
-                (e.sellTargets||[]).map(function(st,i){return st.price?React.createElement("span",{key:i,style:{fontSize:10,color:blueC}},"🔵 Cible "+( i+1)+": $"+st.price+(st.note?" ("+st.note+")":"")):null;}),
-                e.alertSell&&React.createElement("span",{style:{fontSize:10,color:orangeC}},"⬆️ Alerte vente: $"+e.alertSell)
+                e.buyZone&&e.buyZone.low&&React.createElement("span",{style:{fontSize:10,color:greenC,display:"inline-flex",alignItems:"center",gap:5}},React.createElement("i",{style:_pucePrix(greenC)}),"Achat "+e.buyZone.low+"–"+e.buyZone.high),
+                e.alertBuy&&React.createElement("span",{style:{fontSize:10,color:greenC,display:"inline-flex",alignItems:"center",gap:5}},React.createElement("i",{style:_pucePrix(greenC)}),"Alerte achat "+e.alertBuy),
+                (e.sellTargets||[]).map(function(st,i){return st.price?React.createElement("span",{key:i,style:{fontSize:10,color:blueC,display:"inline-flex",alignItems:"center",gap:5}},React.createElement("i",{style:_pucePrix(blueC)}),"Cible "+(i+1)+" "+st.price+(st.note?" ("+st.note+")":"")):null;}),
+                e.alertSell&&React.createElement("span",{style:{fontSize:10,color:orangeC,display:"inline-flex",alignItems:"center",gap:5}},React.createElement("i",{style:_pucePrix(orangeC)}),"Alerte vente "+e.alertSell)
               ),
 
               // Conditions scoring
@@ -12784,11 +12805,13 @@ function PageWatchlist({ EFF, hidden }){
                 React.createElement("div",{style:{fontSize:10,color:grayC,marginBottom:4,fontWeight:600}},"CATALYSEURS "+score+"/"+condTotal+" validés"),
                 React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:3}},
                   (e.conditions||[]).filter(function(c){return c.text;}).map(function(c){
-                    return React.createElement("div",{key:c.id,style:{borderRadius:6,overflow:"hidden"}},
+                    return React.createElement("div",{key:c.id,style:{overflow:"hidden"}},
                       React.createElement("div",{
                         onClick:function(){toggleCondition(e.id,c.id);},
-                        style:{display:"flex",alignItems:"flex-start",gap:6,cursor:"pointer",padding:"3px 6px",
-                          background:c.validated?greenC+"15":C.bg,border:"1px solid "+(c.validated?greenC+"44":borderC)}},
+                        style:{display:"flex",alignItems:"flex-start",gap:7,cursor:"pointer",padding:"4px 0 5px 8px",
+                          background:"transparent",border:"none",
+                          borderLeft:"2px solid "+(c.validated?greenC:borderC),
+                          borderBottom:"1px solid "+C.border}},
                         React.createElement("span",{style:{fontSize:12,color:c.validated?greenC:grayC,flexShrink:0,marginTop:1}},c.validated?"✓":"○"),
                         React.createElement("span",{style:{fontSize:8,flexShrink:0,marginTop:3,padding:"0 4px",borderRadius:4,fontWeight:600,
                           background:(c.cat==="technique"?blueC:c.cat==="fondamentale"?orangeC:grayC)+"22",
@@ -12830,10 +12853,10 @@ function PageWatchlist({ EFF, hidden }){
               ),
 
               // Actions
-              React.createElement("div",{style:{display:"flex",gap:6,marginTop:10}},
-                React.createElement("button",{onClick:function(){toggleFav(e.id);},style:lxBtn({active:e.fav,style:{padding:"5px 10px",fontSize:12}})},e.fav?"★":"☆"),
-                React.createElement("button",{onClick:function(){openEdit(e);},style:lxBtn({style:{padding:"5px 11px",gap:5}})},React.createElement(Icon,{name:"edit",size:14,color:C.text2}),"Éditer"),
-                React.createElement("button",{onClick:function(){deleteEntry(e.id);},style:lxBtn({style:{padding:"5px 10px"}})},React.createElement(Icon,{name:"trash",size:14,color:redC}))
+              React.createElement("div",{style:{display:"flex",gap:18,marginTop:12,alignItems:"center"}},
+                React.createElement("button",{onClick:function(){toggleFav(e.id);},style:lxBtn({active:e.fav,underline:true,style:{fontSize:12,letterSpacing:0,padding:"6px 2px 7px"}})},e.fav?"★":"☆"),
+                React.createElement("button",{onClick:function(){openEdit(e);},style:lxBtn({underline:true,style:{gap:6,padding:"6px 2px 7px"}})},React.createElement(Icon,{name:"edit",size:13,color:C.text2}),"Éditer"),
+                React.createElement("button",{onClick:function(){deleteEntry(e.id);},style:lxBtn({underline:true,style:{padding:"6px 2px 7px"}})},React.createElement(Icon,{name:"trash",size:13,color:redC}))
               )
             );
           })
