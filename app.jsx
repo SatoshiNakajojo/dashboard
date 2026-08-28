@@ -14587,46 +14587,44 @@ function App(){
   },[]);
 
   // #184 — SYNCHRO IBKR À CHAQUE CHARGEMENT DE L'APP.
-  // Avant : /ibkr_sync n'était déclenché que par le cron du worker (4 fois/jour) ou avant l'envoi
-  // du baromètre → une position prise dans la journée n'apparaissait qu'au cron suivant. Ici on la
-  // déclenche à l'ouverture, en tâche de fond (jamais bloquant pour l'affichage) : le worker
-  // réconcilie les positions, réécrit cgi_ibkr_truth, puis on relit le KV et on recalcule.
-  // `purge` reste à 0 : on ne solde jamais automatiquement une ligne absente du rapport.
+  // Avant : /ibkr_sync n'était déclenché que par le cron du worker (4 fois/jour) ou avant l'envoi du
+  // baromètre → une position prise dans la journée n'apparaissait qu'au cron suivant.
+  //
+  // Adoption : le worker réécrit les quantités corrigées dans cgi_portfolio / cgi_stocks /
+  // cgi_crypto ET ajoute des transactions d'ajustement dans cgi_txns. Les recoller à chaud dans
+  // l'état React s'est révélé fragile — le recalcul de positions qui suit repart de ses propres
+  // sources et écrasait l'adoption. On délègue donc au SEUL chemin qui fait ça correctement : le
+  // pipeline de démarrage (_adoptIbkr + reconstruction de `live`). Un rechargement n'a lieu que si
+  // la synchro a VRAIMENT changé quelque chose — donc jamais à l'ouverture ordinaire.
+  // Garde anti-boucle : on ne relance pas une synchro moins de 2 min après la précédente, ce qui
+  // laisse malgré tout un rechargement manuel ultérieur en déclencher une nouvelle.
   useEffect(function(){
     var cancelled=false;
     (async function(){
       try{
+        var lastTs=0; try{ lastTs=parseInt(sessionStorage.getItem('cgi_ibkr_sync_ts')||'0',10)||0; }catch(e){}
+        if(Date.now()-lastTs < 120000) return;
+        try{ sessionStorage.setItem('cgi_ibkr_sync_ts', String(Date.now())); }catch(e){}
         var r=await fetch(CF_WORKER_URL+"/ibkr_sync?k="+encodeURIComponent(CF_AUTH_KEY),
-          { headers:{"X-Auth-Key":CF_AUTH_KEY}, cache:"no-store", signal:AbortSignal.timeout(45000) });
+          { headers:{"X-Auth-Key":CF_AUTH_KEY}, cache:"no-store", signal:AbortSignal.timeout(60000) });
         if(cancelled || !r.ok) return;
         var d=await r.json().catch(function(){return null;});
         if(cancelled || !d || d.ok===false){
           if(d && d.error) console.info("[ibkr] synchro au chargement ignorée : "+d.error);
           return;
         }
-        console.info("[ibkr] synchro au chargement : "+(d.misesAJourQuantites!=null?d.misesAJourQuantites+" quantité(s) réalignée(s)":"ok"));
-        // Relire le cloud pour adopter la vérité fraîche, puis re-dériver les positions.
-        var rr=await fetch(CF_WORKER_URL+"/read?k="+encodeURIComponent(CF_AUTH_KEY)+"&_t="+Date.now(),
-          { headers:{"X-Auth-Key":CF_AUTH_KEY}, cache:"no-store", signal:AbortSignal.timeout(20000) });
-        if(cancelled || !rr.ok) return;
-        var kv=await rr.json().catch(function(){return null;});
-        if(cancelled || !kv) return;
-        if(kv.cgi_ibkr_truth && kv.cgi_ibkr_truth.ts){
-          try{ localStorage.setItem('cgi_ibkr_truth_direct', JSON.stringify(kv.cgi_ibkr_truth)); }catch(e){}
+        var nQty=(Array.isArray(d.misesAJourQuantites)?d.misesAJourQuantites.length:0);
+        var nAdj=(d.reconciliationTxns && Array.isArray(d.reconciliationTxns.ajustements))?d.reconciliationTxns.ajustements.length:0;
+        var cashMoved=!!(d.cashDip && typeof d.cashDip==="object" && d.cashDip.avant!==d.cashDip.apres);
+        console.info("[ibkr] synchro au chargement : "+nQty+" quantité(s), "+nAdj+" ajustement(s)"+(cashMoved?", cash Dip réaligné":""));
+        if((nQty+nAdj>0 || cashMoved) && !cancelled){
+          console.info("[ibkr] positions modifiées — rechargement pour les adopter");
+          setTimeout(function(){ try{ location.reload(); }catch(e){} }, 400);
         }
-        // Les ajustements IBKR arrivent dans cgi_txns. Le rebuild des positions est déclenché par un
-        // changement de l'ÉTAT REACT `txns` (signature _txnsSigOf, cf. #67j) : écrire seulement le
-        // miroir local ne réveille rien — d'où des positions inchangées à l'écran malgré une synchro
-        // réussie. On passe donc par setTxns, et lsv9Set pour la persistance hors-ligne.
-        if(kv.cgi_txns && Array.isArray(kv.cgi_txns)){
-          try{ lsv9Set('cgi_txns', kv.cgi_txns); }catch(e){}
-          setTxns(kv.cgi_txns);
-        }
-        if(!cancelled) handleRefresh();
       }catch(e){ /* IBKR non configuré ou réseau indisponible : silencieux */ }
     })();
     return function(){ cancelled=true; };
-  },[handleRefresh]);
+  },[]);
 
   // Merge live prices into effective CURRENT data
   // EFF = live est la source unique de vérité
