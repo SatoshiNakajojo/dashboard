@@ -6378,21 +6378,9 @@ function PageOverview({chartData,onSnapshot,onImportCsv,eur,setEur,hidden,setHid
         })()}
       </div>
 
-      {/* ════ Snapshot / Rafraîchir / History / Réglages — même design que le bandeau du bas ════ */}
-      <div style={{display:"flex",marginTop:10,borderTop:`1px solid ${C.border}`,paddingTop:2}}>
-        {[
-          {icon:"camera", lb:"Snapshot", onClick:onSnapshot},
-          {icon:"refresh", lb:refreshing?"…":"Rafraîchir", onClick:handleRefresh, disabled:refreshing},
-          {icon:"list", lb:"History", onClick:setTab&&(()=>setTab(5))},
-          {icon:"gear", lb:"Réglages", onClick:setShowSettings&&(()=>setShowSettings(true))},
-        ].map((it,k)=>(
-          <button key={k} onClick={it.onClick} disabled={it.disabled}
-            style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:4,height:52,padding:"4px 2px",background:"none",border:"none",cursor:it.disabled?"default":"pointer",color:C.text3,opacity:it.disabled?.6:1,transition:"color .15s"}}>
-            <Icon name={it.icon} size={21}/>
-            <span style={{fontSize:9,fontWeight:700,lineHeight:1,display:"block"}}>{it.lb}</span>
-          </button>
-        ))}
-      </div>
+      {/* Snapshot / Rafraîchir / History ont rejoint le bandeau du bas (second
+          volet, accessible en faisant glisser le doigt). Réglages reste dans
+          l'en-tête, à côté de la cloche. */}
       <div style={{textAlign:"center",fontSize:9,color:C.text3,opacity:.4,marginTop:4,paddingBottom:8,letterSpacing:.5,pointerEvents:"none"}}>{APP_VERSION}</div>
 
     </div>
@@ -7327,9 +7315,9 @@ function PageStats({chartData, hidden=false, EFF, eur=false, liveDD, src, liveIn
               <span>{show[show.length-1]&&show[show.length-1].label}</span>
             </div>
           </div>
-          <div style={{display:"flex",gap:6,marginBottom:18}}>
+          <div style={{display:"flex",gap:0,marginBottom:18,borderBottom:`1px solid ${C.border}`}}>
             {TFS.map(([lbl])=>(
-              <button key={lbl} onClick={()=>setPnlTF(lbl)} style={lxBtn({active:pnlTF===lbl,accent:catColor,style:{flex:1,padding:"5px 0",fontSize:10}})}>{lbl}</button>
+              <button key={lbl} onClick={()=>setPnlTF(lbl)} style={lxBtn({active:pnlTF===lbl,accent:catColor,underline:true,style:{flex:1,fontSize:10,letterSpacing:1,padding:"7px 0 8px"}})}>{lbl}</button>
             ))}
           </div>
           {/* #129 — PLEIN ÉCRAN du graphe P&L cumulé (mêmes données, étiré) */}
@@ -7347,9 +7335,9 @@ function PageStats({chartData, hidden=false, EFF, eur=false, liveDD, src, liveIn
                   <circle cx={x(show.length-1)} cy={y(last)} r={2.5} fill={lineCol}/>
                 </svg>
               </div>
-              <div style={{display:"flex",gap:6,padding:"0 16px 18px"}}>
+              <div style={{display:"flex",gap:0,margin:"0 16px 18px",borderBottom:`1px solid ${C.border}`}}>
                 {TFS.map(([lbl])=>(
-                  <button key={"f"+lbl} onClick={()=>setPnlTF(lbl)} style={lxBtn({active:pnlTF===lbl,accent:catColor,style:{flex:1,padding:"7px 0",fontSize:11}})}>{lbl}</button>
+                  <button key={"f"+lbl} onClick={()=>setPnlTF(lbl)} style={lxBtn({active:pnlTF===lbl,accent:catColor,underline:true,style:{flex:1,fontSize:10.5,letterSpacing:1,padding:"8px 0 9px"}})}>{lbl}</button>
                 ))}
               </div>
             </div>
@@ -11770,9 +11758,11 @@ function FlowMap(){
 
 // CGI — MarketDash : conteneur à onglets du dashboard marché
 // ══════════════════════════════════════════════════════════════════════════════
-function MarketDash({EFF}){
+function MarketDash({EFF, hidden=false, embedded=false}){
   const[tab,setTab]=useState("home");
-  var tabs=[["home","home","Home"],["btc","coin","Indicateurs"],["flows","repeat","Flux"],["movers","chart","Top/Flop"]];
+  var tabs=[["home","home","Home"]]
+    .concat(embedded?[]:[["track","list","Suivi"]])
+    .concat([["btc","coin","Indicateurs"],["flows","repeat","Flux"],["movers","chart","Top/Flop"]]);
   return React.createElement("div",null,
     React.createElement("div",{style:{display:"flex",gap:0,marginBottom:16,borderBottom:"1px solid "+C.border}},
       tabs.map(function(t){
@@ -11785,6 +11775,7 @@ function MarketDash({EFF}){
       })
     ),
     tab==="home"&&React.createElement(PageMarketHome,{EFF:EFF}),
+    tab==="track"&&React.createElement(PageWatchlist,{EFF:EFF,hidden:hidden,embedded:true}),
     tab==="btc"&&React.createElement(BtcIndicators,null),
     tab==="flows"&&React.createElement(FlowMap,null),
     tab==="movers"&&React.createElement(MoversView,null)
@@ -11795,14 +11786,14 @@ function MarketDash({EFF}){
 // CGI — PageMarket : nouvel onglet "Market" — enveloppe MarketDash (jusque-là
 // jamais branché à la navigation) derrière le titre standard des pages.
 // ══════════════════════════════════════════════════════════════════════════════
-function PageMarket({EFF}){
+function PageMarket({EFF, hidden=false}){
   return React.createElement("div",null,
-    React.createElement(PageTitle,{title:"Market",sub:"Sentiment, secteurs & flux de capitaux"}),
-    React.createElement(MarketDash,{EFF:EFF})
+    React.createElement(PageTitle,{title:"Market",sub:"Suivi, sentiment & flux de capitaux"}),
+    React.createElement(MarketDash,{EFF:EFF,hidden:hidden})
   );
 }
 
-function PageWatchlist({ EFF, hidden }){
+function PageWatchlist({ EFF, hidden, embedded=false }){
   var cardBg=C.bg2, borderC=C.border, textC=C.text, grayC=C.gray;
   var greenC=C.green, redC=C.red, blueC=C.blue, orangeC=C.btc;
   var bgC=C.bg||"#07080D";
@@ -12691,12 +12682,12 @@ function PageWatchlist({ EFF, hidden }){
     );
   }
 
-  return React.createElement("div",{style:{padding:"0 0 80px",fontFamily:C.font||"system-ui,sans-serif"}},
+  return React.createElement("div",{style:{padding:embedded?"0 0 8px":"0 0 80px",fontFamily:C.font||"system-ui,sans-serif"}},
 
     // ── Header ──────────────────────────────────────────────────────────────
-    React.createElement("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"16px 16px 8px"}},
+    React.createElement("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",padding:embedded?"0 0 8px":"16px 16px 8px"}},
       React.createElement("div",null,
-        React.createElement("div",{style:{fontFamily:"'Cinzel',Georgia,serif",fontSize:19,fontWeight:600,color:C.gold,letterSpacing:2,lineHeight:1.15}},"Tracking"),
+        embedded?null:React.createElement("div",{style:{fontFamily:"'Cinzel',Georgia,serif",fontSize:19,fontWeight:600,color:C.gold,letterSpacing:2,lineHeight:1.15}},"Tracking"),
         React.createElement("div",{style:{fontSize:11,color:grayC}},list.length+" ticker"+(list.length>1?"s":"")+(saving?" · 💾":""))
       ),
       React.createElement("div",{style:{display:"flex",gap:6,position:"relative"}},
@@ -12720,17 +12711,17 @@ function PageWatchlist({ EFF, hidden }){
           React.createElement("button",{onClick:function(){setShowIndic(false);},style:{background:"none",border:"none",color:grayC,fontSize:24,cursor:"pointer",lineHeight:1}},"×")
         ),
         React.createElement("div",{style:{flex:1,overflowY:"auto",padding:"14px 16px 30px"}},
-          React.createElement(MarketDash,null)
+          React.createElement(MarketDash,{embedded:true})
         )
       ),
       document.body
     ),
 
     // ── Bandeau retour vérif technique (v4.0) ─────────────────────────────────
-    techMsg&&React.createElement("div",{style:{margin:"0 16px 8px",padding:"6px 10px",background:greenC+"12",border:"1px solid "+greenC+"44",borderRadius:8,fontSize:11,color:greenC,fontWeight:600}},techMsg),
+    techMsg&&React.createElement("div",{style:{margin:embedded?"0 0 8px":"0 16px 8px",padding:"6px 10px",background:greenC+"12",border:"1px solid "+greenC+"44",borderRadius:8,fontSize:11,color:greenC,fontWeight:600}},techMsg),
 
     // ── Filtres ──────────────────────────────────────────────────────────────
-    React.createElement("div",{style:{display:"flex",gap:0,margin:"0 16px 4px",borderBottom:"1px solid "+borderC}},
+    React.createElement("div",{style:{display:"flex",gap:0,margin:embedded?"0 0 4px":"0 16px 4px",borderBottom:"1px solid "+borderC}},
       [["all","Tous ("+list.length+")"],["fav","Favoris"],["alerte",alertCount?String(alertCount):""]].map(function(f){
         var active=filter===f[0];
         var acc=f[0]==="alerte"?redC:C.gold;
@@ -12741,13 +12732,13 @@ function PageWatchlist({ EFF, hidden }){
       })
     ),
 
-    showSearch ? React.createElement("div",{style:{padding:"0 16px"}}, React.createElement(TickerSearchPanel,{withPlan:true})) : null,
+    showSearch ? React.createElement("div",{style:{padding:embedded?0:"0 16px"}}, React.createElement(TickerSearchPanel,{withPlan:true})) : null,
 
     // ── Liste des tickers ─────────────────────────────────────────────────────
     displayed.length===0
-      ? React.createElement("div",{style:{textAlign:"center",padding:"40px 16px",color:grayC}},
+      ? React.createElement("div",{style:{textAlign:"center",padding:embedded?"40px 0":"40px 16px",color:grayC}},
           list.length===0?"Aucun ticker. Clique sur + pour commencer.":"Aucun résultat.")
-      : React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:8,padding:"0 12px"}},
+      : React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:8,padding:embedded?0:"0 12px"}},
           displayed.map(function(e){
             var price=prices[e.ticker];
             var _alerts=wlActiveAlerts(e); var inAlert=_alerts.length>0; // #120 — achat ET vente
@@ -14318,6 +14309,18 @@ function App(){
     }catch(e){}
   },[liveDD,txns]);
   const[showSnap,setShowSnap]=useState(false);
+  // Bandeau du bas : volet 0 = écrans, volet 1 = actions (Snapshot/Rafraîchir/History).
+  const navRef = useRef(null);
+  const[navPane,setNavPane]=useState(0);
+  const onNavScroll = useCallback(()=>{
+    const el = navRef.current; if(!el) return;
+    setNavPane(el.scrollLeft > el.clientWidth/2 ? 1 : 0);
+  },[]);
+  const gotoNavPane = useCallback(i=>{
+    const el = navRef.current; if(!el) return;
+    try{ el.scrollTo({left: i*el.clientWidth, behavior:"smooth"}); }
+    catch(e){ el.scrollLeft = i*el.clientWidth; }
+  },[]);
   const[showTrade,setShowTrade]=useState(false);
   const[showCexImport,setShowCexImport]=useState(false); // #54/#104/#105 — modal d'import CSV
   const[eur,setEur]=useState(false);
@@ -16329,31 +16332,62 @@ function App(){
         {tab===1 && <PageAllocation hidden={hidden} EFF={EFF} eur={eur} setEur={setEur} iconDbVersion={iconDbVersion} bumpIconDb={bumpIconDb} liveOk={liveOk} onTrade={()=>setShowTrade(true)} txns={txnsEff} ibkrTrades={ibkrTrades}/>}
         {tab===2 && <PageStats chartData={chartData} hidden={hidden} EFF={EFF} eur={eur} liveDD={liveDD} src={EFF||CURRENT} liveInv={liveInv} liveCM={liveCM} liveSM={liveSM} liveTM={liveTM}/>}
         {tab===3 && <PageGDB chartData={chartData} hidden={hidden} EFF={EFF} eur={eur} liveGSB={liveGSB} liveGDBS={liveGDBS} liveBench={liveBench} liveGC={gcEff} liveDD={liveDD} liveInv={liveInv}/>}
-        {tab===6 && <PageWatchlist EFF={EFF} hidden={hidden}/>}
+
         {tab===5 && <PageLegend txns={txnsEff} liveFutures={liveFutures} hidden={hidden} eur={eur} EFF={EFF} liveIbkrAnnex={liveIbkrAnnex} ibkrTrades={ibkrTrades} onImportCsv={()=>setShowCexImport(true)}/>}
-        {tab===7 && <PageMarket EFF={EFF}/>}
+        {(tab===7||tab===6) && <PageMarket EFF={EFF} hidden={hidden}/>}
         {tab===4 && <PageData EFF={EFF} hidden={hidden} txns={txns} addTxn={addTxn} delTxn={delTxn} applyPositions={applyPositionsFromTxns} chartData={chartData} kvRefreshTick={kvRefreshTick}
           liveDD={liveDD} liveGDBS={liveGDBS} liveGC={gcEff} liveGSB={liveGSB}
           handleRefresh={handleRefresh} refreshing={refreshing} gistSync={gistSync} onOpenKvDiag={()=>setShowGistDiag(true)}
           liveCM={liveCM} liveSM={liveSM} liveTM={liveTM} liveBench={liveBench} liveInv={liveInv} liveFutures={liveFutures} liveIbkrAnnex={liveIbkrAnnex}/> }
         {/* Buy & Sell accessible via bouton flottant uniquement */}
       </div>
-      <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:430,background:C.bg,borderTop:`1px solid ${C.border}`,display:"flex",padding:"11px 0 22px",zIndex:100}}>
-        {/* Bandeau : Portfolio – Stats – JCGI (centre) – Market – Tracking.
-            Snapshot/Rafraîchir/History/Réglages sont accessibles depuis le bas
-            de l'écran Accueil (même style visuel que ce bandeau). */}
-        {[
-          {i:1, lb:"Portfolio"},
-          {i:2, lb:"Stats"},
-          {i:3, lb:"JCGI"},
-          {i:7, lb:"Market"},
-          {i:6, lb:"Tracking"},
-        ].map((it,k)=>(
-          <button key={k} onClick={()=>setTab(it.i)} aria-current={tab===it.i?"page":undefined}
-            style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",height:34,padding:"4px 2px",background:"none",border:"none",cursor:"pointer",color:tab===it.i?C.gold:C.text3,transition:"color .15s"}}>
-            <span style={{fontFamily:C.font,fontSize:9,fontWeight:400,lineHeight:1,letterSpacing:1.8,textTransform:"uppercase",whiteSpace:"nowrap"}}>{it.lb}</span>
-          </button>
-        ))}
+      {/* Bandeau du bas — DEUX VOLETS que l'on fait défiler du doigt :
+          1. les écrans : Portfolio · Stats · JCGI · Market (le Suivi vit désormais
+             dans Market, entre Home et Indicateurs) ;
+          2. les actions : Snapshot · Rafraîchir · History — remontées du bas de
+             l'écran Accueil. Réglages n'y figure pas : la roue dentée de l'en-tête
+             fait déjà le travail.
+          L'accrochage (scroll-snap) fait que le volet se cale toujours entier ; les
+          deux points rappellent lequel est affiché. */}
+      <div style={{position:"fixed",bottom:0,left:"50%",transform:"translateX(-50%)",width:430,background:C.bg,borderTop:`1px solid ${C.border}`,padding:"9px 0 14px",zIndex:100}}>
+        <div ref={navRef} onScroll={onNavScroll} className="cgi-navswipe"
+          style={{display:"flex",overflowX:"auto",scrollSnapType:"x mandatory",WebkitOverflowScrolling:"touch"}}>
+          {[
+            [
+              {k:"t1", lb:"Portfolio", i:1},
+              {k:"t2", lb:"Stats",     i:2},
+              {k:"t3", lb:"JCGI",      i:3},
+              {k:"t7", lb:"Market",    i:7},
+            ],
+            [
+              {k:"a1", lb:"Snapshot",                        onClick:()=>setShowSnap(true)},
+              {k:"a2", lb:refreshing?"…":"Rafraîchir",       onClick:handleRefresh, disabled:refreshing},
+              {k:"a3", lb:"History",   i:5},
+            ],
+          ].map((volet,vi)=>(
+            <div key={vi} style={{flex:"0 0 100%",minWidth:"100%",display:"flex",scrollSnapAlign:"start"}}>
+              {volet.map(it=>{
+                const active = it.i!=null && tab===it.i;
+                return (
+                  <button key={it.k} disabled={it.disabled}
+                    onClick={it.onClick || (it.i!=null ? ()=>setTab(it.i) : undefined)}
+                    aria-current={active?"page":undefined}
+                    style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",height:34,padding:"4px 2px",background:"none",border:"none",cursor:it.disabled?"default":"pointer",color:active?C.gold:C.text3,opacity:it.disabled?.5:1,transition:"color .15s"}}>
+                    <span style={{fontFamily:C.font,fontSize:9,fontWeight:400,lineHeight:1,letterSpacing:1.8,textTransform:"uppercase",whiteSpace:"nowrap"}}>{it.lb}</span>
+                  </button>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+        <div style={{display:"flex",justifyContent:"center",gap:6,marginTop:9}}>
+          {[0,1].map(i=>(
+            <button key={i} aria-label={i===0?"Écrans":"Actions"} onClick={()=>gotoNavPane(i)}
+              style={{width:14,height:14,padding:0,border:"none",background:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>
+              <span style={{width:4,height:4,borderRadius:"50%",background:navPane===i?C.gold:C.border2,transition:"background .15s"}}/>
+            </button>
+          ))}
+        </div>
       </div>
       {/* Buy & Sell accessible via snapshot uniquement */}
       {/* Toast refresh — visible depuis tous les onglets */}
@@ -16904,7 +16938,7 @@ function App(){
           </div>
         </div>
       )}
-      <style>{"*{box-sizing:border-box}button{outline:none}::-webkit-scrollbar{display:none}input,select{-webkit-appearance:none}@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}"}</style>
+      <style>{"*{box-sizing:border-box}button{outline:none}::-webkit-scrollbar{display:none}.cgi-navswipe{scrollbar-width:none;-ms-overflow-style:none;overscroll-behavior-x:contain}input,select{-webkit-appearance:none}@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}"}</style>
     </div>
   );
 }
