@@ -14614,7 +14614,14 @@ function App(){
         if(kv.cgi_ibkr_truth && kv.cgi_ibkr_truth.ts){
           try{ localStorage.setItem('cgi_ibkr_truth_direct', JSON.stringify(kv.cgi_ibkr_truth)); }catch(e){}
         }
-        if(kv.cgi_txns && Array.isArray(kv.cgi_txns)){ try{ lsv9Set('cgi_txns', kv.cgi_txns); }catch(e){} }
+        // Les ajustements IBKR arrivent dans cgi_txns. Le rebuild des positions est déclenché par un
+        // changement de l'ÉTAT REACT `txns` (signature _txnsSigOf, cf. #67j) : écrire seulement le
+        // miroir local ne réveille rien — d'où des positions inchangées à l'écran malgré une synchro
+        // réussie. On passe donc par setTxns, et lsv9Set pour la persistance hors-ligne.
+        if(kv.cgi_txns && Array.isArray(kv.cgi_txns)){
+          try{ lsv9Set('cgi_txns', kv.cgi_txns); }catch(e){}
+          setTxns(kv.cgi_txns);
+        }
         if(!cancelled) handleRefresh();
       }catch(e){ /* IBKR non configuré ou réseau indisponible : silencieux */ }
     })();
