@@ -16276,7 +16276,10 @@ function App(){
         backgroundColor:C.bg,
         backgroundImage: armorialBg(themeName),
         backgroundAttachment:"fixed",
-        borderBottom:`1px solid ${C.border}`,
+        // Pas de filet sous l'en-tête en Armorial : il redessinait justement la séparation que la
+        // continuité de fond cherche à effacer. Les autres thèmes, sans dégradé, gardent le filet
+        // qui les sépare du contenu.
+        borderBottom: themeName==="armorial" ? "none" : `1px solid ${C.border}`,
       }}>
         <div/>
 
