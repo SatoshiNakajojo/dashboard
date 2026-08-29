@@ -3357,7 +3357,21 @@ const crd=(x={})=>({
 // `fixed`. C'est ce qui garantit la continuité de couleur — deux expressions séparées
 // finiraient tôt ou tard par diverger et le bandeau du haut redeviendrait visible.
 const ARMORIAL_BG = "radial-gradient(132% 64% at 50% -10%, rgba(22,48,79,.62) 0%, rgba(22,48,79,.14) 42%, rgba(22,48,79,0) 68%)";
-const armorialBg = (themeName) => (themeName==="armorial" ? ARMORIAL_BG : "none");
+// `background-attachment: fixed` est mal honoré par les navigateurs mobiles :
+// l'en-tête, collant et composité sur sa propre couche, gardait la portion de
+// dégradé peinte au premier rendu et restait noir au retour en haut de page.
+// On n'en dépend donc plus : le dégradé est dimensionné au viewport et calé À LA
+// MAIN. La page l'ancre au haut du document (il défile donc vers le haut quand on
+// descend) ; l'en-tête, lui, décale le sien de la position de défilement, ce qui
+// lui fait montrer EXACTEMENT la tranche que la page aurait à cet endroit —
+// dans les deux sens de défilement.
+const armorialBgStyle = (themeName, shiftY) => (themeName!=="armorial" ? {backgroundImage:"none"} : {
+  backgroundImage: ARMORIAL_BG,
+  backgroundRepeat: "no-repeat",
+  backgroundSize: "100vw 100vh",
+  backgroundPosition: "50% " + (-(shiftY||0)) + "px",
+  backgroundAttachment: "scroll",
+});
 // Armorial — variante PLATE de crd() : ni fond ni bordure, seulement un filet de tête.
 // Déployée écran par écran ; crd() lui-même est inchangé, donc aucun écran non traité ne bouge.
 const crdFlat=(x={})=>({
@@ -14516,6 +14530,29 @@ function App(){
     }catch(e){}
   },[liveDD,txns]);
   const[showSnap,setShowSnap]=useState(false);
+  // Décalage du dégradé de l'en-tête. Plafonné à la hauteur du viewport : au-delà
+  // le dégradé est entièrement sorti de l'écran, inutile de continuer à redessiner.
+  const[bgShift,setBgShift]=useState(0);
+  useEffect(function(){
+    var raf=0, last=-1;
+    function onScroll(){
+      if(raf) return;
+      raf=requestAnimationFrame(function(){
+        raf=0;
+        var h=window.innerHeight||800;
+        // Selon la propagation du débordement de <body>, le défilement se lit sur
+        // la fenêtre, sur <html> ou sur <body> : on prend le premier qui répond.
+        var raw=window.scrollY||window.pageYOffset
+          ||(document.documentElement&&document.documentElement.scrollTop)
+          ||(document.body&&document.body.scrollTop)||0;
+        var y=Math.min(Math.max(raw,0),h);
+        if(y!==last){ last=y; setBgShift(y); }
+      });
+    }
+    window.addEventListener("scroll",onScroll,{passive:true});
+    onScroll();
+    return function(){ window.removeEventListener("scroll",onScroll); if(raf) cancelAnimationFrame(raf); };
+  },[]);
   // Bandeau du bas : volet 0 = écrans, volet 1 = actions (Snapshot/Rafraîchir/History).
   const navRef = useRef(null);
   const[navPane,setNavPane]=useState(0);
@@ -16482,9 +16519,9 @@ function App(){
     <div key={themeName} style={{fontFamily:C.font||"'-apple-system',sans-serif",
       background:C.bg,
       // Armorial — le noir plat devient un dégradé azur très sombre : la page gagne en matière
-      // sans gagner en bruit. Attaché au défilement pour que la lueur reste en haut de l'écran.
-      backgroundImage: armorialBg(themeName),
-      backgroundAttachment:"fixed",
+      // sans gagner en bruit. La lueur est ancrée en haut du document et s'efface donc
+      // à mesure qu'on descend.
+      ...armorialBgStyle(themeName, 0),
       minHeight:"100vh",color:C.text,maxWidth:430,margin:"0 auto",paddingBottom:78,boxShadow:themeName==="midnight"?"0 0 80px rgba(180,100,240,.08)":themeName==="bitcoin"?"0 0 80px rgba(247,147,26,.06)":"none"}}>
       {demo && (
         <div onClick={()=>{ setDemo(false); setDemoMode(null); setHidden(false); setUnlocked(false); }} style={{position:"fixed",top:8,left:"50%",transform:"translateX(-50%)",zIndex:99998,background:"rgba(201,168,106,.15)",border:"1px solid rgba(201,168,106,.5)",color:C.gold,fontSize:10,letterSpacing:2,textTransform:"uppercase",padding:"4px 12px",borderRadius:999,cursor:"pointer",backdropFilter:"blur(8px)",WebkitBackdropFilter:"blur(8px)"}}>{(demoMode==="small"?"Démo · ≈ 30 K$":demoMode==="large"?"Démo · ≈ 1,6 M$":"Mode démo")+" · toucher pour quitter"}</div>
@@ -16500,13 +16537,12 @@ function App(){
       <div style={{
         padding:"12px 14px 10px",display:"grid",gridTemplateColumns:"1fr auto 1fr",alignItems:"center",
         position:"sticky",top:0,zIndex:100,
-        // Continuité de fond : l'en-tête reprend EXACTEMENT le même dégradé que la page, avec le
-        // même ancrage `fixed`. Les deux se calant sur le viewport, la portion peinte derrière
-        // l'en-tête coïncide au pixel près avec celle de la page — plus de bandeau noir en haut.
-        // Le fond reste opaque pour que le contenu défile invisiblement dessous.
+        // Continuité de fond : l'en-tête reprend EXACTEMENT le même dégradé que la page,
+        // décalé de la position de défilement. Il montre donc au pixel près la tranche que la
+        // page aurait à cet endroit — il s'assombrit quand on descend, et redevient azur quand
+        // on remonte. Le fond reste opaque pour que le contenu défile invisiblement dessous.
         backgroundColor:C.bg,
-        backgroundImage: armorialBg(themeName),
-        backgroundAttachment:"fixed",
+        ...armorialBgStyle(themeName, bgShift),
         // Pas de filet sous l'en-tête en Armorial : il redessinait justement la séparation que la
         // continuité de fond cherche à effacer. Les autres thèmes, sans dégradé, gardent le filet
         // qui les sépare du contenu.
