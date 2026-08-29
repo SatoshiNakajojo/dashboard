@@ -11825,6 +11825,13 @@ function PageWatchlist({ EFF, hidden, embedded=false }){
   const[screenerError,setScreenerError] = useState("");
   const[screenerResults,setScreenerResults] = useState([]);
   const[screenerOpenIdx,setScreenerOpenIdx] = useState(null); // index du candidat déplié
+  // Verdict fondamental : l'agent qui applique le Manuel d'analyse JCGI à la
+  // sélection issue du scan. Ce n'est pas un filtre de plus, c'est un jugement.
+  const[verdictOn,setVerdictOn]       = useState(true);
+  const[verdictBusy,setVerdictBusy]   = useState(false);
+  const[verdict,setVerdict]           = useState(null);
+  const[verdictError,setVerdictError] = useState("");
+  const[verdictOpen,setVerdictOpen]   = useState(null); // ticker du dossier déplié
   // v4.0 LOT2 — backfill best-effort des logos manquants (1× par session)
   useEffect(function(){
     var missing=(list||[]).map(function(e){return e.ticker;})
@@ -12135,6 +12142,7 @@ function PageWatchlist({ EFF, hidden, embedded=false }){
       risks:""});
     setAddMode("manual");
     setScreenerConds([{id:1,text:""}]);
+    setVerdict(null); setVerdictError(""); setVerdictOpen(null);
     setScreenerResults([]);
     setScreenerError("");
     setScreenerMsg("");
@@ -12418,11 +12426,47 @@ function PageWatchlist({ EFF, hidden, embedded=false }){
       verified.sort(function(a,b){ return (b.verifiedScore||0)-(a.verifiedScore||0); });
       setScreenerResults(verified);
       setScreenerMsg("");
+      // Le verdict s'enchaîne sur la sélection qui vient d'être établie.
+      if(verdictOn && verified.length){ setScreenerBusy(false); runVerdict(verified); }
     }catch(e){
       setScreenerError("Erreur : "+e.message);
       setScreenerMsg("");
     }
     setScreenerBusy(false);
+  }
+  // Soumet la sélection du scan au Manuel d'analyse fondamentale JCGI. On ne
+  // renvoie QUE ce qui est utile au jugement — dont les mesures déjà faites sur
+  // de vraies données Yahoo, seul socle chiffré certain dont dispose l'analyste.
+  async function runVerdict(results){
+    var list=(results||screenerResults||[]).filter(function(c){return c&&c.ticker;});
+    if(!list.length) return;
+    setVerdictBusy(true); setVerdictError(""); setVerdict(null); setVerdictOpen(null);
+    try{
+      var payload=list.slice(0,14).map(function(c){
+        var st=c.stats||{};
+        return {
+          ticker:c.ticker, name:c.name, market:c.market, exchange:c.exchange,
+          country:c.country, sector:c.sector, note:c.note,
+          stats:{
+            price: st.last!=null ? Math.round(st.last*100)/100 : null,
+            pctFromAth: st.pctOfAth!=null ? Math.round(st.pctOfAth) : null,
+            years: st.years!=null ? Math.round(st.years*10)/10 : null,
+            uptrend: st.uptrend==null ? null : !!st.uptrend,
+          },
+        };
+      });
+      var conds=(screenerConds||[]).map(function(c){return (c.text||"").trim();}).filter(Boolean);
+      var r=await fetch(CF_WORKER_URL+"/screener_verdict",{
+        method:"POST", headers:{"Content-Type":"application/json","X-Auth-Key":CF_AUTH_KEY},
+        body:JSON.stringify({candidates:payload, conditions:conds}), signal:AbortSignal.timeout(150000)
+      });
+      var d=await r.json();
+      if(!d.ok) throw new Error(d.error||("Échec de l'analyse (HTTP "+r.status+")"));
+      setVerdict(d.verdict||null);
+    }catch(e){
+      setVerdictError("Analyse fondamentale : "+e.message);
+    }
+    setVerdictBusy(false);
   }
   // Reprend un candidat IA dans le formulaire manuel classique (mêmes champs, même bouton Ajouter).
   function pickScreenerCandidate(cand){
@@ -12607,6 +12651,122 @@ function PageWatchlist({ EFF, hidden, embedded=false }){
     if(kind==="info") return {label:"🤖 IA",color:blueC};
     return {label:"📊 chiffré",color:orangeC};
   }
+  // Rend le verdict de l'analyste : lecture macro, lauréats, puis un dossier
+  // dépliable par société avec ses sept piliers notés et ses chiffres clés.
+  var PILIERS=[["qualiteComptable","Comptabilité"],["liquidite","Liquidité"],["rentabilite","Rentabilité"],
+               ["valorisation","Valorisation"],["moat","Moat"],["secteur","Secteur"],["direction","Direction"]];
+  function verdictConfColor(c){
+    return c==="haute" ? C.green : c==="faible" ? redC : orangeC;
+  }
+  function renderVerdict(){
+    var v=verdict||{};
+    var laureats=(v.laureats||[]).map(function(t){return String(t).toUpperCase();});
+    return React.createElement("div",{style:{marginBottom:16,borderTop:"1px solid "+C.gold+"55",paddingTop:14}},
+      React.createElement("div",{style:{fontSize:10,letterSpacing:2.6,textTransform:"uppercase",color:C.gold,textAlign:"center",marginBottom:3}},"⚜ Verdict fondamental"),
+      React.createElement("div",{style:{fontSize:9.5,color:C.text3,textAlign:"center",marginBottom:14}},
+        "Manuel J.C. Global Investments · "+(v.analysees||0)+" dossier"+((v.analysees||0)>1?"s":"")+" instruit"+((v.analysees||0)>1?"s":"")),
+
+      // Lauréats
+      laureats.length>0&&React.createElement("div",{style:{textAlign:"center",marginBottom:14,padding:"12px 10px",borderTop:"1px solid "+C.gold+"33",borderBottom:"1px solid "+C.gold+"33"}},
+        React.createElement("div",{style:{fontSize:9,letterSpacing:2.2,textTransform:"uppercase",color:C.text2,marginBottom:7}},
+          laureats.length>1?"Meilleures entreprises":"Meilleure entreprise"),
+        React.createElement("div",{style:{fontFamily:"'Cormorant Garamond',Georgia,serif",fontSize:26,fontWeight:600,color:C.gold,letterSpacing:1.5,lineHeight:1.2}},
+          laureats.join(" · "))),
+
+      v.macro&&React.createElement("div",{style:{marginBottom:14}},
+        React.createElement("div",{style:{fontSize:9,letterSpacing:2,textTransform:"uppercase",color:C.text2,marginBottom:5}},"Filtre macro"),
+        React.createElement("div",{style:{fontSize:11.5,color:C.text,lineHeight:1.55}},v.macro)),
+
+      v.justificationFinale&&React.createElement("div",{style:{marginBottom:14,paddingLeft:10,borderLeft:"2px solid "+C.gold}},
+        React.createElement("div",{style:{fontSize:11.5,color:C.text,lineHeight:1.55,fontStyle:"italic"}},v.justificationFinale)),
+
+      // Dossiers
+      React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:0,marginBottom:12}},
+        (v.classement||[]).map(function(e,i){
+          var tk=String(e.ticker||"").toUpperCase();
+          var open=verdictOpen===tk;
+          var win=laureats.indexOf(tk)>=0;
+          return React.createElement("div",{key:tk+i,style:{borderTop:"1px solid "+borderC,borderLeft:"2px solid "+(win?C.gold:"transparent"),paddingLeft:win?8:10}},
+            React.createElement("div",{onClick:function(){setVerdictOpen(open?null:tk);},
+              style:{padding:"10px 0",cursor:"pointer",display:"flex",alignItems:"center",gap:9}},
+              React.createElement("span",{style:{fontFamily:"'Cormorant Garamond',Georgia,serif",fontSize:17,color:win?C.gold:C.text3,width:20,flexShrink:0}},e.rang||i+1),
+              React.createElement("div",{style:{flex:1,minWidth:0}},
+                React.createElement("div",{style:{fontSize:13,fontWeight:600,color:win?C.gold:C.text}},tk,
+                  e.confiance&&React.createElement("span",{style:{fontSize:8.5,letterSpacing:1.2,textTransform:"uppercase",marginLeft:7,color:verdictConfColor(e.confiance)}},"conf. "+e.confiance)),
+                e.nom&&React.createElement("div",{style:{fontSize:10.5,color:grayC,fontFamily:"'Cormorant Garamond',Georgia,serif",fontStyle:"italic",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}},e.nom)),
+              e.scoreGlobal!=null&&React.createElement("span",{style:{fontFamily:"'Cormorant Garamond',Georgia,serif",fontSize:19,color:win?C.gold:C.text2,fontVariantNumeric:"tabular-nums",flexShrink:0}},e.scoreGlobal),
+              React.createElement("span",{style:{fontSize:10,color:grayC,flexShrink:0}},open?"−":"+")),
+
+            open&&React.createElement("div",{style:{padding:"2px 0 14px"}},
+              // Les sept piliers, en barres
+              e.piliers&&React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:4,marginBottom:12}},
+                PILIERS.map(function(pl){
+                  var n=e.piliers[pl[0]];
+                  if(n==null) return null;
+                  var pct=Math.max(0,Math.min(10,Number(n)))*10;
+                  var col=pct>=70?C.green:pct>=40?C.gold:redC;
+                  return React.createElement("div",{key:pl[0],style:{display:"flex",alignItems:"center",gap:8,fontSize:10}},
+                    React.createElement("span",{style:{width:88,color:grayC,flexShrink:0,letterSpacing:.3}},pl[1]),
+                    React.createElement("div",{style:{flex:1,height:3,background:C.bg2}},
+                      React.createElement("div",{style:{width:pct+"%",height:"100%",background:col}})),
+                    React.createElement("span",{style:{width:24,textAlign:"right",color:col,fontVariantNumeric:"tabular-nums",flexShrink:0}},n));
+                })),
+
+              // Chiffres clés du manuel
+              React.createElement("div",{style:{display:"flex",flexWrap:"wrap",gap:"5px 14px",marginBottom:11}},
+                [["Piotroski",e.piotroski],["Altman Z",e.altmanZ],["ROIC",e.roic],["ROCE",e.roce],
+                 ["EV/FCF",e.evFcf],["Cycle de vie",e.cycleDeVie]].map(function(kv,k){
+                  if(!kv[1]) return null;
+                  return React.createElement("span",{key:k,style:{fontSize:10,color:grayC}},
+                    React.createElement("span",{style:{fontSize:8.5,letterSpacing:1.1,textTransform:"uppercase",color:C.text3,marginRight:5}},kv[0]),
+                    React.createElement("span",{style:{color:C.text}},kv[1]));
+                })),
+
+              e.moat&&React.createElement("div",{style:{fontSize:11,color:C.text,lineHeight:1.5,marginBottom:8}},
+                React.createElement("span",{style:{fontSize:8.5,letterSpacing:1.2,textTransform:"uppercase",color:C.text3,marginRight:6}},"Moat"),e.moat),
+              e.reverseDcf&&React.createElement("div",{style:{fontSize:11,color:C.text,lineHeight:1.5,marginBottom:8}},
+                React.createElement("span",{style:{fontSize:8.5,letterSpacing:1.2,textTransform:"uppercase",color:C.text3,marginRight:6}},"Reverse DCF"),e.reverseDcf),
+              e.margeSecurite&&React.createElement("div",{style:{fontSize:11,color:C.text,lineHeight:1.5,marginBottom:8}},
+                React.createElement("span",{style:{fontSize:8.5,letterSpacing:1.2,textTransform:"uppercase",color:C.text3,marginRight:6}},"Marge de sécurité"),e.margeSecurite),
+              e.these&&React.createElement("div",{style:{fontSize:11.5,color:C.text,lineHeight:1.55,marginBottom:8,paddingLeft:8,borderLeft:"1px solid "+borderC}},e.these),
+              e.risques&&React.createElement("div",{style:{fontSize:11,color:redC+"DD",lineHeight:1.5,marginBottom:8,paddingLeft:8,borderLeft:"1px solid "+redC+"55"}},
+                React.createElement("span",{style:{fontSize:8.5,letterSpacing:1.2,textTransform:"uppercase",color:redC,marginRight:6}},"Risques"),e.risques),
+
+              (e.redFlags||[]).length>0&&React.createElement("div",{style:{marginBottom:8}},
+                React.createElement("div",{style:{fontSize:8.5,letterSpacing:1.2,textTransform:"uppercase",color:redC,marginBottom:3}},"Red flags"),
+                (e.redFlags||[]).map(function(f,k){
+                  return React.createElement("div",{key:k,style:{fontSize:10.5,color:redC+"CC",lineHeight:1.45}},"· "+f);
+                })),
+
+              (e.aVerifier||[]).length>0&&React.createElement("div",{style:{marginBottom:10}},
+                React.createElement("div",{style:{fontSize:8.5,letterSpacing:1.2,textTransform:"uppercase",color:orangeC,marginBottom:3}},"À vérifier sur les derniers états financiers"),
+                (e.aVerifier||[]).map(function(f,k){
+                  return React.createElement("div",{key:k,style:{fontSize:10.5,color:grayC,lineHeight:1.45}},"· "+f);
+                })),
+
+              React.createElement("button",{onClick:function(){
+                var src=(screenerResults||[]).find(function(c){return String(c.ticker||"").toUpperCase()===tk;});
+                if(src) pickScreenerCandidate(src);
+              },style:lxBtn({active:win,underline:true,style:{fontSize:10,padding:"6px 2px 7px"}})},"Reprendre dans le formulaire")));
+        })),
+
+      // Dossiers écartés
+      (v.ecartes||[]).length>0&&React.createElement("div",{style:{marginBottom:10,paddingTop:10,borderTop:"1px solid "+borderC}},
+        React.createElement("div",{style:{fontSize:8.5,letterSpacing:1.6,textTransform:"uppercase",color:C.text3,marginBottom:5}},"Écartés"),
+        (v.ecartes||[]).map(function(x,k){
+          return React.createElement("div",{key:k,style:{fontSize:10.5,color:grayC,lineHeight:1.5}},
+            React.createElement("span",{style:{color:C.text2}},String(x.ticker||"").toUpperCase()+" — "),x.raison||"");
+        })),
+      (v.ecartesCrypto||[]).length>0&&React.createElement("div",{style:{fontSize:10,color:C.text3,lineHeight:1.5,marginBottom:10}},
+        "Hors périmètre du manuel (pas de bilan à instruire) : "+(v.ecartesCrypto||[]).join(", ")+"."),
+
+      // L'avertissement n'est pas décoratif : le modèle n'a pas les comptes en direct.
+      React.createElement("div",{style:{fontSize:9.5,color:C.text3,lineHeight:1.5,paddingTop:10,borderTop:"1px solid "+borderC}},
+        "Analyse produite par un modèle de langage à partir de ses connaissances : les chiffres marqués « ~ » sont des ESTIMATIONS, possiblement périmées, et non des données issues des derniers états financiers publiés. À contrôler avant toute prise de position. Ne constitue pas un conseil en investissement."),
+      React.createElement("button",{onClick:function(){runVerdict();},disabled:verdictBusy,
+        style:lxBtn({underline:true,style:{fontSize:10,padding:"8px 2px 9px",marginTop:6}})},"Relancer l'analyse")
+    );
+  }
   function renderScreenerPanel(){
     var nonEmpty=(screenerConds||[]).filter(function(c){return c.text&&c.text.trim();});
     return React.createElement("div",null,
@@ -12631,11 +12791,29 @@ function PageWatchlist({ EFF, hidden, embedded=false }){
             style:{background:"none",border:"1px solid "+borderC,borderRadius:999,padding:"4px 10px",color:grayC,fontSize:10,cursor:"pointer"}},"+ "+p);
         })
       ),
+      // ── Le neuvième critère : pas un filtre, un jugement ──────────────────
+      React.createElement("div",{onClick:function(){setVerdictOn(function(v){return !v;});},
+        style:{display:"flex",gap:10,alignItems:"flex-start",cursor:"pointer",marginBottom:14,
+          padding:"11px 12px",borderLeft:"2px solid "+(verdictOn?C.gold:borderC),background:verdictOn?C.gold+"0E":"transparent"}},
+        React.createElement("span",{style:{fontSize:13,color:verdictOn?C.gold:grayC,lineHeight:1.2,flexShrink:0,marginTop:1}},verdictOn?"◆":"◇"),
+        React.createElement("div",{style:{flex:1}},
+          React.createElement("div",{style:{fontSize:11,letterSpacing:1.6,textTransform:"uppercase",color:verdictOn?C.gold:C.text2,marginBottom:3}},"Verdict fondamental"),
+          React.createElement("div",{style:{fontSize:10,color:grayC,lineHeight:1.45}},
+            "Applique le Manuel d'analyse fondamentale J.C. Global Investments à la sélection : filtre macro, Piotroski et Altman Z, liquidité et CCC, ROIC vs WACC, Reverse DCF, moat, Porter, direction et catalyseurs. Désigne la ou les meilleures entreprises."))
+      ),
       React.createElement("button",{onClick:runScreenerScan,disabled:screenerBusy||nonEmpty.length===0,
         style:{width:"100%",background:screenerBusy?grayC:blueC,border:"none",borderRadius:10,padding:"12px",color:"#000",fontSize:14,fontWeight:600,cursor:(screenerBusy||nonEmpty.length===0)?"default":"pointer",opacity:(screenerBusy||nonEmpty.length===0)?.6:1,marginBottom:12}},
         screenerBusy?"⟳ Scan en cours…":"🔍 Lancer le scan IA ("+nonEmpty.length+" condition"+(nonEmpty.length>1?"s":"")+")"),
       screenerMsg&&React.createElement("div",{style:{fontSize:11,color:blueC,marginBottom:12,textAlign:"center"}},screenerMsg),
       screenerError&&React.createElement("div",{style:{fontSize:11,color:redC,marginBottom:12,padding:"8px 10px",background:redC+"12",border:"1px solid "+redC+"44",borderRadius:8}},screenerError),
+
+      // ── VERDICT DE L'ANALYSTE ─────────────────────────────────────────────
+      verdictBusy&&React.createElement("div",{style:{fontSize:11,color:C.gold,marginBottom:12,textAlign:"center",padding:"14px 10px",borderTop:"1px solid "+C.gold+"44",borderBottom:"1px solid "+C.gold+"44"}},
+        "⚜ Instruction des dossiers selon le Manuel JCGI — macro, comptabilité, solvabilité, rentabilité, valorisation, moat, secteur, direction…"),
+      verdictError&&React.createElement("div",{style:{fontSize:11,color:redC,marginBottom:12,padding:"8px 10px",background:redC+"12",border:"1px solid "+redC+"44",borderRadius:8}},
+        verdictError,
+        React.createElement("button",{onClick:function(){runVerdict();},style:{marginLeft:8,background:"none",border:"none",color:blueC,fontSize:11,cursor:"pointer",textDecoration:"underline"}},"Réessayer")),
+      verdict&&renderVerdict(),
 
       screenerResults.length>0&&React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:8,marginBottom:12}},
         screenerResults.map(function(cand,idx){
