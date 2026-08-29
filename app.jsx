@@ -3824,11 +3824,8 @@ function TickerModal({ ticker, cat="", row=null, eur=false, usdEur=0.86, onClose
   const [loading, setLoading] = useState(false);
   const [err, setErr]       = useState(null);
   const [showCity, setShowCity] = useState(false);
-  const [dragY, setDragY]   = useState(0);
   // #91 — verrou : quand le graphe est en plein écran ou qu'un outil de dessin est actif, la feuille
   // ne doit plus se fermer (ni au glissement, ni au clic sur le fond). Sortie par la croix seulement.
-  const [chartLock, setChartLock] = useState(false);
-  const touchStartY = useRef(null);
   const sheetRef    = useRef(null);
   const [crosshair, setCrosshair] = useState(null); // {i, x, y, price, ts}
   const svgRef = useRef(null);
@@ -3882,6 +3879,11 @@ function TickerModal({ ticker, cat="", row=null, eur=false, usdEur=0.86, onClose
       const _ab=(wlPlan.alertBuy!=null)?wlPlan.alertBuy:((wlPlan.alertBelow!=null)?wlPlan.alertBelow:null);
       if(_ab!=null) z.push({price:_ab, color:"#F59E0B", title:"Alerte achat", dashed:true});
       if(wlPlan.alertSell!=null) z.push({price:wlPlan.alertSell, color:"#F59E0B", title:"Alerte vente", dashed:true});
+    }
+    // Prix de revient moyen — tracé d'office dès qu'on détient la ligne : c'est le
+    // repère qui dit, d'un coup d'œil, si la position est en gain ou en perte.
+    if(dispPru!=null && isFinite(dispPru) && dispPru>0 && dispNetQ){
+      z.push({price:dispPru, color:C.gold||"#C6A86B", title:"PRU", width:1, lineStyle:3});
     }
     return z;
   })();
@@ -4090,63 +4092,39 @@ function TickerModal({ ticker, cat="", row=null, eur=false, usdEur=0.86, onClose
 
   const sortedNews = scoreNews(data?.news);
 
-  // ── Swipe-to-close : en haut du scroll OU geste suffisant n'importe où ──────
-  const onSheetTouchStart = e => {
-    if(chartLock) return; // #91 — graphe actif : pas de glissement
-    touchStartY.current = e.touches[0].clientY;
-    setDragY(0);
-  };
-  const onSheetTouchMove = e => {
-    if(chartLock) return; // #91 — graphe actif : pas de glissement
-    const sheet = sheetRef.current;
-    const dy = e.touches[0].clientY - (touchStartY.current || 0);
-    const atTop = sheet && sheet.scrollTop <= 2;
-    // Swipe-to-close si on est tout en haut, ou si geste > 60px n'importe où
-    if(dy > 0 && (atTop || dy > 60)) {
-      e.preventDefault();
-      // Résistance légère : quasi 1:1 pour un geste naturel
-      const resistance = dy * 0.75;
-      setDragY(resistance);
-    }
-  };
-  const onSheetTouchEnd = () => {
-    if(chartLock){ setDragY(0); touchStartY.current=null; return; } // #91
-    // Seuil abaissé à 50px résistants (~67px de geste réel)
-    if(dragY > 50) { onClose(); }
-    else { setDragY(0); }
-    touchStartY.current = null;
-  };
+  // La fermeture au glissement a été retirée : la fiche est une page pleine, on en
+  // sort par la croix. C'est ce qui permet de manipuler le graphe sans arrière-pensée.
 
   return (
-    <div style={{
-      position:"fixed", inset:0, zIndex:1000,
-      background:`rgba(0,0,0,${Math.max(0, 0.94 - dragY/300)})`,
-      display:"flex", alignItems:"flex-end",
-    }} onClick={chartLock?undefined:onClose}>
+    // Page pleine et non plus feuille glissante : on manipule le graphe (pincement,
+    // défilement horizontal, dessin) sans risquer de refermer la fiche d'un geste.
+    // La sortie se fait par la croix, en haut à droite, toujours visible.
+    <div data-fiche="1" style={{
+      position:"fixed", inset:0, zIndex:1000, background:C.bg||C.bg0,
+      display:"flex", flexDirection:"column",
+    }}>
       <div
         ref={sheetRef}
-        onClick={e=>e.stopPropagation()}
-        onTouchStart={onSheetTouchStart}
-        onTouchMove={onSheetTouchMove}
-        onTouchEnd={onSheetTouchEnd}
         style={{
-          width:"100%", background:C.bg0, borderRadius:"20px 20px 0 0",
-          paddingBottom:36, maxHeight:"88vh", overflowY:"auto",
-          transform:`translateY(${dragY}px)`,
-          transition: dragY===0 ? "transform 0.25s cubic-bezier(0.32,0.72,0,1)" : "none",
-          WebkitOverflowScrolling: "touch",
+          flex:1, width:"100%", maxWidth:430, margin:"0 auto",
+          background:C.bg0, paddingBottom:"calc(36px + env(safe-area-inset-bottom, 0px))",
+          overflowY:"auto", WebkitOverflowScrolling:"touch",
         }}>
-        {/* Handle visuel — indication de swipe (masqué quand le graphe est actif, #91) */}
-        {!chartLock && <div style={{display:"flex",justifyContent:"center",padding:"14px 0 8px"}}>
-          <div style={{width:36,height:4,borderRadius:2,
-            background:dragY>50?C.red:C.border,
-            transform:`scaleX(${1 + dragY/200})`,
-            transition:"background 0.15s, transform 0.1s"}}/>
-        </div>}
+
+        {/* Barre de fermeture — collante : la fiche étant une page pleine, la croix
+            doit rester sous le pouce quel que soit le défilement. */}
+        <div style={{position:"sticky",top:0,zIndex:30,display:"flex",alignItems:"center",
+          justifyContent:"space-between",gap:10,padding:"12px 16px 10px",
+          background:C.bg0,borderBottom:`1px solid ${C.border}`}}>
+          <span style={{fontFamily:"'Cinzel',Georgia,serif",fontSize:15,fontWeight:600,letterSpacing:1.8,color:C.gold}}>{ticker}</span>
+          <button onClick={onClose} aria-label="Fermer" style={{background:"transparent",border:`1px solid ${C.border2}`,
+            borderRadius:C.radiusSm||6,width:30,height:30,color:C.text2,fontSize:16,cursor:"pointer",
+            display:"flex",alignItems:"center",justifyContent:"center",lineHeight:1,flexShrink:0}}>✕</button>
+        </div>
 
         {/* v4.0 LOT4 — Graphique TradingView + zones du plan + indicateurs clés */}
-        <div style={{padding:"0 14px 8px"}}>
-          <LWChart symbol={yfSym} height={280} zones={planZones} trades={tkTrades} onLock={setChartLock} onCandles={(c)=>setKpis(computeKeyIndicators(c))}/>
+        <div style={{padding:"10px 14px 8px"}}>
+          <LWChart symbol={yfSym} height={280} zones={planZones} trades={tkTrades} onCandles={(c)=>setKpis(computeKeyIndicators(c))}/>
           {planZones.length>0 && (
             <div style={{fontSize:10,color:C.gray,marginTop:2}}>
               Zones du plan (onglet Suivi) : <span style={{color:C.green}}>achat</span> · <span style={{color:C.red}}>cibles de vente</span>
@@ -4377,7 +4355,6 @@ function TickerModal({ ticker, cat="", row=null, eur=false, usdEur=0.86, onClose
                 </div>
               )}
             </div>
-            <button onClick={onClose} style={{background:"transparent",border:"none",color:C.gray,fontSize:20,cursor:"pointer",padding:"2px 6px"}}>✕</button>
           </div>
         </div>
 
@@ -10367,6 +10344,13 @@ function LWChart(props){
   var ichiState=useState(false); var showIchi=ichiState[0], setShowIchi=ichiState[1];
   var rsiState=useState(false); var showRSI=rsiState[0], setShowRSI=rsiState[1];
   var barsRef=useRef([]);
+  // Détail des trades, indexé par temps de bougie (rempli avec les marqueurs) et
+  // ce que le clic a sélectionné.
+  var tradeInfoRef=useRef({});
+  // Le gestionnaire de clic est créé une seule fois : il lirait sinon un drawMode
+  // périmé. On le miroite dans une réf.
+  var drawModeRef=useRef(null);
+  var tradePickState=useState(null); var tradePick=tradePickState[0], setTradePick=tradePickState[1];
   var maSeriesRef=useRef([]);
   var ichiSeriesRef=useRef([]);
   var rsiSeriesRef=useRef(null);
@@ -10378,6 +10362,7 @@ function LWChart(props){
   var selDrawState=useState(null); var selDraw=selDrawState[0], setSelDraw=selDrawState[1];
   // #68 — atelier de dessin : brouillon de texte, glissement, marqueurs de trades
   var textDraftState=useState(null); var textDraft=textDraftState[0], setTextDraft=textDraftState[1];
+  useEffect(function(){ drawModeRef.current=drawMode; },[drawMode]);
   var showTradesState=useState(true); var showTrades=showTradesState[0], setShowTrades=showTradesState[1];
   var magnetState=useState(false); var magnet=magnetState[0], setMagnet=magnetState[1]; // #99 — aimanter aux hauts/bas
   var toolOpenState=useState(false); var toolOpen=toolOpenState[0], setToolOpen=toolOpenState[1]; // #101 — menu déroulant des outils
@@ -10409,9 +10394,25 @@ function LWChart(props){
     chartRef.current=chart; seriesRef.current=series;
     var onClick=function(param){
       var pk=pickRef.current;
-      if(!pk.active||!pk.cb||!param.point) return;
-      var price=series.coordinateToPrice(param.point.y);
-      if(price!=null) pk.cb(Math.round(price*100)/100);
+      if(pk.active&&pk.cb&&param.point){
+        var price=series.coordinateToPrice(param.point.y);
+        if(price!=null) pk.cb(Math.round(price*100)/100);
+        return;
+      }
+      // Hors mode pioche/dessin : un clic près d'une flèche en révèle le détail.
+      if(drawModeRef.current) return;
+      var info=tradeInfoRef.current||{};
+      if(param.time==null){ setTradePick(null); return; }
+      var lots=info[param.time];
+      if(!lots){
+        // Tolérance : la bougie touchée peut être voisine de celle qui porte la flèche.
+        var best=null,bd=Infinity;
+        Object.keys(info).forEach(function(k){ var d=Math.abs(Number(k)-param.time); if(d<bd){bd=d;best=k;} });
+        var bars2=barsRef.current||[];
+        var pas=(bars2.length>1)?Math.abs(bars2[1].time-bars2[0].time):86400;
+        if(best!=null && bd<=pas*1.5) lots=info[best];
+      }
+      setTradePick(lots?{lots:lots}:null);
     };
     chart.subscribeClick(onClick);
     var bump=function(){ setDrawTick(function(x){return (x+1)%1000000;}); };
@@ -10472,32 +10473,39 @@ function LWChart(props){
     try{ chartRef.current.applyOptions({timeScale:{timeVisible:!!intra, secondsVisible:false, borderColor:gridC}}); }catch(e){}
   },[tfIdx]);
 
-  // #68 — Points d'entrée / sortie sur le graphe : flèche + taille de la position + date.
+  // #68 — Points d'entrée / sortie : UNE FLÈCHE, rien d'autre. L'étiquette collée à
+  // chaque flèche (quantité + date) rendait le graphe illisible dès qu'il y avait
+  // plus de quelques trades. Le détail — sens, quantité, prix moyen, montant — se
+  // lit maintenant en touchant la flèche.
   useEffect(function(){
     var series=seriesRef.current; if(!series) return;
-    if(!showTrades || !trades || !trades.length){ try{ series.setMarkers([]); }catch(e){} return; }
+    if(!showTrades || !trades || !trades.length){ try{ series.setMarkers([]); }catch(e){} tradeInfoRef.current={}; return; }
     var bars=barsRef.current||[];
     if(!bars.length) return;
     var snap=function(ts){ var best=bars[0].time,bd=Infinity; for(var i=0;i<bars.length;i++){ var dd=Math.abs(bars[i].time-ts); if(dd<bd){bd=dd;best=bars[i].time;} } return best; };
-    var fmtD=function(ds){ try{ var p=String(ds).slice(0,10).split("-"); return p[2]+"/"+p[1]; }catch(e){ return ""; } };
     var seen={}, ms=[];
     trades.forEach(function(t){
       if(!t||!t.date) return;
       var ts=Math.floor(new Date(String(t.date).slice(0,10)+"T00:00:00Z").getTime()/1000);
       if(!isFinite(ts)) return;
       var st=snap(ts), buy=(t.side==="BUY");
-      var q=Math.abs(+t.qty||0);
+      var q=Math.abs(+t.qty||0), pr=+t.price||0;
       var key=st+"|"+t.side;
-      if(seen[key]!=null){ ms[seen[key]]._q += q; return; }   // regroupe les fills du même jour/sens
+      if(seen[key]!=null){ var e0=ms[seen[key]]; e0._q+=q; e0._v+=q*pr; e0._n++; return; }  // regroupe les fills du même jour/sens
       seen[key]=ms.length;
       ms.push({time:st, position:(buy?"belowBar":"aboveBar"), color:(buy?up:down),
-        shape:(buy?"arrowUp":"arrowDown"), _q:q, _buy:buy, _d:fmtD(t.date)});
+        shape:(buy?"arrowUp":"arrowDown"), size:1, _q:q, _v:q*pr, _n:1, _buy:buy, _date:String(t.date).slice(0,10)});
     });
     ms.sort(function(a,b){ return a.time-b.time; });
+    // Le détail est rangé à part, indexé par temps de bougie : c'est ce que le clic
+    // sur le graphe viendra chercher.
+    var info={};
     ms.forEach(function(m){
-      var qt=m._q>=1?Math.round(m._q):Math.round(m._q*1e4)/1e4;
-      m.text=(m._buy?"▲ ":"▼ ")+qt+" · "+m._d;
+      var px=m._q>0?m._v/m._q:0;
+      (info[m.time]=info[m.time]||[]).push({buy:m._buy, qty:m._q, price:px, n:m._n, date:m._date});
+      delete m._q; delete m._v; delete m._n; delete m._buy; delete m._date;
     });
+    tradeInfoRef.current=info;
     try{ series.setMarkers(ms); }catch(e){}
   },[trades, showTrades, tfIdx, loading, symbol]);
 
@@ -10509,7 +10517,9 @@ function LWChart(props){
     (zones||[]).forEach(function(z){
       if(z.price==null||isNaN(z.price)) return;
       try{
-        var pl=series.createPriceLine({ price:Number(z.price), color:z.color||"#888", lineWidth:2, lineStyle:z.dashed?2:0, axisLabelVisible:true, title:z.title||"" });
+        var pl=series.createPriceLine({ price:Number(z.price), color:z.color||"#888",
+          lineWidth:z.width||2, lineStyle:(z.lineStyle!=null?z.lineStyle:(z.dashed?2:0)),
+          axisLabelVisible:true, title:z.title||"" });
         lineRefs.current.push(pl);
       }catch(e){}
     });
@@ -10804,6 +10814,28 @@ function LWChart(props){
     noLib&&React.createElement("div",{style:{fontSize:11,color:down,padding:8}},"Librairie graphique non chargée (recharge la page)."),
     React.createElement("div",{style:{position:"relative",width:"100%",height:chartHeight}},
       React.createElement("div",{ref:containerRef,style:{width:"100%",height:chartHeight,opacity:loading?0.5:1}}),
+      // Détail d'une flèche de trade : ouvert au clic, fermé au clic ailleurs ou
+      // sur la croix. Les flèches ne portent plus d'étiquette, c'est ici qu'on lit.
+      tradePick&&React.createElement("div",{style:{position:"absolute",top:8,left:"50%",transform:"translateX(-50%)",
+        zIndex:20,minWidth:186,maxWidth:"92%",background:(C2.bg1||"#11131A")+"F2",
+        border:"1px solid "+(C2.border2||gridC),padding:"9px 12px 10px",
+        boxShadow:"0 6px 22px rgba(0,0,0,.6)"}},
+        React.createElement("button",{onClick:function(){setTradePick(null);},
+          style:{position:"absolute",top:3,right:6,background:"none",border:"none",color:C2.text3||"#666",fontSize:14,cursor:"pointer",lineHeight:1,padding:2}},"\u00d7"),
+        tradePick.lots.map(function(l,li){
+          var qt=l.qty>=1?Math.round(l.qty*100)/100:Math.round(l.qty*1e6)/1e6;
+          var px=l.price>=10?l.price.toFixed(2):l.price.toFixed(4);
+          var mt=l.qty*l.price;
+          return React.createElement("div",{key:li,style:{marginTop:li?8:0}},
+            React.createElement("div",{style:{fontSize:8.5,letterSpacing:1.6,textTransform:"uppercase",color:l.buy?up:down,marginBottom:3}},
+              (l.buy?"Achat":"Vente")+" \u00b7 "+l.date+(l.n>1?" \u00b7 "+l.n+" ex\u00e9cutions":"")),
+            React.createElement("div",{style:{fontSize:13,color:txt,fontVariantNumeric:"tabular-nums",letterSpacing:.2}},
+              qt+" \u00d7 "+px),
+            React.createElement("div",{style:{fontSize:10,color:C2.text2||"#8A8677",fontVariantNumeric:"tabular-nums",marginTop:1}},
+              (mt>=1000?Math.round(mt).toLocaleString("fr-FR"):Math.round(mt*100)/100)+" au total")
+          );
+        })
+      ),
       (function(){
         var _t=drawTick;
         var cv=_cv();
