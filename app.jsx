@@ -510,7 +510,37 @@ function _despikeCarry(vals){
   }
   return out;
 }
-function fundAppendLive(anchors, jField, kvCol, liveIdx){
+// Bornes de VÉRITÉ pour la queue de série : l'indice de fin de mois reconstruit à
+// partir des rendements mensuels, remis à l'échelle des ancres quotidiennes (les
+// deux sont calés l'un sur l'autre en fin de mois).
+function fundMonthTruth(MAP, afterD, refV, refD){
+  try{
+    const ma=fundAnchors(MAP||{});
+    if(!ma.length) return [];
+    // Valeur mensuelle à la date de référence (fin des ancres quotidiennes).
+    const at=d=>{ let v=null; for(let i=0;i<ma.length;i++){ if(ma[i].d<=d) v=ma[i].v; else break; } return v; };
+    const base=at(refD);
+    if(!(base>0)||!(refV>0)) return [];
+    const k=refV/base;
+    return ma.filter(a=>a.d>afterD && /-28$/.test(a.d)).map(a=>({d:a.d, v:a.v*k}));
+  }catch(e){ return []; }
+}
+// Parts en circulation d'un fonds à une date, depuis le registre des apports.
+function fundSharesAt(fonds, dstr, invArr){
+  try{
+    const arr = invArr
+      || ((typeof lsv9Get==="function") ? lsv9Get("cgi_inv") : null)
+      || ((typeof INV_SEED_OK!=="undefined") ? INV_SEED_OK : []);
+    let n=0;
+    (Array.isArray(arr)?arr:[]).forEach(x=>{
+      if(!x || x.fonds!==fonds) return;
+      if(String(x.date||"") > dstr) return;
+      n += (x.io==="OUT" ? -1 : 1) * (+x.shares||0);
+    });
+    return n>0 ? n : 0;
+  }catch(e){ return 0; }
+}
+function fundAppendLive(anchors, jField, kvCol, liveIdx, monthlyMap){
   try{
     if(!anchors||!anchors.length) return anchors;
     const last = anchors[anchors.length-1];
@@ -524,25 +554,86 @@ function fundAppendLive(anchors, jField, kvCol, liveIdx){
     let jr=[];
     try{
       const j=(typeof lsv9Get==="function")?lsv9Get("cgi_daily"):null;
-      if(Array.isArray(j)) jr=sortd(j.filter(x=>x&&x.d>last.d&&x.d<=today&&x[jField]!=null&&x[jField]>0).map(x=>[x.d,x[jField]]));
+      // Le journal enregistre la VALEUR € du pôle, apports compris. On la ramène à
+      // la valeur PAR PART en la divisant par les parts en circulation ce jour-là :
+      // un apport ou un retrait n'a alors plus aucun effet sur la courbe, ce qui est
+      // exactement le sens d'une valeur liquidative. (Les points du KV de juin sont
+      // déjà des valeurs par part, ils n'ont pas besoin de cette division.)
+      const _fonds = (jField==="c") ? "CGIC" : "CGIS";
+      if(Array.isArray(j)) jr=sortd(j.filter(x=>x&&x.d>last.d&&x.d<=today&&x[jField]!=null&&x[jField]>0)
+        .map(x=>{ const sh=fundSharesAt(_fonds, x.d); return [x.d, sh>0 ? (x[jField]/sh) : x[jField]]; }));
     }catch(e){}
     // Segment principal = le plus DENSE (le journal l'emporte à densité ≥). Puis on chaîne les
     // points du journal AU-DELÀ (mois suivants) → juin dense garanti + alimentation continue.
     const primary = (jr.length>=kv.length) ? jr : kv;
     const lastPrimD = primary.length ? primary[primary.length-1][0] : last.d;
-    const ext = jr.filter(p=>p[0]>lastPrimD);
-    // Chaînage en indices : chaque segment rebasé pour continuer le précédent (ratios internes).
-    const out=[]; let curV=last.v, curD=last.d;
-    const chain=(seg)=>{ const s=seg.filter(p=>p[0]>curD); if(!s.length) return; const v0=s[0][1]; s.forEach(p=>{ out.push([p[0], curV*(p[1]/v0)]); }); curV=out[out.length-1][1]; curD=out[out.length-1][0]; };
-    chain(primary); chain(ext);
-    if(!out.length){ if(last.d<today) anchors.push({d:today, v:target}); return anchors; }
-    // Dérive géométrique répartie → le dernier point atteint exactement la valeur live (cohérence).
-    const provN=out[out.length-1][1], k=(provN>0)?(target/provN):1, n=out.length;
-    out.forEach((p,i)=>{ const prog=(n>1)?i/(n-1):1; anchors.push({d:p[0], v: p[1]*Math.pow(k,prog)}); });
-    if(out[out.length-1][0]<today) anchors.push({d:today, v:target});
+    const src0 = sortd(primary.concat(jr.filter(p=>p[0]>lastPrimD)));
+    if(!src0.length){ if(last.d<today) anchors.push({d:today, v:target}); return anchors; }
+    // Garde-fou : on travaille en RENDEMENTS et on ignore ceux qu'aucun marché ne
+    // peut expliquer (donnée corrompue). Le niveau reste gouverné par la vérité de
+    // fin de mois ; le journal ne fournit que la forme à l'intérieur du mois.
+    const src=(function(pts){
+      if(pts.length<2) return pts.slice();
+      const o=[[pts[0][0],100]]; let cur=100;
+      for(let i=1;i<pts.length;i++){
+        const p0=pts[i-1][1], p1=pts[i][1];
+        let r=(p0>0)?(p1/p0-1):0;
+        if(!isFinite(r)||Math.abs(r)>0.60) r=0;   // valeur aberrante (les apports, eux, sont déjà neutralisés par les parts)
+        cur=cur*(1+r); o.push([pts[i][0],cur]);
+      }
+      return o;
+    })(src0);
+
+    // Chaîne un tronçon : on garde sa FORME (ratios internes), on le fait partir de
+    // curV et on répartit dans le TEMPS la dérive qui le fait finir sur vEnd.
+    // Répartir par index — ce que faisait l'ancien code — concentrait mal la
+    // correction quand les points sont irrégulièrement espacés.
+    const chainTo=(seg, curV, curD, vEnd, endD)=>{
+      if(!seg.length) return [];
+      const v0=seg[0][1]; if(!(v0>0)) return [];
+      const shape=seg.map(p=>[p[0], curV*(p[1]/v0)]);
+      const provN=shape[shape.length-1][1];
+      const k=(provN>0&&vEnd>0)?(vEnd/provN):1;
+      const t0=Date.parse(curD+"T00:00:00Z"), t1=Date.parse(endD+"T00:00:00Z");
+      return shape.map(p=>{
+        const t=Date.parse(p[0]+"T00:00:00Z");
+        const prog=(t1>t0&&isFinite(t))?Math.max(0,Math.min(1,(t-t0)/(t1-t0))):1;
+        return [p[0], p[1]*Math.pow(k,prog)];
+      });
+    };
+
+    // Le journal enregistre la VALEUR € du pôle, apports compris : s'en servir comme
+    // forme de l'indice par part sur plusieurs mois, avec une seule correction tout à
+    // la fin, laissait la courbe s'envoler puis retomber d'un coup sur la vraie valeur.
+    // On la raccroche donc à l'indice de fin de MOIS : la dérive ne peut plus dépasser
+    // un mois, et il n'y a plus de marche terminale.
+    // Seuls les mois CLOS servent de borne. Retenir celle du mois en cours revenait à
+    // la faire contredire par la valeur live le lendemain — d'où une marche verticale
+    // au tout dernier point.
+    const _moisEnCours = today.slice(0,7);
+    const truth = fundMonthTruth(monthlyMap, last.d, last.v, last.d)
+      .filter(t=>t.d.slice(0,7) < _moisEnCours);
+    let curV=last.v, curD=last.d;
+    truth.forEach(t=>{
+      const seg=src.filter(p=>p[0]>curD && p[0]<=t.d);
+      if(seg.length){
+        chainTo(seg, curV, curD, t.v, t.d).forEach(p=>anchors.push({d:p[0], v:p[1]}));
+        curD=seg[seg.length-1][0];
+      }
+      if(curD<t.d){ anchors.push({d:t.d, v:t.v}); curD=t.d; }
+      curV=t.v;
+    });
+    // Mois en cours : la borne est la valeur live.
+    const tail=src.filter(p=>p[0]>curD);
+    if(tail.length){
+      chainTo(tail, curV, curD, target, today).forEach(p=>anchors.push({d:p[0], v:p[1]}));
+      curD=tail[tail.length-1][0];
+    }
+    if(curD<today) anchors.push({d:today, v:target});
     return anchors;
   }catch(e){ return anchors; }
 }
+
 
 /* ─── DATA ──────────────────────────────────────────────── */
 /* ─── FONDS JCGI ─────────────────────────────────────────── */
@@ -7704,7 +7795,7 @@ function PageStats({chartData, hidden=false, EFF, eur=false, liveDD, src, liveIn
    sélectionnée — permet la comparaison de performance directe.
    Benchmark dynamique sur la même période.
 ═══════════════════════════════════════════════════════════ */
-function GdbCompareChartGDB({tf:tfProp, onTFChange, liveGSB, liveGDBS, liveBench, liveGC, liveCgicIdx, liveCgisIdx}){
+function GdbCompareChartGDB({tf:tfProp, onTFChange, liveGSB, liveGDBS, liveBench, liveGC, liveCgicIdx, liveCgisIdx, cmMap, smMap}){
   const [tfState, setTF] = useState("YTD");
   const tf = (tfProp!=null) ? tfProp : tfState;   // #70 — contrôlé par la page quand fourni
   const [hover, setHover] = useState(null);
@@ -7792,8 +7883,8 @@ function GdbCompareChartGDB({tf:tfProp, onTFChange, liveGSB, liveGDBS, liveBench
   };
   // CGIC = série quotidienne (ancrée mensuel) ; CGIS = mensuel ; les deux prolongées à aujourd'hui
   // via la forme quotidienne du KV de juin, ré-ancrée entre fin mai et la valeur live.
-  const _cgicA=fundAppendLive(fundCgicDailyAnchors(), "c", 2, liveCgicIdx);
-  const _cgisA=fundAppendLive(fundCgisDailyAnchors(), "s", 1, liveCgisIdx);
+  const _cgicA=fundAppendLive(fundCgicDailyAnchors(), "c", 2, liveCgicIdx, cmMap||((typeof CRYPTO_MONTHLY!=="undefined")?CRYPTO_MONTHLY:null));
+  const _cgisA=fundAppendLive(fundCgisDailyAnchors(), "s", 1, liveCgisIdx, smMap||((typeof STOCKS_MONTHLY!=="undefined")?STOCKS_MONTHLY:null));
   // Les fonds passent par la série quotidienne unique (déjà dépiquée et rebasée) :
   // plus de traitement propre au graphe, donc plus de divergence avec les cartes.
   const _cgicDaily = fundDailyBase100(_cgicA, cut, liveCgicIdx);
@@ -8213,7 +8304,7 @@ function FondDetailModal({fond, EFF, liveInv, liveDD, liveGC, eur, onClose}){
   );
 }
 function PageGDB(
-{chartData,hidden,EFF,eur,liveGSB,liveGDBS,liveBench,liveGC,liveDD,liveInv}){
+{chartData,hidden,EFF,eur,liveGSB,liveGDBS,liveBench,liveGC,liveDD,liveInv,liveCM,liveSM}){
   const [benchTF, setBenchTF] = useState("YTD");
   const [detailFond, setDetailFond] = useState(null);
   const src = EFF||CURRENT;
@@ -8245,8 +8336,10 @@ function PageGDB(
 
   // Perf période via composition mensuelle (helper global fundPeriodPerf) — cohérent avec Stats.
   const _gpNow = (typeof calcGdbPrices==="function") ? calcGdbPrices(src) : {};
-  const _cmJG = (typeof CRYPTO_MONTHLY!=="undefined")?CRYPTO_MONTHLY:null;
-  const _smJG = (typeof STOCKS_MONTHLY!=="undefined")?STOCKS_MONTHLY:null;
+  // Les tableaux embarqués s'arrêtent à mai : sans les versions LIVE, la queue de
+  // série n'aurait aucune borne mensuelle sur laquelle se raccrocher.
+  const _cmJG = liveCM || ((typeof CRYPTO_MONTHLY!=="undefined")?CRYPTO_MONTHLY:null);
+  const _smJG = liveSM || ((typeof STOCKS_MONTHLY!=="undefined")?STOCKS_MONTHLY:null);
   const gcPerf = d => fundPeriodPerf("CGIC", d, _cmJG, _smJG, (_gpNow.fundCfondsUSD!=null?_gpNow.fundCfondsUSD:(src.crypto?src.crypto.total:0))*usdEurNow);
   const gsPerf = d => fundPeriodPerf("CGIS", d, _cmJG, _smJG, (_gpNow.fundSfondsUSD!=null?_gpNow.fundSfondsUSD:0)*usdEurNow);
   // #fix cohérence — indice base-100 AUJOURD'HUI (croissance totale time-weighted, live inclus) ;
@@ -8256,8 +8349,8 @@ function PageGDB(
   // Ancres des fonds : CGIC = série QUOTIDIENNE (fichier d'origine, ancrée sur le mensuel) ;
   // CGIS = mensuel (pas de quotidien fiable). Les deux prolongées jusqu'à aujourd'hui via la
   // forme quotidienne du KV de juin, ré-ancrée entre fin mai et la valeur live (endpoints exacts).
-  const _cgicAnchors = fundAppendLive(fundCgicDailyAnchors(), "c", 2, _liveCgicIdx);
-  const _cgisAnchors = fundAppendLive(fundCgisDailyAnchors(), "s", 1, _liveCgisIdx);
+  const _cgicAnchors = fundAppendLive(fundCgicDailyAnchors(), "c", 2, _liveCgicIdx, _cmJG);
+  const _cgisAnchors = fundAppendLive(fundCgisDailyAnchors(), "s", 1, _liveCgisIdx, _smJG);
   // La sparkline ET le P&L de la carte dérivent de LA MÊME série (cohérence garantie).
   const _cgicSpark = fundSampleN(fundDailyBase100(_cgicAnchors, TF[benchTF], _liveCgicIdx).vals, 25);
   const _cgisSpark = fundSampleN(fundDailyBase100(_cgisAnchors, TF[benchTF], _liveCgisIdx).vals, 25);
@@ -8423,7 +8516,7 @@ function PageGDB(
       {detailFond && <FondDetailModal fond={detailFond} EFF={EFF} liveInv={liveInv} liveDD={liveDD} liveGC={liveGC} eur={eur} onClose={()=>setDetailFond(null)}/>}
 
       <div style={{fontSize:10,letterSpacing:4,color:C.text2,textTransform:"uppercase",textAlign:"center",margin:"22px 0 12px"}}>Comparaison % de performance</div>
-      <GdbCompareChartGDB tf={benchTF} onTFChange={setBenchTF} liveGSB={liveGSB} liveGDBS={liveGDBS} liveBench={liveBench} liveGC={liveGC} liveCgicIdx={_liveCgicIdx} liveCgisIdx={_liveCgisIdx}/>
+      <GdbCompareChartGDB tf={benchTF} onTFChange={setBenchTF} liveGSB={liveGSB} liveGDBS={liveGDBS} liveBench={liveBench} liveGC={liveGC} liveCgicIdx={_liveCgicIdx} liveCgisIdx={_liveCgisIdx} cmMap={_cmJG} smMap={_smJG}/>
       {/* Liste benchmark en barres retiree a la demande — v26.08 */}
     </div>
   );
@@ -16684,7 +16777,7 @@ function App(){
         {tab===0 && <PageOverview chartData={chartData} onSnapshot={()=>setShowSnap(true)} {...liveProps} liveDD={liveDD} liveCM={liveCM} liveGDBS={liveGDBS} liveGC={gcEff} chosenSource={chosenSource} iconDbVersion={iconDbVersion} bumpIconDb={bumpIconDb} setTab={setTab} setShowSettings={setShowSettings}/>}
         {tab===1 && <PageAllocation hidden={hidden} EFF={EFF} eur={eur} setEur={setEur} iconDbVersion={iconDbVersion} bumpIconDb={bumpIconDb} liveOk={liveOk} onTrade={()=>setShowTrade(true)} txns={txnsEff} ibkrTrades={ibkrTrades}/>}
         {tab===2 && <PageStats chartData={chartData} hidden={hidden} EFF={EFF} eur={eur} liveDD={liveDD} src={EFF||CURRENT} liveInv={liveInv} liveCM={liveCM} liveSM={liveSM} liveTM={liveTM}/>}
-        {tab===3 && <PageGDB chartData={chartData} hidden={hidden} EFF={EFF} eur={eur} liveGSB={liveGSB} liveGDBS={liveGDBS} liveBench={liveBench} liveGC={gcEff} liveDD={liveDD} liveInv={liveInv}/>}
+        {tab===3 && <PageGDB chartData={chartData} hidden={hidden} EFF={EFF} eur={eur} liveGSB={liveGSB} liveGDBS={liveGDBS} liveBench={liveBench} liveGC={gcEff} liveDD={liveDD} liveInv={liveInv} liveCM={liveCM} liveSM={liveSM}/>}
 
         {tab===5 && <PageLegend txns={txnsEff} liveFutures={liveFutures} hidden={hidden} eur={eur} EFF={EFF} liveIbkrAnnex={liveIbkrAnnex} ibkrTrades={ibkrTrades} onImportCsv={()=>setShowCexImport(true)}/>}
         {(tab===7||tab===6) && <PageMarket EFF={EFF} hidden={hidden}/>}
