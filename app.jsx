@@ -9923,30 +9923,34 @@ function TradeDetailModal({trade, kind, onClose, liveIbkrAnnex, onToggleClose}){
   const fU = function(v){ return (v<0?"-$":"$")+Math.abs(Math.round(v)).toLocaleString("fr-FR"); };
   const fE = function(v){ return (v<0?"-":"")+Math.abs(Math.round(v)).toLocaleString("fr-FR")+" \u20ac"; };
   const typeLabel = isFut ? ("Futures "+dir) : (src==="ibkr"?"Action (spot)":"Crypto (spot)");
+  // Pastille plate, identique à celles de la liste des trades.
+  const dChip={display:"inline-block",fontSize:8.5,letterSpacing:1.4,textTransform:"uppercase",
+    borderRadius:2,padding:"2px 6px",border:"1px solid",background:"transparent",whiteSpace:"nowrap"};
   const Info=function(props){ return (
-    <div style={{background:C.bg2,borderRadius:10,padding:"9px 11px"}}>
-      <div style={{fontSize:9,color:C.text3,textTransform:"uppercase",letterSpacing:1}}>{props.k}</div>
-      <div style={{fontSize:14,fontWeight:600,color:props.c||C.text,marginTop:2}}>{props.v}</div>
+    <div style={{borderTop:`1px solid ${C.border}`,padding:"9px 2px 2px"}}>
+      <div style={{fontSize:8.5,color:C.text3,textTransform:"uppercase",letterSpacing:1.8}}>{props.k}</div>
+      <div style={{fontFamily:"'Cormorant Garamond',Georgia,serif",fontWeight:600,fontSize:17,lineHeight:1.2,
+        color:props.c||C.text,marginTop:2,fontVariantNumeric:"tabular-nums"}}>{props.v}</div>
     </div>
   );};
 
   return (
     <div onClick={onClose} style={{position:"fixed",inset:0,zIndex:680,background:"rgba(0,0,0,.78)",display:"flex",alignItems:"flex-end",justifyContent:"center"}}>
-      <div onClick={function(e){e.stopPropagation();}} style={{background:C.bg1,borderRadius:"20px 20px 0 0",padding:"20px 16px 30px",width:"100%",maxWidth:460,maxHeight:"90vh",overflowY:"auto",border:`1px solid ${C.border}`}}>
+      <div onClick={function(e){e.stopPropagation();}} style={{background:C.bg1,borderRadius:0,borderTop:`1px solid ${C.gold}66`,border:"none",padding:"18px 18px 28px",width:"100%",maxWidth:460,maxHeight:"90vh",overflowY:"auto",boxShadow:"0 -10px 40px rgba(0,0,0,.6)"}}>
         {/* En-tete */}
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14}}>
           <div>
-            <div style={{fontSize:20,fontWeight:700,color:C.text}}>{ticker}</div>
-            <div style={{display:"flex",alignItems:"center",gap:7,marginTop:3}}>
-              {(function(){var cl=assetClass(ticker,src,isFut);return <span style={{fontSize:9,fontWeight:600,padding:"2px 7px",borderRadius:5,background:cl.color+"22",color:cl.color}}>{cl.label}</span>;})()}
-              <span style={{fontSize:11,fontWeight:700,color:isFut?(dir==="LONG"?C.green:C.red):C.text3}}>{typeLabel}{isFut&&trade.lev!=null&&!isNaN(trade.lev)?(" \u00b7 x"+trade.lev):""}</span>
-              {isOpen && <span style={{fontSize:9,fontWeight:700,padding:"2px 7px",borderRadius:5,background:C.gold+"22",color:C.gold,letterSpacing:.4}}>OUVERT</span>}
+            <div style={{fontFamily:"'Cinzel',Georgia,serif",fontSize:19,fontWeight:600,letterSpacing:1.6,color:C.gold}}>{ticker}</div>
+            <div style={{display:"flex",alignItems:"center",gap:7,marginTop:5,flexWrap:"wrap"}}>
+              {(function(){var cl=assetClass(ticker,src,isFut);return <span style={{...dChip,color:cl.color,borderColor:cl.color+"66"}}>{cl.label}</span>;})()}
+              <span style={{fontSize:10,letterSpacing:.4,color:isFut?(dir==="LONG"?C.green:C.red):C.text3}}>{typeLabel}{isFut&&trade.lev!=null&&!isNaN(trade.lev)?(" \u00b7 \u00d7"+trade.lev):""}</span>
+              {isOpen && <span style={{...dChip,color:C.gold,borderColor:C.gold+"66"}}>Ouvert</span>}
             </div>
           </div>
           <div style={{textAlign:"right"}}>
-            <div style={{fontSize:20,fontWeight:700,color:up?C.green:C.red}}>{(up?"+":"")+fU(pnlUSD)}</div>
-            <div style={{fontSize:12,fontWeight:700,color:up?C.green:C.red}}>{(up?"+":"")+fE(pnlEUR)} {trade.pct!=null?("\u00b7 "+(up?"+":"")+trade.pct.toFixed(1)+"%"):""}</div>
-            {isOpen && <div style={{fontSize:9,color:C.text3,marginTop:2,fontWeight:600}}>P&L réalisé (sur parts vendues)</div>}
+            <div style={{fontFamily:"'Cormorant Garamond',Georgia,serif",fontWeight:600,fontSize:26,lineHeight:1.15,color:up?C.green:C.red,fontVariantNumeric:"tabular-nums"}}>{(up?"+":"")+fU(pnlUSD)}</div>
+            <div style={{fontSize:11,color:up?C.green:C.red,fontVariantNumeric:"tabular-nums",opacity:.85,marginTop:1}}>{(up?"+":"")+fE(pnlEUR)} {trade.pct!=null?("\u00b7 "+(up?"+":"")+trade.pct.toFixed(1)+"%"):""}</div>
+            {isOpen && <div style={{fontSize:9,color:C.text3,marginTop:3}}>P&L réalisé (sur parts vendues)</div>}
           </div>
         </div>
         {/* Infos — #141 : robustes aux champs manquants des futures importés (— au lieu de null/NaN/xnull) */}
@@ -9981,15 +9985,15 @@ function TradeDetailModal({trade, kind, onClose, liveIbkrAnnex, onToggleClose}){
           })()}
         </div>
         {/* Graphique Yahoo */}
-        <div style={{background:C.bg2,borderRadius:12,padding:"12px 12px 8px"}}>
-          <div style={{display:"flex",gap:16,marginBottom:6,paddingLeft:2,fontSize:11,alignItems:"center"}}>
-            <span style={{color:C.blue,fontWeight:700}}>Cours Yahoo</span>
-            <span style={{color:C.green,fontWeight:700}}>● Buy</span>
-            <span style={{color:C.red,fontWeight:700}}>● Sell</span>
+        <div style={{background:"transparent",borderTop:`1px solid ${C.border}`,borderRadius:0,padding:"12px 0 8px",marginTop:14}}>
+          <div style={{display:"flex",gap:14,marginBottom:8,fontSize:9,alignItems:"center",letterSpacing:1.2,textTransform:"uppercase"}}>
+            <span style={{color:C.blue}}>Cours Yahoo</span>
+            <span style={{color:C.green}}>● Achat</span>
+            <span style={{color:C.red}}>● Vente</span>
             {/* #116 — fenêtre du graphe */}
             <div style={{marginLeft:"auto",position:"relative"}}>
               <select value={chartTf} onChange={function(e){ setChartTf(e.target.value); }}
-                style={{appearance:"none",WebkitAppearance:"none",background:C.bg1||C.bg,border:`1px solid ${chartTf!=="trade"?C.gold:C.border2}`,borderRadius:7,padding:"4px 22px 4px 9px",color:chartTf!=="trade"?C.gold:C.text2,fontSize:10,fontWeight:700,fontFamily:"inherit",cursor:"pointer",outline:"none"}}>
+                style={{appearance:"none",WebkitAppearance:"none",background:"transparent",border:"none",borderBottom:`1px solid ${chartTf!=="trade"?C.gold:C.border}`,borderRadius:0,padding:"4px 16px 5px 4px",color:chartTf!=="trade"?C.gold:C.text2,fontSize:10,fontFamily:"inherit",cursor:"pointer",outline:"none"}}>
                 <option value="trade" style={{color:"#111",background:"#fff"}}>Trade</option>
                 <option value="1M" style={{color:"#111",background:"#fff"}}>1 mois</option>
                 <option value="3M" style={{color:"#111",background:"#fff"}}>3 mois</option>
@@ -9997,7 +10001,7 @@ function TradeDetailModal({trade, kind, onClose, liveIbkrAnnex, onToggleClose}){
                 <option value="1A" style={{color:"#111",background:"#fff"}}>1 an</option>
                 <option value="all" style={{color:"#111",background:"#fff"}}>Tout</option>
               </select>
-              <span style={{position:"absolute",right:8,top:"50%",transform:"translateY(-50%)",pointerEvents:"none",fontSize:9,color:chartTf!=="trade"?C.gold:C.text3}}>▾</span>
+              <span style={{position:"absolute",right:2,top:"44%",transform:"translateY(-50%)",pointerEvents:"none",fontSize:9,color:chartTf!=="trade"?C.gold:C.text3}}>▾</span>
             </div>
           </div>
           {hist===null && <div style={{textAlign:"center",color:C.text3,fontSize:12,padding:40}}>Chargement du cours {ySym}…</div>}
@@ -10011,16 +10015,17 @@ function TradeDetailModal({trade, kind, onClose, liveIbkrAnnex, onToggleClose}){
           if(!all.length) return null;
           return (
             <div style={{marginTop:14}}>
-              <div style={{fontSize:10,fontWeight:600,color:C.text3,textTransform:"uppercase",letterSpacing:1.5,marginBottom:8}}>Trades {ticker} ({all.length})</div>
-              <div style={{display:"flex",flexDirection:"column",gap:6,maxHeight:220,overflowY:"auto"}}>
+              <div style={{fontSize:8.5,color:C.text3,textTransform:"uppercase",letterSpacing:1.8,marginBottom:6}}>Trades {ticker} · {all.length}</div>
+              <div style={{display:"flex",flexDirection:"column",gap:0,maxHeight:220,overflowY:"auto"}}>
                 {all.map(function(t,i){
                   var buy=(t.side||"").toUpperCase()!=="SELL"; var si=tradeSrcInfo(t);
                   return (
-                    <div key={t.id||i} style={{display:"flex",alignItems:"center",gap:8,fontSize:11,borderBottom:`1px solid ${C.border}`,paddingBottom:6}}>
-                      <span style={{fontSize:9,fontWeight:700,color:buy?C.green:C.red,border:`1px solid ${(buy?C.green:C.red)}55`,borderRadius:5,padding:"1px 6px",minWidth:42,textAlign:"center"}}>{buy?"ACHAT":"VENTE"}</span>
-                      <span style={{fontSize:8,fontWeight:700,padding:"1px 5px",borderRadius:4,background:si.color+"22",color:si.color}}>{t._synth?"SOCLE":si.label}</span>
-                      <span style={{color:C.text3,minWidth:64}}>{t.date}</span>
-                      <span style={{flex:1,textAlign:"right",color:C.text}}>{Math.abs(t.qty||0).toLocaleString("fr-FR",{maximumFractionDigits:8})} @ {(t.currency==="EUR"?"€":"$")}{Number(t.price||0).toLocaleString("fr-FR",{maximumFractionDigits:6})}</span>
+                    <div key={t.id||i} style={{display:"flex",alignItems:"center",gap:8,fontSize:11,
+                      borderTop:`1px solid ${C.border}`,borderLeft:`2px solid ${buy?C.green:C.red}`,padding:"6px 0 6px 8px"}}>
+                      <span style={{...dChip,color:buy?C.green:C.red,borderColor:(buy?C.green:C.red)+"55",minWidth:44,textAlign:"center"}}>{buy?"Achat":"Vente"}</span>
+                      <span style={{...dChip,fontSize:8,color:si.color,borderColor:si.color+"55"}}>{t._synth?"Socle":si.label}</span>
+                      <span style={{color:C.text3,minWidth:62,fontSize:10}}>{t.date}</span>
+                      <span style={{flex:1,textAlign:"right",color:C.text,fontVariantNumeric:"tabular-nums"}}>{Math.abs(t.qty||0).toLocaleString("fr-FR",{maximumFractionDigits:8})} @ {(t.currency==="EUR"?"€":"$")}{Number(t.price||0).toLocaleString("fr-FR",{maximumFractionDigits:6})}</span>
                     </div>
                   );
                 })}
@@ -10031,13 +10036,16 @@ function TradeDetailModal({trade, kind, onClose, liveIbkrAnnex, onToggleClose}){
         {/* #111 — clôture / réouverture manuelle */}
         {onToggleClose && (
           <div style={{marginTop:12}}>
-            <button onClick={function(){ onToggleClose(ticker); }} style={{width:"100%",padding:"10px 0",borderRadius:10,border:`1px solid ${cgiIsManualClosed(ticker)?C.gold:C.border2}`,background:"transparent",color:cgiIsManualClosed(ticker)?C.gold:C.text2,fontSize:12,fontWeight:600,cursor:"pointer",fontFamily:C.font}}>
+            <button onClick={function(){ onToggleClose(ticker); }} style={{width:"100%",padding:"12px 0",borderRadius:0,border:`1px solid ${cgiIsManualClosed(ticker)?C.gold:C.border}`,background:"transparent",color:cgiIsManualClosed(ticker)?C.gold:C.text2,fontSize:10,letterSpacing:1.8,textTransform:"uppercase",cursor:"pointer",fontFamily:C.font}}>
               {cgiIsManualClosed(ticker) ? "\u21a9 Rouvrir ce trade" : "\u2713 Cl\u00f4turer manuellement ce trade"}
             </button>
             <div style={{fontSize:9,color:C.text3,textAlign:"center",marginTop:5}}>{cgiIsManualClosed(ticker)?"Marqu\u00e9 cl\u00f4tur\u00e9 manuellement \u2014 retir\u00e9 des positions ouvertes.":"Force ce ticker \u00e0 appara\u00eetre comme cl\u00f4tur\u00e9 (utile si une revente n'est pas dans les CSV)."}</div>
           </div>
         )}
-        <div style={{marginTop:14}}><Btn label="Fermer" onClick={onClose} color={C.gray} outline full/></div>
+        <div style={{marginTop:16}}>
+          <button onClick={onClose} style={{width:"100%",padding:"12px 0",borderRadius:0,border:`1px solid ${C.border2}`,
+            background:"transparent",color:C.text2,fontFamily:C.font,fontSize:10,letterSpacing:2.2,textTransform:"uppercase",cursor:"pointer"}}>Fermer</button>
+        </div>
       </div>
     </div>
   );
@@ -13507,23 +13515,38 @@ function PageLegend(
   const openCount = filtered.filter(function(t){ return t.open; }).length;
   const fU = function(v){ return (v<0?"-$":"$")+Math.abs(Math.round(v)).toLocaleString("fr-FR"); };
   const filterOn = board==="spot" && (srcFilter||assetFilter);
+  // Pastille plate : un filet, pas un fond — comme les pastilles du Suivi.
+  const hChip={display:"inline-block",fontSize:8.5,letterSpacing:1.4,textTransform:"uppercase",
+    borderRadius:2,padding:"2px 6px",border:"1px solid",background:"transparent",whiteSpace:"nowrap",verticalAlign:1};
   const Tab=function(props){ return (
-    <button onClick={props.onClick} style={lxBtn({active:props.active,style:{flex:1,padding:"9px 0",fontSize:13}})}>{props.label}</button>
+    <button onClick={props.onClick} style={lxBtn({active:props.active,underline:true,style:{flex:1,fontSize:11,letterSpacing:1.6}})}>{props.label}</button>
+  );};
+  // Encart de statistique à plat : un filet en tête, le libellé en petites
+  // capitales, le chiffre en Cormorant — comme partout ailleurs dans l'app.
+  const Stat=function(props){ return (
+    <div style={{borderTop:`1px solid ${C.border}`,padding:"11px 2px 4px",textAlign:props.center===false?"left":"center",gridColumn:props.wide?"1 / -1":undefined}}>
+      <div style={{fontSize:8.5,color:C.text2,textTransform:"uppercase",letterSpacing:2}}>{props.label}
+        {props.hint&&<span style={{opacity:.55,letterSpacing:.5,textTransform:"none"}}> {props.hint}</span>}</div>
+      <div style={{fontFamily:"'Cormorant Garamond',Georgia,serif",fontWeight:600,fontSize:props.small?20:24,lineHeight:1.15,
+        color:props.color||C.text,fontVariantNumeric:"tabular-nums",marginTop:3}}>{props.value}
+        {props.sub&&<span style={{fontFamily:C.font,fontSize:10.5,color:C.text3,fontWeight:400,marginLeft:5}}>{props.sub}</span>}</div>
+    </div>
   );};
   // #108b — menu déroulant stylé (réduit le nombre de boutons visibles). value/onChange sur des options [val,label].
   const Dropdown=function(props){
     var active=props.value!==props.defaultVal;
     return (
       <div style={{flex:props.flex||1,minWidth:0}}>
-        <div style={{fontSize:9,color:C.text3,textTransform:"uppercase",letterSpacing:1.5,marginBottom:4,textAlign:"center"}}>{props.title}</div>
+        <div style={{fontSize:8.5,color:C.text3,textTransform:"uppercase",letterSpacing:1.8,marginBottom:4,textAlign:"center"}}>{props.title}</div>
         <div style={{position:"relative"}}>
           <select value={props.value==null?"__null__":props.value} onChange={function(e){ var v=e.target.value; props.onChange(v==="__null__"?null:v); }}
-            style={{width:"100%",appearance:"none",WebkitAppearance:"none",boxSizing:"border-box",background:C.bg1||C.bg,
-              border:`1px solid ${active?C.gold:C.border2}`,borderRadius:8,padding:"8px 26px 8px 26px",textAlign:"center",textAlignLast:"center",
-              color:active?C.gold:C.text,fontSize:12,fontWeight:600,fontFamily:"inherit",cursor:"pointer",outline:"none"}}>
+            style={{width:"100%",appearance:"none",WebkitAppearance:"none",boxSizing:"border-box",background:"transparent",
+              border:"none",borderBottom:`1px solid ${active?C.gold:C.border}`,borderRadius:0,padding:"7px 18px 8px 4px",
+              textAlign:"center",textAlignLast:"center",
+              color:active?C.gold:C.text,fontSize:11.5,fontFamily:"inherit",cursor:"pointer",outline:"none"}}>
             {props.options.map(function(o){ return <option key={String(o[0])} value={o[0]==null?"__null__":o[0]} style={{color:"#111",background:"#fff"}}>{o[1]}</option>; })}
           </select>
-          <span style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",pointerEvents:"none",fontSize:10,color:active?C.gold:C.text3}}>▾</span>
+          <span style={{position:"absolute",right:2,top:"46%",transform:"translateY(-50%)",pointerEvents:"none",fontSize:9,color:active?C.gold:C.text3}}>▾</span>
         </div>
       </div>
     );
@@ -13533,42 +13556,28 @@ function PageLegend(
   return (
     <div style={{padding:"8px 14px 96px"}}>
       <PageTitle title="History" sub={board==="spot"?"Trades clôturés + positions ouvertes":"Trades clôturés · Futures"}/>
-      <div style={{display:"flex",gap:8,marginBottom:14,flexWrap:"wrap"}}>
-        <button onClick={()=>setShowSearch(v=>!v)} style={lxBtn({active:showSearch,style:{flex:1,minWidth:150,padding:"8px 13px",gap:7,justifyContent:"center"}})}>
-          <Icon name="search" size={14} color={showSearch?C.gold:C.text2}/>Recherche ticker
+      <div style={{display:"flex",gap:20,marginBottom:8,alignItems:"center"}}>
+        <button onClick={()=>setShowSearch(v=>!v)} style={lxBtn({active:showSearch,underline:true,style:{gap:7,fontSize:10,padding:"7px 2px 8px"}})}>
+          <Icon name="search" size={13} color={showSearch?C.gold:C.text2}/>Recherche ticker
         </button>
         {onImportCsv && (
-          <button onClick={onImportCsv} style={{flex:1,minWidth:150,display:"flex",alignItems:"center",justifyContent:"center",gap:7,padding:"8px 13px",borderRadius:C.radius||12,border:`1px solid ${C.border2}`,background:"transparent",color:C.text2,fontSize:13,fontWeight:600,cursor:"pointer",fontFamily:C.font}}>
-            Importer CSV
-          </button>
+          <button onClick={onImportCsv} style={lxBtn({underline:true,style:{fontSize:10,padding:"7px 2px 8px"}})}>Importer CSV</button>
         )}
       </div>
       {showSearch && <TickerSearchPanel/>}
-      <div style={{display:"flex",gap:8,marginBottom:14}}>
+      <div style={{display:"flex",gap:0,marginBottom:16,borderBottom:`1px solid ${C.border}`}}>
         <Tab label="Spot" active={board==="spot"} onClick={function(){setBoard("spot");}}/>
         <Tab label="Futures" active={board==="futures"} onClick={function(){setBoard("futures");}}/>
       </div>
       {/* Stats globales — recalculées sur le set filtré */}
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:16}}>
-        <div style={{background:"transparent",border:`1px solid ${C.border2}`,borderRadius:C.radiusSm||8,padding:"11px 13px",textAlign:"center"}}>
-          <div style={{fontSize:9,color:C.text2,textTransform:"uppercase",letterSpacing:2}}>P&L total{filterOn?" · filtré":""}</div>
-          <div style={{fontSize:19,fontWeight:600,color:tot>=0?C.green:C.red,fontVariantNumeric:"tabular-nums"}}>{msk(fU(tot),hidden)}</div>
-        </div>
-        <div style={{background:"transparent",border:`1px solid ${C.border2}`,borderRadius:C.radiusSm||8,padding:"11px 13px",textAlign:"center"}}>
-          <div style={{fontSize:9,color:C.text2,textTransform:"uppercase",letterSpacing:2}}>Win rate <span style={{opacity:.55,letterSpacing:.5,textTransform:"none"}}>· clôturés avec coût</span></div>
-          <div style={{fontSize:19,fontWeight:600,color:C.text,fontVariantNumeric:"tabular-nums"}}>{winRate}% <span style={{fontSize:11,color:C.text3,fontWeight:600}}>({wins}/{statList.length})</span></div>
-        </div>
-        <div style={{background:"transparent",border:`1px solid ${C.border2}`,borderRadius:C.radiusSm||8,padding:"11px 13px",textAlign:"center"}}>
-          <div style={{fontSize:9,color:C.text2,textTransform:"uppercase",letterSpacing:2}}>Meilleur</div>
-          <div style={{fontSize:15,fontWeight:600,color:C.green,fontVariantNumeric:"tabular-nums"}}>{msk(fU(best),hidden)}</div>
-        </div>
-        <div style={{background:"transparent",border:`1px solid ${C.border2}`,borderRadius:C.radiusSm||8,padding:"11px 13px",textAlign:"center"}}>
-          <div style={{fontSize:9,color:C.text2,textTransform:"uppercase",letterSpacing:2}}>Pire</div>
-          <div style={{fontSize:15,fontWeight:600,color:C.red,fontVariantNumeric:"tabular-nums"}}>{msk(fU(worst),hidden)}</div>
-        </div>
-        <div style={{gridColumn:"1 / -1",background:"transparent",border:`1px solid ${C.border2}`,borderRadius:C.radiusSm||8,padding:"11px 13px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-          <div style={{fontSize:9,color:C.text2,textTransform:"uppercase",letterSpacing:2}}>Durée moyenne de trade</div>
-          <div style={{fontSize:16,fontWeight:600,color:C.text,fontVariantNumeric:"tabular-nums"}}>{avgDur} jour{avgDur>1?"s":""}</div>
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:"0 18px",marginBottom:18}}>
+        <Stat label={"P&L total"+(filterOn?" · filtré":"")} value={msk(fU(tot),hidden)} color={tot>=0?C.green:C.red}/>
+        <Stat label="Win rate" hint="· clôturés avec coût" value={winRate+"%"} sub={"("+wins+"/"+statList.length+")"}/>
+        <Stat label="Meilleur" value={msk(fU(best),hidden)} color={C.green} small/>
+        <Stat label="Pire" value={msk(fU(worst),hidden)} color={C.red} small/>
+        <div style={{gridColumn:"1 / -1",borderTop:`1px solid ${C.border}`,padding:"11px 2px 4px",display:"flex",justifyContent:"space-between",alignItems:"baseline"}}>
+          <span style={{fontSize:8.5,color:C.text2,textTransform:"uppercase",letterSpacing:2}}>Durée moyenne de trade</span>
+          <span style={{fontFamily:"'Cormorant Garamond',Georgia,serif",fontWeight:600,fontSize:20,color:C.text,fontVariantNumeric:"tabular-nums"}}>{avgDur} jour{avgDur>1?"s":""}</span>
         </div>
       </div>
       {/* #108b/#111 — filtres et tri en menus déroulants (TYPE avant SOURCE) */}
@@ -13586,8 +13595,8 @@ function PageLegend(
           options={[["date","Date"],["pnl","P&L"],["pct","%"],["dur","Durée"]]}
           onChange={function(v){ setSortK(v||"date"); }}/>
       </div>
-      <div style={{fontSize:11,color:C.text3,marginBottom:8}}>
-        {filtered.length} trade{filtered.length>1?"s":""}{filterOn?" (filtré)":""}
+      <div style={{fontSize:8.5,color:C.text3,marginBottom:6,letterSpacing:1.6,textTransform:"uppercase"}}>
+        {filtered.length} trade{filtered.length>1?"s":""}{filterOn?" · filtré":""}
         {board==="spot"&&openCount>0?" · dont "+openCount+" position"+(openCount>1?"s":"")+" ouverte"+(openCount>1?"s":""):""}
       </div>
       {/* Liste des trades */}
@@ -13597,31 +13606,36 @@ function PageLegend(
           const cls=assetClass(t.ticker,t.src,board==="futures");
           const srcs=(t.sources||[]).filter(function(s){ return s!=="FUTURES"; });
           return (
-            <div key={i} onClick={function(){setSel({trade:t,kind:board});}} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 4px",borderBottom:`1px solid ${C.border}`,cursor:"pointer"}}>
+            <div key={i} onClick={function(){setSel({trade:t,kind:board});}} style={{display:"flex",alignItems:"center",gap:10,
+              padding:"11px 4px 12px 9px",borderTop:`1px solid ${C.border}`,
+              // Barre de couleur réservée aux positions ENCORE OUVERTES : la mettre
+              // sur chaque ligne dessinait un rail vert continu sur toute la page,
+              // alors que le sens du résultat est déjà porté par la couleur du chiffre.
+              borderLeft:`2px solid ${t.open?C.gold:"transparent"}`,cursor:"pointer"}}>
               <div style={{flex:1,minWidth:0}}>
-                <div style={{fontSize:14,fontWeight:600,color:C.text,display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
-                  <span>{t.ticker}</span>
-                  <span style={{fontSize:9,fontWeight:600,padding:"1px 6px",borderRadius:5,background:cls.color+"22",color:cls.color}}>{cls.label}</span>
-                  {t.open && <span style={{fontSize:9,fontWeight:700,padding:"1px 6px",borderRadius:5,background:C.gold+"22",color:C.gold,letterSpacing:.4}}>OUVERT</span>}
-                  {t.externalClose && <span style={{fontSize:9,fontWeight:700,padding:"1px 6px",borderRadius:5,background:C.text3+"22",color:C.text3,letterSpacing:.4}}>{t.manualClosed?"CLÔTURÉ":"SOLDÉ"}</span>}
-                  {board==="futures" && <span style={{fontSize:10,fontWeight:700,color:t.dir==="LONG"?C.green:C.red}}>{t.dir}{(t.lev!=null&&!isNaN(t.lev))?(" x"+t.lev):""}</span>}
+                <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+                  <span style={{fontSize:13.5,fontWeight:600,color:C.text,letterSpacing:.3}}>{t.ticker}</span>
+                  <span style={{...hChip,color:cls.color,borderColor:cls.color+"66"}}>{cls.label}</span>
+                  {t.open && <span style={{...hChip,color:C.gold,borderColor:C.gold+"66"}}>Ouvert</span>}
+                  {t.externalClose && <span style={{...hChip,color:C.text3,borderColor:C.border2}}>{t.manualClosed?"Clôturé":"Soldé"}</span>}
+                  {board==="futures" && <span style={{...hChip,color:t.dir==="LONG"?C.green:C.red,borderColor:(t.dir==="LONG"?C.green:C.red)+"66"}}>{t.dir}{(t.lev!=null&&!isNaN(t.lev))?(" ×"+t.lev):""}</span>}
                   {/* #139 — badges de source aussi en Futures */}
                   {srcs.map(function(s){ var si=tradeSrcInfo({src:s==="MANUEL"?"":s.toLowerCase()}); return (
-                    <span key={s} style={{fontSize:8,fontWeight:700,padding:"1px 5px",borderRadius:4,background:si.color+"22",color:si.color,letterSpacing:.3}}>{s}</span>
+                    <span key={s} style={{...hChip,fontSize:8,color:si.color,borderColor:si.color+"55"}}>{s}</span>
                   );})}
                 </div>
                 {t.open
-                  ? <div style={{fontSize:10,color:C.text3,marginTop:2}}>{t.entryDate} → en cours · <span style={{color:C.text2,fontWeight:600}}>{(t.remainingQty||0).toLocaleString("fr-FR",{maximumFractionDigits:6})} parts restantes</span></div>
-                  : <div style={{fontSize:10,color:C.text3,marginTop:2}}>{t.entryDate} → {t.exitDate} · {t.durationDays}j</div>}
+                  ? <div style={{fontSize:10,color:C.text3,marginTop:3}}>{t.entryDate} → en cours · <span style={{color:C.text2}}>{(t.remainingQty||0).toLocaleString("fr-FR",{maximumFractionDigits:6})} parts restantes</span></div>
+                  : <div style={{fontSize:10,color:C.text3,marginTop:3}}>{t.entryDate} → {t.exitDate} · {t.durationDays}j</div>}
               </div>
-              <div style={{textAlign:"right"}}>
-                <div style={{fontSize:14,fontWeight:600,color:up?C.green:C.red}}>{msk((up?"+":"")+fU(t.pnlUSD),hidden)}</div>
-                <div style={{fontSize:11,fontWeight:700,color:up?C.green:C.red}}>{t.pct==null?(t.open?"réalisé":"—"):((up?"+":"")+t.pct.toFixed(1)+"%")}</div>
+              <div style={{textAlign:"right",flexShrink:0}}>
+                <div style={{fontFamily:"'Cormorant Garamond',Georgia,serif",fontWeight:600,fontSize:18,lineHeight:1.15,color:up?C.green:C.red,fontVariantNumeric:"tabular-nums"}}>{msk((up?"+":"")+fU(t.pnlUSD),hidden)}</div>
+                <div style={{fontSize:10.5,color:up?C.green:C.red,fontVariantNumeric:"tabular-nums",letterSpacing:.3,opacity:.85}}>{t.pct==null?(t.open?"réalisé":"—"):((up?"+":"")+t.pct.toFixed(1)+"%")}</div>
               </div>
             </div>
           );
         })}
-        {sorted.length>limit && <button onClick={function(){setLimit(limit+500);}} style={{width:"100%",marginTop:8,padding:"9px 0",borderRadius:8,border:`1px solid ${C.border2}`,background:"transparent",color:C.text2,fontSize:12,fontWeight:600,cursor:"pointer"}}>Voir plus ({sorted.length-limit} restants)</button>}
+        {sorted.length>limit && <button onClick={function(){setLimit(limit+500);}} style={{width:"100%",marginTop:10,padding:"11px 0",borderRadius:0,border:"none",borderTop:`1px solid ${C.border}`,background:"transparent",color:C.text2,fontFamily:C.font,fontSize:10,letterSpacing:1.8,textTransform:"uppercase",cursor:"pointer"}}>Voir plus · {sorted.length-limit} restants</button>}
         {sorted.length===0 && <div style={{textAlign:"center",color:C.text3,fontSize:13,padding:30}}>{board==="spot"?(filterOn?"Aucun trade pour ces filtres.":"Aucun trade ni position."):"Aucun trade clôturé."}</div>}
       </div>
       {sel && <TradeDetailModal trade={sel.trade} kind={sel.kind} liveIbkrAnnex={liveIbkrAnnex} onClose={function(){setSel(null);}}
