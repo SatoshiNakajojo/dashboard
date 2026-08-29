@@ -233,23 +233,63 @@ function fundInterp(anchors, dstr){
   }
   return anchors[anchors.length-1].v;
 }
-// Série base-100 d'un fonds sur une fenêtre [cut → aujourd'hui], ~25 points, rebasée à 100.
-// liveIdx (optionnel) = valeur d'indice base-100 AUJOURD'HUI (mois courant live) → dernier point réel.
-function fundSeries(anchors, cut, liveIdx){
-  try{
-    if(!anchors||!anchors.length) return [];
-    const inception = anchors[0].d;
-    const startStr = (cut < inception) ? inception : cut;   // #fix — ne pas échantillonner avant la création (rebase 100 exact)
-    const start=new Date(startStr+"T00:00:00").getTime(); const end=Date.now();
-    if(!(end>start)) return [];
-    const N=24, raw=[];
-    for(let i=0;i<N;i++){ const d=new Date(start+(end-start)*i/N).toISOString().slice(0,10); raw.push(fundInterp(anchors,d)); }
-    raw.push((liveIdx!=null&&liveIdx>0) ? liveIdx : fundInterp(anchors, new Date(end).toISOString().slice(0,10)));
-    const f=raw.find(v=>v!=null&&v>0); if(!f) return [];
-    return raw.map(v=>(v!=null&&v>0)?v/f*100:null);
-  }catch(e){ return []; }
-}
 
+
+// ════════════════════════════════════════════════════════════════════════════
+//  SOURCE UNIQUE des courbes de fonds (CGIC / CGIS)
+//  La sparkline des cartes ET la courbe du graphe de comparaison dérivent
+//  désormais de cette série, et d'elle seule.
+//  Avant, chacune ré-échantillonnait les ancres de son côté PUIS dépiquait. Or le
+//  dépicage compare deux points CONSÉCUTIFS avec un seuil de 35 % : il ne voit pas
+//  la même chose sur 25 points espacés de dix jours et sur 240 points quotidiens.
+//  Les deux pouvaient donc annoncer des performances différentes pour la MÊME
+//  période. En calculant la série une fois, au pas quotidien — la seule densité où
+//  ce seuil a un sens — puis en la ré-échantillonnant sans plus y toucher, les deux
+//  affichages coïncident par construction.
+// ════════════════════════════════════════════════════════════════════════════
+function fundDailyBase100(anchors, cut, liveIdx){
+  try{
+    if(!anchors||!anchors.length) return {dates:[],vals:[]};
+    const inception=anchors[0].d;
+    const startStr=(cut&&cut>inception)?cut:inception;
+    const t0=Date.parse(startStr+"T00:00:00Z");
+    const t1=Date.parse(_todayNCstr()+"T00:00:00Z");
+    if(!isFinite(t0)||!isFinite(t1)||t1<t0) return {dates:[],vals:[]};
+    const dates=[], raw=[];
+    for(let t=t0;t<=t1;t+=864e5){
+      const d=new Date(t).toISOString().slice(0,10);
+      dates.push(d); raw.push(fundInterp(anchors,d));
+    }
+    // Le dernier point est la valeur live : c'est l'extrémité qui fait foi.
+    if(liveIdx!=null&&liveIdx>0&&raw.length) raw[raw.length-1]=liveIdx;
+    const clean=_despikeCarry(raw);
+    const f=clean.find(v=>v!=null&&v>0);
+    if(!f) return {dates:[],vals:[]};
+    return {dates:dates, vals:clean.map(v=>(v!=null&&v>0)?v/f*100:null)};
+  }catch(e){ return {dates:[],vals:[]}; }
+}
+// Ré-échantillonne une série dense en ~n points, sans jamais perdre le dernier.
+function fundSampleN(vals, n){
+  const a=vals||[]; if(a.length<=n) return a.slice();
+  const out=[]; for(let i=0;i<n-1;i++) out.push(a[Math.round(i*(a.length-1)/(n-1))]);
+  out.push(a[a.length-1]); return out;
+}
+// Lit la série quotidienne aux dates demandées : report de la dernière valeur
+// connue pour les jours sans cotation, null avant la création du fonds.
+function fundReadAt(daily, dates){
+  const dd=(daily&&daily.dates)||[], vv=(daily&&daily.vals)||[];
+  if(!dd.length) return (dates||[]).map(()=>null);
+  const idx={}; dd.forEach((d,i)=>{ idx[d]=i; });
+  const first=dd[0], last=dd[dd.length-1], lastV=vv[vv.length-1];
+  let carry=null;
+  return (dates||[]).map(d=>{
+    if(d<first) return null;
+    if(d>last) return lastV;
+    const i=idx[d];
+    if(i!=null&&vv[i]!=null){ carry=vv[i]; }
+    return carry;
+  });
+}
 
 /* ─── FONDS — données QUOTIDIENNES (tableau de vérité étendu) ─────────────
    CRYPTO_DAILY : indice CGIC base-100 quotidien, dérivé du fichier d'origine (valeurs €),
@@ -453,10 +493,15 @@ function fundCgisDailyAnchors(){
 function _despikeCarry(vals){
   if(!Array.isArray(vals)) return vals;
   const out=vals.slice(); let lastGood=null;
+  // La DERNIÈRE valeur exploitable est la valeur live : elle fait foi et ne doit
+  // jamais être « corrigée ». N'ayant pas de point suivant pour prouver qu'elle
+  // revient, l'ancien test la prenait systématiquement pour un pic —
+  // [100,100,100,160] devenait [100,100,100,100], effaçant la performance.
+  let lastIdx=-1; for(let i=out.length-1;i>=0;i--){ if(out[i]!=null&&out[i]>0){ lastIdx=i; break; } }
   for(let i=0;i<out.length;i++){
     const v=out[i]; if(v==null||v<=0) continue;
     if(lastGood==null){ lastGood=v; continue; }
-    if(Math.abs(v-lastGood)/lastGood > 0.35){
+    if(i!==lastIdx && Math.abs(v-lastGood)/lastGood > 0.35){
       let nx=null; for(let j=i+1;j<out.length;j++){ if(out[j]!=null&&out[j]>0){ nx=out[j]; break; } }
       const returns = (nx==null) ? true : (Math.abs(nx-lastGood)/lastGood < 0.35);
       if(returns){ out[i]=lastGood; continue; }
@@ -7670,13 +7715,12 @@ function GdbCompareChartGDB({tf:tfProp, onTFChange, liveGSB, liveGDBS, liveBench
   const _GDBS_data = liveGDBS || GDBS;
   const _BENCH_data = liveBench || BENCH_IDX;
   // BENCH_IDX cols: [date, BTC, ETH, SP500, NASDAQ, MSCI]
-  const lastGSB = _GSB_data.length > 0 ? _GSB_data[_GSB_data.length-1][0] : todayNC();
-  const cutFn = days => { const d=new Date(new Date(lastGSB).getTime() - days*864e5); return d.toISOString().slice(0,10); };
-  const TF_CUTS = {
-    "1W": cutFn(7), "1M": cutFn(31), "MTD": lastGSB.slice(0,7)+"-01",
-    "YTD": lastGSB.slice(0,4)+"-01-01", "1Y": cutFn(365), "2Y": cutFn(730), "3Y": cutFn(1095), "ALL": "2022-01-01",
-  };
-  const cut = TF_CUTS[tf] || "2022-01-01";
+  // MÊMES bornes de période que la page (makeTFCuts, calées sur aujourd'hui). Elles
+  // étaient calculées ici à partir de la dernière date du jeu GSB : dès que celui-ci
+  // n'était pas à jour, le graphe mesurait sur une fenêtre décalée de celle des
+  // cartes et annonçait donc une autre performance pour la même période.
+  const TF_CUTS = makeTFCuts();
+  const cut = TF_CUTS[tf] || "2020-01-01";
 
   const _GC_data = liveGC || GC_FULL;
   const gcMap  = {};
@@ -7687,6 +7731,16 @@ function GdbCompareChartGDB({tf:tfProp, onTFChange, liveGSB, liveGDBS, liveBench
   // Source de dates : BENCH_IDX couvre depuis 2020, GSB depuis ~2024 seulement
   const dateSource = _BENCH_data.length > _GSB_data.length ? _BENCH_data : _GSB_data;
   const dates = dateSource.map(r=>r[0]).filter(d=>d>=cut);
+  // La grille est bornée sur la PÉRIODE DEMANDÉE, pas sur les séances disponibles.
+  // Les indices ne cotent ni le week-end ni les jours fériés : sans ces deux
+  // compléments, les courbes de fonds démarraient à la première séance suivant la
+  // coupure et s'arrêtaient à la dernière séance chargée, alors que les cartes
+  // mesurent de la coupure à la valeur live — d'où deux performances différentes
+  // annoncées pour la même période. Les indices n'ont pas de valeur à ces dates :
+  // leurs courbes commencent simplement un point plus loin.
+  const _auj = _todayNCstr();
+  if(!dates.length || dates[0] > cut) dates.unshift(cut);
+  if(dates[dates.length-1] < _auj) dates.push(_auj);
   const n = dates.length;
 
   const rebase = (vals) => {
@@ -7740,16 +7794,18 @@ function GdbCompareChartGDB({tf:tfProp, onTFChange, liveGSB, liveGDBS, liveBench
   // via la forme quotidienne du KV de juin, ré-ancrée entre fin mai et la valeur live.
   const _cgicA=fundAppendLive(fundCgicDailyAnchors(), "c", 2, liveCgicIdx);
   const _cgisA=fundAppendLive(fundCgisDailyAnchors(), "s", 1, liveCgisIdx);
-  const gcRaw  = dates.map(d=>fundInterp(_cgicA,d));
-  const gsRaw  = dates.map(d=>fundInterp(_cgisA,d));
+  // Les fonds passent par la série quotidienne unique (déjà dépiquée et rebasée) :
+  // plus de traitement propre au graphe, donc plus de divergence avec les cartes.
+  const _cgicDaily = fundDailyBase100(_cgicA, cut, liveCgicIdx);
+  const _cgisDaily = fundDailyBase100(_cgisA, cut, liveCgisIdx);
   const btcRaw = dates.map(d=>{ const r=benchMap[d]; return r?r[1]:null; }); // BTC
   const spRaw  = dates.map(d=>{ const r=benchMap[d]; return r?r[3]:null; }); // SP500
   const nqRaw  = dates.map(d=>{ const r=benchMap[d]; return r?r[4]:null; }); // NASDAQ
   const ethRaw = dates.map(d=>{ const r=benchMap[d]; return r?r[2]:null; }); // ETH
   const msRaw  = dates.map(d=>{ const r=benchMap[d]; return r?r[5]:null; }); // MSCI
 
-  const gcB  = _despikeCarry(rebase(sanitize(gcRaw)));
-  const gsB  = _despikeCarry(rebase(sanitize(gsRaw)));
+  const gcB  = fundReadAt(_cgicDaily, dates);
+  const gsB  = fundReadAt(_cgisDaily, dates);
   const btcB = rebase(sanitize(btcRaw));
   const spB  = rebase(sanitize(spRaw));
   const nqB  = rebase(sanitize(nqRaw));
@@ -7896,6 +7952,10 @@ function GdbCompareChartGDB({tf:tfProp, onTFChange, liveGSB, liveGDBS, liveBench
         </>}
         {dates.map((d,i)=>{
           if(i!==0&&i!==n-1&&i%step!==0) return null;
+          // Deux étiquettes trop proches se chevauchent : la grille étant complétée
+          // aux bornes de la période, l'avant-dernière peut tomber à un ou deux jours
+          // de la dernière. On ne garde alors que celle du bout.
+          if(i!==n-1 && (n-1-i) < step*0.6) return null;
           return <text key={i} x={px(i)} y={H+13} textAnchor="middle" fill={hi===i?"#fff":C.text3} fontSize={5.5}>{xLabel(d)}</text>;
         })}
       </svg>
@@ -8199,8 +8259,8 @@ function PageGDB(
   const _cgicAnchors = fundAppendLive(fundCgicDailyAnchors(), "c", 2, _liveCgicIdx);
   const _cgisAnchors = fundAppendLive(fundCgisDailyAnchors(), "s", 1, _liveCgisIdx);
   // La sparkline ET le P&L de la carte dérivent de LA MÊME série (cohérence garantie).
-  const _cgicSpark = _despikeCarry(fundSeries(_cgicAnchors, TF[benchTF], _liveCgicIdx));
-  const _cgisSpark = _despikeCarry(fundSeries(_cgisAnchors, TF[benchTF], _liveCgisIdx));
+  const _cgicSpark = fundSampleN(fundDailyBase100(_cgicAnchors, TF[benchTF], _liveCgicIdx).vals, 25);
+  const _cgisSpark = fundSampleN(fundDailyBase100(_cgisAnchors, TF[benchTF], _liveCgisIdx).vals, 25);
   const _seriesPerf = ser => { const a=(ser||[]).filter(v=>v!=null); return a.length>=2 ? (a[a.length-1]/a[0]-1) : null; };
   // Depuis création CGIC : 10€ = 10.88$ au 25 mars 2020
   const GC_CREATION_USD = 10.88;
