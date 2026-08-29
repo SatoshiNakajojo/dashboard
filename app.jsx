@@ -12446,7 +12446,9 @@ function PageWatchlist({ EFF, hidden, embedded=false }){
     try{
       var r=await fetch(CF_WORKER_URL+"/screener_scan",{
         method:"POST", headers:{"Content-Type":"application/json","X-Auth-Key":CF_AUTH_KEY},
-        body:JSON.stringify({conditions:conds}), signal:AbortSignal.timeout(75000)
+        // Au-dessus de l'enveloppe du Worker (95 s) : c'est lui qui doit expliquer un
+        // dépassement, pas le navigateur qui coupe avec un message technique.
+        body:JSON.stringify({conditions:conds}), signal:AbortSignal.timeout(130000)
       });
       var d=await r.json();
       if(!d.ok) throw new Error(d.error||("Échec du scan (HTTP "+r.status+")"));
@@ -12476,7 +12478,9 @@ function PageWatchlist({ EFF, hidden, embedded=false }){
       // Le verdict s'enchaîne sur la sélection qui vient d'être établie.
       if(verdictOn && verified.length){ setScreenerBusy(false); runVerdict(verified); }
     }catch(e){
-      setScreenerError("Erreur : "+e.message);
+      var m=String(e&&e.message||e);
+      if(/abort|timed? ?out/i.test(m)) m="le scan a dépassé le temps imparti. Réessaie — le modèle retenu est mémorisé, la seconde tentative est en général bien plus rapide.";
+      setScreenerError("Erreur : "+m);
       setScreenerMsg("");
     }
     setScreenerBusy(false);
