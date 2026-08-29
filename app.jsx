@@ -11832,6 +11832,7 @@ function PageWatchlist({ EFF, hidden, embedded=false }){
   const[verdict,setVerdict]           = useState(null);
   const[verdictError,setVerdictError] = useState("");
   const[verdictOpen,setVerdictOpen]   = useState(null); // ticker du dossier déplié
+  const[verdictSec,setVerdictSec]     = useState(0);    // secondes écoulées (l'attente est longue)
   // v4.0 LOT2 — backfill best-effort des logos manquants (1× par session)
   useEffect(function(){
     var missing=(list||[]).map(function(e){return e.ticker;})
@@ -12440,7 +12441,7 @@ function PageWatchlist({ EFF, hidden, embedded=false }){
   async function runVerdict(results){
     var list=(results||screenerResults||[]).filter(function(c){return c&&c.ticker;});
     if(!list.length) return;
-    setVerdictBusy(true); setVerdictError(""); setVerdict(null); setVerdictOpen(null);
+    setVerdictBusy(true); setVerdictError(""); setVerdict(null); setVerdictOpen(null); setVerdictSec(0);
     try{
       var payload=list.slice(0,14).map(function(c){
         var st=c.stats||{};
@@ -12458,13 +12459,18 @@ function PageWatchlist({ EFF, hidden, embedded=false }){
       var conds=(screenerConds||[]).map(function(c){return (c.text||"").trim();}).filter(Boolean);
       var r=await fetch(CF_WORKER_URL+"/screener_verdict",{
         method:"POST", headers:{"Content-Type":"application/json","X-Auth-Key":CF_AUTH_KEY},
-        body:JSON.stringify({candidates:payload, conditions:conds}), signal:AbortSignal.timeout(150000)
+        body:JSON.stringify({candidates:payload, conditions:conds}), signal:AbortSignal.timeout(230000)
       });
       var d=await r.json();
       if(!d.ok) throw new Error(d.error||("Échec de l'analyse (HTTP "+r.status+")"));
       setVerdict(d.verdict||null);
     }catch(e){
-      setVerdictError("Analyse fondamentale : "+e.message);
+      // « signal timed out » ne veut rien dire pour qui lit l'écran : on nomme
+      // la cause. Le délai de l'app dépasse l'enveloppe du worker, donc en
+      // principe c'est le worker qui explique — ceci couvre le reste.
+      var m=String(e&&e.message||e);
+      if(/timed? ?out|aborted/i.test(m)) m="l'analyse a dépassé le temps imparti. Réessaie, ou relance le scan avec moins de conditions pour réduire la sélection.";
+      setVerdictError("Analyse fondamentale : "+m);
     }
     setVerdictBusy(false);
   }
@@ -12559,7 +12565,9 @@ function PageWatchlist({ EFF, hidden, embedded=false }){
     return true;
   });
 
-  var inputStyle={width:"100%",background:C.bg,border:"1px solid "+borderC,borderRadius:8,padding:"8px 10px",color:textC,fontSize:13,boxSizing:"border-box"};
+  // Armorial : le champ n'est plus une boîte, c'est une ligne à remplir.
+  var inputStyle={width:"100%",background:"transparent",border:"none",borderBottom:"1px solid "+borderC,
+    borderRadius:0,padding:"8px 2px",color:textC,fontSize:13,boxSizing:"border-box",fontFamily:C.font,outline:"none"};
   var labelStyle={display:"block",fontSize:11,color:grayC,marginBottom:4};
   // Armorial — pastilles de texte qui remplacent les emoji de statut.
   // Azur = un secteur, une catégorie (information). Or = ce qui appelle une décision.
@@ -12651,6 +12659,11 @@ function PageWatchlist({ EFF, hidden, embedded=false }){
     if(kind==="info") return {label:"🤖 IA",color:blueC};
     return {label:"📊 chiffré",color:orangeC};
   }
+  useEffect(function(){
+    if(!verdictBusy) return;
+    var id=setInterval(function(){ setVerdictSec(function(n){ return n+1; }); },1000);
+    return function(){ clearInterval(id); };
+  },[verdictBusy]);
   // Rend le verdict de l'analyste : lecture macro, lauréats, puis un dossier
   // dépliable par société avec ses sept piliers notés et ses chiffres clés.
   var PILIERS=[["qualiteComptable","Comptabilité"],["liquidite","Liquidité"],["rentabilite","Rentabilité"],
@@ -12770,26 +12783,30 @@ function PageWatchlist({ EFF, hidden, embedded=false }){
   function renderScreenerPanel(){
     var nonEmpty=(screenerConds||[]).filter(function(c){return c.text&&c.text.trim();});
     return React.createElement("div",null,
-      React.createElement("div",{style:{fontSize:11,color:orangeC,fontWeight:700,marginBottom:6,letterSpacing:.5}},"CONDITIONS DE RECHERCHE (jusqu'à 10)"),
-      React.createElement("div",{style:{fontSize:10,color:grayC,marginBottom:10,lineHeight:1.4}},
-        "Décris librement chaque condition. L'IA scanne le marché mondial (actions + crypto) pour proposer des tickers candidats ; l'app revérifie ensuite avec de vraies données de prix ce qu'elle sait mesurer (% de l'ATH, ancienneté, tendance)."),
-      React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:6,marginBottom:8}},
+      React.createElement("div",{style:{fontSize:9.5,color:C.text2,letterSpacing:2.2,textTransform:"uppercase",marginBottom:6}},"Conditions de recherche · jusqu'à 10"),
+      React.createElement("div",{style:{fontSize:10,color:grayC,marginBottom:14,lineHeight:1.5}},
+        "Décris librement chaque condition. L'IA scanne le marché mondial (actions et crypto) pour proposer des tickers candidats ; l'app revérifie ensuite, sur de vraies données de prix, ce qu'elle sait mesurer — écart à l'ATH, ancienneté, tendance."),
+      React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:0,marginBottom:10}},
         (screenerConds||[]).map(function(c,i){
-          return React.createElement("div",{key:c.id||i,style:{display:"flex",gap:6,alignItems:"center"}},
-            React.createElement("span",{style:{fontSize:10,color:grayC,width:16,textAlign:"right",flexShrink:0}},String(i+1)),
-            React.createElement("input",{value:c.text||"",placeholder:"Ex: "+SCREENER_PRESETS[i%SCREENER_PRESETS.length],
+          return React.createElement("div",{key:c.id||i,style:{display:"flex",gap:9,alignItems:"center"}},
+            React.createElement("span",{style:{fontFamily:"'Cormorant Garamond',Georgia,serif",fontSize:15,color:C.text3,width:16,textAlign:"right",flexShrink:0}},String(i+1)),
+            React.createElement("input",{value:c.text||"",placeholder:"Ex : "+SCREENER_PRESETS[i%SCREENER_PRESETS.length],
               onChange:function(ev){updateScreenerCond(i,ev.target.value);},style:{...inputStyle,flex:1}}),
-            React.createElement("button",{onClick:function(){removeScreenerCond(i);},style:{background:"none",border:"none",color:redC,fontSize:16,cursor:"pointer",padding:"0 4px",flexShrink:0}},"×")
+            React.createElement("button",{onClick:function(){removeScreenerCond(i);},style:{background:"none",border:"none",color:C.text3,fontSize:15,cursor:"pointer",padding:"0 2px",flexShrink:0,lineHeight:1}},"×")
           );
         })
       ),
-      (screenerConds||[]).length<10&&React.createElement("button",{onClick:addScreenerCond,style:{background:"none",border:"1px solid "+borderC,borderRadius:6,padding:"4px 12px",color:blueC,fontSize:11,cursor:"pointer",marginBottom:10}},
-        "+ Ajouter une condition"),
-      React.createElement("div",{style:{display:"flex",flexWrap:"wrap",gap:6,marginBottom:14}},
-        SCREENER_PRESETS.map(function(p,i){
-          return React.createElement("button",{key:i,onClick:function(){addScreenerPreset(p);},
-            style:{background:"none",border:"1px solid "+borderC,borderRadius:999,padding:"4px 10px",color:grayC,fontSize:10,cursor:"pointer"}},"+ "+p);
-        })
+      (screenerConds||[]).length<10&&React.createElement("button",{onClick:addScreenerCond,
+        style:lxBtn({underline:true,style:{fontSize:10,letterSpacing:1.3,padding:"6px 2px 7px",marginBottom:12}})},"+ Ajouter une condition"),
+      React.createElement("div",{style:{marginBottom:16}},
+        React.createElement("div",{style:{fontSize:8.5,color:C.text3,letterSpacing:1.8,textTransform:"uppercase",marginBottom:7}},"Suggestions"),
+        React.createElement("div",{style:{display:"flex",flexWrap:"wrap",gap:6}},
+          SCREENER_PRESETS.map(function(p,i){
+            return React.createElement("button",{key:i,onClick:function(){addScreenerPreset(p);},
+              style:{background:"transparent",border:"1px solid "+borderC,borderRadius:2,padding:"4px 9px",color:grayC,
+                fontSize:9.5,letterSpacing:.6,cursor:"pointer",fontFamily:C.font}},p);
+          })
+        )
       ),
       // ── Le neuvième critère : pas un filtre, un jugement ──────────────────
       React.createElement("div",{onClick:function(){setVerdictOn(function(v){return !v;});},
@@ -12802,56 +12819,67 @@ function PageWatchlist({ EFF, hidden, embedded=false }){
             "Applique le Manuel d'analyse fondamentale J.C. Global Investments à la sélection : filtre macro, Piotroski et Altman Z, liquidité et CCC, ROIC vs WACC, Reverse DCF, moat, Porter, direction et catalyseurs. Désigne la ou les meilleures entreprises."))
       ),
       React.createElement("button",{onClick:runScreenerScan,disabled:screenerBusy||nonEmpty.length===0,
-        style:{width:"100%",background:screenerBusy?grayC:blueC,border:"none",borderRadius:10,padding:"12px",color:"#000",fontSize:14,fontWeight:600,cursor:(screenerBusy||nonEmpty.length===0)?"default":"pointer",opacity:(screenerBusy||nonEmpty.length===0)?.6:1,marginBottom:12}},
-        screenerBusy?"⟳ Scan en cours…":"🔍 Lancer le scan IA ("+nonEmpty.length+" condition"+(nonEmpty.length>1?"s":"")+")"),
-      screenerMsg&&React.createElement("div",{style:{fontSize:11,color:blueC,marginBottom:12,textAlign:"center"}},screenerMsg),
-      screenerError&&React.createElement("div",{style:{fontSize:11,color:redC,marginBottom:12,padding:"8px 10px",background:redC+"12",border:"1px solid "+redC+"44",borderRadius:8}},screenerError),
+        style:{width:"100%",background:"transparent",border:"1px solid "+((screenerBusy||nonEmpty.length===0)?borderC:C.gold),
+          borderRadius:0,padding:"13px 10px",color:(screenerBusy||nonEmpty.length===0)?grayC:C.gold,
+          fontFamily:C.font,fontSize:10.5,fontWeight:500,letterSpacing:2.2,textTransform:"uppercase",
+          cursor:(screenerBusy||nonEmpty.length===0)?"default":"pointer",marginBottom:12}},
+        screenerBusy?"Scan en cours…":"Lancer le scan · "+nonEmpty.length+" condition"+(nonEmpty.length>1?"s":"")),
+      screenerMsg&&React.createElement("div",{style:{fontSize:10.5,color:C.text2,marginBottom:12,textAlign:"center",lineHeight:1.5}},screenerMsg),
+      screenerError&&React.createElement("div",{style:{fontSize:10.5,color:redC,marginBottom:12,padding:"9px 0 9px 10px",borderLeft:"2px solid "+redC,lineHeight:1.5}},screenerError),
 
       // ── VERDICT DE L'ANALYSTE ─────────────────────────────────────────────
-      verdictBusy&&React.createElement("div",{style:{fontSize:11,color:C.gold,marginBottom:12,textAlign:"center",padding:"14px 10px",borderTop:"1px solid "+C.gold+"44",borderBottom:"1px solid "+C.gold+"44"}},
-        "⚜ Instruction des dossiers selon le Manuel JCGI — macro, comptabilité, solvabilité, rentabilité, valorisation, moat, secteur, direction…"),
-      verdictError&&React.createElement("div",{style:{fontSize:11,color:redC,marginBottom:12,padding:"8px 10px",background:redC+"12",border:"1px solid "+redC+"44",borderRadius:8}},
+      verdictBusy&&React.createElement("div",{style:{marginBottom:14,textAlign:"center",padding:"15px 10px",borderTop:"1px solid "+C.gold+"44",borderBottom:"1px solid "+C.gold+"44"}},
+        React.createElement("div",{style:{fontSize:9.5,letterSpacing:2.4,textTransform:"uppercase",color:C.gold,marginBottom:6}},"Instruction des dossiers"),
+        React.createElement("div",{style:{fontSize:10,color:grayC,lineHeight:1.5}},
+          "Macro, comptabilité, solvabilité, rentabilité, valorisation, moat, secteur, direction."),
+        React.createElement("div",{style:{fontFamily:"'Cormorant Garamond',Georgia,serif",fontSize:20,color:C.text2,marginTop:8,fontVariantNumeric:"tabular-nums"}},
+          Math.floor(verdictSec/60)+":"+String(verdictSec%60).padStart(2,"0"))),
+      verdictError&&React.createElement("div",{style:{fontSize:10.5,color:redC,marginBottom:12,padding:"9px 0 9px 10px",borderLeft:"2px solid "+redC,lineHeight:1.5}},
         verdictError,
-        React.createElement("button",{onClick:function(){runVerdict();},style:{marginLeft:8,background:"none",border:"none",color:blueC,fontSize:11,cursor:"pointer",textDecoration:"underline"}},"Réessayer")),
+        React.createElement("button",{onClick:function(){runVerdict();},
+          style:lxBtn({underline:true,style:{fontSize:10,padding:"5px 2px 6px",marginLeft:10}})},"Réessayer")),
       verdict&&renderVerdict(),
 
-      screenerResults.length>0&&React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:8,marginBottom:12}},
+      screenerResults.length>0&&React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:0,marginBottom:12}},
         screenerResults.map(function(cand,idx){
           var open=screenerOpenIdx===idx;
           var total=(cand.checklist||[]).length;
-          return React.createElement("div",{key:idx,style:{border:"1px solid "+borderC,borderRadius:10,overflow:"hidden"}},
-            React.createElement("div",{onClick:function(){setScreenerOpenIdx(open?null:idx);},style:{padding:"10px 12px",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}},
+          var plein=cand.verifiedScore===cand.verifiableTotal&&cand.verifiableTotal>0;
+          return React.createElement("div",{key:idx,style:{borderTop:"1px solid "+borderC,
+            borderLeft:"2px solid "+(plein?C.gold:"transparent"),paddingLeft:plein?8:10}},
+            React.createElement("div",{onClick:function(){setScreenerOpenIdx(open?null:idx);},style:{padding:"10px 0",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}},
               React.createElement("div",{style:{minWidth:0}},
-                React.createElement("div",{style:{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}},
-                  React.createElement("span",{style:{fontSize:14,fontWeight:700,color:textC}},cand.ticker),
-                  cand.sector&&React.createElement("span",{style:{fontSize:9,background:blueC+"22",border:"1px solid "+blueC+"44",borderRadius:4,padding:"1px 6px",color:blueC}},cand.sector),
-                  !cand.dataOk&&React.createElement("span",{style:{fontSize:9,color:grayC,fontStyle:"italic"}},"⚠ données indisponibles")
+                React.createElement("div",{style:{display:"flex",alignItems:"center",gap:7,flexWrap:"wrap"}},
+                  React.createElement("span",{style:{fontSize:13.5,fontWeight:600,color:textC,letterSpacing:.3}},cand.ticker),
+                  cand.sector&&React.createElement("span",{style:chipAz},cand.sector),
+                  !cand.dataOk&&React.createElement("span",{style:{fontSize:9,color:C.text3,fontStyle:"italic"}},"données indisponibles")
                 ),
-                React.createElement("div",{style:{fontSize:11,color:grayC,marginTop:2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}},cand.name||"")
+                React.createElement("div",{style:{fontSize:11,color:grayC,marginTop:2,fontFamily:"'Cormorant Garamond',Georgia,serif",fontStyle:"italic",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}},cand.name||"")
               ),
-              cand.dataOk&&total>0&&React.createElement("span",{style:{fontSize:12,fontWeight:700,flexShrink:0,color:cand.verifiedScore===cand.verifiableTotal&&cand.verifiableTotal>0?greenC:orangeC}},
-                cand.verifiedScore+"/"+cand.verifiableTotal+" ✓")
+              cand.dataOk&&total>0&&React.createElement("span",{style:{fontSize:10.5,letterSpacing:.4,flexShrink:0,fontVariantNumeric:"tabular-nums",color:plein?C.gold:grayC}},
+                cand.verifiedScore+" / "+cand.verifiableTotal)
             ),
-            open&&React.createElement("div",{style:{padding:"0 12px 12px",borderTop:"1px solid "+borderC}},
-              cand.note&&React.createElement("div",{style:{fontSize:11,color:grayC,fontStyle:"italic",margin:"10px 0"}},"🤖 "+cand.note),
-              React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:6,marginBottom:10}},
+            open&&React.createElement("div",{style:{padding:"2px 0 12px"}},
+              cand.note&&React.createElement("div",{style:{fontSize:11,color:grayC,lineHeight:1.5,margin:"0 0 10px",paddingLeft:8,borderLeft:"1px solid "+borderC}},cand.note),
+              React.createElement("div",{style:{display:"flex",flexDirection:"column",gap:0,marginBottom:12}},
                 (cand.checklist||[]).map(function(ch,ci){
-                  var badge=screenerKindBadge(ch.kind);
-                  var icon=ch.ok===true?"✅":ch.ok===false?"❌":"🤖";
-                  return React.createElement("div",{key:ci,style:{fontSize:11,display:"flex",alignItems:"flex-start",gap:6}},
-                    React.createElement("span",{style:{flexShrink:0}},icon),
-                    React.createElement("div",null,
-                      React.createElement("div",{style:{color:textC}},ch.text),
-                      ch.detail&&React.createElement("div",{style:{color:grayC,fontSize:10}},ch.detail)
+                  var col=ch.ok===true?greenC:ch.ok===false?redC:C.text3;
+                  return React.createElement("div",{key:ci,style:{fontSize:11,display:"flex",alignItems:"flex-start",gap:8,
+                    padding:"5px 0 6px 8px",borderLeft:"2px solid "+(ch.ok===true?greenC:ch.ok===false?redC+"77":borderC),
+                    borderBottom:"1px solid "+C.border}},
+                    React.createElement("span",{style:{flexShrink:0,color:col,fontSize:11,marginTop:1}},ch.ok===true?"✓":ch.ok===false?"×":"○"),
+                    React.createElement("div",{style:{flex:1,minWidth:0}},
+                      React.createElement("div",{style:{color:textC,lineHeight:1.4}},ch.text),
+                      ch.detail&&React.createElement("div",{style:{color:grayC,fontSize:10,lineHeight:1.4,marginTop:1}},ch.detail)
                     )
                   );
                 })
               ),
-              React.createElement("div",{style:{display:"flex",gap:8}},
+              React.createElement("div",{style:{display:"flex",gap:18,alignItems:"center"}},
                 React.createElement("button",{onClick:function(ev){ev.stopPropagation();setViewT({ticker:cand.ticker,cat:(cand.market||"").toLowerCase()==="crypto"?"Crypto":"Picking"});},
-                  style:{flex:1,background:"none",border:"1px solid "+borderC,borderRadius:8,padding:"8px",color:blueC,fontSize:12,fontWeight:700,cursor:"pointer"}},"📊 Voir la fiche"),
+                  style:lxBtn({underline:true,style:{fontSize:10,padding:"6px 2px 7px"}})},"Voir la fiche"),
                 React.createElement("button",{onClick:function(ev){ev.stopPropagation();pickScreenerCandidate(cand);},
-                  style:{flex:1,background:orangeC,border:"none",borderRadius:8,padding:"8px",color:"#000",fontSize:12,fontWeight:700,cursor:"pointer"}},"+ Ajouter")
+                  style:lxBtn({active:true,underline:true,style:{fontSize:10,padding:"6px 2px 7px"}})},"Ajouter")
               )
             )
           );
@@ -13084,18 +13112,19 @@ function PageWatchlist({ EFF, hidden, embedded=false }){
       style:{position:"fixed",top:0,left:0,right:0,bottom:0,background:"#000C",zIndex:9999,display:"flex",alignItems:"flex-end",justifyContent:"center"},
       onClick:function(ev){if(ev.target===ev.currentTarget)closeModal();}
     },
-      React.createElement("div",{style:{background:bgC,border:"1px solid "+borderC,borderRadius:"16px 16px 0 0",width:"100%",maxWidth:500,padding:20,maxHeight:"92vh",overflowY:"auto"}},
+      React.createElement("div",{style:{background:bgC,border:"none",borderTop:"1px solid "+C.gold+"66",borderRadius:0,width:"100%",maxWidth:500,padding:"18px 20px 22px",maxHeight:"92vh",overflowY:"auto"}},
 
-        // En-tête modal
-        React.createElement("div",{style:{display:"flex",justifyContent:"space-between",marginBottom:16}},
-          React.createElement("span",{style:{fontSize:16,fontWeight:600,color:textC}},modal==="add"?"Ajouter un ticker":"Modifier "+editForm.ticker),
-          React.createElement("button",{onClick:closeModal,style:{background:"none",border:"none",color:grayC,fontSize:20,cursor:"pointer"}},"×")
+        // En-tête modal — titre en Cinzel, comme les titres de page
+        React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16,paddingBottom:12,borderBottom:"1px solid "+borderC}},
+          React.createElement("span",{style:{fontFamily:"'Cinzel',Georgia,serif",fontSize:15,fontWeight:600,letterSpacing:1.8,color:C.gold}},
+            modal==="add"?"Ajouter un ticker":"Modifier "+editForm.ticker),
+          React.createElement("button",{onClick:closeModal,style:{background:"none",border:"none",color:grayC,fontSize:20,cursor:"pointer",lineHeight:1}},"×")
         ),
 
         // v4.8 — bascule Ajout manuel / Recherche par conditions (IA), uniquement à la création
-        modal==="add"&&React.createElement("div",{style:{display:"flex",gap:6,marginBottom:16}},
-          React.createElement("button",{onClick:function(){setAddMode("manual");},style:lxBtn({active:addMode==="manual",style:{flex:1,padding:"8px 0",fontSize:12}})},"✍️ Manuel"),
-          React.createElement("button",{onClick:function(){setAddMode("screener");},style:lxBtn({active:addMode==="screener",style:{flex:1,padding:"8px 0",fontSize:12}})},"🤖 Recherche par conditions")
+        modal==="add"&&React.createElement("div",{style:{display:"flex",gap:0,marginBottom:18,borderBottom:"1px solid "+borderC}},
+          React.createElement("button",{onClick:function(){setAddMode("manual");},style:lxBtn({active:addMode==="manual",underline:true,style:{flex:1,fontSize:10.5,letterSpacing:1.4}})},"Manuel"),
+          React.createElement("button",{onClick:function(){setAddMode("screener");},style:lxBtn({active:addMode==="screener",underline:true,style:{flex:1,fontSize:10.5,letterSpacing:1.4}})},"Recherche par conditions")
         ),
 
         modal==="add"&&addMode==="screener"&&renderScreenerPanel(),
