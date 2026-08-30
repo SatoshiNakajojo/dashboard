@@ -1821,7 +1821,13 @@ function cgiRecordDaySnap(cEUR, sEUR, tEUR){
     if(i>=0) arr[i]=e; else arr.push(e);
     arr.sort((a,b)=> a.d<b.d ? -1 : (a.d>b.d?1:0));
     if(arr.length>1200) arr=arr.slice(-1200);
-    return lsv9Set("cgi_daily", arr);
+    const okLocal = lsv9Set("cgi_daily", arr);
+    // …et on le pousse au cloud, sans bloquer : le Worker fusionne par date, si
+    // bien que l'union des appareils forme un seul journal. Sans cela, chaque
+    // appareil n'observait que ses propres jours et les courbes de fonds
+    // différaient d'un écran à l'autre.
+    try{ if(typeof cfWriteBase==="function") cfWriteBase("cgi_daily", arr).catch(function(){ lsv9MarkDirty("cgi_daily"); }); }catch(e){}
+    return okLocal;
   }catch(_){ return false; }
 }
 // ─────────────────────────────────────────────────────────────────────────
@@ -2023,6 +2029,21 @@ function lsv9SeedFromKv(kv){
     if(existing[k]!==undefined) return;   // ne pas écraser une base déjà présente
     if(kv[k]!==undefined && kv[k]!==null) picked[k]=kv[k];
   });
+  // cgi_daily fait exception à la règle « déjà présent, on ne touche pas » : c'est
+  // un journal d'OBSERVATIONS, pas un état. Chaque appareil n'a que les jours où il
+  // a été ouvert ; on prend donc l'UNION par date, sinon deux appareils dessinent
+  // deux courbes de fonds différentes à partir du même fonds.
+  try{
+    if(Array.isArray(kv.cgi_daily) && kv.cgi_daily.length){
+      const loc = Array.isArray(existing.cgi_daily) ? existing.cgi_daily : [];
+      const byDay={};
+      kv.cgi_daily.forEach(function(e){ if(e&&e.d) byDay[e.d]=e; });
+      loc.forEach(function(e){ if(e&&e.d) byDay[e.d]=e; });   // le local gagne à date égale (plus frais)
+      let merged=Object.keys(byDay).sort().map(function(d){ return byDay[d]; });
+      if(merged.length>1200) merged=merged.slice(-1200);
+      if(merged.length!==loc.length) picked.cgi_daily=merged;
+    }
+  }catch(e){}
   const n=lsv9SetMany(picked);
   console.info("[lsv9] seed KV→v9 : "+n+" base(s) remplie(s) (dirty/existant préservés)");
   return n;
