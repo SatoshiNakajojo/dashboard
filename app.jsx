@@ -547,6 +547,7 @@ function fundAppendLive(anchors, jField, kvCol, liveIdx, monthlyMap){
     const today = _todayNCstr();
     const target = (liveIdx!=null&&liveIdx>0) ? liveIdx : last.v;
     const sortd = a => a.sort((x,y)=> x[0]<y[0]?-1:(x[0]>y[0]?1:0));
+    let _fluxDates = {};
     // KV de juin embarqué (dense, fiable comme FORME)
     const KV=(typeof KV_JUNE!=="undefined"?KV_JUNE:[]);
     const kv=sortd(KV.filter(r=>r&&r[0]>last.d&&r[0]<=today&&r[kvCol]!=null&&r[kvCol]>0).map(r=>[r[0],r[kvCol]]));
@@ -560,6 +561,23 @@ function fundAppendLive(anchors, jField, kvCol, liveIdx, monthlyMap){
       // exactement le sens d'une valeur liquidative. (Les points du KV de juin sont
       // déjà des valeurs par part, ils n'ont pas besoin de cette division.)
       const _fonds = (jField==="c") ? "CGIC" : "CGIS";
+      // Dates auxquelles le nombre de parts change : l'argent et l'écriture au
+      // registre ne tombent pas toujours le même jour, si bien que la division par
+      // les parts peut laisser un creux d'un ou deux jours. On ignore le rendement
+      // autour de ces dates plutôt que de le prendre pour un mouvement de marché.
+      _fluxDates = (function(){
+        try{
+          const reg=((typeof lsv9Get==="function")?lsv9Get("cgi_inv"):null)
+            || ((typeof INV_SEED_OK!=="undefined")?INV_SEED_OK:[]);
+          const set={};
+          (Array.isArray(reg)?reg:[]).forEach(x=>{
+            if(!x||x.fonds!==_fonds||!x.date||!(+x.shares)) return;
+            const t=Date.parse(String(x.date)+"T00:00:00Z");
+            for(let k=-1;k<=1;k++){ const d=new Date(t+k*864e5).toISOString().slice(0,10); set[d]=1; }
+          });
+          return set;
+        }catch(e){ return {}; }
+      })();
       if(Array.isArray(j)) jr=sortd(j.filter(x=>x&&x.d>last.d&&x.d<=today&&x[jField]!=null&&x[jField]>0)
         .map(x=>{ const sh=fundSharesAt(_fonds, x.d); return [x.d, sh>0 ? (x[jField]/sh) : x[jField]]; }));
     }catch(e){}
@@ -578,7 +596,11 @@ function fundAppendLive(anchors, jField, kvCol, liveIdx, monthlyMap){
       for(let i=1;i<pts.length;i++){
         const p0=pts[i-1][1], p1=pts[i][1];
         let r=(p0>0)?(p1/p0-1):0;
-        if(!isFinite(r)||Math.abs(r)>0.60) r=0;   // valeur aberrante (les apports, eux, sont déjà neutralisés par les parts)
+        if(!isFinite(r)||Math.abs(r)>0.60) r=0;             // valeur aberrante
+        // Autour d'un mouvement de parts, on n'écarte QUE les sauts : quand la
+        // division par les parts a bien fait son office, le rendement du jour est
+        // normal et doit être conservé.
+        if((_fluxDates[pts[i][0]]||_fluxDates[pts[i-1][0]]) && Math.abs(r)>0.08) r=0;
         cur=cur*(1+r); o.push([pts[i][0],cur]);
       }
       return o;
@@ -617,7 +639,11 @@ function fundAppendLive(anchors, jField, kvCol, liveIdx, monthlyMap){
     truth.forEach(t=>{
       const seg=src.filter(p=>p[0]>curD && p[0]<=t.d);
       if(seg.length){
-        chainTo(seg, curV, curD, t.v, t.d).forEach(p=>anchors.push({d:p[0], v:p[1]}));
+        // La dérive se répartit jusqu'au DERNIER POINT du tronçon, pas jusqu'à la
+        // date de la borne : sinon ce dernier point garde un résidu de correction et
+        // l'on saute d'un coup sur la valeur de borne — c'est ce qui dessinait la
+        // chute verticale en fin de courbe.
+        chainTo(seg, curV, curD, t.v, seg[seg.length-1][0]).forEach(p=>anchors.push({d:p[0], v:p[1]}));
         curD=seg[seg.length-1][0];
       }
       if(curD<t.d){ anchors.push({d:t.d, v:t.v}); curD=t.d; }
@@ -626,7 +652,7 @@ function fundAppendLive(anchors, jField, kvCol, liveIdx, monthlyMap){
     // Mois en cours : la borne est la valeur live.
     const tail=src.filter(p=>p[0]>curD);
     if(tail.length){
-      chainTo(tail, curV, curD, target, today).forEach(p=>anchors.push({d:p[0], v:p[1]}));
+      chainTo(tail, curV, curD, target, tail[tail.length-1][0]).forEach(p=>anchors.push({d:p[0], v:p[1]}));
       curD=tail[tail.length-1][0];
     }
     if(curD<today) anchors.push({d:today, v:target});
@@ -8100,6 +8126,61 @@ function GdbCompareChartGDB({tf:tfProp, onTFChange, liveGSB, liveGDBS, liveBench
    3. Benchmark YTD corrigé
    4. Graphique CGIC cours + Graphique CGIS cours
 ═══════════════════════════════════════════════════════════ */
+/* ── Diagnostic des courbes de fonds ────────────────────────────────────────
+   Ce que valent réellement les ingrédients de la courbe : le journal quotidien,
+   le registre des parts, et surtout les BORNES MENSUELLES. Sans P&L mensuel pour
+   les mois récents, la forme de la queue n'a rien qui la retienne — c'est ce que
+   ce bloc permet de constater d'un coup d'œil. ── */
+function FondsDiag({cm, sm, cgicA, cgisA, liveC, liveS, cut}){
+  const [open,setOpen]=useState(false);
+  if(!open) return (
+    <div style={{textAlign:"center",marginTop:6}}>
+      <button onClick={()=>setOpen(true)} style={lxBtn({underline:true,style:{fontSize:9,letterSpacing:1.6,padding:"6px 2px 7px"}})}>Diagnostic des courbes</button>
+    </div>
+  );
+  const jr=(()=>{ try{ const a=lsv9Get("cgi_daily"); return Array.isArray(a)?a:[]; }catch(e){ return []; } })();
+  const reg=(()=>{ try{ const a=lsv9Get("cgi_inv"); return Array.isArray(a)?a:((typeof INV_SEED_OK!=="undefined")?INV_SEED_OK:[]); }catch(e){ return []; } })();
+  const today=_todayNCstr();
+  const moisEnCours=today.slice(0,7);
+  const infoFonds=(nom, MAP, anchors, live, jf)=>{
+    const dailyEnd=(nom==="CGIC"?fundCgicDailyAnchors():fundCgisDailyAnchors());
+    const lastD=dailyEnd.length?dailyEnd[dailyEnd.length-1].d:"—";
+    const lastV=dailyEnd.length?dailyEnd[dailyEnd.length-1].v:0;
+    const truth=fundMonthTruth(MAP,lastD,lastV,lastD).filter(t=>t.d.slice(0,7)<moisEnCours);
+    const d=fundDailyBase100(anchors,cut,live);
+    let mx=0,mxd="";
+    for(let i=1;i<d.vals.length;i++){ const a=d.vals[i-1],b=d.vals[i];
+      if(a==null||b==null||a<=0) continue; const r=Math.abs(b/a-1); if(r>mx){mx=r;mxd=d.dates[i];} }
+    const vv=d.vals.filter(v=>v!=null);
+    const nj=jr.filter(x=>x&&x.d>lastD&&x[jf]!=null&&x[jf]>0).length;
+    const npart=reg.filter(x=>x&&x.fonds===nom).length;
+    return {nom, lastD, truth:truth.map(t=>t.d.slice(0,7)), nj, npart,
+      parts:Math.round(fundSharesAt(nom,today)*100)/100,
+      min:vv.length?Math.min(...vv).toFixed(0):"—", max:vv.length?Math.max(...vv).toFixed(0):"—",
+      pas:(mx*100).toFixed(1)+"% le "+(mxd||"—")};
+  };
+  const L=(k,v)=>React.createElement("div",{style:{display:"flex",gap:8,fontSize:10,lineHeight:1.6}},
+    React.createElement("span",{style:{color:C.text3,minWidth:132,flexShrink:0}},k),
+    React.createElement("span",{style:{color:C.text,wordBreak:"break-word"}},v));
+  const bloc=(o)=>React.createElement("div",{key:o.nom,style:{marginTop:12,paddingLeft:9,borderLeft:`2px solid ${o.truth.length?C.green:C.red}`}},
+    React.createElement("div",{style:{fontSize:10,letterSpacing:1.8,textTransform:"uppercase",color:o.truth.length?C.green:C.red,marginBottom:4}},o.nom),
+    L("bornes mensuelles", o.truth.length ? o.truth.join(", ") : "AUCUNE — la forme de la queue n'est bornée par rien"),
+    L("fin des ancres", o.lastD),
+    L("journal après", o.nj+" point"+(o.nj>1?"s":"")),
+    L("registre parts", o.npart+" écriture"+(o.npart>1?"s":"")+" · "+o.parts+" parts"),
+    L("série (base 100)", "min "+o.min+" · max "+o.max),
+    L("plus grand pas", o.pas));
+  return React.createElement("div",{style:{marginTop:12,paddingTop:12,borderTop:`1px solid ${C.border}`}},
+    React.createElement("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center"}},
+      React.createElement("span",{style:{fontSize:9,letterSpacing:2,textTransform:"uppercase",color:C.text2}},"Diagnostic des courbes"),
+      React.createElement("button",{onClick:()=>setOpen(false),style:{background:"none",border:"none",color:C.text3,fontSize:14,cursor:"pointer",lineHeight:1}},"×")),
+    L("journal cgi_daily", jr.length ? (jr.length+" jours · "+jr[0].d+" → "+jr[jr.length-1].d) : "vide"),
+    [infoFonds("CGIC",cm,cgicA,liveC,"c"), infoFonds("CGIS",sm,cgisA,liveS,"s")].map(bloc),
+    React.createElement("div",{style:{fontSize:9,color:C.text3,lineHeight:1.5,marginTop:10}},
+      "Une borne mensuelle par mois clos empêche la courbe de dériver. Elle vient du P&L mensuel du fonds : s'il manque pour les mois récents, la queue de courbe n'a plus rien qui la retienne.")
+  );
+}
+
 /* ── FondCard: récapitulatif d'un fonds ── */
 function FondCard({label, cours, qty, fonds, color, hidden, eur, usdEur, perfAllTime, onClick, tfLabel, perf, spark}){
   // label format: "CGIC — Crypto" or "CGIS — Actions"
@@ -8517,6 +8598,8 @@ function PageGDB(
 
       <div style={{fontSize:10,letterSpacing:4,color:C.text2,textTransform:"uppercase",textAlign:"center",margin:"22px 0 12px"}}>Comparaison % de performance</div>
       <GdbCompareChartGDB tf={benchTF} onTFChange={setBenchTF} liveGSB={liveGSB} liveGDBS={liveGDBS} liveBench={liveBench} liveGC={liveGC} liveCgicIdx={_liveCgicIdx} liveCgisIdx={_liveCgisIdx} cmMap={_cmJG} smMap={_smJG}/>
+      <FondsDiag cm={_cmJG} sm={_smJG} cgicA={_cgicAnchors} cgisA={_cgisAnchors}
+        liveC={_liveCgicIdx} liveS={_liveCgisIdx} cut={TF[benchTF]}/>
       {/* Liste benchmark en barres retiree a la demande — v26.08 */}
     </div>
   );
