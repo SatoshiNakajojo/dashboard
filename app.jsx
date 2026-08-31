@@ -1439,6 +1439,10 @@ const LSV9_KEYS = [
   "cgi_fund_stats",
   "cgi_alloc_targets","cgi_alloc_templates",
   "cgi_daily",
+  // Le thème suit l'UTILISATEUR, pas l'appareil : tant qu'il restait en
+  // localStorage brut, l'iPhone et le poste fixe pouvaient afficher deux
+  // habillages différents (fond azur d'un côté, noir et filet de l'autre).
+  "cgi_theme",
   "cgi_home_ovr",
   "cgi_pin",   // #62b — hash du code PIN (jamais en clair) : doit être accepté par saveBase pour se synchroniser au cloud
   "cgi_cex_trades", // #54/#104/#105 — trades importés par CSV (KuCoin/Binance/Kraken/Gate) : archive multi-plateforme
@@ -15097,6 +15101,8 @@ function App(){
     cc = getCC();
     setThemeName(name);
     try{ localStorage.setItem('cgi_theme', name); }catch{}
+    // …et on le partage : le choix vaut pour tous les appareils.
+    try{ if(typeof saveBase==="function") saveBase('cgi_theme', name); }catch(e){}
     setShowTheme(false);
   };
 
@@ -15356,6 +15362,19 @@ function App(){
           const kv=await res.json();
           // Phase 1 v23.01 — seeder le miroir local v9 depuis KV (écriture additive)
           lsv9SeedFromKv(kv);
+          // Le thème choisi sur un appareil s'applique aux autres. On n'écrase que
+          // s'il est connu et réellement différent, pour ne pas rendre la sélection
+          // locale inopérante.
+          try{
+            const kvTheme = kv.cgi_theme;
+            if(typeof kvTheme==="string" && THEMES[kvTheme]){
+              const localTheme = localStorage.getItem('cgi_theme');
+              if(kvTheme!==localTheme){
+                localStorage.setItem('cgi_theme', kvTheme);
+                setThemeName(kvTheme);
+              }
+            }
+          }catch(e){}
           // Phase 3 v23.04 — /read KV a réussi → on est en ligne → re-pousser les bases dirty
           flushDirtyBases();
           const kvPort=kv.cgi_portfolio,kvStk=kv.cgi_stocks,kvCryp=kv.cgi_crypto,kvBank=kv.cgi_bank;
