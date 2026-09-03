@@ -1,8 +1,8 @@
 # Trading Desk — Hyperliquid
 
-Desk de trading automatisé multi-agents. **Phase P0** : ingestion de marché,
-moteur de risque et supervision. Aucune couche d'exécution — ce code ne signe
-rien et n'envoie aucun ordre.
+Desk de trading automatisé multi-agents. **Phases P0 et P2** : ingestion de
+marché, moteur de risque, supervision, et les baselines chiffrées sans IA.
+Aucune couche d'exécution — ce code ne signe rien et n'envoie aucun ordre.
 
 ---
 
@@ -54,10 +54,16 @@ cp .env.example .env
 python -m trading_desk
 ```
 
+Produire les baselines (**la référence du P2**) :
+
+```bash
+python -m trading_desk.backtest --source hyperliquid --asset BTC --days 365
+```
+
 Lancer les tests :
 
 ```bash
-python -m pytest tests -q        # 98 tests
+python -m pytest tests -q        # 142 tests
 ```
 
 ---
@@ -76,13 +82,57 @@ python -m pytest tests -q        # 98 tests
 | `market/budget.py` | Suivi des trois limites de débit Hyperliquid. |
 | `storage/sqlite_store.py` | Persistance + journal de décisions **append-only**. |
 | `api/` + `ui/` | Supervision, SSE, kill switch. |
+| `features/indicators.py` | RSI, EMA, MACD, ATR, z-score, Donchian — écrits à la main, conventions explicites. |
+| `features/bars.py` | Bougies. Les trous ne sont **pas** comblés : un trou doit rester visible. |
+| `backtest/engine.py` | Backtest événementiel qui **réutilise `size_position` du live**. |
+| `backtest/costs.py` | Frais, funding, slippage — présents dès le premier run. |
+| `backtest/strategies.py` | Les baselines sans IA : croisement d'EMA, retour à la moyenne RSI. |
 
 ## Ce qui n'existe pas encore
 
-Signature et envoi d'ordres, réconciliation avec l'exchange, agents LLM,
-backtest. Le mode par défaut est `SHADOW`, et l'application **refuse de
-démarrer** en `TESTNET` ou `LIVE` tant que la couche d'exécution n'est pas
-écrite (porte P1).
+Signature et envoi d'ordres, réconciliation avec l'exchange, agents LLM. Le
+mode par défaut est `SHADOW`, et l'application **refuse de démarrer** en
+`TESTNET` ou `LIVE` tant que la couche d'exécution n'est pas écrite (porte P1).
+
+---
+
+## Le backtest, et pourquoi il ne triche pas
+
+Un backtest optimiste est plus dangereux qu'aucun backtest : il produit un
+chiffre auquel on finit par croire. Quatre choix de prudence, chacun couvert
+par un test :
+
+1. **Entrée à l'ouverture de la barre suivante.** Une décision prise sur la
+   clôture de la barre `i` ne peut pas s'exécuter à cette même clôture.
+2. **Le stop l'emporte sur la cible** quand une barre contient les deux : on
+   ignore l'ordre réel des ticks, donc on suppose le pire.
+3. **Les gaps sont servis au gap**, pas au niveau du stop. C'est là que les
+   pertes réelles dépassent les pertes théoriques.
+4. **Le funding se paie à chaque barre détenue.**
+
+Le moteur appelle `size_position` et `RiskLimits` — les objets du live, pas
+une copie. Une stratégie testée ici est dimensionnée comme elle le serait en
+production.
+
+`buy_and_hold` a son propre chemin de code (`benchmark_buy_and_hold`) et
+**aucun stop** : le faire passer par le moteur de stratégies lui en imposerait
+un, il sortirait à la première secousse, et la référence serait silencieusement
+fausse — un benchmark cassé flatte tout ce qu'on lui compare.
+
+### La limite à connaître
+
+Le funding est supposé **constant**. C'est la simplification la plus forte du
+modèle, et elle décide du verdict : sur une même série, `buy_and_hold` passe de
+`+70` à `−420` USD selon qu'on suppose 0 ou 2 bps/heure. Tester la sensibilité
+avant de conclure :
+
+```bash
+python -m trading_desk.backtest --source hyperliquid --funding-bps 0
+python -m trading_desk.backtest --source hyperliquid --funding-bps 2
+```
+
+La correction propre est de rejouer le funding réellement observé depuis la
+table `marks` que remplit le P0.
 
 ---
 
@@ -146,9 +196,9 @@ le schéma ne lui permet pas d'exprimer une recommandation.
 
 | | Phase | Porte de sortie |
 |---|---|---|
-| **P0** | Fondations et ingestion | 72 h sans intervention, aucun trou de données |
+| P0 ✓ | Fondations et ingestion | 72 h sans intervention, aucun trou de données |
 | P1 | Cœur d'exécution déterministe | 200 aller-retours testnet sans divergence ; kill switch < 5 s |
-| P2 | Features, backtest, **baseline sans IA** | Chiffres de référence publiés et rejouables |
+| **P2** | Features, backtest, **baseline sans IA** | Chiffres de référence publiés et rejouables |
 | P3 | Premier agent, en mode fantôme | > 98 % de sorties structurées valides ; coût connu |
 | P4 | Graphe complet, toujours fantôme | 2 semaines sans mandat violant un invariant |
 | P5 | Paper trading temps réel | **Bat les baselines net de tous les coûts, LLM inclus, sur 4 semaines** |
