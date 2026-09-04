@@ -67,7 +67,7 @@ python -m trading_desk.backtest --source hyperliquid --asset BTC --days 365
 Lancer les tests :
 
 ```bash
-python -m pytest tests -q        # 254 tests
+python -m pytest tests -q        # 282 tests
 ```
 
 ---
@@ -101,11 +101,13 @@ python -m pytest tests -q        # 254 tests
 | `agents/runner.py` | Politique d'abstention : deux tentatives, puis un aveu — jamais un défaut. |
 | `agents/isolation.py` | Isolation des contenus externes (I11), et pourquoi elle ne suffit pas. |
 | `agents/metrics.py` | Les trois chiffres de la porte P3. |
+| `agents/roster.py` | L'équipe. Un rôle, un schéma fermé, un pouvoir borné. |
+| `agents/graph.py` | Les portes déterministes qui empêchent le débat de converger vers l'action. |
+| `agents/shadow_book.py` | Mesure ce que le desk **refuse** — filtre-t-il du bruit ou de l'alpha ? |
 
 ## Ce qui n'existe pas encore
 
-Le graphe complet d'agents (P4). Un seul agent existe, en mode fantôme. Le
-mode par défaut est `SHADOW`, et l'application **refuse de
+La mémoire vectorielle et l'agent Post-mortem. Le mode par défaut est `SHADOW`, et l'application **refuse de
 démarrer** en `TESTNET` ou `LIVE` — non plus parce que la couche d'exécution
 manque, mais parce que sa signature n'a jamais été confrontée à l'exchange.
 Ce garde se lève délibérément, pas par oubli d'une variable d'environnement.
@@ -173,6 +175,45 @@ vers un autre modèle : sur un desk, s'abstenir est acceptable, alors qu'un
 changement de modèle en cours de décision brouillerait le journal. Les
 *refusal fallbacks* côté serveur restent activables en une ligne si l'on
 préfère l'autre compromis.
+
+### Le graphe, et pourquoi il est construit contre lui-même
+
+Le problème n'est pas d'enchaîner des agents : c'est d'**empêcher le débat de
+converger vers l'action**. Les LLM sont complaisants. Six agents qui délibèrent
+trouvent un consensus poli, et sans contre-force explicite on obtient une
+machine qui propose un trade toutes les quinze minutes — le sur-trading étant
+le mode de mort le plus courant d'un desk automatisé.
+
+D'où des **portes déterministes**, évaluées en code entre les agents :
+
+| Porte | Ferme quand |
+|---|---|
+| `QUOTA` | le plafond quotidien est atteint — vérifié avant le moindre appel |
+| `LECTURE` | une lecture amont s'est abstenue : décider sur un trou est pire que ne pas décider |
+| `PAS_DE_SETUP` | la stratégie n'a rien proposé |
+| `VETO` | l'Avocat du diable oppose son veto — **ou s'abstient** : un silence n'est pas un feu vert |
+| `OBJECTION` | l'objection dépasse le seuil de sévérité |
+| `CONVICTION` / `ASYMETRIE` | seuils chiffrés sur le setup lui-même |
+| `REJET_CHEF` | le Chef de desk rejette |
+
+**FLAT est la sortie par défaut**, et chaque porte fermée arrête le cycle
+immédiatement — pas seulement pour économiser des appels, mais parce
+qu'appeler le Chef de desk sur un setup déjà invalidé, c'est lui donner
+l'occasion de le sauver. L'Avocat du diable passe donc **avant** lui.
+
+Les deux facteurs de réduction — Chef de desk et Risk Advisor — se
+multiplient, et chacun est borné à `]0, 1]` par son schéma. Aucun agent n'a de
+champ capable d'élargir quoi que ce soit.
+
+### Le registre fantôme
+
+Chaque setup **rejeté** est suivi comme s'il avait été pris, jusqu'à sa cible
+ou son stop. Au bout de quelques semaines, on sait si la couche décisionnelle
+filtre du bruit ou détruit de l'alpha — sans cette mesure, « le Chef de desk
+sert-il à quelque chose » n'a que des réponses d'opinion.
+
+Le registre suit aussi **où** les cycles meurent. Une porte qui ne filtre
+jamais rien donne l'illusion d'un filtrage : le rapport la signale.
 
 ### L'isolation des contenus externes, et ses limites
 
@@ -336,8 +377,8 @@ le schéma ne lui permet pas d'exprimer une recommandation.
 | P0 ✓ | Fondations et ingestion | 72 h sans intervention, aucun trou de données |
 | P1 | Cœur d'exécution déterministe | 200 aller-retours testnet sans divergence ; kill switch < 5 s |
 | P2 ✓ | Features, backtest, **baseline sans IA** | Chiffres de référence publiés et rejouables |
-| **P3** | Premier agent, en mode fantôme | > 98 % de sorties structurées valides sur ≥ 30 appels ; coût connu |
-| P4 | Graphe complet, toujours fantôme | 2 semaines sans mandat violant un invariant |
+| P3 | Premier agent, en mode fantôme | > 98 % de sorties structurées valides sur ≥ 30 appels ; coût connu |
+| **P4** | Graphe complet, toujours fantôme | 2 semaines sans mandat violant un invariant |
 | P5 | Paper trading temps réel | **Bat les baselines net de tous les coûts, LLM inclus, sur 4 semaines** |
 | P6 | Live micro-capital (200–500 USDC) | 4 semaines sans intervention d'urgence |
 | P7 | Montée en charge | Tout palier de capital est réversible |

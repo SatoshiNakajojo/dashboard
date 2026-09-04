@@ -307,20 +307,79 @@ def test_extrapolation_du_cout_mensuel():
 #  Frontière structurelle
 # --------------------------------------------------------------------------
 
-def test_aucun_agent_n_importe_l_execution_ni_le_risque():
+def test_aucun_agent_n_a_de_chemin_vers_l_execution():
     """La frontière du mandat est du code, pas une consigne de prompt.
 
-    Si un import apparaît un jour ici, ce test le dira avant qu'un agent
-    n'obtienne un chemin vers l'exchange.
+    La règle exacte, et elle mérite d'être précise plutôt que large :
+
+    - `execution` est totalement interdit. Un agent ne doit avoir aucun chemin
+      vers l'exchange, ni même le vocabulaire pour en parler.
+    - `risk.engine` et `risk.sizing` sont interdits : évaluer les invariants
+      ou dimensionner une position appartient à la couche déterministe. Un
+      agent qui pourrait appeler `evaluate()` pourrait apprendre à le
+      satisfaire plutôt qu'à raisonner.
+    - `risk.limits` est AUTORISÉ. C'est un objet de configuration gelé, et le
+      graphe s'en sert pour rétrécir le mandat qu'il émet — jamais pour
+      l'élargir. Interdire sa lecture rendrait le mandat moins borné, ce qui
+      serait l'inverse de l'effet recherché.
     """
     import pathlib
 
     racine = pathlib.Path(__file__).resolve().parents[1] / "src/trading_desk/agents"
+    interdits = (
+        "from ..execution", "import execution",
+        "from ..risk.engine", "from ..risk.sizing", "from ..risk import",
+        "OrderIntent", "OrderManager", "size_position", "evaluate(",
+    )
     for fichier in racine.glob("*.py"):
         source = fichier.read_text(encoding="utf-8")
-        for interdit in ("from ..execution", "import execution",
-                         "from ..risk", "OrderIntent", "OrderManager"):
+        for interdit in interdits:
             assert interdit not in source, f"{fichier.name} référence {interdit}"
+
+
+def test_le_mandat_emis_ne_depasse_jamais_les_limites():
+    """Le seul emprunt autorisé à `risk`, vérifié sur le comportement.
+
+    Une assertion par `grep` serait un mauvais test ici : le code contient un
+    `max()` légitime — celui qui empêche un stop d'être PLUS SERRÉ que la
+    limite basse. Lire le sens d'un `min` ou d'un `max` demande de savoir sur
+    quelle borne il agit, donc on vérifie le résultat plutôt que la syntaxe.
+    """
+    from decimal import Decimal
+
+    from trading_desk.agents import GraphConfig, build_mandate
+    from trading_desk.contracts import (
+        DeskVerdict, Regime, RegimeRead, RiskAdvice, SetupProposal, Side,
+    )
+    from trading_desk.risk import RiskLimits
+
+    limits = RiskLimits(
+        max_position_notional_usd=Decimal("200"),
+        max_gross_notional_usd=Decimal("400"),
+        max_effective_leverage=Decimal("2"),
+        min_stop_distance_bps=Decimal("50"),
+        max_stop_distance_bps=Decimal("400"),
+    )
+    # Setup volontairement démesuré, et des agents qui poussent au maximum.
+    setup = SetupProposal(
+        asset="BTC", side=Side.LONG, entry_price=Decimal("60000"),
+        stop_price=Decimal("59400"), target_price=Decimal("70000"),
+        conviction=Decimal("1"),
+    )
+    mandat = build_mandate(
+        setup=setup,
+        verdict=DeskVerdict(decision="APPROVE", size_factor=Decimal("1")),
+        advice=RiskAdvice(size_factor=Decimal("1")),
+        regime=RegimeRead(regime=Regime.TREND_UP),
+        config=GraphConfig(base_notional_usd=Decimal("1000000")),
+        limits=limits,
+    )
+
+    assert mandat.max_notional_usd <= limits.max_position_notional_usd
+    assert mandat.max_leverage <= limits.max_effective_leverage
+    assert mandat.stop_band.min_bps >= limits.min_stop_distance_bps
+    assert mandat.stop_band.max_bps <= limits.max_stop_distance_bps
+    assert mandat.max_concurrent_positions == 1
 
 
 def test_le_systeme_dit_a_l_agent_qu_il_n_execute_rien():
