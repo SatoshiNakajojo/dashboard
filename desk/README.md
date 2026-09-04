@@ -79,10 +79,26 @@ python -m trading_desk.backtest --source hyperliquid --asset BTC --days 208
 renvoie pas d'erreur — juste une série plus courte. Les deux outils le
 signalent désormais explicitement.
 
+Faire tourner le desk d'agents en mode fantôme (**la porte P3**) :
+
+```bash
+# Vérifier le câblage sans clé et sans dépenser un centime
+python -m trading_desk.agents --dry-run --runs 30
+
+# Pour de vrai, sur le marché réel, avec un plafond de dépense
+export ANTHROPIC_API_KEY="sk-ant-..."
+python -m trading_desk.agents --file data/BTC_1h_real.json --runs 30 --budget-usd 5
+```
+
+Aucun ordre n'est émis : le mandat produit est journalisé puis jeté. Le
+plafond est porté par le client LLM lui-même, pas par l'appelant — aucun
+chemin de code ne peut le contourner, et il est franchi d'au plus un appel
+puisqu'on ne connaît le coût d'un appel qu'après l'avoir fait.
+
 Lancer les tests :
 
 ```bash
-python -m pytest tests -q        # 311 tests
+python -m pytest tests -q        # 329 tests
 ```
 
 ---
@@ -92,6 +108,7 @@ python -m pytest tests -q        # 311 tests
 | Module | Rôle |
 |---|---|
 | `contracts/mandate.py` | **Le mandat.** Bornage, péremption, resserrage monotone. |
+| `agents/budget.py` | **Plafond de dépense**, porté par le client. Incontournable par construction. |
 | `contracts/signals.py` | Un schéma fermé par agent. L'abstention est une réponse valide. |
 | `risk/engine.py` | Les douze invariants. Aucune dépendance vers un LLM. |
 | `risk/sizing.py` | Taille déduite du risque et de la distance de stop, jamais de la conviction. |
@@ -487,7 +504,7 @@ résultat.
 | P0 ✓ | Fondations et ingestion | 72 h sans intervention, aucun trou de données |
 | P1 | Cœur d'exécution déterministe | 200 aller-retours testnet sans divergence ; kill switch < 5 s |
 | P2 ✓ | Features, backtest, **baseline sans IA** | Chiffres de référence publiés et rejouables — *franchie, et le résultat est négatif : voir ci-dessous* |
-| P3 | Premier agent, en mode fantôme | > 98 % de sorties structurées valides sur ≥ 30 appels ; coût connu |
+| P3 | Premier agent, en mode fantôme | > 98 % de sorties structurées valides sur ≥ 30 appels ; coût connu — *outillage prêt, `python -m trading_desk.agents`, en attente d'une clé API* |
 | **P4** | Graphe complet, toujours fantôme | 2 semaines sans mandat violant un invariant |
 | P5 | Paper trading temps réel | **Bat les baselines net de tous les coûts, LLM inclus, sur 4 semaines** |
 | P6 | Live micro-capital (200–500 USDC) | 4 semaines sans intervention d'urgence |
