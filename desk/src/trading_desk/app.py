@@ -182,7 +182,55 @@ async def run_demo(state: DeskState, settings: Settings) -> None:
         await asyncio.sleep(1.0)
 
 
+def is_known_websockets_noise(exc: BaseException | None) -> bool:
+    """Vrai uniquement pour la trace parasite connue de websockets.
+
+    Trois conditions cumulees — type, message, et fichier d'origine — parce
+    qu'un filtre de journal trop large transforme un vrai bug en silence, ce
+    qui est bien pire que le bruit qu'il supprime.
+    """
+    if not isinstance(exc, AttributeError) or "status_code" not in str(exc):
+        return False
+    tb = exc.__traceback__
+    while tb is not None:
+        if "websockets/asyncio/client.py" in tb.tb_frame.f_code.co_filename:
+            return True
+        tb = tb.tb_next
+    return False
+
+
+def _install_asyncio_noise_filter() -> None:
+    """Rabaisse une trace connue de la bibliotheque websockets.
+
+    Quand la connexion est refusee au niveau du proxy ou du TLS, websockets
+    leve une `AttributeError` interne depuis `connection_lost`, et asyncio en
+    imprime la trace complete a chaque tentative. Le desk a DEJA journalise la
+    vraie cause juste avant ("websocket interrompu : ..."), donc ces lignes
+    n'apportent rien — elles noient les incidents reels, et un journal
+    illisible est un journal qu'on cesse de lire.
+
+    Le filtre s'appuie sur l'ORIGINE de la trace, pas sur la forme du contexte
+    asyncio : selon que l'erreur remonte d'un callback ou d'une tache, les
+    cles disponibles changent, et se fier a l'une d'elles rend le filtre
+    silencieusement inoperant.
+
+    Volontairement etroit : meme fichier, meme exception, meme symptome. Tout
+    le reste garde sa trace complete, sinon un vrai bug deviendrait un silence.
+    """
+    loop = asyncio.get_running_loop()
+
+    def handler(loop: asyncio.AbstractEventLoop, context: dict) -> None:
+        exc = context.get("exception")
+        if is_known_websockets_noise(exc):
+            log.debug("bruit websockets ignore : %s", exc)
+            return
+        loop.default_exception_handler(context)
+
+    loop.set_exception_handler(handler)
+
+
 async def main_async(demo: bool) -> None:
+    _install_asyncio_noise_filter()
     settings = get_settings()
     store = SqliteStore(settings.db_path)
     state = DeskState(settings, store)

@@ -250,3 +250,28 @@ def test_mode_live_refuse_le_master_wallet():
 
 def test_side_est_exporte():
     assert Side.LONG.value == "LONG"
+
+
+# --------------------------------------------------------------------------
+#  Filtre de bruit du journal
+# --------------------------------------------------------------------------
+
+def test_le_filtre_de_bruit_ne_prend_que_sa_cible():
+    """Un filtre de journal trop large transforme un vrai bug en silence.
+
+    On verifie donc surtout ce qu'il NE filtre PAS : toute exception qui ne
+    reunit pas les trois conditions doit garder sa trace complete.
+    """
+    from trading_desk.app import is_known_websockets_noise
+
+    assert not is_known_websockets_noise(None)
+    assert not is_known_websockets_noise(ValueError("status_code manquant"))
+    assert not is_known_websockets_noise(AttributeError("autre chose"))
+
+    # Bon type et bon message, mais pas la bonne origine : on ne filtre pas.
+    try:
+        raise AttributeError("'NoneType' object has no attribute 'status_code'")
+    except AttributeError as exc:
+        assert not is_known_websockets_noise(exc), (
+            "sans origine websockets, la trace doit rester visible"
+        )

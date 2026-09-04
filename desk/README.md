@@ -1,8 +1,12 @@
 # Trading Desk — Hyperliquid
 
-Desk de trading automatisé multi-agents. **Phases P0 et P2** : ingestion de
-marché, moteur de risque, supervision, et les baselines chiffrées sans IA.
-Aucune couche d'exécution — ce code ne signe rien et n'envoie aucun ordre.
+Desk de trading automatisé multi-agents. **Phases P0, P2, et le P1 hors
+testnet** : ingestion de marché, moteur de risque, supervision, baselines
+chiffrées sans IA, et la couche d'exécution — order manager, idempotence,
+réconciliation — validée contre un faux exchange.
+
+Aucun connecteur Hyperliquid réel : ce code ne signe rien et n'envoie aucun
+ordre à un vrai exchange.
 
 ---
 
@@ -63,7 +67,7 @@ python -m trading_desk.backtest --source hyperliquid --asset BTC --days 365
 Lancer les tests :
 
 ```bash
-python -m pytest tests -q        # 142 tests
+python -m pytest tests -q        # 166 tests
 ```
 
 ---
@@ -87,12 +91,49 @@ python -m pytest tests -q        # 142 tests
 | `backtest/engine.py` | Backtest événementiel qui **réutilise `size_position` du live**. |
 | `backtest/costs.py` | Frais, funding, slippage — présents dès le premier run. |
 | `backtest/strategies.py` | Les baselines sans IA : croisement d'EMA, retour à la moyenne RSI. |
+| `execution/exchange.py` | L'interface d'exchange, et un simulateur qui sait tomber en panne. |
+| `execution/order_manager.py` | Seul chemin vers l'exchange. Timeouts, stop obligatoire, sorties toujours permises. |
+| `execution/reconciler.py` | Démarrage après crash : l'exchange est la source de vérité. |
 
 ## Ce qui n'existe pas encore
 
-Signature et envoi d'ordres, réconciliation avec l'exchange, agents LLM. Le
-mode par défaut est `SHADOW`, et l'application **refuse de démarrer** en
-`TESTNET` ou `LIVE` tant que la couche d'exécution n'est pas écrite (porte P1).
+Le connecteur Hyperliquid réel (signature EIP-712, envoi), et les agents LLM.
+Le mode par défaut est `SHADOW`, et l'application **refuse de démarrer** en
+`TESTNET` ou `LIVE` tant que ce connecteur n'existe pas.
+
+---
+
+## La couche d'exécution, et les pannes qu'elle encaisse
+
+Toute la logique est écrite et testée contre `FakeExchange`, un simulateur qui
+tombe en panne exprès. Seule la validation finale de la porte P1 — 200
+aller-retours réels — exige un compte testnet.
+
+**Le renvoi ne double jamais une position.** Le `cloid` est dérivé du contenu
+de l'intention, horodatage exclu ; l'exchange déduplique. Deux requêtes, un
+seul ordre.
+
+**Un timeout n'est pas un échec.** Quand la réponse se perd, le sort de
+l'ordre est *inconnu* : le manager va voir chez l'exchange avant toute
+décision. `SubmitOutcome.unknown` est distinct de `accepted=False` pour rendre
+la confusion impossible dans le code appelant.
+
+**Une entrée sans stop n'existe pas.** Le stop part dans la foulée. S'il est
+refusé, la position est fermée immédiatement — une position nue est plus
+dangereuse qu'une opportunité manquée.
+
+**Une position nue bloque tout.** Conséquence directe de I02, et vérifiée :
+tant qu'une position n'a pas de stop côté exchange, aucun nouvel ordre ne
+passe. La seule action possible est de la protéger ou de la solder.
+
+**Après un crash, l'exchange a raison.** `reconcile_and_protect` lit l'état
+réel avant toute décision, détecte les positions dont le desk n'a aucune trace,
+et leur pose un stop de secours — placé à la distance *maximale* autorisée, pas
+minimale : on ignore la thèse qui a ouvert cette position, un stop serré la
+ferait sortir sur du bruit. C'est un filet, pas une gestion. Si le stop échoue,
+la position est soldée. Si l'exchange est illisible, la réconciliation ne
+converge pas et le desk reste inerte — mieux qu'un desk qui trade sur un état
+supposé.
 
 ---
 
@@ -197,8 +238,8 @@ le schéma ne lui permet pas d'exprimer une recommandation.
 | | Phase | Porte de sortie |
 |---|---|---|
 | P0 ✓ | Fondations et ingestion | 72 h sans intervention, aucun trou de données |
-| P1 | Cœur d'exécution déterministe | 200 aller-retours testnet sans divergence ; kill switch < 5 s |
-| **P2** | Features, backtest, **baseline sans IA** | Chiffres de référence publiés et rejouables |
+| **P1** | Cœur d'exécution déterministe | 200 aller-retours testnet sans divergence ; kill switch < 5 s |
+| P2 ✓ | Features, backtest, **baseline sans IA** | Chiffres de référence publiés et rejouables |
 | P3 | Premier agent, en mode fantôme | > 98 % de sorties structurées valides ; coût connu |
 | P4 | Graphe complet, toujours fantôme | 2 semaines sans mandat violant un invariant |
 | P5 | Paper trading temps réel | **Bat les baselines net de tous les coûts, LLM inclus, sur 4 semaines** |
