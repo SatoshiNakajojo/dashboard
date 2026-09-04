@@ -67,7 +67,7 @@ python -m trading_desk.backtest --source hyperliquid --asset BTC --days 365
 Lancer les tests :
 
 ```bash
-python -m pytest tests -q        # 282 tests
+python -m pytest tests -q        # 298 tests
 ```
 
 ---
@@ -104,10 +104,14 @@ python -m pytest tests -q        # 282 tests
 | `agents/roster.py` | L'équipe. Un rôle, un schéma fermé, un pouvoir borné. |
 | `agents/graph.py` | Les portes déterministes qui empêchent le débat de converger vers l'action. |
 | `agents/shadow_book.py` | Mesure ce que le desk **refuse** — filtre-t-il du bruit ou de l'alpha ? |
+| `agents/postmortem.py` | La boucle d'apprentissage. Causes dans un ensemble **fermé**, donc comptables. |
+| `agents/memory.py` | Les leçons des trades clos, rappelées devant l'agent qui propose. |
 
 ## Ce qui n'existe pas encore
 
-La mémoire vectorielle et l'agent Post-mortem. Le mode par défaut est `SHADOW`, et l'application **refuse de
+Rien de structurant côté code : les phases P0 à P4 sont écrites. Ce qui manque
+est ailleurs — **aucune porte n'est franchie**, faute de données réelles, de
+clé API et de compte testnet. Le mode par défaut est `SHADOW`, et l'application **refuse de
 démarrer** en `TESTNET` ou `LIVE` — non plus parce que la couche d'exécution
 manque, mais parce que sa signature n'a jamais été confrontée à l'exchange.
 Ce garde se lève délibérément, pas par oubli d'une variable d'environnement.
@@ -214,6 +218,31 @@ sert-il à quelque chose » n'a que des réponses d'opinion.
 
 Le registre suit aussi **où** les cycles meurent. Une porte qui ne filtre
 jamais rien donne l'illusion d'un filtrage : le rapport la signale.
+
+### La boucle d'apprentissage
+
+Le Post-mortem regarde un trade clos, en tire une leçon, et l'écrit en
+mémoire. Il n'a **aucun pouvoir sur le présent** — c'est simplement ce qui
+fait que le desk du troisième mois n'est pas identique à celui du premier.
+
+Deux détails font la différence entre une boucle d'apprentissage et un journal
+de plus :
+
+**La cause est choisie dans un ensemble fermé** (huit valeurs). Des causes en
+texte libre ne se comptent pas ; avec un ensemble fermé, on découvre au bout
+de trente trades que 40 % des sorties sont des stops balayés par le bruit — un
+fait que trente paragraphes de prose n'auraient jamais fait apparaître.
+
+**La mémoire est lue.** Les leçons remontent dans le prompt de la Stratégie,
+au moment où elle propose, filtrées par actif *et par régime réellement
+identifié*. Une mémoire qu'on écrit sans jamais la relire est du théâtre, et
+un test vérifie que les leçons arrivent bien dans le prompt.
+
+Pas d'embeddings, et c'est un choix : la question que le desk pose à sa
+mémoire n'est pas sémantique mais structurée — « qu'est-ce qui s'est passé sur
+CET actif, dans CE régime, dans CE sens ? ». C'est un filtre, et un `WHERE`
+exact bat une approximation vectorielle sur ce genre de question. `pgvector`
+reste la porte de sortie si le corpus grossit ; le protocole ne changerait pas.
 
 ### L'isolation des contenus externes, et ses limites
 

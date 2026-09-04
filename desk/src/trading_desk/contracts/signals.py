@@ -171,6 +171,32 @@ class RiskAdvice(AgentOutput):
     concerns: tuple[str, ...] = ()
 
 
+class PostMortem(AgentOutput):
+    """Analyse d'un trade clos. Alimente la memoire du desk.
+
+    `primary_cause` est un ensemble FERME, et c'est le point du schema : des
+    causes en texte libre ne se comptent pas. Avec un ensemble ferme, on
+    apprend au bout de trente trades que 40 % des sorties sont des stops
+    balayes par le bruit — ce qu'aucune prose ne fera jamais apparaitre.
+    """
+
+    agent: str = "post_mortem"
+    primary_cause: Literal[
+        "THESE_FAUSSE",          # la lecture de marche etait erronee
+        "STOP_TROP_SERRE",       # sorti par le bruit, these encore valable
+        "TIMING",                # bonne these, mauvais moment
+        "REGIME_MAL_CLASSE",     # strategie inadaptee au regime reel
+        "EVENEMENT_EXTERNE",     # choc imprevisible
+        "EXECUTION",             # slippage, fill partiel, latence
+        "COUTS",                 # frais et funding ont mange le gain
+        "THESE_JUSTE",           # a fonctionne comme prevu
+    ] = "THESE_FAUSSE"
+    what_happened: str = Field(default="", max_length=400)
+    lesson: str = Field(default="", max_length=300)
+    would_take_again: bool = False
+    tags: tuple[str, ...] = ()
+
+
 class DeskVerdict(AgentOutput):
     """Decision du Chef de desk. Precede immediatement l'emission du mandat."""
 

@@ -11,7 +11,13 @@ from .llm import (
     DEFAULT_MODEL, PRICING_USD_PER_MTOK, AnthropicLLM, LLMClient, LLMError,
     LLMRefusal, LLMResponse, ScriptedLLM,
 )
+from .memory import (
+    Lesson, LessonStore, SqliteLessonStore, format_for_prompt,
+)
 from .metrics import AgentMetrics, format_report, summarize
+from .postmortem import (
+    cause_histogram, learn_from_trade, lesson_from, run_postmortem,
+)
 from .roster import (
     ModelPolicy, run_chef, run_devil, run_news, run_quant, run_regime,
     run_risk_advisor, run_strategy,
@@ -22,8 +28,11 @@ from .shadow_book import ShadowBook, ShadowEntry, StageStats
 __all__ = [
     "DEFAULT_MODEL", "MAX_ATTEMPTS", "PRICING_USD_PER_MTOK", "AgentMetrics",
     "AgentRun", "AnthropicLLM", "ExternalContent", "GraphConfig", "GraphResult",
-    "LLMClient", "LLMError", "LLMRefusal", "LLMResponse", "ModelPolicy",
-    "ScriptedLLM", "ShadowBook", "ShadowEntry", "Stage", "StageStats",
+    "LLMClient", "LLMError", "LLMRefusal", "LLMResponse", "Lesson",
+    "LessonStore", "ModelPolicy",
+    "ScriptedLLM", "ShadowBook", "ShadowEntry", "SqliteLessonStore", "Stage",
+    "StageStats", "cause_histogram", "format_for_prompt", "learn_from_trade",
+    "lesson_from", "run_postmortem",
     "build_mandate", "build_market_context", "format_prompt", "format_report",
     "looks_like_injection", "run_agent", "run_analyst", "run_chef", "run_desk_cycle",
     "run_devil", "run_news", "run_quant", "run_regime", "run_risk_advisor",

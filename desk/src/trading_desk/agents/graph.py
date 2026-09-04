@@ -46,6 +46,7 @@ from ..risk.limits import RiskLimits
 from .analyst import build_market_context, run_analyst
 from .isolation import ExternalContent
 from .llm import LLMClient
+from .memory import LessonStore, format_for_prompt
 from .roster import (
     run_chef, run_devil, run_news, run_quant, run_regime, run_risk_advisor,
     run_strategy,
@@ -122,6 +123,7 @@ def run_desk_cycle(
     config: GraphConfig | None = None,
     limits: RiskLimits | None = None,
     mandates_today: int = 0,
+    memory: LessonStore | None = None,
     store=None,
 ) -> GraphResult:
     """Déroule un cycle complet. En mode fantôme, le mandat n'est pas exécuté.
@@ -196,10 +198,21 @@ def run_desk_cycle(
     analyst: AnalystView = analyst_run.output    # type: ignore[assignment]
     news: NewsRead | None = news_run.output if news_run and not news_run.abstained else None  # type: ignore[assignment]
 
-    # --- proposition ---
+    # --- proposition, éclairée par les trades passés ---
+    # Le rappel se fait APRÈS la classification du régime : on veut les leçons
+    # du régime réellement identifié, pas celles de l'actif en général.
+    lecons = ""
+    if memory is not None:
+        passees = memory.recall(
+            asset=analyst.asset or context["actif"],
+            regime=regime.regime, side=None, limit=4,
+            context_text=analyst.thesis_summary + " " + " ".join(quant.divergences),
+        )
+        lecons = format_for_prompt(passees)
+
     strategy_run = run_strategy(
         llm=llm, context=context, analyst=analyst, quant=quant,
-        regime=regime, news=news, store=store,
+        regime=regime, news=news, memories=lecons, store=store,
     )
     runs.append(strategy_run)
 

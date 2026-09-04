@@ -14,8 +14,8 @@ from .orders import (
     Position,
 )
 from .signals import (
-    AgentOutput, AnalystView, CounterThesis, DeskVerdict, NewsRead, QuantRead,
-    RegimeRead, RiskAdvice, SetupProposal,
+    AgentOutput, AnalystView, CounterThesis, DeskVerdict, NewsRead, PostMortem,
+    QuantRead, RegimeRead, RiskAdvice, SetupProposal,
 )
 
 __all__ = [
@@ -24,6 +24,6 @@ __all__ = [
     "EntryStyle", "FeedHealth", "FeedStatus", "Fill", "Frozen", "HaltReason",
     "Invalidation", "MANDATE_SCHEMA_VERSION", "Mandate", "MarkPrice",
     "NewsRead", "OrderIntent", "OrderPurpose", "OrderRecord", "OrderStatus",
-    "Position", "QuantRead", "Regime", "RegimeRead", "RiskAdvice", "SetupProposal",
+    "PostMortem", "Position", "QuantRead", "Regime", "RegimeRead", "RiskAdvice", "SetupProposal",
     "Side", "StopBand", "Trade", "bps", "now_ms",
 ]

@@ -208,8 +208,14 @@ def run_regime(*, llm: LLMClient, context: dict, store=None) -> AgentRun:
 def run_strategy(
     *, llm: LLMClient, context: dict, analyst: AnalystView,
     quant: QuantRead, regime: RegimeRead, news: NewsRead | None = None,
-    store=None,
+    memories: str = "", store=None,
 ) -> AgentRun:
+    """C'est ici que la mémoire du desk sert réellement.
+
+    Les leçons des trades passés arrivent devant l'agent qui propose, au
+    moment où il propose. Une mémoire qu'on écrit sans jamais la relire ne
+    serait qu'un journal de plus.
+    """
     payload = {
         "marche": context,
         "analyste": analyst.model_dump(mode="json"),
@@ -217,10 +223,13 @@ def run_strategy(
         "regime": regime.model_dump(mode="json"),
         "news": news.model_dump(mode="json") if news else None,
     }
+    parties = ["Lectures de l'équipe :", "", _dumps(payload)]
+    if memories:
+        parties += ["", memories]
+    parties += ["", "Un setup précis, ou aucun."]
     return run_agent(
         name="strategie", llm=llm, system=STRATEGY_SYSTEM,
-        user="Lectures de l'équipe :\n\n" + _dumps(payload)
-             + "\n\nUn setup précis, ou aucun.",
+        user="\n".join(parties),
         schema=SetupProposal, store=store, context=context,
     )
 
