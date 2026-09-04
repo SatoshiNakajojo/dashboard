@@ -1,5 +1,6 @@
 """Lance les baselines et publie leurs chiffres.
 
+    python -m trading_desk.backtest --source file --file BTC_1h_365d.json
     python -m trading_desk.backtest --source hyperliquid --asset BTC --days 365
     python -m trading_desk.backtest --source store --db desk.db
     python -m trading_desk.backtest --source synthetic     # test moteur seulement
@@ -18,13 +19,18 @@ from pathlib import Path
 
 from ..features.bars import Bar
 from .costs import FRICTIONLESS, CostModel
-from .data import DataUnavailable, fetch_hyperliquid, load_from_store, load_synthetic
+from .data import (
+    DataUnavailable, fetch_hyperliquid, load_from_file, load_from_store,
+    load_synthetic,
+)
 from .engine import benchmark_buy_and_hold, run_backtest
 from .report import compute_metrics, format_report
 from .strategies import BASELINES
 
 
 def _load(args: argparse.Namespace) -> list[Bar]:
+    if args.source == "file":
+        return load_from_file(args.file, args.asset, args.interval)
     if args.source == "hyperliquid":
         return fetch_hyperliquid(args.asset, args.interval, args.days,
                                  testnet=args.testnet, cache_dir=args.cache)
@@ -35,8 +41,11 @@ def _load(args: argparse.Namespace) -> list[Bar]:
 
 def main() -> int:
     p = argparse.ArgumentParser(description="Baselines sans IA — porte P2")
-    p.add_argument("--source", choices=["hyperliquid", "store", "synthetic"],
+    p.add_argument("--source",
+                   choices=["file", "hyperliquid", "store", "synthetic"],
                    default="hyperliquid")
+    p.add_argument("--file", default=None,
+                   help="source file : JSON produit par scripts/fetch_candles.py")
     p.add_argument("--asset", default="BTC")
     p.add_argument("--interval", default="1h",
                    choices=["1m", "5m", "15m", "1h", "4h", "1d"])
@@ -46,12 +55,17 @@ def main() -> int:
     p.add_argument("--cache", default=".cache")
     p.add_argument("--testnet", action="store_true")
     p.add_argument("--equity", type=float, default=1000.0)
-    p.add_argument("--funding-bps", type=float, default=1.0,
+    p.add_argument("--funding-bps", type=float, default=0.125,
                    help="funding horaire moyen paye par les longs, en bps. "
-                        "Hypothese forte : tester 0 et 2 pour voir si la "
+                        "0.125 = taux d'interet Hyperliquid (0,01 %% / 8 h). "
+                        "Hypothese forte : tester 0 et 0.5 pour voir si la "
                         "conclusion tient.")
     p.add_argument("--out", default="baselines")
     args = p.parse_args()
+
+    if args.source == "file" and not args.file:
+        print("\n  --source file exige --file <chemin.json>\n", file=sys.stderr)
+        return 2
 
     try:
         bars = _load(args)

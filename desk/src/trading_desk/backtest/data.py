@@ -141,3 +141,84 @@ def load_synthetic(asset: str = "BTC", interval: str = "1h",
                    count: int = 1_500, seed: int = 7) -> list[Bar]:
     """Barres deterministes. Pour tester le moteur, pas pour conclure."""
     return synthetic_bars(asset=asset, interval=interval, count=count, seed=seed)
+
+
+def load_from_file(
+    path: str | Path,
+    asset: str = "BTC",
+    interval: str = "1h",
+    *,
+    max_gap_ratio: float = 0.02,
+) -> list[Bar]:
+    """Charge un fichier de bougies produit par `scripts/fetch_candles.py`.
+
+    C'est la porte d'entree quand la machine qui developpe n'a pas acces a
+    l'API : quelqu'un lance le script ailleurs et transmet le JSON.
+
+    Un fichier venu de l'exterieur est une donnee non verifiee. On refuse
+    plutot que de corriger :
+
+    - **actif different** : un backtest BTC sur des bougies ETH ne produit pas
+      une erreur, il produit un chiffre faux ;
+    - **intervalle different** de celui annonce : les couts de funding sont
+      factures a l'heure, un intervalle mal lu les multiplie ou les divise ;
+    - **trop de trous** : au-dela de `max_gap_ratio`, la serie n'est plus
+      continue et les stops se declenchent sur des barres qui n'existent pas.
+
+    Un trou isole est tolere et signale, parce qu'une coupure d'API d'une
+    heure sur six mois ne change aucune conclusion — mais il est compte.
+    """
+    p = Path(path)
+    try:
+        raw = json.loads(p.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise DataUnavailable(f"fichier illisible : {p} ({exc})") from exc
+
+    if not isinstance(raw, list) or not raw:
+        raise DataUnavailable(
+            f"{p} ne contient pas une liste de bougies. Attendu : la sortie "
+            "brute de `scripts/fetch_candles.py`."
+        )
+
+    coins = {str(r.get("s", asset)).upper() for r in raw if isinstance(r, dict)}
+    if coins and coins != {asset.upper()}:
+        raise DataUnavailable(
+            f"le fichier contient {sorted(coins)} mais le backtest demande "
+            f"{asset.upper()}. Relancer avec --asset {sorted(coins)[0]}."
+        )
+
+    intervals = {str(r.get("i", interval)) for r in raw if isinstance(r, dict)}
+    if intervals and intervals != {interval}:
+        raise DataUnavailable(
+            f"le fichier est en {sorted(intervals)} mais le backtest demande "
+            f"{interval}. Le funding est facture a l'heure : un intervalle mal "
+            f"lu fausse les couts. Relancer avec --interval {sorted(intervals)[0]}."
+        )
+
+    bars = bars_from_hyperliquid_candles(raw, asset.upper())
+    if len(bars) < 2:
+        raise DataUnavailable(f"{p} : {len(bars)} barre(s) exploitable(s)")
+
+    rejetees = len(raw) - len(bars)
+    step = INTERVAL_MS[interval]
+    trous = sum(1 for a, b in zip(bars, bars[1:]) if b.ts_ms - a.ts_ms != step)
+    manquantes = sum(
+        (b.ts_ms - a.ts_ms) // step - 1
+        for a, b in zip(bars, bars[1:]) if b.ts_ms - a.ts_ms > step
+    )
+    attendu = (bars[-1].ts_ms - bars[0].ts_ms) // step + 1
+    ratio = manquantes / attendu if attendu else 0.0
+
+    if ratio > max_gap_ratio:
+        raise DataUnavailable(
+            f"{p} : {manquantes} barres manquantes sur {attendu} "
+            f"({ratio:.1%}), au-dela du seuil de {max_gap_ratio:.0%}. "
+            "Une serie discontinue declenche des stops sur des barres qui "
+            "n'ont pas existe. Re-telecharger."
+        )
+
+    if trous or rejetees:
+        print(f"  Fichier accepte avec reserve : {trous} discontinuite(s), "
+              f"{manquantes} barre(s) manquante(s), {rejetees} rejetee(s).")
+
+    return bars

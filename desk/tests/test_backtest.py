@@ -164,6 +164,40 @@ def test_le_funding_penalise_la_detention_longue():
     assert r.trades[0].hours > 900, "la reference doit tenir toute la periode"
 
 
+def test_le_funding_par_defaut_est_bien_un_taux_HORAIRE():
+    """L'erreur d'unite qui condamne un backtest sans le faire echouer.
+
+    Hyperliquid facture le funding toutes les heures ; sa composante de taux
+    d'interet est annoncee a 0,01 % par 8 heures. Prendre ce chiffre pour un
+    taux horaire le multiplie par huit, soit 0,24 %/jour de notionnel, et
+    penalise toute strategie a proportion de son exposition. Le buy and hold
+    en meurt, les strategies peu exposees paraissent bonnes, et la baseline
+    que le desk doit battre au P5 devient artificiellement facile.
+
+    Ce test verifie l'UNITE, pas la valeur : il derive le taux horaire du taux
+    8 h publie, au lieu de figer un nombre qu'on pourrait recopier faux.
+    """
+    taux_8h_pct = Decimal("0.01")                  # publie par Hyperliquid
+    attendu_bps_horaire = taux_8h_pct * 100 / 8    # % -> bps, puis /8 h
+    assert CostModel().funding_bps_per_hour == attendu_bps_horaire
+
+    # Et l'effet, vu du portefeuille : la detention d'un notionnel de 1000 $
+    # pendant un an coute quelques pour cent, pas la moitie du capital.
+    annuel = CostModel().funding_usd(Decimal("1000"), Decimal("8760"), is_long=True)
+    assert Decimal("50") < annuel < Decimal("200"), (
+        f"{annuel} $/an sur 1000 $ de notionnel : verifier l'unite du funding"
+    )
+
+
+def test_le_signe_du_funding_suit_le_sens_de_la_position():
+    """Les longs paient, les shorts encaissent — quand le taux est positif."""
+    c = CostModel()
+    long_ = c.funding_usd(Decimal("1000"), Decimal("24"), is_long=True)
+    short = c.funding_usd(Decimal("1000"), Decimal("24"), is_long=False)
+    assert long_ > 0 > short
+    assert long_ == -short
+
+
 def test_le_benchmark_na_pas_de_stop():
     """Le piege evite : passer buy and hold dans le moteur de strategies lui
     imposerait un stop, il sortirait a la premiere secousse, et la reference
@@ -280,6 +314,76 @@ def test_bougie_incoherente_rejetee():
 #  Rapport
 # --------------------------------------------------------------------------
 
+def test_un_pnl_positif_mais_dans_le_bruit_est_declare_INDECIS():
+    """Le garde-fou principal de ce module.
+
+    129 trades pour +11,76 $ avec un ecart-type de 4,26 $ par trade : le PnL
+    est positif et ne prouve rien. Sans cette colonne, le rapport affiche
+    « +11,76 » et laisse le lecteur conclure — ce qu'il fera dans le sens qui
+    l'arrange.
+    """
+    from trading_desk.backtest.report import _significance
+    import random
+
+    rng = random.Random(1)
+    # Bruit centre sur un gain minuscule : exactement le cas piege.
+    pnls = [rng.gauss(0.09, 4.26) for _ in range(129)]
+    sig = _significance(pnls)
+
+    assert abs(sig["t_stat"]) < 2.0
+    assert sig["ci95_low_usd"] < 0 < sig["ci95_high_usd"], "l'IC doit contenir zero"
+    assert sig["p_value"] > 0.05
+    assert sig["trades_for_t2"] is None or sig["trades_for_t2"] > 129
+
+
+def test_un_edge_reel_est_declare_PROBABLE():
+    """Le test miroir : sans lui, on aurait juste un module qui dit toujours
+    « on ne sait pas », ce qui est aussi inutile qu'un module qui valide tout."""
+    from trading_desk.backtest.report import _significance
+    import random
+
+    rng = random.Random(2)
+    pnls = [rng.gauss(2.0, 4.26) for _ in range(129)]
+    sig = _significance(pnls)
+
+    assert sig["t_stat"] > 2.0
+    assert sig["ci95_low_usd"] > 0, "l'IC d'un vrai edge exclut zero"
+    assert sig["p_value"] < 0.05
+    assert sig["p_loss"] < 0.05
+
+
+def test_le_bootstrap_est_deterministe():
+    """Un intervalle de confiance qui bouge d'un run a l'autre est un chiffre
+    qu'on cesse de lire."""
+    from trading_desk.backtest.report import _significance
+    pnls = [float(i % 17) - 8.0 for i in range(200)]
+    assert _significance(pnls) == _significance(pnls)
+
+
+def test_le_verdict_exige_l_echantillon_ET_la_significativite():
+    bars = synthetic_bars(count=1200, seed=7)
+    m = compute_metrics(run_backtest(bars, RsiReversion()))
+    assert m.edge_verdict in {"ECHANTILLON", "INDECIS", "PROBABLE", "PERDANT"}
+    if m.trades < 30:
+        assert m.edge_verdict == "ECHANTILLON"
+        assert m.t_stat is None, "pas de t-stat sur un echantillon trop faible"
+
+    bh = compute_metrics(benchmark_buy_and_hold(bars))
+    assert bh.trades == 1
+    assert bh.edge_verdict == "ECHANTILLON"
+    assert bh.ci95_low_usd is None
+
+
+def test_le_rapport_montre_l_intervalle_de_confiance():
+    """Ce que le rapport n'affiche pas, personne ne le calcule a la main."""
+    bars = synthetic_bars(count=2000, seed=11)
+    m = [compute_metrics(run_backtest(bars, s())) for s in (EmaCross, RsiReversion)]
+    texte = format_report(m)
+    assert "IC 95 %" in texte
+    assert "verdict" in texte
+    assert "n'est pas un edge" in texte or "pas un edge" in texte
+
+
 def test_metriques_et_rapport():
     bars = synthetic_bars(count=1200, seed=7)
     m = [compute_metrics(run_backtest(bars, s())) for s in (EmaCross, RsiReversion)]
@@ -293,11 +397,17 @@ def test_metriques_et_rapport():
 
 
 def test_echantillon_faible_signale():
+    """Le marqueur `*` disait « peu de trades » ; il est remplace par un
+    verdict nomme, parce qu'un asterisque en bas de tableau se lit apres
+    avoir conclu, quand il se lit."""
     bars = synthetic_bars(count=700, seed=37)
     m = compute_metrics(benchmark_buy_and_hold(bars))
     assert m.trades == 1
-    assert not m.is_significant
-    assert "*" in format_report([m])
+    assert not m.has_enough_trades
+    assert not m.is_significant          # alias conserve
+    rapport = format_report([m])
+    assert "ECHANTILLON" in rapport
+    assert "trop peu pour conclure" in rapport
 
 
 def test_sharpe_absent_si_trop_peu_de_points():

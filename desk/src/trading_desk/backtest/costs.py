@@ -31,17 +31,27 @@ class CostModel(Frozen):
 
     # Funding horaire moyen paye par le cote long. Positif = les longs paient.
     #
-    # C'est la simplification la plus forte de ce modele, et il faut la garder
-    # en tete en lisant les resultats : le funding reel oscille, change de
-    # signe, et remunere parfois les longs. Le supposer constant est
-    # deliberement pessimiste pour une position longue durablement tenue —
-    # exactement le cas du benchmark buy and hold, dont le cout affiche est
-    # donc un majorant, pas une prevision.
+    # 0,125 bps/h = la composante de taux d'interet Hyperliquid, 0,01 % par
+    # 8 heures ramenee a l'heure. C'est le regime de reference hors pression
+    # directionnelle ; le premium s'y ajoute et peut le dominer largement.
+    #
+    # Cette valeur a d'abord ete fixee a 1,0 bps/h — huit fois trop haut,
+    # par confusion entre le taux 8 h et le taux horaire. L'erreur n'etait pas
+    # neutre : elle taxait 0,24 %/jour de notionnel, soit ~50 % sur 208 jours,
+    # ce qui condamnait mecaniquement toute strategie exposee et faisait
+    # paraitre bonnes les strategies peu exposees. Une baseline artificiellement
+    # basse est le pire cas de figure : c'est celle que le desk multi-agents
+    # doit battre au P5, et une baseline trop facile valide un desk qui ne
+    # vaut rien.
+    #
+    # Cela reste une simplification forte : le funding reel oscille, change de
+    # signe, et remunere parfois les longs. `--funding-bps` existe pour tester
+    # si la conclusion tient quand on le fait varier — si elle ne tient pas,
+    # c'est le funding qu'on mesure, pas la strategie.
     #
     # Correction prevue : rejouer le funding reellement observe depuis la table
-    # `marks` alimentee par le P0, des qu'elle couvre la periode testee. En
-    # attendant, `--funding-bps` permet de tester la sensibilite du resultat.
-    funding_bps_per_hour: Decimal = Field(default=Decimal("1.0"))
+    # `marks` alimentee par le P0, des qu'elle couvre la periode testee.
+    funding_bps_per_hour: Decimal = Field(default=Decimal("0.125"))
 
     def fee_usd(self, notional_usd: Decimal, *, maker: bool = False) -> Decimal:
         rate = self.maker_fee_bps if maker else self.taker_fee_bps

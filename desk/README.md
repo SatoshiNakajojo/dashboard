@@ -8,6 +8,11 @@ réconciliation — validée contre un faux exchange.
 Aucun connecteur Hyperliquid réel : ce code ne signe rien et n'envoie aucun
 ordre à un vrai exchange.
 
+> **État au 4 septembre 2026.** Le P2 est franchi sur données réelles, et son
+> résultat est négatif : sur 208 jours de BTC en 1 h, aucune baseline n'a
+> d'edge statistiquement distinguable de zéro. Ce n'est pas un blocage — c'est
+> l'information que la phase devait produire. [Détail et chiffres](#résultat-du-p2--mesuré-pas-espéré).
+
 ---
 
 ## Le principe : une architecture à deux vitesses
@@ -61,13 +66,23 @@ python -m trading_desk
 Produire les baselines (**la référence du P2**) :
 
 ```bash
-python -m trading_desk.backtest --source hyperliquid --asset BTC --days 365
+# Depuis un fichier collecté ailleurs (machine sans accès à l'API)
+python scripts/fetch_candles.py --asset BTC --interval 1h --days 208
+python -m trading_desk.backtest --source file --file BTC_1h_208d.json
+
+# Ou directement, si la machine a accès à api.hyperliquid.xyz
+python -m trading_desk.backtest --source hyperliquid --asset BTC --days 208
 ```
+
+`candleSnapshot` ne conserve qu'environ **5000 bougies par intervalle** :
+208 jours en 1 h, 833 jours en 4 h, treize ans en 1 j. Demander davantage ne
+renvoie pas d'erreur — juste une série plus courte. Les deux outils le
+signalent désormais explicitement.
 
 Lancer les tests :
 
 ```bash
-python -m pytest tests -q        # 298 tests
+python -m pytest tests -q        # 311 tests
 ```
 
 ---
@@ -399,13 +414,79 @@ le schéma ne lui permet pas d'exprimer une recommandation.
 
 ---
 
+## Résultat du P2 — mesuré, pas espéré
+
+BTC 1 h, 5002 barres, du 8 février au 4 septembre 2026 (208 jours), 1000 USDC
+de capital, funding à 0,125 bps/h, frais et slippage Hyperliquid.
+
+| stratégie | net | net % | brut | coûts | Sharpe | DD max | trades | t | verdict |
+|---|---|---|---|---|---|---|---|---|---|
+| buy_and_hold | +81,87 | +8,19 % | +144,72 | 62,85 | 0,53 | 31,35 % | 1 | — | échantillon |
+| rsi_reversion | +11,76 | +1,18 % | +48,83 | 37,07 | 0,37 | 4,58 % | 129 | 0,24 | **indécis** |
+| ema_cross | −14,12 | −1,41 % | +13,17 | 27,29 | −0,36 | 5,57 % | 77 | −0,29 | **indécis** |
+
+Trois faits, dans l'ordre d'importance.
+
+**1. Aucune baseline n'a d'edge démontrable.** `rsi_reversion` gagne +11,76 $ —
+et son intervalle de confiance à 95 % est [−80 ; +106]. p = 0,81. Il y a 40 %
+de chances que sa vraie espérance soit négative. À cet effet, il faudrait
+~8700 trades pour trancher, soit environ **39 ans** au rythme observé. Ce
+n'est pas une stratégie à affiner : c'est du bruit.
+
+**2. Les coûts mangent l'essentiel du brut.** `rsi_reversion` produit +66,77 $
+sans frictions et n'en garde que 11,76 : **82 % de l'edge brut part en frais,
+slippage et funding**. `ema_cross` est gagnante brute (+24,11) et perdante
+nette (−14,12) — le cas le plus courant, et celui qu'un backtest sans modèle
+de coûts ne voit jamais.
+
+**3. Détenir l'actif a mieux marché que le trader**, sur cette période :
++8,19 % contre +1,18 %. Au prix d'un drawdown de 31 % contre 4,6 %. C'est un
+échantillon d'un seul régime — BTC a monté de 11 % sur ces 208 jours — donc
+cela ne prouve rien non plus, mais cela interdit d'annoncer que les
+stratégies actives « battent le marché ».
+
+### Deux erreurs corrigées en produisant ces chiffres
+
+**Le funding était 8× trop élevé.** `funding_bps_per_hour` valait 1,0 : le taux
+Hyperliquid de 0,01 % **par 8 heures** pris pour un taux horaire. Effet :
+0,24 %/jour de notionnel, ~50 % du capital sur 208 jours. Le buy-and-hold
+affichait −35 % au lieu de +8 %. L'erreur ne pénalisait pas au hasard — elle
+taxait à proportion de l'exposition, donc écrasait la référence et flattait les
+stratégies peu exposées. **Une baseline artificiellement basse est le pire cas
+de figure** : c'est celle que le desk doit battre au P5.
+
+**Le rapport affichait un PnL sans intervalle de confiance.** C'est ce qui rend
+l'erreur d'interprétation quasi automatique : « +11,76 $ » se lit comme un
+résultat, « +11,76 $, IC 95 % [−80 ; +106] » se lit correctement du premier
+coup d'œil. Le rapport calcule désormais t de Student *et* bootstrap — le
+bootstrap fait foi quand les deux divergent, parce qu'il ne suppose rien de la
+forme de la distribution, et qu'en trading quelques trades portent tout le
+résultat.
+
+### Ce que ces chiffres ne disent pas
+
+- **Un seul actif, un seul régime, 208 jours.** BTC a monté. Rien ici ne dit
+  ce qui se passe en marché baissier ou en range prolongé.
+- **Rien sur la couche cognitive.** Ce backtest ne teste que le déterministe :
+  indicateurs, dimensionnement, stops, coûts. Les agents LLM ne peuvent pas
+  être backtestés — un modèle entraîné jusqu'en 2026 connaît l'histoire de
+  2025. Contamination structurelle, pas défaut d'implémentation. Seul le
+  forward-test valide le P5.
+- **Le funding est supposé constant.** Il oscille et change de signe. `--funding-bps`
+  existe pour tester si la conclusion tient : entre 0 et 0,5 bps/h, le classement
+  des deux stratégies ne bouge pas (+11,86 → +11,58) ; le buy-and-hold, lui, passe
+  de +143 à −104. Toute conclusion qui l'implique est une conclusion sur le
+  funding, pas sur la stratégie.
+
+---
+
 ## Roadmap
 
 | | Phase | Porte de sortie |
 |---|---|---|
 | P0 ✓ | Fondations et ingestion | 72 h sans intervention, aucun trou de données |
 | P1 | Cœur d'exécution déterministe | 200 aller-retours testnet sans divergence ; kill switch < 5 s |
-| P2 ✓ | Features, backtest, **baseline sans IA** | Chiffres de référence publiés et rejouables |
+| P2 ✓ | Features, backtest, **baseline sans IA** | Chiffres de référence publiés et rejouables — *franchie, et le résultat est négatif : voir ci-dessous* |
 | P3 | Premier agent, en mode fantôme | > 98 % de sorties structurées valides sur ≥ 30 appels ; coût connu |
 | **P4** | Graphe complet, toujours fantôme | 2 semaines sans mandat violant un invariant |
 | P5 | Paper trading temps réel | **Bat les baselines net de tous les coûts, LLM inclus, sur 4 semaines** |
@@ -415,6 +496,12 @@ le schéma ne lui permet pas d'exprimer une recommandation.
 La porte P5 est celle qu'il faut refuser de franchir. Si le desk multi-agents
 ne bat pas un croisement de moyennes mobiles, il ne faut pas passer en live —
 il faut itérer.
+
+**Le P2 ajoute une condition qui n'était pas prévue.** Les baselines mesurées
+sur données réelles ne sont pas seulement modestes : elles sont statistiquement
+nulles (détail plus bas). Battre une référence qui vaut zéro ne prouve rien.
+Le P5 doit donc démontrer un edge **distinguable de zéro** — pas un PnL
+supérieur à celui d'une baseline qui n'en a pas.
 
 ---
 
