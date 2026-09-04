@@ -5,6 +5,7 @@ from .exchange import (
     Exchange, ExchangeError, ExchangeRejected, ExchangeTimeout, FakeExchange,
     FaultProfile,
 )
+from .hyperliquid_client import HyperliquidClient, HttpxTransport, Transport
 from .hyperliquid_format import (
     AssetMeta, FormatError, format_price, format_size, is_valid_price,
 )
@@ -23,7 +24,7 @@ from .reconciler import (
 )
 
 __all__ = [
-    "AssetMeta", "ClockDriftError", "FormatError", "L1_DOMAIN", "action_hash",
+    "AssetMeta", "ClockDriftError", "HttpxTransport", "HyperliquidClient", "Transport", "FormatError", "L1_DOMAIN", "action_hash",
     "cancel_action", "exchange_request", "format_price", "format_size",
     "is_valid_price", "order_to_wire", "phantom_agent", "place_action",
     "sign_l1_action", "Exchange", "ExchangeError", "ExchangeRejected",

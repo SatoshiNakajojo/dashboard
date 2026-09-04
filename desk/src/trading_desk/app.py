@@ -236,11 +236,18 @@ async def main_async(demo: bool) -> None:
     state = DeskState(settings, store)
 
     if settings.mode.sends_orders:
-        # Filet de securite : la phase P0 n'a pas de couche d'execution. Un
-        # mode qui enverrait des ordres serait une erreur de configuration.
+        # La couche d'execution existe desormais, mais sa SIGNATURE n'a jamais
+        # ete confrontee a l'exchange : les regles viennent de la
+        # documentation, pas d'un aller-retour reel. Envoyer un ordre dans cet
+        # etat, c'est decouvrir un bug de signature avec de l'argent engage.
+        #
+        # Ce garde saute quand les vecteurs de signature auront ete valides
+        # contre le SDK officiel sur testnet — c'est la porte P1, et elle se
+        # franchit deliberement, pas par oubli d'une variable d'environnement.
         raise SystemExit(
-            f"mode {settings.mode.value} refuse : la couche d'execution n'existe "
-            "pas encore (porte P1 non franchie). Utiliser SHADOW ou PAPER."
+            f"mode {settings.mode.value} refuse : la signature Hyperliquid n'a "
+            "pas encore ete validee contre l'exchange (porte P1). "
+            "Utiliser SHADOW ou PAPER."
         )
 
     store.journal("boot", {

@@ -67,7 +67,7 @@ python -m trading_desk.backtest --source hyperliquid --asset BTC --days 365
 Lancer les tests :
 
 ```bash
-python -m pytest tests -q        # 201 tests
+python -m pytest tests -q        # 227 tests
 ```
 
 ---
@@ -96,11 +96,14 @@ python -m pytest tests -q        # 201 tests
 | `execution/reconciler.py` | Démarrage après crash : l'exchange est la source de vérité. |
 | `execution/hyperliquid_format.py` | Règles de tick et de lot — la première cause de rejets d'ordres. |
 | `execution/hyperliquid_wire.py` | Format filaire et signature EIP-712 (msgpack → keccak → agent fantôme). |
+| `execution/hyperliquid_client.py` | Transport HTTP. Classe les pannes selon ce qu'il est **sûr** de renvoyer. |
 
 ## Ce qui n'existe pas encore
 
-Le transport HTTP vers `/exchange`, et les agents LLM. Le mode par défaut est
-`SHADOW`, et l'application **refuse de démarrer** en `TESTNET` ou `LIVE`.
+Les agents LLM. Le mode par défaut est `SHADOW`, et l'application **refuse de
+démarrer** en `TESTNET` ou `LIVE` — non plus parce que la couche d'exécution
+manque, mais parce que sa signature n'a jamais été confrontée à l'exchange.
+Ce garde se lève délibérément, pas par oubli d'une variable d'environnement.
 
 ⚠️ **La signature n'a jamais été confrontée à l'exchange.** Les règles viennent
 de la documentation ; les vecteurs de signature doivent être validés contre le
@@ -123,6 +126,25 @@ par ailleurs, avec un message d'erreur laconique :
 
 Le prix d'un ordre s'arrondit dans le sens *défavorable* à la position : un
 arrondi en sa faveur produit un ordre qui ne se remplit pas.
+
+### Quelles pannes sont sûres à renvoyer
+
+Le client HTTP classe les erreurs selon une seule question : **est-ce que la
+requête est partie ?**
+
+| Panne | Erreur levée | Renvoi |
+|---|---|---|
+| DNS, connexion refusée, délai de connexion | `ExchangeError` | Sûr — jamais partie |
+| Timeout de lecture, 5xx | `ExchangeTimeout` | **Interdit** — sort inconnu |
+| 4xx, rejet explicite | `ExchangeRejected` | Sûr — l'ordre n'existe pas |
+
+Les confondre dans un `except Exception` unique est exactement la façon dont
+on double une position en production.
+
+Un piège de plus : Hyperliquid renvoie `status: "ok"` au niveau enveloppe même
+quand l'ordre lui-même est refusé. Le vrai résultat est dans
+`response.data.statuses[0]`. S'y fier ferait croire à un succès sur un ordre
+jamais créé — et le desk poserait un stop sur une position inexistante.
 
 Côté signature, le piège est ailleurs : une action L1 n'est pas signée
 directement. Elle est sérialisée en msgpack, on y concatène le nonce et un
