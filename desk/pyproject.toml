@@ -19,7 +19,7 @@ dependencies = [
 # et n'a besoin ni de Postgres, ni de LLM, ni de moteur de backtest.
 dev = ["pytest>=8", "pytest-asyncio>=0.24", "ruff>=0.6"]
 postgres = ["psycopg[binary]>=3.2", "redis>=5"]
-agents = ["langgraph>=0.2", "langchain-core>=0.3", "anthropic>=0.40"]
+agents = ["anthropic>=1.0", "langgraph>=0.2", "langchain-core>=0.3"]
 backtest = ["nautilus_trader>=1.200", "polars>=1.0", "numpy>=2.0"]
 
 [project.scripts]

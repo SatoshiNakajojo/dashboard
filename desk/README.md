@@ -67,7 +67,7 @@ python -m trading_desk.backtest --source hyperliquid --asset BTC --days 365
 Lancer les tests :
 
 ```bash
-python -m pytest tests -q        # 227 tests
+python -m pytest tests -q        # 254 tests
 ```
 
 ---
@@ -97,10 +97,15 @@ python -m pytest tests -q        # 227 tests
 | `execution/hyperliquid_format.py` | Règles de tick et de lot — la première cause de rejets d'ordres. |
 | `execution/hyperliquid_wire.py` | Format filaire et signature EIP-712 (msgpack → keccak → agent fantôme). |
 | `execution/hyperliquid_client.py` | Transport HTTP. Classe les pannes selon ce qu'il est **sûr** de renvoyer. |
+| `agents/analyst.py` | Premier agent. Interprète des chiffres calculés, n'en produit aucun. |
+| `agents/runner.py` | Politique d'abstention : deux tentatives, puis un aveu — jamais un défaut. |
+| `agents/isolation.py` | Isolation des contenus externes (I11), et pourquoi elle ne suffit pas. |
+| `agents/metrics.py` | Les trois chiffres de la porte P3. |
 
 ## Ce qui n'existe pas encore
 
-Les agents LLM. Le mode par défaut est `SHADOW`, et l'application **refuse de
+Le graphe complet d'agents (P4). Un seul agent existe, en mode fantôme. Le
+mode par défaut est `SHADOW`, et l'application **refuse de
 démarrer** en `TESTNET` ou `LIVE` — non plus parce que la couche d'exécution
 manque, mais parce que sa signature n'a jamais été confrontée à l'exchange.
 Ce garde se lève délibérément, pas par oubli d'une variable d'environnement.
@@ -145,6 +150,44 @@ Un piège de plus : Hyperliquid renvoie `status: "ok"` au niveau enveloppe même
 quand l'ordre lui-même est refusé. Le vrai résultat est dans
 `response.data.statuses[0]`. S'y fier ferait croire à un succès sur un ordre
 jamais créé — et le desk poserait un stop sur une position inexistante.
+
+### Le premier agent, et ce qu'il n'a pas le droit de faire
+
+L'Analyste lit un état de marché et formule une thèse. Il ne dimensionne rien,
+ne décide rien, et **n'a aucun import vers `execution` ou `risk`** — un test
+le vérifie sur le source, parce qu'une frontière tenue par une consigne de
+prompt n'est pas une frontière.
+
+**Tous les chiffres du prompt sont calculés en code.** L'agent interprète des
+valeurs, il n'en produit aucune : on peut rejouer l'entrée exacte et vérifier
+que le RSI valait bien 38,2.
+
+**Deux tentatives, puis abstention.** Jamais de valeur par défaut : un
+`FLAT` de repli serait un mensonge, puisqu'il se lirait comme une analyse.
+Une abstention *choisie par le modèle* est en revanche une réponse valide —
+et la métrique distingue les deux, sinon un agent qui échoue systématiquement
+afficherait 100 % de sorties valides.
+
+**Un refus du modèle ne se réessaie pas** et ne bascule pas silencieusement
+vers un autre modèle : sur un desk, s'abstenir est acceptable, alors qu'un
+changement de modèle en cours de décision brouillerait le journal. Les
+*refusal fallbacks* côté serveur restent activables en une ligne si l'on
+préfère l'autre compromis.
+
+### L'isolation des contenus externes, et ses limites
+
+Trois défenses cumulées, dont une seule est structurelle :
+
+1. Le contenu externe arrive dans un bloc balisé, précédé d'une consigne qui
+   dit que c'est une donnée, jamais un ordre. *Mitigation.*
+2. Les délimiteurs sont neutralisés, pour qu'un texte ne puisse pas fermer son
+   propre bloc. *Mitigation.*
+3. **Le schéma de sortie ferme la porte** : l'agent News ne peut produire
+   qu'un score numérique. Même convaincu par une injection, il n'a aucun champ
+   où écrire « achète ». *La seule vraie défense.*
+
+Aucune ne rend l'injection impossible. Elles la rendent inoffensive, ce qui
+est un objectif atteignable.
 
 Côté signature, le piège est ailleurs : une action L1 n'est pas signée
 directement. Elle est sérialisée en msgpack, on y concatène le nonce et un
@@ -291,9 +334,9 @@ le schéma ne lui permet pas d'exprimer une recommandation.
 | | Phase | Porte de sortie |
 |---|---|---|
 | P0 ✓ | Fondations et ingestion | 72 h sans intervention, aucun trou de données |
-| **P1** | Cœur d'exécution déterministe | 200 aller-retours testnet sans divergence ; kill switch < 5 s |
+| P1 | Cœur d'exécution déterministe | 200 aller-retours testnet sans divergence ; kill switch < 5 s |
 | P2 ✓ | Features, backtest, **baseline sans IA** | Chiffres de référence publiés et rejouables |
-| P3 | Premier agent, en mode fantôme | > 98 % de sorties structurées valides ; coût connu |
+| **P3** | Premier agent, en mode fantôme | > 98 % de sorties structurées valides sur ≥ 30 appels ; coût connu |
 | P4 | Graphe complet, toujours fantôme | 2 semaines sans mandat violant un invariant |
 | P5 | Paper trading temps réel | **Bat les baselines net de tous les coûts, LLM inclus, sur 4 semaines** |
 | P6 | Live micro-capital (200–500 USDC) | 4 semaines sans intervention d'urgence |
