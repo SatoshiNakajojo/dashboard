@@ -67,7 +67,7 @@ python -m trading_desk.backtest --source hyperliquid --asset BTC --days 365
 Lancer les tests :
 
 ```bash
-python -m pytest tests -q        # 166 tests
+python -m pytest tests -q        # 201 tests
 ```
 
 ---
@@ -94,12 +94,43 @@ python -m pytest tests -q        # 166 tests
 | `execution/exchange.py` | L'interface d'exchange, et un simulateur qui sait tomber en panne. |
 | `execution/order_manager.py` | Seul chemin vers l'exchange. Timeouts, stop obligatoire, sorties toujours permises. |
 | `execution/reconciler.py` | Démarrage après crash : l'exchange est la source de vérité. |
+| `execution/hyperliquid_format.py` | Règles de tick et de lot — la première cause de rejets d'ordres. |
+| `execution/hyperliquid_wire.py` | Format filaire et signature EIP-712 (msgpack → keccak → agent fantôme). |
 
 ## Ce qui n'existe pas encore
 
-Le connecteur Hyperliquid réel (signature EIP-712, envoi), et les agents LLM.
-Le mode par défaut est `SHADOW`, et l'application **refuse de démarrer** en
-`TESTNET` ou `LIVE` tant que ce connecteur n'existe pas.
+Le transport HTTP vers `/exchange`, et les agents LLM. Le mode par défaut est
+`SHADOW`, et l'application **refuse de démarrer** en `TESTNET` ou `LIVE`.
+
+⚠️ **La signature n'a jamais été confrontée à l'exchange.** Les règles viennent
+de la documentation ; les vecteurs de signature doivent être validés contre le
+SDK officiel avant le premier ordre réel. C'est une tâche explicite de la
+porte P1, pas un détail.
+
+---
+
+## Format d'ordre : là où se fabriquent les rejets
+
+Trois règles, chacune capable de faire échouer un ordre parfaitement valide
+par ailleurs, avec un message d'erreur laconique :
+
+- **Prix** : au plus 5 chiffres significatifs *et* au plus `6 − szDecimals`
+  décimales. Un entier échappe à la règle des significatifs — `123456` passe
+  alors que `12345.6` est refusé.
+- **Taille** : arrondie à `szDecimals`, **toujours vers le bas**. Vers le haut
+  ferait dépasser le notionnel que le moteur de risque a autorisé.
+- **Zéros terminaux interdits** : `0.500` est rejeté, `0.5` passe.
+
+Le prix d'un ordre s'arrondit dans le sens *défavorable* à la position : un
+arrondi en sa faveur produit un ordre qui ne se remplit pas.
+
+Côté signature, le piège est ailleurs : une action L1 n'est pas signée
+directement. Elle est sérialisée en msgpack, on y concatène le nonce et un
+marqueur de vault, on hache en keccak-256, et ce hash devient le
+`connectionId` d'une structure appelée *agent fantôme* — c'est elle qu'on
+signe. Le domaine utilise **chainId 1337**, quel que soit le réseau : signer
+avec l'identifiant d'Arbitrum produit un `INVALID_SIGNATURE` sur une requête
+impeccable.
 
 ---
 
