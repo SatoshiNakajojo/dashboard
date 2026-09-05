@@ -103,3 +103,49 @@ def test_lhorizon_se_convertit_en_barres(interval, heures, attendu):
     conversion, un horizon de 24 h vaudrait 24 JOURS en daily."""
     n = max(1, int(heures * qualite.BARRES_PAR_HEURE[interval]))
     assert n == attendu
+
+
+# --------------------------------------------------------------------------
+#  Lecture de la calibration
+# --------------------------------------------------------------------------
+#
+# Une fonction d'analyse qui ment est pire que pas d'analyse : elle produit
+# un chiffre qu'on cite ensuite. Ces trois cas fabriqués vérifient qu'elle
+# distingue les trois situations qui comptent.
+
+def _e(conv, pnl, outcome="cible"):
+    return {"conviction": str(conv), "pnl_r": str(pnl), "resolved": True,
+            "outcome": outcome}
+
+
+def test_la_calibration_voit_une_conviction_informative():
+    texte = qualite.calibration([_e(0.3, -1)] * 6 + [_e(0.8, 2)] * 6)
+    assert "porte de l'information" in texte
+    assert "+3.00 R" in texte
+
+
+def test_la_calibration_voit_une_conviction_sans_rapport():
+    """Le cas qui compte : si la conviction ne prédit rien, une porte à seuil
+    n'y filtre que du bruit de notation."""
+    texte = qualite.calibration(([_e(0.3, 2), _e(0.3, -1)] * 3
+                                 + [_e(0.8, -1), _e(0.8, 2)] * 3))
+    assert "n'en porte pas" in texte
+
+
+def test_la_calibration_refuse_de_correler_une_conviction_constante():
+    """Deux moitiés de même conviction moyenne ne se comparent pas : l'écart
+    de P&L y serait du bruit d'échantillon présenté comme un signal."""
+    texte = qualite.calibration([_e(0.6, 1)] * 6 + [_e(0.6, -1)] * 6)
+    assert "ne varie presque pas" in texte
+
+
+def test_la_mediane_nest_pas_la_centrale_haute():
+    """Sur une distribution à deux modes, la centrale haute vaut le max et se
+    lirait comme « tout est en haut »."""
+    texte = qualite.calibration([_e(0.3, -1)] * 6 + [_e(0.8, 2)] * 6)
+    assert "min 0.30  mediane 0.55  max 0.80" in texte
+
+
+def test_la_calibration_refuse_un_echantillon_trop_court():
+    texte = qualite.calibration([_e(0.5, 1)] * 9)
+    assert "trop peu" in texte
