@@ -366,3 +366,69 @@ construction.
 
 La vérification hors échantillon est désormais le comportement **par défaut**
 du script ; `--in-sample-only` permet de la sauter, ce qui est déconseillé.
+
+
+## Septième lot : le funding, enfin mesuré
+
+Le corpus est complet — 33 fichiers.
+
+`strategies-funding-rate-arbitrage.md` et
+`strategies-funding-bleed-short-interest-carry.md` pointent vers la **seule
+série que le dépôt ne pouvait pas produire seul** : le taux de financement.
+`backtest/costs.py` le traitait comme une constante, et son propre docstring
+signalait la limite — « le funding réel oscille, change de signe, et rémunère
+parfois les longs ». Tant que l'API était refusée, c'était la seule option.
+
+`scripts/fetch_funding.py` récupère désormais l'historique horaire. Un an,
+quatre actifs, 8 760 points chacun :
+
+| actif | médiane bps/h | moyenne bps/h | heures négatives | annualisé |
+|---|---:|---:|---:|---:|
+| BTC | 0,1250 | 0,0691 | 19 % | 6,0 % |
+| ETH | 0,1250 | 0,0710 | 17 % | 6,2 % |
+| SOL | 0,0649 | 0,0008 | **36 %** | 0,1 % |
+| DOGE | 0,1239 | 0,0614 | 25 % | 5,4 % |
+| **modèle du dépôt** | **0,1250** | 0,1250 | 0 % | 10,9 % |
+
+**La constante du dépôt est exactement la médiane de BTC et ETH** — elle n'a
+rien d'arbitraire. Mais elle vaut le **double de la moyenne**, parce que le
+funding est négatif 17 à 36 % du temps : les longs sont régulièrement payés,
+et une constante positive ne peut pas représenter ça.
+
+Le modèle surestime donc le coût de portage d'environ 80 % sur BTC et ETH.
+**Le sens de l'erreur importe** : il rend les baselines *plus* difficiles à
+battre, pas moins. Une baseline trop facile validerait un desk qui ne vaut
+rien ; celle-ci penche dans le bon sens.
+
+### L'arbitrage de financement ne passe pas son propre seuil
+
+Le document fixe la viabilité à **APY net > 15 %**, avec ses propres frais
+(4 jambes taker à 0,035 %, portage 5 %) :
+
+| actif | APY brut | APY net | viable ? |
+|---|---:|---:|---|
+| BTC | 6,05 % | 0,91 % | non |
+| ETH | 6,22 % | 1,08 % | non |
+| SOL | 0,07 % | **−5,07 %** | non |
+| DOGE | 5,38 % | 0,24 % | non |
+
+Aucun actif n'atteint le seuil du document. Et ce calcul est **optimiste** :
+il suppose de capter la moyenne, alors qu'un arbitragiste subit aussi les
+17 à 36 % d'heures à funding négatif, pendant lesquelles il *paie* au lieu
+d'encaisser.
+
+### Les trois autres documents
+
+- **`strategies-pinescript-v5.md`** : la stratégie de référence (EMA 200 +
+  croisement 21/50 + RSI > 50, stop 2×ATR, TP 3,5×ATR) est un assemblage de
+  briques que le dépôt possède déjà. Elle est directement implémentable comme
+  cinquième baseline — mais elle appartient à la famille `ema_cross`, qui ne
+  se distingue du hasard sur aucune cellule de la grille.
+- **`strategies-optimisation-portefeuille-black-litterman.md`** : Black-Litterman
+  injecte les opinions des agents dans l'allocation via le vecteur Q. Même
+  tension qu'avec le cahier des charges — `I05_NO_LLM_WIDENING` interdit qu'un
+  avis d'agent augmente une exposition. HRP, en revanche, n'utilise que la
+  matrice de covariance et resterait compatible.
+- **`strategies-uniswap-v3-donnees-alternatives.md`** : hors périmètre. Le
+  dépôt trade des perpétuels sur un carnet d'ordres on-chain, pas de la
+  liquidité concentrée sur AMM.

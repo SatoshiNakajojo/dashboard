@@ -778,3 +778,27 @@ def test_engle_granger_reconnait_une_paire_construite_co_integree():
         b.append(pb)
     _, t_faux = engle_granger(a, b)
     assert t_faux > MACKINNON[0.05], "deux marches independantes ne le sont pas"
+
+
+def test_le_funding_du_modele_est_la_mediane_mesuree_pas_une_estimation():
+    """La constante de `costs.py` doit rester ancree a une mesure.
+
+    Mesure du 5 septembre 2026 sur un an de funding horaire Hyperliquid :
+    mediane 0,1250 bps/h sur BTC et ETH. La valeur du modele est exactement
+    celle-la — mais elle vaut le double de la MOYENNE, le funding etant
+    negatif 17 a 36 % du temps.
+
+    Ce test fige l'ancrage : si quelqu'un change la constante, il doit
+    reconsiderer la mesure plutot que d'ajuster un chiffre au jugement.
+    """
+    from trading_desk.backtest.costs import CostModel
+
+    assert CostModel().funding_bps_per_hour == Decimal("0.125")
+
+    # Le sens de l'erreur compte : surestimer le portage rend les baselines
+    # plus dures a battre. C'est le bon defaut pour une reference que le desk
+    # multi-agents devra depasser au P5.
+    mediane_mesuree = Decimal("0.125")
+    moyenne_mesuree = Decimal("0.069")   # BTC, un an d'historique reel
+    assert CostModel().funding_bps_per_hour >= moyenne_mesuree
+    assert CostModel().funding_bps_per_hour == mediane_mesuree

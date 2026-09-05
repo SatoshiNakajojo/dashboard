@@ -49,8 +49,26 @@ class CostModel(Frozen):
     # si la conclusion tient quand on le fait varier — si elle ne tient pas,
     # c'est le funding qu'on mesure, pas la strategie.
     #
-    # Correction prevue : rejouer le funding reellement observe depuis la table
-    # `marks` alimentee par le P0, des qu'elle couvre la periode testee.
+    # MESURE le 5 septembre 2026, une fois `api.hyperliquid.xyz` de nouveau
+    # joignable : un an de funding horaire reel (`scripts/fetch_funding.py`).
+    #
+    #   actif   mediane bps/h   moyenne bps/h   heures negatives   annualise
+    #   BTC        0.1250          0.0691             19 %           6.0 %
+    #   ETH        0.1250          0.0710             17 %           6.2 %
+    #   SOL        0.0649          0.0008             36 %           0.1 %
+    #   DOGE       0.1239          0.0614             25 %           5.4 %
+    #
+    # La valeur ci-dessous est exactement la MEDIANE de BTC et ETH — elle n'a
+    # donc rien d'arbitraire. Mais elle vaut environ le DOUBLE de la moyenne,
+    # parce que le funding est negatif 17 a 36 % du temps : les longs sont
+    # regulierement payes, et une constante positive ne peut pas le
+    # representer. Ce modele SURESTIME donc le cout de portage d'a peu pres
+    # 80 % sur BTC et ETH, et d'un facteur bien plus grand sur SOL.
+    #
+    # Le sens de l'erreur importe : il rend les baselines PLUS difficiles a
+    # battre, pas moins. Une baseline trop facile validerait un desk qui ne
+    # vaut rien ; celle-ci penche dans l'autre sens, ce qui est le bon defaut
+    # tant que le funding reel n'est pas rejoue barre par barre.
     funding_bps_per_hour: Decimal = Field(default=Decimal("0.125"))
 
     def fee_usd(self, notional_usd: Decimal, *, maker: bool = False) -> Decimal:
