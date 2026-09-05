@@ -1,0 +1,599 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Desk — Supervision</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<style>
+/* Palette alignee sur la note d'architecture : neutres a biais froid,
+   accent petrole. Le rouge et le vert sont reserves a la SEVERITE : ils ne
+   servent jamais de decoration, pour qu'un aplat colore veuille toujours dire
+   quelque chose. */
+:root {
+  --bg:#EEF1F2; --surface:#FBFCFC; --surface-2:#E3E9EA; --surface-3:#D6DFE0;
+  --ink:#101819; --ink-2:#2C3B3E; --muted:#55666A;
+  --line:#CBD5D6; --line-soft:#DEE5E6;
+  --accent:#0D5A63; --accent-ink:#0A464D; --accent-soft:#D9E8E9;
+  --crit:#9E2B21; --crit-soft:#F3DEDB; --crit-line:#D9A49E;
+  --warn:#8A5A0E; --warn-soft:#F3E7D2;
+  --ok:#2C6E4A; --ok-soft:#DCEBE2; --ok-line:#9CC7AF;
+  --shadow:0 1px 2px rgba(16,24,25,.06), 0 8px 24px -18px rgba(16,24,25,.4);
+  --f-ui:"Archivo","Helvetica Neue",system-ui,-apple-system,Arial,sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg:#0B1113; --surface:#121A1C; --surface-2:#1A2427; --surface-3:#243134;
+    --ink:#E7EEEF; --ink-2:#C6D3D5; --muted:#8FA2A6;
+    --line:#27363A; --line-soft:#1E2A2D;
+    --accent:#55C3CD; --accent-ink:#8AD8DF; --accent-soft:#143338;
+    --crit:#E88476; --crit-soft:#35201D; --crit-line:#6B3931;
+    --warn:#DFB05C; --warn-soft:#322715;
+    --ok:#74C89C; --ok-soft:#17301F; --ok-line:#2E5B41;
+    --shadow:0 1px 2px rgba(0,0,0,.5), 0 10px 28px -20px rgba(0,0,0,.9);
+  }
+}
+:root[data-theme="dark"] {
+  --bg:#0B1113; --surface:#121A1C; --surface-2:#1A2427; --surface-3:#243134;
+  --ink:#E7EEEF; --ink-2:#C6D3D5; --muted:#8FA2A6;
+  --line:#27363A; --line-soft:#1E2A2D;
+  --accent:#55C3CD; --accent-ink:#8AD8DF; --accent-soft:#143338;
+  --crit:#E88476; --crit-soft:#35201D; --crit-line:#6B3931;
+  --warn:#DFB05C; --warn-soft:#322715;
+  --ok:#74C89C; --ok-soft:#17301F; --ok-line:#2E5B41;
+  --shadow:0 1px 2px rgba(0,0,0,.5), 0 10px 28px -20px rgba(0,0,0,.9);
+}
+
+*{box-sizing:border-box}
+html,body{margin:0}
+body{
+  background:var(--bg); color:var(--ink);
+  font-family:var(--f-ui); font-size:15px; line-height:1.5;
+  -webkit-font-smoothing:antialiased;
+  padding-bottom:48px;
+}
+.num{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+
+/* ---------------- barre superieure ---------------- */
+.bar{
+  position:sticky; top:0; z-index:30;
+  background:var(--surface); border-bottom:1px solid var(--line);
+  display:flex; align-items:center; gap:14px; flex-wrap:wrap;
+  padding:10px 20px;
+}
+.bar h1{
+  font-size:14px; font-weight:700; letter-spacing:.14em; text-transform:uppercase;
+  margin:0; color:var(--accent); font-family:var(--f-mono); white-space:nowrap;
+}
+.bar .sep{flex:1}
+.pill{
+  font-family:var(--f-mono); font-size:10.5px; font-weight:700;
+  letter-spacing:.1em; text-transform:uppercase;
+  padding:4px 9px; border-radius:3px; white-space:nowrap;
+  background:var(--surface-2); color:var(--muted); border:1px solid var(--line);
+}
+.pill.mode-LIVE{background:var(--crit-soft);color:var(--crit);border-color:var(--crit-line)}
+.pill.mode-TESTNET{background:var(--warn-soft);color:var(--warn);border-color:transparent}
+.pill.mode-PAPER,.pill.mode-SHADOW{background:var(--accent-soft);color:var(--accent-ink);border-color:transparent}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--muted);display:inline-block;flex:none}
+.dot.on{background:var(--ok)} .dot.off{background:var(--crit)}
+.link-btn{
+  font-family:var(--f-mono);font-size:11px;letter-spacing:.06em;
+  background:none;border:1px solid var(--line);color:var(--muted);
+  padding:4px 10px;border-radius:3px;cursor:pointer;
+}
+.link-btn:hover{color:var(--ink);border-color:var(--accent)}
+
+.wrap{max-width:1240px;margin:0 auto;padding:20px}
+
+/* ---------------- banniere d'etat + kill switch ---------------- */
+.banner{
+  display:grid; grid-template-columns:1fr; gap:18px;
+  background:var(--surface); border:1px solid var(--line);
+  border-left:5px solid var(--ok);
+  padding:22px 24px; box-shadow:var(--shadow); margin-bottom:18px;
+}
+@media(min-width:860px){.banner{grid-template-columns:1fr auto;align-items:center}}
+.banner.bad{border-left-color:var(--crit);background:var(--crit-soft)}
+.banner.warn{border-left-color:var(--warn)}
+.banner .state{
+  font-size:clamp(22px,3.4vw,32px); font-weight:700; letter-spacing:-.02em;
+  margin:0 0 6px; line-height:1.1;
+}
+.banner.bad .state{color:var(--crit)}
+.banner .why{margin:0;color:var(--ink-2);font-size:15px;max-width:70ch}
+.banner .why b{font-family:var(--f-mono);font-size:12.5px}
+
+.kill{
+  font-family:var(--f-ui); font-size:15px; font-weight:700; letter-spacing:.06em;
+  text-transform:uppercase;
+  background:var(--crit); color:#fff; border:0; border-radius:4px;
+  padding:16px 26px; cursor:pointer; white-space:nowrap;
+  box-shadow:0 2px 0 rgba(0,0,0,.25);
+}
+.kill:hover{filter:brightness(1.08)}
+.kill:active{transform:translateY(1px);box-shadow:none}
+.kill.confirm{background:#7d1d15;animation:pulse .9s ease-in-out infinite}
+.kill.arm{background:var(--ok)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.72}}
+@media(prefers-reduced-motion:reduce){.kill.confirm{animation:none;outline:3px solid var(--crit)}}
+.kill-note{
+  font-family:var(--f-mono);font-size:10.5px;color:var(--muted);
+  text-align:center;margin-top:7px;letter-spacing:.04em;
+}
+
+/* ---------------- tuiles ---------------- */
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(168px,1fr));gap:1px;
+  background:var(--line);border:1px solid var(--line);margin-bottom:18px}
+.tile{background:var(--surface);padding:14px 16px 16px}
+.tile .k{
+  font-family:var(--f-mono);font-size:10px;letter-spacing:.13em;text-transform:uppercase;
+  color:var(--muted);display:block;margin-bottom:7px;
+}
+.tile .v{font-family:var(--f-mono);font-size:23px;font-weight:700;
+  font-variant-numeric:tabular-nums;letter-spacing:-.02em;line-height:1.1}
+.tile .s{font-family:var(--f-mono);font-size:11px;color:var(--muted);margin-top:5px}
+.v.pos{color:var(--ok)} .v.neg{color:var(--crit)} .v.dim{color:var(--muted)}
+
+/* ---------------- grille de panneaux ---------------- */
+.grid{display:grid;grid-template-columns:1fr;gap:18px}
+@media(min-width:980px){.grid{grid-template-columns:1.15fr .85fr}}
+.panel{background:var(--surface);border:1px solid var(--line)}
+.panel > h2{
+  font-family:var(--f-mono);font-size:10.5px;font-weight:700;letter-spacing:.14em;
+  text-transform:uppercase;color:var(--muted);margin:0;
+  padding:12px 16px;border-bottom:1px solid var(--line);background:var(--surface-2);
+  display:flex;justify-content:space-between;align-items:center;gap:10px;
+}
+.panel > h2 .badge{font-size:10.5px;letter-spacing:.08em}
+.panel .body{padding:4px 0}
+.empty{padding:22px 16px;color:var(--muted);font-size:14px;text-align:center}
+
+/* ---------------- invariants ---------------- */
+.inv{display:flex;gap:12px;padding:10px 16px;border-bottom:1px solid var(--line-soft);align-items:flex-start}
+.inv:last-child{border-bottom:0}
+.inv .mark{
+  font-family:var(--f-mono);font-size:11px;font-weight:700;flex:none;
+  width:26px;height:22px;display:grid;place-items:center;border-radius:3px;margin-top:1px;
+}
+.inv.ok .mark{background:var(--ok-soft);color:var(--ok)}
+.inv.ko .mark{background:var(--crit-soft);color:var(--crit)}
+.inv.ko{background:color-mix(in srgb,var(--crit-soft) 45%,transparent)}
+.inv .id{font-family:var(--f-mono);font-size:10px;color:var(--muted);letter-spacing:.06em}
+.inv .lbl{font-size:14px;font-weight:600;line-height:1.35}
+.inv .det{font-family:var(--f-mono);font-size:11.5px;color:var(--muted);
+  margin-top:3px;word-break:break-word}
+.inv.ko .det{color:var(--crit)}
+
+/* ---------------- flux ---------------- */
+.feed{padding:10px 16px;border-bottom:1px solid var(--line-soft)}
+.feed:last-child{border-bottom:0}
+.feed .top{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.feed .nm{font-family:var(--f-mono);font-size:12.5px;font-weight:500}
+.feed .ag{font-family:var(--f-mono);font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums}
+.track{height:4px;background:var(--surface-3);margin-top:7px;border-radius:2px;overflow:hidden}
+.fill{height:100%;background:var(--ok);transition:width .3s linear,background .3s}
+.fill.warn{background:var(--warn)} .fill.bad{background:var(--crit)}
+.feed .err{font-family:var(--f-mono);font-size:10.5px;color:var(--crit);margin-top:5px}
+
+/* ---------------- mandat ---------------- */
+.mandate{padding:16px}
+.mandate .head{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px}
+.bias{
+  font-family:var(--f-mono);font-size:13px;font-weight:700;letter-spacing:.1em;
+  padding:5px 11px;border-radius:3px;
+}
+.bias.LONG{background:var(--ok-soft);color:var(--ok)}
+.bias.SHORT{background:var(--crit-soft);color:var(--crit)}
+.bias.FLAT{background:var(--surface-2);color:var(--muted);border:1px solid var(--line)}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:7px 16px;font-size:13.5px}
+.kv dt{font-family:var(--f-mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;
+  color:var(--muted);padding-top:2px}
+.kv dd{margin:0;font-family:var(--f-mono);font-variant-numeric:tabular-nums;word-break:break-word}
+.ttl{margin-top:14px}
+.ttl .track{height:6px}
+.ttl .fill{background:var(--accent)}
+.ttl .lbl{display:flex;justify-content:space-between;font-family:var(--f-mono);
+  font-size:10.5px;color:var(--muted);letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px}
+
+/* ---------------- tables ---------------- */
+.tscroll{overflow-x:auto}
+table{border-collapse:collapse;width:100%;min-width:520px}
+th,td{text-align:left;padding:9px 16px;border-bottom:1px solid var(--line-soft);font-size:13px}
+th{font-family:var(--f-mono);font-size:10px;letter-spacing:.11em;text-transform:uppercase;
+  color:var(--muted);font-weight:700;white-space:nowrap}
+td{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+tbody tr:last-child td{border-bottom:0}
+td.name{font-family:var(--f-ui);font-weight:600}
+.tag{font-family:var(--f-mono);font-size:9.5px;letter-spacing:.09em;padding:2px 6px;border-radius:2px}
+.tag.ok{background:var(--ok-soft);color:var(--ok)}
+.tag.ko{background:var(--crit-soft);color:var(--crit)}
+
+/* ---------------- journal ---------------- */
+.jr{padding:10px 16px;border-bottom:1px solid var(--line-soft)}
+.jr:last-child{border-bottom:0}
+.jr .l1{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}
+.jr .kind{font-family:var(--f-mono);font-size:10.5px;font-weight:700;letter-spacing:.08em;
+  text-transform:uppercase;color:var(--accent-ink);background:var(--accent-soft);padding:2px 7px;border-radius:2px}
+.jr .ts{font-family:var(--f-mono);font-size:10.5px;color:var(--muted)}
+.jr pre{font-family:var(--f-mono);font-size:11px;color:var(--ink-2);margin:6px 0 0;
+  white-space:pre-wrap;word-break:break-word;max-height:88px;overflow:auto}
+
+.foot{max-width:1240px;margin:26px auto 0;padding:0 20px;
+  font-family:var(--f-mono);font-size:10.5px;color:var(--muted);line-height:1.7}
+button:focus-visible,.link-btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.offline{background:var(--warn-soft);color:var(--warn);text-align:center;
+  font-family:var(--f-mono);font-size:12px;padding:8px}
+</style>
+</head>
+<body>
+
+<div class="bar">
+  <h1>Desk · Supervision</h1>
+  <span class="pill" id="mode">—</span>
+  <span class="pill" id="net"><span class="dot" id="dot"></span>&nbsp;flux</span>
+  <span class="sep"></span>
+  <span class="pill" id="uptime">—</span>
+  <button class="link-btn" id="theme" type="button">Thème</button>
+</div>
+
+<div class="offline" id="offline" hidden>Backend non joignable — dernières valeurs connues, figées.</div>
+
+<div class="wrap">
+
+  <section class="banner" id="banner">
+    <div>
+      <h2 class="state" id="state">Connexion…</h2>
+      <p class="why" id="why">Lecture de l'état du desk.</p>
+    </div>
+    <div>
+      <button class="kill" id="kill" type="button">Tout arrêter</button>
+      <div class="kill-note" id="killNote">arrête le desk et passe en FLAT</div>
+    </div>
+  </section>
+
+  <section class="tiles" id="tiles"></section>
+
+  <div class="grid">
+    <div style="display:grid;gap:18px;align-content:start">
+
+      <section class="panel">
+        <h2>Invariants <span class="badge" id="invCount">—</span></h2>
+        <div class="body" id="inv"></div>
+      </section>
+
+      <section class="panel">
+        <h2>Positions</h2>
+        <div class="body tscroll" id="pos"></div>
+      </section>
+
+      <section class="panel">
+        <h2>Journal de décisions</h2>
+        <div class="body" id="journal"></div>
+      </section>
+
+    </div>
+    <div style="display:grid;gap:18px;align-content:start">
+
+      <section class="panel">
+        <h2>Mandat en vigueur</h2>
+        <div class="mandate" id="mandate"></div>
+      </section>
+
+      <section class="panel">
+        <h2>Flux de données <span class="badge" id="feedCount">—</span></h2>
+        <div class="body" id="feeds"></div>
+      </section>
+
+      <section class="panel">
+        <h2>Budget de requêtes</h2>
+        <div class="body" id="budget"></div>
+      </section>
+
+      <section class="panel">
+        <h2>Derniers prix</h2>
+        <div class="body tscroll" id="prices"></div>
+      </section>
+
+    </div>
+  </div>
+
+  <div class="foot">
+    Phase P0 — ingestion et supervision. Aucune couche d'exécution : ce processus ne signe rien.<br>
+    Le kill switch reste joignable même quand tout le reste est en défaut. Ne jamais exposer ce port hors de la machine — passer par un tunnel SSH.
+  </div>
+</div>
+
+<script>
+"use strict";
+
+// L'interface ne calcule aucune regle metier : elle affiche ce que le moteur
+// de risque a deja tranche. Un ecran qui reinterprete les regles finit par
+// diverger du systeme qu'il est cense surveiller.
+
+const $ = (id) => document.getElementById(id);
+let snap = null, offline = false;
+
+/* ---------- theme ---------- */
+const root = document.documentElement;
+try {
+  const saved = localStorage.getItem("desk-theme");
+  if (saved) root.setAttribute("data-theme", saved);
+} catch (e) { /* stockage indisponible : le theme systeme s'applique */ }
+$("theme").addEventListener("click", () => {
+  const dark = root.getAttribute("data-theme") === "dark"
+    || (!root.hasAttribute("data-theme")
+        && matchMedia("(prefers-color-scheme: dark)").matches);
+  const next = dark ? "light" : "dark";
+  root.setAttribute("data-theme", next);
+  try { localStorage.setItem("desk-theme", next); } catch (e) { /* ignore */ }
+});
+
+/* ---------- formatage ---------- */
+const nf = new Intl.NumberFormat("fr-FR", { maximumFractionDigits: 2 });
+function usd(v) {
+  if (v === null || v === undefined || v === "") return "—";
+  const n = Number(v);
+  return Number.isFinite(n) ? nf.format(n) + " $" : String(v);
+}
+function dur(ms) {
+  if (ms === null || ms === undefined) return "—";
+  const s = Math.max(0, Math.floor(ms / 1000));
+  if (s < 60) return s + " s";
+  const m = Math.floor(s / 60);
+  if (m < 60) return m + " min " + String(s % 60).padStart(2, "0") + " s";
+  const h = Math.floor(m / 60);
+  return h + " h " + String(m % 60).padStart(2, "0");
+}
+function clock(ms) {
+  return new Date(ms).toLocaleTimeString("fr-FR", { hour12: false });
+}
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, (c) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+/* ---------- kill switch : deux temps ---------- */
+// Un bouton qui coupe un desk ne doit pas partir sur un clic accidentel, mais
+// il ne doit pas non plus imposer une boite de dialogue : en situation reelle,
+// on veut deux clics rapides au meme endroit.
+let armed = false, armTimer = null;
+const killBtn = $("kill");
+
+killBtn.addEventListener("click", async () => {
+  if (snap && snap.halted) { await post("/api/arm"); flash("Desk réarmé."); return; }
+  if (!armed) {
+    armed = true;
+    killBtn.classList.add("confirm");
+    killBtn.textContent = "Confirmer l'arrêt";
+    $("killNote").textContent = "second clic pour confirmer · annulation dans 5 s";
+    clearTimeout(armTimer);
+    armTimer = setTimeout(resetKill, 5000);
+    return;
+  }
+  clearTimeout(armTimer);
+  resetKill();
+  await post("/api/halt", { reason: "MANUAL", detail: "arrêt manuel depuis l'interface" });
+  flash("Arrêt demandé.");
+});
+
+function resetKill() {
+  armed = false;
+  killBtn.classList.remove("confirm");
+  if (!(snap && snap.halted)) {
+    killBtn.textContent = "Tout arrêter";
+    $("killNote").textContent = "arrête le desk et passe en FLAT";
+  }
+}
+
+async function post(path, body) {
+  try {
+    const r = await fetch(path, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body || {}),
+    });
+    return await r.json();
+  } catch (e) {
+    flash("Échec : backend injoignable.");
+    return null;
+  }
+}
+
+function flash(msg) { $("killNote").textContent = msg; }
+
+/* ---------- rendu ---------- */
+function render(s) {
+  snap = s;
+
+  $("mode").textContent = s.mode + (s.testnet ? " · testnet" : "");
+  $("mode").className = "pill mode-" + s.mode;
+  $("uptime").textContent = "actif " + dur(s.uptime_s * 1000);
+  $("dot").className = "dot " + (s.ws_connected ? "on" : "off");
+
+  /* --- banniere --- */
+  const banner = $("banner");
+  const failed = s.checks.filter((c) => !c.passed);
+  banner.classList.remove("bad", "warn");
+  if (s.halted) {
+    banner.classList.add("bad");
+    $("state").textContent = "Desk arrêté";
+    $("why").innerHTML = "<b>" + esc(s.halt_reason || "MANUAL") + "</b> — "
+      + esc(s.halt_detail || "arrêt manuel") + "<br>Rien ne sera envoyé tant que le desk n'est pas réarmé à la main.";
+    killBtn.className = "kill arm";
+    killBtn.textContent = "Réarmer le desk";
+    $("killNote").textContent = "vérifie les invariants juste après";
+  } else if (failed.length) {
+    banner.classList.add("warn");
+    $("state").textContent = failed.length + " invariant" + (failed.length > 1 ? "s" : "") + " en défaut";
+    $("why").innerHTML = failed.map((c) => "<b>" + esc(c.id.slice(0, 3)) + "</b> "
+      + esc(c.label) + " — " + esc(c.detail)).join("<br>");
+    if (!armed) { killBtn.className = "kill"; killBtn.textContent = "Tout arrêter"; }
+  } else {
+    $("state").textContent = "Desk sain";
+    $("why").textContent = "Les douze invariants sont satisfaits. "
+      + (s.mode === "SHADOW"
+        ? "Mode SHADOW : les mandats sont journalisés, aucun ordre n'est émis."
+        : "Mode " + s.mode + ".");
+    if (!armed) { killBtn.className = "kill"; killBtn.textContent = "Tout arrêter"; }
+  }
+
+  /* --- tuiles --- */
+  const a = s.account;
+  const pnl = a && a.day_pnl_usd !== null && a.day_pnl_usd !== undefined ? Number(a.day_pnl_usd) : null;
+  const tiles = [
+    { k: "Équité", v: a ? usd(a.equity_usd) : "—",
+      s: a ? "marge libre " + usd(a.available_margin_usd) : "compte non reconcilié" },
+    { k: "PnL du jour", v: pnl === null ? "—" : usd(pnl),
+      cls: pnl === null ? "dim" : (pnl >= 0 ? "pos" : "neg"),
+      s: "limite " + s.limits.max_daily_loss_pct + " % de l'équité" },
+    { k: "Exposition", v: a ? usd(a.gross_notional_usd) : "—",
+      s: "plafond " + usd(s.limits.max_gross_notional_usd) },
+    { k: "Levier effectif", v: a ? a.effective_leverage + "×" : "—",
+      s: "plafond " + s.limits.max_effective_leverage + "×" },
+    { k: "Positions", v: a ? String(a.positions.length) : "—",
+      s: a && a.positions.some((p) => !p.protected) ? "⚠ une position sans stop" : "toutes protégées" },
+    { k: "Mandats aujourd'hui", v: String(s.limits.mandates_today),
+      s: "quota " + s.limits.max_mandates_per_day },
+  ];
+  $("tiles").innerHTML = tiles.map((t) =>
+    '<div class="tile"><span class="k">' + esc(t.k) + '</span>'
+    + '<div class="v ' + (t.cls || "") + '">' + esc(t.v) + "</div>"
+    + '<div class="s">' + esc(t.s) + "</div></div>").join("");
+
+  /* --- invariants --- */
+  $("invCount").textContent = (s.checks.length - failed.length) + "/" + s.checks.length;
+  $("invCount").style.color = failed.length ? "var(--crit)" : "var(--ok)";
+  $("inv").innerHTML = s.checks.map((c) =>
+    '<div class="inv ' + (c.passed ? "ok" : "ko") + '">'
+    + '<span class="mark">' + (c.passed ? "✓" : "✗") + "</span><div>"
+    + '<span class="id">' + esc(c.id.slice(0, 3)) + "</span> "
+    + '<span class="lbl">' + esc(c.label) + "</span>"
+    + '<div class="det">' + esc(c.detail || "—") + "</div></div></div>").join("");
+
+  /* --- mandat --- */
+  const m = s.mandate;
+  const pct = m.ttl_ms ? Math.max(0, Math.min(100, 100 * m.remaining_ms / m.ttl_ms)) : 0;
+  $("mandate").innerHTML =
+    '<div class="head"><span class="bias ' + esc(m.bias) + '">' + esc(m.bias) + "</span>"
+    + '<span class="pill">' + esc(m.regime) + "</span>"
+    + (m.expired ? '<span class="pill" style="background:var(--crit-soft);color:var(--crit);border-color:transparent">EXPIRÉ</span>' : "")
+    + "</div>"
+    + '<dl class="kv">'
+    + "<dt>Univers</dt><dd>" + (m.universe.length ? esc(m.universe.join(" · ")) : "—") + "</dd>"
+    + "<dt>Notionnel</dt><dd>" + usd(m.max_notional_usd) + "</dd>"
+    + "<dt>Levier max</dt><dd>" + esc(m.max_leverage) + "×</dd>"
+    + "<dt>Positions</dt><dd>" + esc(m.max_positions) + "</dd>"
+    + "<dt>Conviction</dt><dd>" + esc(m.conviction) + "</dd>"
+    + "<dt>Journal</dt><dd>" + esc(m.journal_ref || "—") + "</dd>"
+    + "</dl>"
+    + '<div class="ttl"><div class="lbl"><span>Durée de vie</span><span>'
+    + dur(m.remaining_ms) + " restantes</span></div>"
+    + '<div class="track"><div class="fill" style="width:' + pct.toFixed(1) + '%"></div></div></div>';
+
+  /* --- flux --- */
+  const stale = s.feeds.filter((f) => f.status !== "LIVE").length;
+  $("feedCount").textContent = (s.feeds.length - stale) + "/" + s.feeds.length + " vivants";
+  $("feedCount").style.color = stale ? "var(--crit)" : "var(--ok)";
+  $("feeds").innerHTML = s.feeds.length ? s.feeds.map((f) => {
+    const age = f.age_ms === null || f.age_ms === undefined ? null : f.age_ms;
+    const ratio = age === null ? 1 : Math.min(1, age / f.max_age_ms);
+    const cls = f.status !== "LIVE" ? "bad" : (ratio > 0.6 ? "warn" : "");
+    return '<div class="feed"><div class="top"><span class="nm">' + esc(f.name) + "</span>"
+      + '<span class="ag">' + (age === null ? f.status : age + " ms")
+      + " · " + f.messages + " msg" + (f.reconnects ? " · " + f.reconnects + " reco" : "") + "</span></div>"
+      + '<div class="track"><div class="fill ' + cls + '" style="width:'
+      + (100 * (1 - ratio)).toFixed(0) + '%"></div></div>'
+      + (f.last_error ? '<div class="err">' + esc(f.last_error) + "</div>" : "") + "</div>";
+  }).join("") : '<div class="empty">Aucun flux déclaré.</div>';
+
+  /* --- budget --- */
+  const b = s.budget;
+  $("budget").innerHTML =
+    '<div class="feed"><div class="top"><span class="nm">Poids IP / minute</span>'
+    + '<span class="ag">' + b.ip_used + " / " + b.ip_limit + "</span></div>"
+    + '<div class="track"><div class="fill ' + (b.ip_pct > 85 ? "bad" : b.ip_pct > 60 ? "warn" : "")
+    + '" style="width:' + Math.min(100, b.ip_pct).toFixed(0) + '%"></div></div></div>'
+    + '<div class="feed"><div class="top"><span class="nm">Réserve par adresse</span>'
+    + '<span class="ag">' + b.reserve_left + " req · " + b.reserve_pct + " %</span></div>"
+    + '<div class="track"><div class="fill ' + (b.reserve_pct < 10 ? "bad" : b.reserve_pct < 30 ? "warn" : "")
+    + '" style="width:' + Math.min(100, b.reserve_pct).toFixed(0) + '%"></div></div>'
+    + '<div class="err" style="color:var(--muted)">Indexée sur le volume tradé — s\'épuise si on interroge l\'API en boucle.</div></div>';
+
+  /* --- positions --- */
+  $("pos").innerHTML = (a && a.positions.length)
+    ? "<table><thead><tr><th>Actif</th><th>Sens</th><th>Taille</th><th>Entrée</th>"
+      + "<th>Mark</th><th>Notionnel</th><th>PnL</th><th>Stop</th></tr></thead><tbody>"
+      + a.positions.map((p) =>
+        "<tr><td class='name'>" + esc(p.asset) + "</td><td>" + esc(p.side) + "</td>"
+        + "<td>" + esc(p.size) + "</td><td>" + esc(p.entry_price) + "</td>"
+        + "<td>" + esc(p.mark_price) + "</td><td>" + usd(p.notional_usd) + "</td>"
+        + "<td style='color:" + (Number(p.unrealized_pnl_usd) >= 0 ? "var(--ok)" : "var(--crit)") + "'>"
+        + usd(p.unrealized_pnl_usd) + "</td>"
+        + "<td><span class='tag " + (p.protected ? "ok'>protégée" : "ko'>SANS STOP") + "</span></td></tr>").join("")
+      + "</tbody></table>"
+    : '<div class="empty">Aucune position ouverte.</div>';
+
+  /* --- prix --- */
+  const px = Object.entries(s.last_prices || {});
+  $("prices").innerHTML = px.length
+    ? "<table><thead><tr><th>Actif</th><th>Dernier prix</th></tr></thead><tbody>"
+      + px.map(([k, v]) => "<tr><td class='name'>" + esc(k) + "</td><td>" + usd(v) + "</td></tr>").join("")
+      + "</tbody></table>"
+    : '<div class="empty">Aucun trade reçu pour l\'instant.</div>';
+}
+
+/* ---------- journal (moins frequent : il bouge lentement) ---------- */
+async function loadJournal() {
+  try {
+    const r = await fetch("/api/journal?limit=12");
+    const rows = await r.json();
+    $("journal").innerHTML = rows.length ? rows.map((j) =>
+      '<div class="jr"><div class="l1"><span class="kind">' + esc(j.kind) + "</span>"
+      + '<span class="ts">' + clock(j.ts_ms) + " · " + esc(j.journal_ref) + "</span></div>"
+      + "<pre>" + esc(JSON.stringify(j.payload, null, 1)) + "</pre></div>").join("")
+      : '<div class="empty">Journal vide.</div>';
+  } catch (e) { /* le flux principal signale deja la panne */ }
+}
+
+/* ---------- transport ---------- */
+// SSE en primaire, polling en secours. Une interface de supervision qui se tait
+// quand le transport tombe est pire qu'inutile : d'ou la banniere "offline",
+// qui dit explicitement que les valeurs affichees sont figees.
+function setOffline(v) {
+  if (offline === v) return;
+  offline = v;
+  $("offline").hidden = !v;
+}
+
+function connect() {
+  let es;
+  try { es = new EventSource("/api/stream"); } catch (e) { return poll(); }
+  es.onmessage = (ev) => {
+    try { render(JSON.parse(ev.data)); setOffline(false); } catch (e) { /* trame partielle */ }
+  };
+  es.onerror = () => {
+    setOffline(true);
+    es.close();
+    setTimeout(connect, 2000);
+  };
+}
+
+async function poll() {
+  try {
+    const r = await fetch("/api/snapshot");
+    render(await r.json());
+    setOffline(false);
+  } catch (e) { setOffline(true); }
+  setTimeout(poll, 2000);
+}
+
+connect();
+loadJournal();
+setInterval(loadJournal, 10000);
+</script>
+</body>
+</html>
