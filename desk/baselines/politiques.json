@@ -1,0 +1,227 @@
+[
+  {
+    "politique": "uniforme",
+    "cycles": 10,
+    "cout_total": 1.12286,
+    "cout_par_cycle": 0.112286,
+    "appels_non_tarifes": 0,
+    "etapes": {
+      "PAS_DE_SETUP": 6,
+      "OBJECTION": 1,
+      "LECTURE": 1,
+      "CONVICTION": 2
+    },
+    "agents": {
+      "analyste": {
+        "appels": 10,
+        "valides_pct": 100.0,
+        "abstentions_pct": 0.0,
+        "cout_par_appel": 0.020915,
+        "in_par_appel": 1690,
+        "out_par_appel": 498,
+        "p95_ms": 10975,
+        "modeles": [
+          "claude-opus-5"
+        ]
+      },
+      "avocat_du_diable": {
+        "appels": 3,
+        "valides_pct": 100.0,
+        "abstentions_pct": 0.0,
+        "cout_par_appel": 0.05642666666666667,
+        "in_par_appel": 1915,
+        "out_par_appel": 1874,
+        "p95_ms": 34081,
+        "modeles": [
+          "claude-opus-5"
+        ]
+      },
+      "quant": {
+        "appels": 10,
+        "valides_pct": 100.0,
+        "abstentions_pct": 0.0,
+        "cout_par_appel": 0.032665,
+        "in_par_appel": 1338,
+        "out_par_appel": 1039,
+        "p95_ms": 22915,
+        "modeles": [
+          "claude-opus-5"
+        ]
+      },
+      "regime": {
+        "appels": 10,
+        "valides_pct": 100.0,
+        "abstentions_pct": 10.0,
+        "cout_par_appel": 0.01521,
+        "in_par_appel": 1296,
+        "out_par_appel": 349,
+        "p95_ms": 13957,
+        "modeles": [
+          "claude-opus-5"
+        ]
+      },
+      "strategie": {
+        "appels": 9,
+        "valides_pct": 100.0,
+        "abstentions_pct": 66.7,
+        "cout_par_appel": 0.02952,
+        "in_par_appel": 3425,
+        "out_par_appel": 495,
+        "p95_ms": 11638,
+        "modeles": [
+          "claude-opus-5"
+        ]
+      }
+    },
+    "interrompu": ""
+  },
+  {
+    "politique": "economique",
+    "cycles": 10,
+    "cout_total": 0.72971,
+    "cout_par_cycle": 0.072971,
+    "appels_non_tarifes": 0,
+    "etapes": {
+      "LECTURE": 1,
+      "PAS_DE_SETUP": 5,
+      "CONVICTION": 4
+    },
+    "agents": {
+      "analyste": {
+        "appels": 10,
+        "valides_pct": 100.0,
+        "abstentions_pct": 0.0,
+        "cout_par_appel": 0.02138,
+        "in_par_appel": 1690,
+        "out_par_appel": 517,
+        "p95_ms": 12489,
+        "modeles": [
+          "claude-opus-5"
+        ]
+      },
+      "avocat_du_diable": {
+        "appels": 4,
+        "valides_pct": 100.0,
+        "abstentions_pct": 0.0,
+        "cout_par_appel": 0.060465,
+        "in_par_appel": 1859,
+        "out_par_appel": 2046,
+        "p95_ms": 36560,
+        "modeles": [
+          "claude-opus-5"
+        ]
+      },
+      "quant": {
+        "appels": 10,
+        "valides_pct": 100.0,
+        "abstentions_pct": 10.0,
+        "cout_par_appel": 0.0019505,
+        "in_par_appel": 1084,
+        "out_par_appel": 173,
+        "p95_ms": 8705,
+        "modeles": [
+          "claude-haiku-4-5-20251001"
+        ]
+      },
+      "regime": {
+        "appels": 10,
+        "valides_pct": 100.0,
+        "abstentions_pct": 0.0,
+        "cout_par_appel": 0.0013135,
+        "in_par_appel": 1062,
+        "out_par_appel": 50,
+        "p95_ms": 2794,
+        "modeles": [
+          "claude-haiku-4-5-20251001"
+        ]
+      },
+      "strategie": {
+        "appels": 9,
+        "valides_pct": 100.0,
+        "abstentions_pct": 55.6,
+        "cout_par_appel": 0.026823333333333334,
+        "in_par_appel": 2939,
+        "out_par_appel": 485,
+        "p95_ms": 11210,
+        "modeles": [
+          "claude-opus-5"
+        ]
+      }
+    },
+    "interrompu": ""
+  },
+  {
+    "politique": "diversifie",
+    "cycles": 10,
+    "cout_total": 0.599881,
+    "cout_par_cycle": 0.0599881,
+    "appels_non_tarifes": 0,
+    "etapes": {
+      "CONVICTION": 4,
+      "PAS_DE_SETUP": 6
+    },
+    "agents": {
+      "analyste": {
+        "appels": 10,
+        "valides_pct": 100.0,
+        "abstentions_pct": 0.0,
+        "cout_par_appel": 0.021435,
+        "in_par_appel": 1690,
+        "out_par_appel": 519,
+        "p95_ms": 11850,
+        "modeles": [
+          "claude-opus-5"
+        ]
+      },
+      "avocat_du_diable": {
+        "appels": 4,
+        "valides_pct": 100.0,
+        "abstentions_pct": 0.0,
+        "cout_par_appel": 0.0161465,
+        "in_par_appel": 1858,
+        "out_par_appel": 1243,
+        "p95_ms": 23605,
+        "modeles": [
+          "claude-sonnet-5"
+        ]
+      },
+      "quant": {
+        "appels": 10,
+        "valides_pct": 100.0,
+        "abstentions_pct": 0.0,
+        "cout_par_appel": 0.00191,
+        "in_par_appel": 1084,
+        "out_par_appel": 165,
+        "p95_ms": 5870,
+        "modeles": [
+          "claude-haiku-4-5-20251001"
+        ]
+      },
+      "regime": {
+        "appels": 10,
+        "valides_pct": 100.0,
+        "abstentions_pct": 0.0,
+        "cout_par_appel": 0.0013285,
+        "in_par_appel": 1062,
+        "out_par_appel": 53,
+        "p95_ms": 2202,
+        "modeles": [
+          "claude-haiku-4-5-20251001"
+        ]
+      },
+      "strategie": {
+        "appels": 10,
+        "valides_pct": 100.0,
+        "abstentions_pct": 60.0,
+        "cout_par_appel": 0.028856,
+        "in_par_appel": 2944,
+        "out_par_appel": 565,
+        "p95_ms": 14915,
+        "modeles": [
+          "claude-opus-5"
+        ]
+      }
+    },
+    "interrompu": ""
+  }
+]

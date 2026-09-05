@@ -839,3 +839,73 @@ Plafonner le capital à ce qu'on peut perdre entièrement. Vérifier les
 conditions d'utilisation d'Hyperliquid pour sa juridiction avant le premier
 trade réel. Chaque fill est un événement fiscal : l'export existe dès le P1,
 s'en servir.
+
+
+---
+
+## Baisser le coût de décision : mesuré, pas estimé
+
+Trois politiques de modèles sur **les mêmes 10 fenêtres** de
+`data/BTC_1h_real.json`, effort moyen. Mesure du 5 septembre 2026, 2,45 $
+au total.
+
+| politique | $/cycle | vs uniforme | sorties valides | étapes atteintes |
+|---|---:|---:|---:|---|
+| `uniforme` (tout Opus 5) | 0,1123 | — | **100 %** | 6 sans setup, 2 conviction, 1 objection, 1 lecture |
+| `economique` | 0,0730 | **−35 %** | **100 %** | 5 sans setup, 4 conviction, 1 lecture |
+| `diversifie` | 0,0600 | **−47 %** | **100 %** | 6 sans setup, 4 conviction |
+
+**Aucun échec de schéma, sur aucun agent, sous aucune politique.** C'était le
+risque principal : un modèle plus petit qui rate le décodage contraint
+s'abstient, le cycle s'arrête, et l'économie apparente vient de ce que le desk
+ne décide plus rien.
+
+### L'économie est plus grande que le rapport des tarifs
+
+| agent | modèle | $/appel | tokens sortie/appel |
+|---|---|---:|---:|
+| `quant` | opus-5 → haiku-4-5 | 0,0327 → **0,0020** | 1 039 → **173** |
+| `regime` | opus-5 → haiku-4-5 | 0,0152 → **0,0013** | 349 → **50** |
+| `avocat_du_diable` | opus-5 → sonnet-5 | 0,0564 → **0,0161** | 1 874 → **1 243** |
+
+J'avais prédit −27 % pour `economique`, en raisonnant à tokens constants sur
+le seul rapport des tarifs (Haiku coûte 1/5 d'Opus). Le résultat est −35 %, et
+l'écart vient d'ailleurs : le Quant est **16 fois** moins cher, pas 5. Les
+tokens de sortie s'effondrent en même temps que le prix unitaire, parce que
+Haiku 4.5 n'a pas de réflexion adaptative — il n'émet pas de jetons de
+raisonnement.
+
+**Et c'est exactement la réserve à poser.** Six fois moins de sortie, ce n'est
+pas six fois moins de gaspillage : c'est six fois moins de ce que l'agent dit.
+Le schéma est respecté à 100 %, mais la validité de forme ne mesure pas la
+qualité du contenu — et les `divergences` du Quant alimentent la Stratégie.
+
+### Les décisions ne sont pas les mêmes
+
+C'est visible dans la colonne des étapes : sous les politiques bon marché, la
+Stratégie propose **4 setups** là où `uniforme` en proposait 2. Aucun n'a
+produit de mandat — tous ont échoué sur la conviction — mais le desk ne se
+comporte pas de la même façon.
+
+Sur 10 cycles je ne peux pas dire si cette différence est un gain ou une
+perte. Et tant que le P2 n'a pas montré d'edge, « mieux décider » n'a pas
+encore de définition mesurable. **Ce qui est établi est le coût ; ce qui ne
+l'est pas est la qualité de décision.** Trancher demande les 30 cycles de la
+porte P3 sous chaque politique, et un critère de qualité qui ne soit pas la
+conformité au schéma.
+
+### Les leviers, classés par ce qu'ils rapportent réellement
+
+| levier | facteur | mesuré ? |
+|---|---:|---|
+| **cadence** (12/h → 1/jour) | **÷288** | oui, arithmétique |
+| politique `diversifie` | ÷1,9 | **oui, 10 cycles** |
+| politique `economique` | ÷1,5 | **oui, 10 cycles** |
+| effort `low` | ÷1,25 | oui, campagne antérieure |
+| enveloppe hors des prompts aval | ÷1,015 | oui, 30 % de 1 634 caractères |
+| cache de prompt | ÷1,02 | oui — plafond mesuré à 2,3 % |
+
+La cadence écrase tout le reste de deux ordres de grandeur, et elle ne se
+justifie que par un edge. À 1 154 $/mois à cadence nominale contre une
+meilleure baseline à +66,77 $ bruts sur 208 jours, **le premier levier de coût
+reste de ne pas décider douze fois par heure.**
