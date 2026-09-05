@@ -87,10 +87,27 @@ Faire tourner le desk d'agents en mode fantôme (**la porte P3**) :
 # Vérifier le câblage sans clé et sans dépenser un centime
 python -m trading_desk.agents --dry-run --runs 30
 
+# Vérifier la clé et le réseau par un seul appel (< 1 centime)
+export DESK_ANTHROPIC_API_KEY="sk-ant-..."
+python -m trading_desk.agents --check
+
 # Pour de vrai, sur le marché réel, avec un plafond de dépense
-export ANTHROPIC_API_KEY="sk-ant-..."
 python -m trading_desk.agents --file data/BTC_1h_real.json --runs 30 --budget-usd 5
 ```
+
+**`DESK_ANTHROPIC_API_KEY`, et pas `ANTHROPIC_API_KEY`.** Cette dernière est un
+nom réservé dans plusieurs environnements d'exécution — Claude Code sur le web
+prévient d'ailleurs qu'elle ne servira pas à authentifier les sessions. Selon
+la plateforme elle peut être ignorée, filtrée, ou porter une identité qui n'est
+pas celle qu'on veut facturer. Un nom propre au projet supprime l'ambiguïté :
+ce qu'on pose est ce qu'on utilise. Le repli sur `ANTHROPIC_API_KEY` reste,
+parce que c'est ce qu'on pose spontanément sur sa propre machine.
+
+Pour la même raison le point d'entrée est fixé explicitement à
+`https://api.anthropic.com` plutôt qu'hérité de `ANTHROPIC_BASE_URL` : cette
+variable est souvent posée par l'outil qui exécute le code et peut pointer vers
+un relais qui lui appartient. `DESK_ANTHROPIC_BASE_URL` permet de le changer —
+explicitement, avec une variable qui appartient au projet.
 
 Aucun ordre n'est émis : le mandat produit est journalisé puis jeté. Le
 plafond est porté par le client LLM lui-même, pas par l'appelant — aucun
@@ -100,7 +117,7 @@ puisqu'on ne connaît le coût d'un appel qu'après l'avoir fait.
 Lancer les tests :
 
 ```bash
-python -m pytest tests -q        # 338 tests
+python -m pytest tests -q        # 344 tests
 ```
 
 ---

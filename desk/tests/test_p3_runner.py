@@ -165,3 +165,85 @@ def test_le_plafond_de_la_ligne_de_commande_atteint_le_client(monkeypatch, capsy
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     _lance(monkeypatch, "--dry-run", "--runs", "30", "--budget-usd", "0.37")
     assert vus == [Decimal("0.37")]
+
+
+# --------------------------------------------------------------------------
+#  Resolution de la cle
+# --------------------------------------------------------------------------
+
+def test_la_variable_du_projet_prime_sur_celle_du_sdk(monkeypatch):
+    """`ANTHROPIC_API_KEY` est un nom reserve sur certaines plateformes : elle
+    peut y etre ignoree, filtree, ou porter une identite qui n'est pas celle
+    qu'on veut facturer. Un nom propre au projet leve l'ambiguite."""
+    from trading_desk.agents.llm import api_key_source, desk_api_key
+
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-sdk")
+    monkeypatch.setenv("DESK_ANTHROPIC_API_KEY", "sk-desk")
+    assert desk_api_key() == "sk-desk"
+    assert api_key_source() == "DESK_ANTHROPIC_API_KEY"
+
+    monkeypatch.delenv("DESK_ANTHROPIC_API_KEY")
+    assert desk_api_key() == "sk-sdk", "le repli reste, pour une machine locale"
+    assert api_key_source() == "ANTHROPIC_API_KEY"
+
+
+def test_une_variable_vide_ou_blanche_ne_compte_pas(monkeypatch):
+    """Une variable posee a vide est le cas le plus perfide : elle existe,
+    donc un test de presence passe, et l'appel echoue plus loin avec un
+    message de transport incomprehensible."""
+    from trading_desk.agents.llm import desk_api_key
+
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.setenv("DESK_ANTHROPIC_API_KEY", "   ")
+    assert desk_api_key() is None
+
+
+def test_la_source_ne_revele_jamais_la_cle(monkeypatch):
+    """Le diagnostic renvoie le NOM de la variable, pas sa valeur — meme
+    tronquee. Une valeur tronquee finit dans un journal ou une capture."""
+    from trading_desk.agents.llm import api_key_source
+
+    monkeypatch.setenv("DESK_ANTHROPIC_API_KEY", "sk-ant-api03-SECRET")
+    assert "SECRET" not in api_key_source()
+    assert api_key_source() == "DESK_ANTHROPIC_API_KEY"
+
+
+def test_le_point_d_entree_n_est_pas_herite_silencieusement(monkeypatch):
+    """`ANTHROPIC_BASE_URL` est souvent pose par l'outil qui execute le code
+    et peut pointer vers un relais qui lui appartient. Herite, il enverrait la
+    cle du desk a ce relais."""
+    import anthropic
+
+    from trading_desk.agents.llm import OFFICIAL_BASE_URL, AnthropicLLM
+
+    monkeypatch.setenv("ANTHROPIC_BASE_URL", "https://relais-tiers.example")
+    monkeypatch.setenv("DESK_ANTHROPIC_API_KEY", "sk-ant-test")
+    monkeypatch.delenv("DESK_ANTHROPIC_BASE_URL", raising=False)
+
+    client = AnthropicLLM()._lazy_client()
+    assert str(client.base_url).rstrip("/") == OFFICIAL_BASE_URL
+    assert "relais-tiers" not in str(client.base_url)
+
+
+def test_le_point_d_entree_reste_surchargeable_par_le_projet(monkeypatch):
+    """Un utilisateur sur Bedrock ou derriere son propre relais doit pouvoir
+    le dire — mais explicitement, avec une variable qui lui appartient."""
+    from trading_desk.agents.llm import AnthropicLLM
+
+    monkeypatch.setenv("DESK_ANTHROPIC_API_KEY", "sk-ant-test")
+    monkeypatch.setenv("DESK_ANTHROPIC_BASE_URL", "https://mon-relais.example")
+    client = AnthropicLLM()._lazy_client()
+    assert "mon-relais" in str(client.base_url)
+
+
+def test_le_message_d_erreur_nomme_les_deux_variables(monkeypatch, capsys, tmp_path):
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("DESK_ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("ANTHROPIC_AUTH_TOKEN", raising=False)
+    monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
+
+    assert _lance(monkeypatch, "--runs", "30") == 2
+    err = capsys.readouterr().err
+    assert "DESK_ANTHROPIC_API_KEY" in err
+    assert "ANTHROPIC_API_KEY" in err
+    assert "nom réservé" in err

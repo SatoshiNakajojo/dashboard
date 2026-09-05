@@ -21,6 +21,7 @@ qu'il rapporte » reste une intuition — et c'est la porte P5 qui la tranche.
 
 from __future__ import annotations
 
+import os
 import time
 from decimal import Decimal
 from typing import Any, Protocol, TypeVar
@@ -32,6 +33,54 @@ from ..contracts.common import Frozen
 T = TypeVar("T", bound=BaseModel)
 
 DEFAULT_MODEL = "claude-opus-5"
+
+# Le desk lit SA propre variable avant celle du SDK.
+#
+# `ANTHROPIC_API_KEY` est un nom reserve dans certains environnements
+# d'execution — l'interface de Claude Code sur le web previent d'ailleurs
+# qu'elle ne servira pas a authentifier les sessions. Selon la plateforme,
+# elle peut etre ignoree, filtree, ou porter une identite qui n'est pas celle
+# qu'on veut facturer. Un nom propre au projet supprime toute ambiguite : ce
+# qu'on pose est ce qu'on utilise.
+#
+# Le repli sur `ANTHROPIC_API_KEY` reste, parce que c'est ce qu'un
+# utilisateur pose spontanement sur sa propre machine.
+API_KEY_VARS = ("DESK_ANTHROPIC_API_KEY", "ANTHROPIC_API_KEY")
+
+# Point d'entree officiel, fixe explicitement plutot qu'herite.
+#
+# `ANTHROPIC_BASE_URL` est souvent pose par l'outil qui execute le code, et
+# peut pointer vers un relais qui lui appartient. Herite silencieusement, il
+# enverrait la cle du desk a ce relais. On prefere une adresse explicite,
+# surchargeable par une variable qui, elle, appartient au projet.
+OFFICIAL_BASE_URL = "https://api.anthropic.com"
+
+
+def desk_api_key() -> str | None:
+    """La cle a utiliser, ou `None` si aucune n'est posee.
+
+    `None` n'est pas une erreur : le SDK sait encore resoudre un profil
+    `ant auth login` ou une federation d'identite. C'est a l'appelant de
+    decider si l'absence de cle doit bloquer.
+    """
+    for var in API_KEY_VARS:
+        value = os.environ.get(var, "").strip()
+        if value:
+            return value
+    return None
+
+
+def api_key_source() -> str:
+    """Le NOM de la variable utilisee — jamais sa valeur.
+
+    Sert au diagnostic : « la cle est-elle vue, et laquelle ». Renvoyer la
+    valeur, meme tronquee, la ferait finir dans un journal ou une capture
+    d'ecran.
+    """
+    for var in API_KEY_VARS:
+        if os.environ.get(var, "").strip():
+            return var
+    return ""
 
 # Tarifs par million de tokens, à la date d'écriture. À revalider : une grille
 # périmée fausse le calcul de rentabilité, qui est la seule raison d'être de
@@ -126,10 +175,16 @@ class AnthropicLLM:
         if self._client is None:
             import anthropic
 
-            # Constructeur sans argument : la clé vient de l'environnement ou
-            # d'un profil `ant auth login`. Aucune clé n'est écrite en dur ni
-            # journalisée.
-            self._client = anthropic.Anthropic()
+            kwargs: dict[str, Any] = {}
+            if (key := desk_api_key()) is not None:
+                kwargs["api_key"] = key
+            kwargs["base_url"] = os.environ.get(
+                "DESK_ANTHROPIC_BASE_URL", OFFICIAL_BASE_URL)
+            # Sans clé explicite, on laisse le SDK résoudre lui-même :
+            # `ANTHROPIC_API_KEY`, un profil `ant auth login`, ou une
+            # fédération d'identité. Aucune clé n'est écrite en dur ni
+            # journalisée, ici ou ailleurs.
+            self._client = anthropic.Anthropic(**kwargs)
         return self._client
 
     def structured(
