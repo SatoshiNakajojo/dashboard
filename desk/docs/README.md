@@ -477,3 +477,32 @@ survivable, l'autre est une ruine quasi certaine.
 Et `rsi_reversion` échoue à **100 %** dès 0,5 %, avec un drawdown médian de
 40,7 %. C'est la **quatrième méthode indépendante** à la condamner, après le
 modèle nul, le critère de Kelly et le filtre de régime.
+
+
+## Le biais de survie, mesuré — et ma préoccupation n'est pas confirmée
+
+J'avais signalé comme une faute d'avoir bâti la grille sur sept actifs qui
+existent aujourd'hui, alors que 56 des 233 listés sont marqués délistés. Le
+diagnostic était juste ; la conclusion que j'en tirais ne l'est pas.
+
+Six actifs délistés récupérés (MATIC, RNDR, FTM, FXS, UNIBOT, CYBER) — leur
+historique s'arrête à leur radiation, ce qu'il fallait. Leurs séries sont bien
+plus courtes (380 à 1 572 barres contre ~2 200), donc la comparaison par actif
+est trompeuse. Normalisée par barre de marché :
+
+| stratégie | survivants | délistés | écart |
+|---|---:|---:|---:|
+| `ema_cross` | +4,81 | +4,50 | −6 % |
+| `rsi_reversion` | −32,92 | −31,30 | +5 % |
+| `turtle_breakout` | +217,53 | **+356,61** | **+64 %** |
+| `tsmom` | +163,51 | +148,60 | −9 % |
+
+**Aucune dégradation systématique.** Le suivi de tendance fait même nettement
+mieux sur les actifs morts — ce qui se comprend : un actif qui finit radié a
+souvent connu une chute prolongée, et une stratégie qui suit la tendance dans
+les deux sens la capture.
+
+Réserve : six actifs, et seulement ceux dont Hyperliquid sert encore
+l'historique. Un jeton effondré en quelques jours puis retiré ne figure
+probablement pas ici. Le biais existe donc peut-être encore, mais il n'a pas
+l'ampleur ni le signe que je supposais.
