@@ -73,13 +73,14 @@ def test_dry_run_tourne_sans_cle_et_sans_depense(monkeypatch, capsys):
 
 
 def test_sans_cle_la_commande_refuse_au_lieu_d_echouer_plus_tard(
-        monkeypatch, capsys, tmp_path):
+        monkeypatch, capsys):
     """Echouer a l'appel numero un apres avoir charge les donnees serait un
-    message d'erreur obscur ; refuser d'emblee dit quoi faire."""
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
-    monkeypatch.delenv("ANTHROPIC_AUTH_TOKEN", raising=False)
-    monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
+    message d'erreur obscur ; refuser d'emblee dit quoi faire.
 
+    Les variables sont retirees par la fixture `_aucune_cle_reelle`, qui les
+    lit dans `API_KEY_VARS` : ce test ne peut donc pas partir appeler l'API
+    parce qu'une variable a ete ajoutee au desk sans etre ajoutee ici.
+    """
     assert _lance(monkeypatch, "--runs", "30") == 2
     err = capsys.readouterr().err
     assert "Aucune clé Anthropic" in err

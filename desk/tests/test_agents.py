@@ -23,7 +23,10 @@ from trading_desk.agents import (
     run_agent, run_analyst, sanitize, summarize, wrap,
 )
 from trading_desk.agents.isolation import CLOSE, OPEN, PREAMBLE
-from trading_desk.contracts import AnalystView, Bias, NewsRead
+from trading_desk.contracts import (
+    AgentOutput, AnalystView, Bias, CounterThesis, DeskVerdict, NewsRead,
+    QuantRead, Regime, RegimeRead, RiskAdvice, SetupProposal,
+)
 from trading_desk.features import synthetic_bars
 from trading_desk.storage import SqliteStore
 
@@ -387,3 +390,110 @@ def test_le_systeme_dit_a_l_agent_qu_il_n_execute_rien():
     assert "AUCUN pouvoir d'exécution" in SYSTEM
     assert "FLAT" in SYSTEM
     assert "abstiens-toi" in SYSTEM
+
+
+# --------------------------------------------------------------------------
+#  Ce qu'on demande au modele, et ce que le desk sait deja
+# --------------------------------------------------------------------------
+
+def test_le_modele_ne_remplit_pas_les_champs_que_le_desk_mesure():
+    """Cout, latence et identifiant de modele sont MESURES apres l'appel.
+
+    Les demander au modele, c'est demander une valeur inventee — et ce sont
+    exactement les deux chiffres que la porte P3 doit mesurer honnetement.
+    """
+    from trading_desk.agents.runner import ENVELOPPE, payload_schema
+
+    champs = payload_schema(SetupProposal).model_fields
+    for interdit in ("cost_usd", "latency_ms", "model_id", "journal_ref",
+                     "produced_at_ms", "agent"):
+        assert interdit in ENVELOPPE
+        assert interdit not in champs, f"{interdit} ne doit pas etre demande"
+
+
+def test_l_abstention_reste_une_reponse_que_le_modele_peut_donner():
+    """L'inverse du test precedent : s'abstenir est un droit de l'agent, pas
+    une decision du runner. Retirer ces champs du schema le lui oterait."""
+    from trading_desk.agents.runner import payload_schema
+
+    champs = payload_schema(QuantRead).model_fields
+    assert "abstained" in champs
+    assert "abstain_reason" in champs
+
+
+@pytest.mark.parametrize("schema", [
+    AnalystView, CounterThesis, DeskVerdict, NewsRead, QuantRead, RegimeRead,
+    RiskAdvice, SetupProposal,
+])
+def test_aucun_schema_ne_depasse_le_seuil_de_l_api(schema):
+    """Le decodage contraint compile le schema en automate, et chaque champ
+    OPTIONNEL multiplie les chemins. Au-dela de douze, l'API repond
+    « Schema is too complex » (400) et l'agent s'abstient — pour une raison
+    qui n'a rien a voir avec sa competence.
+
+    Mesure, constatee contre l'API : 12 champs optionnels passent, 13 non.
+    On garde une marge, parce qu'ajouter un champ a un contrat est une
+    modification banale qui ne doit pas casser la porte P3 en silence.
+    """
+    from trading_desk.agents.runner import payload_schema
+
+    demande = payload_schema(schema)
+    optionnels = [n for n, f in demande.model_fields.items() if not f.is_required()]
+    assert len(optionnels) <= 10, (
+        f"{schema.__name__} demande {len(optionnels)} champs optionnels ; "
+        "l'API en refuse 13 ou plus"
+    )
+
+
+def test_le_contrat_complet_se_reconstruit_depuis_la_charge_utile():
+    """Le sous-schema ne sert qu'a poser la question : c'est le contrat
+    complet qui circule ensuite dans le desk."""
+    from trading_desk.agents.runner import payload_schema
+
+    charge = payload_schema(RegimeRead)(regime=Regime.RANGE, confidence=Decimal("0.6"))
+    plein = RegimeRead(**charge.model_dump())
+    assert plein.agent == "regime"
+    assert plein.regime is Regime.RANGE
+    assert plein.cost_usd == Decimal("0")
+
+
+def test_les_bornes_de_longueur_sont_dites_au_modele():
+    """Le decodage contraint garantit la forme, pas les longueurs : un champ
+    trop long est rejete APRES l'appel et apres la depense. Un agent qui
+    ignore la borne s'abstient a chaque cycle."""
+    from trading_desk.agents.runner import limites_de_longueur, payload_schema
+
+    texte = limites_de_longueur(payload_schema(AnalystView))
+    assert "600" in texte and "thesis_summary" in texte
+    assert "300" in texte and "invalidation_summary" in texte
+
+
+def test_les_bornes_annoncees_sont_celles_du_schema():
+    """Recopier la borne dans le prompt la ferait mentir des la premiere
+    modification du `Field`. Elle est donc lue, pas ecrite."""
+    from pydantic import Field
+
+    from trading_desk.agents.runner import limites_de_longueur, payload_schema
+
+    class Bavard(AgentOutput):
+        agent: str = "bavard"
+        propos: str = Field(default="", max_length=42)
+
+    assert "42 caracteres" in limites_de_longueur(payload_schema(Bavard))
+    assert limites_de_longueur(payload_schema(RegimeRead)) == ""
+
+
+def test_le_journal_garde_le_prompt_reellement_envoye(tmp_path):
+    """Un journal qui stocke un prompt different de celui envoye ne rejoue
+    rien — et rejouer est sa seule raison d'etre."""
+    store = SqliteStore(tmp_path / "j.db")
+    llm = ScriptedLLM([{"asset": "BTC", "bias": "LONG", "thesis_summary": "Court."}])
+    run = run_agent(name="analyste", llm=llm, system="SYSTEME DE BASE.",
+                    user="u", schema=AnalystView, store=store)
+
+    assert run.succeeded
+    envoye = llm.calls[0]["system"]
+    journalise = store.recent_journal(1)[0]["payload"]["prompt_system"]
+    assert journalise == envoye
+    assert "600 caracteres" in journalise
+    store.close()
