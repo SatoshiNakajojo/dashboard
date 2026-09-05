@@ -84,6 +84,13 @@ class BacktestResult(Frozen):
     trades: tuple[BacktestTrade, ...]
     equity_curve: tuple[Decimal, ...]
     rejected_by_risk: int = 0
+    stops_resserres: int = 0
+    """Combien de fois un stop a ete deplace vers le prix, jamais l'inverse.
+
+    Zero sur une strategie qui declare un stop suiveur signale que le
+    mecanisme ne s'est jamais declenche — un resultat a ne pas confondre avec
+    « le stop suiveur n'apporte rien ».
+    """
     costs: dict[str, Any] = Field(default_factory=dict)
 
     @property
@@ -133,6 +140,7 @@ def run_backtest(
     position: _Open | None = None
     pending: tuple[Side, Decimal, Decimal | None] | None = None
     rejected = 0
+    stops_resserres = 0
 
     for i in range(len(bars)):
         bar = bars[i]
@@ -176,6 +184,9 @@ def run_backtest(
                 )
                 trades.append(trade)
                 position = None
+            elif position is not None and sig.stop_price is not None:
+                position, resserre = _resserrer(position, sig.stop_price)
+                stops_resserres += resserre
             elif position is None and sig.side is not None and pending is None:
                 stop = sig.stop_price or _default_stop(bar.close, sig.side, limits)
                 pending = (sig.side, stop, sig.target_price)
@@ -212,6 +223,7 @@ def run_backtest(
         trades=tuple(trades),
         equity_curve=tuple(curve),
         rejected_by_risk=rejected,
+        stops_resserres=stops_resserres,
         costs=costs.model_dump(mode="json"),
     )
 
@@ -286,6 +298,39 @@ def _try_open(
         stop_price=stop, target_price=target,
         fees_paid=costs.fee_usd(sized.notional_usd),
     )
+
+
+def _resserrer(pos: _Open, nouveau: Decimal) -> tuple[_Open, int]:
+    """Deplace le stop d'une position ouverte — dans un seul sens.
+
+    Un stop ne peut que se RAPPROCHER du prix : monter sur un long, descendre
+    sur un short. La restriction n'est pas cosmetique. Autoriser
+    l'elargissement laisserait une strategie repousser son stop devant un prix
+    qui vient le chercher, transformer une perte au budget en perte plus
+    grande, et produire un backtest flatteur par une regle qu'aucun operateur
+    n'accepterait a l'avance. C'est la version « strategie » de l'invariant
+    `I05_NO_LLM_WIDENING` : on peut toujours reduire son risque, jamais
+    l'etendre.
+
+    Le stop deplace a la barre `i` n'est verifie qu'a partir de `i+1` :
+    l'ordre de la boucle (sortie, puis avis de la strategie) l'impose, et
+    c'est ce qui empeche un stop de se placer retroactivement du bon cote
+    d'une bougie deja jouee.
+
+    Le stop resserre n'est PAS revalide contre `StopBand`, et c'est
+    volontaire : la borne haute ne peut pas etre franchie par un stop qui se
+    rapproche, et la borne basse (`min_stop_distance_bps`) sert a dimensionner
+    la position a l'entree — deplacer le stop ensuite ne redimensionne rien.
+    Un stop remonte a l'equilibre passera souvent sous cette borne ; c'est le
+    comportement voulu, pas un contournement.
+
+    Renvoie la position — modifiee ou non — et 1 si le stop a bouge.
+    """
+    resserre = (nouveau > pos.stop_price if pos.side is Side.LONG
+                else nouveau < pos.stop_price)
+    if not resserre:
+        return pos, 0
+    return pos.model_copy(update={"stop_price": nouveau}), 1
 
 
 def _check_exit_levels(bar: Bar, pos: _Open) -> tuple[Decimal | None, str]:

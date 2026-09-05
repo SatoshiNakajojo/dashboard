@@ -367,6 +367,108 @@ class FundingExtreme:
         return FLAT
 
 
+class TrendFollowerATR:
+    """La strategie de reference de `docs/strategies-pinescript-v5.md`.
+
+    Un HYBRIDE, et c'est pour ca qu'elle est ici : elle empile quatre briques
+    qui appartiennent a des familles differentes, la ou chaque baseline
+    existante n'en porte qu'une.
+
+        filtre de regime   Close > EMA 200        (tendance)
+        declencheur        EMA 21 croise EMA 50   (tendance)
+        confirmation       RSI 14 > 50            (momentum)
+        risque             stop 2 ATR, cible 3,5 ATR, seuil a 1,5 ATR
+                                                  (volatilite)
+
+    J'avais ecarte ce document en une ligne — « elle appartient a la famille
+    `ema_cross`, qui ne se distingue du hasard sur aucune cellule de la
+    grille ». C'etait un raisonnement, pas une mesure, et il etait faux sur
+    deux points precis :
+
+    - le **seuil a l'equilibre** (le stop remonte au prix d'entree des que le
+      gain atteint 1,5 ATR) n'existe dans aucune baseline. Il modifie la
+      distribution des sorties, pas le signal d'entree — et la mesure
+      Monte-Carlo a montre que la perte mediane vaut **-1,27 R et non -1 R**.
+      C'est exactement ce que ce mecanisme attaque.
+    - le filtre EMA 200 et la confirmation RSI n'appartiennent pas a la meme
+      famille que le croisement. Les tester ensemble n'est pas tester
+      `ema_cross`.
+
+    **Cette classe est long seulement**, comme le Pine Script du document
+    (`strategy.entry(strategy.long)`, aucune branche short). Le lui ajouter
+    serait tester ma strategie, pas la sienne.
+    """
+
+    name = "trend_follower_atr"
+
+    def __init__(self, fast: int = 21, medium: int = 50, slow: int = 200,
+                 rsi_period: int = 14, rsi_seuil: float = 50.0,
+                 atr_period: int = 14, atr_stop: float = 2.0,
+                 atr_target: float = 3.5, atr_equilibre: float = 1.5) -> None:
+        self.fast, self.medium, self.slow = fast, medium, slow
+        self.rsi_period, self.rsi_seuil = rsi_period, rsi_seuil
+        self.atr_period, self.atr_stop = atr_period, atr_stop
+        self.atr_target, self.atr_equilibre = atr_target, atr_equilibre
+        self._f: Series = []
+        self._m: Series = []
+        self._s: Series = []
+        self._rsi: Series = []
+        self._atr: Series = []
+        # Etat de la position en cours. Le moteur ne le communique pas : il ne
+        # dit que le SENS. Une strategie a stop suiveur doit donc se souvenir
+        # de son prix d'entree elle-meme.
+        self._entree: Decimal | None = None
+        self._a_lequilibre = False
+
+    def prepare(self, bars: list[Bar]) -> None:
+        px = closes(bars)
+        self._f, self._m, self._s = ema(px, self.fast), ema(px, self.medium), ema(px, self.slow)
+        self._rsi = rsi(px, self.rsi_period)
+        self._atr = atr(bars, self.atr_period)
+        self._entree, self._a_lequilibre = None, False
+
+    def on_bar(self, i: int, bars: list[Bar], in_position: Side | None) -> Signal:
+        if i == 0:
+            return FLAT
+        f, m, s = self._f[i], self._m[i], self._s[i]
+        pf, pm = self._f[i - 1], self._m[i - 1]
+        r, a = self._rsi[i], self._atr[i]
+        if None in (f, m, s, pf, pm, r, a) or not a:
+            return FLAT
+
+        bar = bars[i]
+        span = Decimal(str(a))
+
+        if in_position is Side.LONG:
+            # Seuil a l'equilibre : « des que le prix atteint un gain egal a
+            # 1,5 x ATR, le stop remonte au prix d'entree ». Teste sur le HAUT
+            # de la barre, comme le `high >= breakEvenTrigger` du document.
+            if self._entree is None or self._a_lequilibre:
+                return FLAT
+            seuil = self._entree + span * Decimal(str(self.atr_equilibre))
+            if bar.high >= seuil:
+                self._a_lequilibre = True
+                return Signal(stop_price=self._entree, note="stop a l'equilibre")
+            return FLAT
+        if in_position is not None:
+            return FLAT
+
+        self._entree, self._a_lequilibre = None, False
+        if not (bar.close > Decimal(str(s))          # filtre de regime
+                and pf <= pm and f > m               # declencheur
+                and r > self.rsi_seuil):             # confirmation
+            return FLAT
+
+        ecart = span * Decimal(str(self.atr_stop))
+        st = _stop(bar.close, ecart, Side.LONG)
+        if st is None:
+            return FLAT
+        self._entree = bar.close
+        return Signal(side=Side.LONG, stop_price=st,
+                      target_price=bar.close + span * Decimal(str(self.atr_target)),
+                      note="tendance confirmee")
+
+
 # Les strategies actives. `buy_and_hold` n'y figure pas : ce n'est pas une
 # strategie mais une reference, calculee par `engine.benchmark_buy_and_hold`
 # qui ne lui impose ni stop ni dimensionnement par le risque.
@@ -375,4 +477,5 @@ BASELINES: dict[str, type] = {
     "rsi_reversion": RsiReversion,
     "turtle_breakout": TurtleBreakout,
     "tsmom": TimeSeriesMomentum,
+    "trend_follower_atr": TrendFollowerATR,
 }
