@@ -92,6 +92,44 @@ PRICING_USD_PER_MTOK: dict[str, tuple[Decimal, Decimal]] = {
 }
 
 
+# Ce que chaque modele accepte DANS LA REQUETE.
+#
+# Mesure contre l'API le 5 septembre 2026, pas deduite d'un numero de
+# version. Haiku 4.5 refuse les deux parametres, avec deux 400 distincts :
+#
+#     thinking: {"type": "adaptive"}   -> « adaptive thinking is not
+#                                          supported on this model »
+#     output_config: {"effort": ...}   -> « This model does not support the
+#                                          effort parameter. »
+#
+# Sans cette table, router un role vers Haiku ferait echouer 100 % de ses
+# appels — l'agent s'abstiendrait a chaque cycle et la porte P3 lirait
+# « qualite insuffisante » la ou le defaut est une requete mal formee.
+CAPACITES: dict[str, frozenset[str]] = {
+    "claude-opus-5": frozenset({"adaptive", "effort"}),
+    "claude-sonnet-5": frozenset({"adaptive", "effort"}),
+    "claude-haiku-4-5": frozenset(),
+}
+
+# Un modele absent de la table part sans rien. Le choix va dans le sens ou
+# l'erreur est la moins couteuse : envoyer un parametre non supporte fait
+# echouer TOUS les appels, ne pas l'envoyer fait seulement tourner le modele
+# a son reglage par defaut. On degrade la finesse, jamais la disponibilite.
+CAPACITES_INCONNUES: frozenset[str] = frozenset()
+
+
+def capacites_de(model: str) -> frozenset[str]:
+    """Les parametres de requete que ce modele accepte.
+
+    Meme correspondance par prefixe que `tarif_de` : l'identifiant resolu
+    (`claude-haiku-4-5-20251001`) doit retrouver sa ligne.
+    """
+    candidats = [k for k in CAPACITES if model.startswith(k)]
+    if not candidats:
+        return CAPACITES_INCONNUES
+    return CAPACITES[max(candidats, key=len)]
+
+
 def tarif_de(model: str) -> tuple[Decimal, Decimal] | None:
     """Les tarifs d'un identifiant de modele, ou `None` si inconnu.
 
@@ -224,15 +262,20 @@ class AnthropicLLM:
         kwargs: dict[str, Any] = {
             "model": self.model,
             "max_tokens": max_tokens,
-            # La réflexion adaptative est laissée active : lire une structure
-            # de marché n'est pas une tâche de classification triviale, et
-            # l'effort se règle plutôt par `effort` que par sa désactivation.
-            "thinking": {"type": "adaptive"},
-            "output_config": {"effort": self.effort},
             "system": system,
             "messages": [{"role": "user", "content": user}],
             "output_format": schema,
         }
+        # La réflexion adaptative est laissée active quand le modèle la
+        # connaît : lire une structure de marché n'est pas une tâche de
+        # classification triviale, et l'effort se règle plutôt par `effort`
+        # que par sa désactivation. Sur un modèle qui l'ignore, l'envoyer
+        # ferait échouer l'appel — voir `CAPACITES`.
+        peut = capacites_de(self.model)
+        if "adaptive" in peut:
+            kwargs["thinking"] = {"type": "adaptive"}
+        if "effort" in peut:
+            kwargs["output_config"] = {"effort": self.effort}
 
         try:
             response = client.messages.parse(**kwargs)

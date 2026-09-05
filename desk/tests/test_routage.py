@@ -193,3 +193,84 @@ def test_labstention_survit_au_nettoyage():
     assert avis["abstained"] is True
     assert avis["abstain_reason"] == "indicateurs incoherents"
     assert "cost_usd" not in avis
+
+
+# --- forme de la requete selon le modele ----------------------------------
+
+class _ClientEspion:
+    """Capture les kwargs envoyes a `messages.parse` sans reseau ni depense."""
+
+    def __init__(self) -> None:
+        self.kwargs: dict = {}
+        self.messages = self
+
+    def parse(self, **kwargs):
+        self.kwargs = kwargs
+
+        class _R:
+            model = kwargs["model"]
+            stop_reason = "end_turn"
+            usage = type("U", (), {"input_tokens": 10, "output_tokens": 5,
+                                   "cache_read_input_tokens": 0})()
+            parsed_output = RegimeRead()
+        return _R()
+
+
+def _kwargs_pour(modele: str) -> dict:
+    from trading_desk.agents.llm import AnthropicLLM
+
+    espion = _ClientEspion()
+    AnthropicLLM(model=modele, effort="low", client=espion).structured(
+        system="s", user="u", schema=RegimeRead)
+    return espion.kwargs
+
+
+def test_haiku_45_part_sans_thinking_ni_effort():
+    """Mesure contre l'API : les deux parametres y sont refuses en 400.
+
+    Si cette assertion tombe, router un role vers Haiku ferait echouer 100 %
+    de ses appels — et la porte P3 lirait « qualite insuffisante » la ou le
+    defaut est une requete mal formee.
+    """
+    k = _kwargs_pour("claude-haiku-4-5")
+    assert "thinking" not in k
+    assert "output_config" not in k
+
+
+def test_un_identifiant_date_retrouve_ses_capacites():
+    """L'API renvoie `claude-haiku-4-5-20251001` ; la table doit suivre."""
+    from trading_desk.agents.llm import capacites_de
+
+    assert capacites_de("claude-haiku-4-5-20251001") == frozenset()
+    assert "adaptive" in capacites_de("claude-opus-5-20260101")
+
+
+@pytest.mark.parametrize("modele", ["claude-opus-5", "claude-sonnet-5"])
+def test_les_modeles_recents_gardent_reflexion_et_effort(modele):
+    k = _kwargs_pour(modele)
+    assert k["thinking"] == {"type": "adaptive"}
+    assert k["output_config"] == {"effort": "low"}
+
+
+def test_un_modele_inconnu_part_au_plus_simple():
+    """Degrader la finesse, jamais la disponibilite.
+
+    Envoyer un parametre non supporte fait echouer TOUS les appels ; ne pas
+    l'envoyer fait seulement tourner le modele a son reglage par defaut.
+    """
+    k = _kwargs_pour("un-modele-jamais-vu")
+    assert "thinking" not in k
+    assert "output_config" not in k
+    assert k["model"] == "un-modele-jamais-vu"
+
+
+def test_chaque_modele_de_la_grille_tarifaire_a_ses_capacites():
+    """Les deux tables doivent couvrir les memes modeles.
+
+    Une ligne tarifaire sans ligne de capacites part au plus simple en
+    silence — donc sans reflexion sur un modele qui la supporte, ce qui
+    degrade la decision sans que rien ne le dise.
+    """
+    from trading_desk.agents.llm import CAPACITES, PRICING_USD_PER_MTOK
+
+    assert set(PRICING_USD_PER_MTOK) == set(CAPACITES)
