@@ -6,7 +6,7 @@ développement et que ces documents doivent vivre avec le code qu'ils décrivent
 
 `00-manifeste-indexation-rag.md` est l'index maître : il recense ~24 documents
 et les associe à une phase, un agent destinataire et des tags d'interrogation.
-**Dix documents sur les vingt-quatre sont présents à ce jour** — le reste est
+**Quinze documents sur les vingt-quatre sont présents à ce jour** — le reste est
 annoncé comme suivant.
 
 | document | testable avec l'outillage actuel ? |
@@ -103,3 +103,66 @@ porté augmente sans contrepartie.
 décrit dans le document reste plausible — un carnet mince se pousse plus
 facilement — mais il ne se traduit pas en mouvements réalisés plus larges sur
 cette place et cette période.
+
+
+## Troisième lot : ML, risque et cahier des charges
+
+### Le critère de Kelly, appliqué aux chiffres réellement mesurés
+
+`autre-risk-management.md` prescrit **deux** choses. Confrontées aux trades
+que ce dépôt produit réellement (7 actifs, daily), elles se contredisent d'un
+facteur sept. `scripts/kelly_sur_mesure.py` le montre :
+
+| stratégie | trades | p | R | f\* | quarter-Kelly | DD après 8 pertes |
+|---|---:|---:|---:|---:|---:|---|
+| `ema_cross` | 217 | 0,410 | 1,63 | +0,047 | +0,012 | 9 % |
+| `rsi_reversion` | 511 | 0,440 | 0,79 | **−0,265** | — | **ne pas trader** |
+| `turtle_breakout` | 195 | 0,369 | 8,90 | +0,298 | **+0,075** | **46 %** |
+| `tsmom` | 987 | 0,342 | 5,72 | +0,227 | **+0,057** | **37 %** |
+
+Le même document plafonne le risque crypto à **0,5–1 % par trade** et définit
+la « zone de mort mathématique » au-delà de 30 % de perte. Or son propre
+quarter-Kelly prescrit ici 5,7 à 7,5 % — et à ce taux, une série de huit
+pertes coûte 37 à 46 %. Ces stratégies perdent 63 à 66 % de leurs trades :
+sur 500 trades, une telle série est **quasi certaine**.
+
+**Kelly n'a pas tort.** Il est exact si `p` et `R` sont les vraies valeurs.
+Ils sont ici estimés *in-sample*, sur des stratégies dont le modèle nul dit
+qu'elles ne battent pas des entrées aléatoires. Le document nomme d'ailleurs
+ce danger — « si p ou R sont surestimés en raison d'un historique trop court,
+la mise de Kelly devient surévaluée ». Sa parade, le quarter-Kelly, ne suffit
+pas : **le quart d'un edge fantôme reste un edge fantôme.**
+
+Deux choses valent d'être retenues :
+
+- **Kelly rejette correctement `rsi_reversion`** (f\* = −0,265). C'est la
+  seule partie du critère qui protège sans hypothèse, et elle rejoint le
+  verdict indépendant du modèle nul. Deux méthodes convergent.
+- **Le plafond dur doit primer sur Kelly**, pas l'inverse. Le dépôt est à
+  0,5 % — l'extrémité conservatrice de la fourchette du document — et il est
+  sûr précisément parce qu'il ne fait confiance à aucun edge estimé.
+
+### Une tension avec l'architecture du dépôt
+
+Le cahier des charges veut que le Desk Manager dimensionne via un consensus
+pondéré `w_TA·S_TA + w_FA·S_FA + w_SA·S_SA`, avec des poids que le Cold
+Analyst fait évoluer (*Authority Feedback Loop*).
+
+Le dépôt interdit structurellement ce chemin : `I05_NO_LLM_WIDENING` borne
+les facteurs consultatifs à `]0, 1]` et les applique par `min()`. **Un agent
+ne peut que resserrer, jamais élargir.** Faire dépendre la taille d'un score
+d'agent rouvrirait exactement la porte que cet invariant ferme.
+
+Un dimensionnement par Kelly calculé sur des statistiques *mesurées en code*
+resterait compatible ; un dimensionnement pondéré par des scores d'agents ne
+l'est pas.
+
+### HMM et DRL : la question préalable n'est pas résolue
+
+La détection de régimes par HMM et l'allocation par DRL supposent toutes deux
+qu'il existe quelque chose à commuter ou à allouer. À ce jour, la grille de
+robustesse donne **une cellule survivante sur cinquante-six**. Un moteur de
+commutation entre une stratégie de tendance et une stratégie de range n'a de
+valeur que si au moins l'une des deux a un edge dans son régime — ce qui
+reste à établir. `rsi_reversion`, la candidate naturelle du régime *range*,
+est significativement pire que le hasard dans six cellules.

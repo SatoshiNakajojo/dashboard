@@ -694,3 +694,29 @@ def test_l_effet_week_end_se_mesure_sur_les_queues_pas_la_mediane():
     assert quantile([], 0.95) == 0.0, "une serie vide ne doit pas lever"
     assert ecart_pct(100.0, 57.0) == -43.0
     assert ecart_pct(0.0, 5.0) == 0.0, "pas de division par zero"
+
+
+def test_kelly_refuse_une_esperance_defavorable():
+    """Kelly renvoie une fraction NEGATIVE quand l'esperance est mauvaise.
+
+    C'est la seule partie du critere qui protege sans hypothese : elle ne
+    demande pas que `p` et `R` soient bien estimes pour dire « ne pas
+    trader ». Mesure sur les baselines : `rsi_reversion` donne f* = -0,265,
+    ce qui rejoint le verdict independant du modele nul.
+    """
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+    from kelly_sur_mesure import drawdown_serie, kelly, proba_serie_perdante
+
+    assert kelly(0.44, 0.79) < 0, "esperance defavorable -> ne pas trader"
+    assert kelly(0.60, 2.0) > 0
+    assert kelly(0.50, 0.0) == -1.0, "un ratio nul ne doit pas diviser par zero"
+
+    # Le quart d'un edge surestime reste dangereux : c'est le point du script.
+    f = kelly(0.369, 8.90)
+    assert drawdown_serie(0.25 * f, 8) > 0.30, "zone de mort attendue"
+    assert drawdown_serie(0.01, 8) < 0.10, "le plafond du document, lui, tient"
+
+    # Une serie de 8 pertes est quasi certaine a ce taux de reussite.
+    assert proba_serie_perdante(0.369, 8, 500) > 0.95
