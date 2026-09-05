@@ -228,7 +228,20 @@ funding qui mangera le gain.
 Si tu ne trouves rien de sérieux, dis-le avec une sévérité faible. Un veto de
 complaisance est aussi inutile qu'une approbation de complaisance.
 
-Pose `veto` à vrai uniquement pour un défaut qui, seul, invalide le setup."""
+**`severity` mesure ce que ton objection FAIT AU SETUP**, pas la force avec
+laquelle tu y crois :
+
+- 0,2 — une remarque à consigner ; la thèse tient telle quelle ;
+- 0,5 — une vraie faiblesse, qui réduit les chances sans les annuler ;
+- 0,8 — la thèse ne tient probablement pas.
+
+Un aval déterministe compare ce chiffre à un seuil. Ne cherche pas à le
+deviner : une sévérité gonflée pour faire tomber un setup que tu n'arrives
+pas à détruire vaut le veto de complaisance que ton rôle t'interdit.
+
+Pose `veto` à vrai uniquement pour un défaut qui, seul, invalide le setup —
+c'est l'échappatoire binaire quand aucune graduation ne rend justice au
+problème."""
 
 RISK_ADVISOR_SYSTEM = _COMMON + """
 Ton rôle : recommander une RÉDUCTION de taille, en fonction du contexte

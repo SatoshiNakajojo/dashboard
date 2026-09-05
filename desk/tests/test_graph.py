@@ -505,3 +505,27 @@ def test_le_prompt_ne_revele_pas_le_seuil_de_la_porte():
     seuil = str(GraphConfig().min_conviction)          # "0.6"
     assert seuil not in STRATEGY_SYSTEM
     assert seuil.replace(".", ",") not in STRATEGY_SYSTEM
+
+
+def test_le_prompt_de_lavocat_ancre_la_severite():
+    """Le graphe écarte le setup au-dessus de `max_objection_severity`.
+    « Sévérité faible » sans point d'ancrage laisse l'agent inventer son
+    échelle, et la porte filtre alors du bruit de notation."""
+    from trading_desk.agents.roster import DEVIL_SYSTEM
+
+    assert "severity" in DEVIL_SYSTEM
+    assert "0,2" in DEVIL_SYSTEM and "0,8" in DEVIL_SYSTEM
+
+
+def test_aucun_prompt_ne_revele_le_seuil_de_sa_porte():
+    """Un seuil révélé invite l'agent à s'y poser juste au-dessus ou juste
+    en dessous. Le champ ne transporterait plus que la connaissance du
+    seuil, que le desk possédait déjà."""
+    from trading_desk.agents.graph import GraphConfig
+    from trading_desk.agents.roster import DEVIL_SYSTEM, STRATEGY_SYSTEM
+
+    cfg = GraphConfig()
+    for seuil, prompt in ((cfg.min_conviction, STRATEGY_SYSTEM),
+                          (cfg.max_objection_severity, DEVIL_SYSTEM)):
+        for forme in (str(seuil), str(seuil).replace(".", ",")):
+            assert forme not in prompt, f"seuil {forme} révélé"
