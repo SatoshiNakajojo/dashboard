@@ -23,6 +23,14 @@ ordre à un vrai exchange.
 > Stratégie s'est abstenue une fois sur deux. Il faudrait ~61 cycles pour le
 > mesurer. [Détail et chiffres](#résultat-du-p3--la-qualité-est-là-le-coût-interroge).
 >
+> **Walk-forward, 5 septembre 2026 — le dernier survivant tombe.** `tsmom` sur
+> BTC daily rendait +1,0 %/an hors échantillon sur 20 passes, que son lookback
+> soit optimisé (WFE 26,7 %) ou figé au paramètre documenté (WFE 47,1 %).
+> L'OOS est identique dans les deux cas : optimiser ne rapporte rien devant,
+> ça n'enfle que l'in-sample de 64 %. Or la couche LLM à une décision par jour
+> coûte ~3,4 %/an du capital. **Elle coûte trois fois ce que la meilleure
+> stratégie rapporte hors échantillon.**
+>
 > Le chiffre qui compte pour la suite n'est pas le taux, c'est le prix :
 > **0,1335 $ le cycle complet, soit ~1 154 $/mois à 12 décisions/h** (~68 $/mois
 > à 1/h, ~2,85 $/mois à une décision par jour). Le P5 exige de battre les

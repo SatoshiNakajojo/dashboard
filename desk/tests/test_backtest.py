@@ -830,3 +830,32 @@ def test_le_drawdown_croit_avec_la_taille_de_position():
 
     # Une serie qui efface tout le capital est plafonnee a 100 %.
     assert pire_drawdown([-1.0] * 50, 0.5) <= 1.0
+
+
+def test_le_walk_forward_ne_confond_pas_optimise_et_fixe():
+    """Un WFE bas sur un parametre FIXE ne diagnostique pas un sur-ajustement.
+
+    Rien n'a ete optimise : il mesure seulement que la fenetre suivante a
+    moins bien rendu. Confondre les deux ferait accuser de sur-optimisation
+    une strategie qui n'a rien optimise du tout.
+
+    Mesure sur BTC 1d, 20 passes : lookback optimise WFE 26,7 %, lookback
+    documente fige a 28 jours WFE 47,1 % — et l'OOS est IDENTIQUE (+1,0 %/an)
+    dans les deux cas. Optimiser n'a rien rapporte devant ; ca n'a enfle que
+    l'IS de 64 %.
+    """
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+    from walk_forward import rendement_annualise
+
+    # Une fenetre courte doit s'annualiser plus fort qu'une longue.
+    court = rendement_annualise(net=10.0, capital=1000.0, barres=91,
+                                barres_par_an=365)
+    long_ = rendement_annualise(net=10.0, capital=1000.0, barres=365,
+                                barres_par_an=365)
+    assert court > long_
+    assert abs(long_ - 1.0) < 1e-9, "1 % sur un an doit rendre 1 %/an"
+
+    # Une fenetre vide ne doit pas diviser par zero.
+    assert rendement_annualise(5.0, 1000.0, 0, 365) == 0.0
