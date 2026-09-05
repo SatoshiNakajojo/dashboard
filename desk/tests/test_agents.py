@@ -528,3 +528,45 @@ def test_le_journal_garde_le_prompt_reellement_envoye(tmp_path):
     assert journalise == envoye
     assert "600 caracteres" in journalise
     store.close()
+
+
+def test_le_run_conserve_les_tokens_pas_seulement_leur_prix():
+    """Un total en dollars ne dit pas quel levier tirer.
+
+    L'entree se traite par le cache et des prompts plus courts ; la sortie ne
+    se traite que par l'effort. Un run a 4 $ qui ne garde que l'agregat ne
+    laisse aucune trace de la ou est parti l'argent — il faut le repayer pour
+    le savoir.
+    """
+    llm = ScriptedLLM([_view()])
+    run = run_analyst(llm=llm, bars=synthetic_bars(count=120, seed=5))
+
+    assert run.input_tokens == 1200, "les tokens d'entree remontent du client"
+    assert run.output_tokens == 300, "ceux de sortie aussi"
+
+    m = summarize([run])
+    assert m.input_tokens == 1200
+    assert m.output_tokens == 300
+
+
+def test_la_part_de_sortie_designe_le_levier():
+    """`output_share_pct` pondere les tokens par le tarif, pas par leur nombre.
+
+    Opus-5 facture la sortie cinq fois l'entree : 1000 tokens de sortie
+    pesent autant que 5000 d'entree. Compter les tokens bruts designerait le
+    mauvais levier.
+    """
+    from trading_desk.agents.metrics import AgentMetrics
+
+    # Autant de tokens des deux cotes -> la sortie pese 5/6 de la facture.
+    egal = AgentMetrics(agent="x", runs=1, valid=1, abstentions=0,
+                        input_tokens=1000, output_tokens=1000)
+    assert round(egal.output_share_pct) == 83
+
+    # Facture dominee par l'entree : le cache et des prompts courts servent.
+    lourd = AgentMetrics(agent="x", runs=1, valid=1, abstentions=0,
+                         input_tokens=50_000, output_tokens=100)
+    assert lourd.output_share_pct < 2
+
+    vide = AgentMetrics(agent="x", runs=0, valid=0, abstentions=0)
+    assert vide.output_share_pct == 0.0

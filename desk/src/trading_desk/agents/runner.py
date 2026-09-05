@@ -121,6 +121,13 @@ class AgentRun(Frozen):
     succeeded: bool
     cost_usd: Decimal = Decimal("0")
     latency_ms: int = 0
+    # Les tokens, et pas seulement leur prix. Un total en dollars ne dit pas
+    # quel levier tirer : l'entree se cache et se raccourcit, la sortie se
+    # regle par l'effort. Sans cette decomposition, un run a 4 $ ne laisse
+    # aucune trace exploitable de la ou est parti l'argent.
+    input_tokens: int = 0
+    output_tokens: int = 0
+    cache_read_tokens: int = 0
     model: str = ""
     journal_ref: str = ""
     errors: tuple[str, ...] = ()
@@ -151,6 +158,7 @@ def run_agent(
     errors: list[str] = []
     total_cost = Decimal("0")
     total_latency = 0
+    total_in = total_out = total_cache = 0
     model_used = ""
 
     demande = payload_schema(schema)
@@ -178,6 +186,9 @@ def run_agent(
 
         total_cost += meta.cost_usd
         total_latency += meta.latency_ms
+        total_in += meta.input_tokens
+        total_out += meta.output_tokens
+        total_cache += meta.cache_read_tokens
         model_used = meta.model
 
         enriched = output.model_copy(update={
@@ -191,6 +202,8 @@ def run_agent(
             output=enriched.model_copy(update={"journal_ref": ref}),
             attempts=attempt, succeeded=True,
             cost_usd=total_cost, latency_ms=total_latency,
+            input_tokens=total_in, output_tokens=total_out,
+            cache_read_tokens=total_cache,
             model=model_used, journal_ref=ref, errors=tuple(errors),
             pricing_known=meta.pricing_known,
         )
@@ -209,6 +222,8 @@ def run_agent(
         output=abstention.model_copy(update={"journal_ref": ref}),
         attempts=MAX_ATTEMPTS, succeeded=False,
         cost_usd=total_cost, latency_ms=total_latency,
+        input_tokens=total_in, output_tokens=total_out,
+        cache_read_tokens=total_cache,
         model=model_used, journal_ref=ref, errors=tuple(errors),
     )
 

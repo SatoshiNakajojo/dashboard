@@ -41,7 +41,23 @@ class AgentMetrics(Frozen):
     failures: int = 0
     unpriced: int = 0
     total_cost_usd: Decimal = Decimal("0")
+    input_tokens: int = 0
+    output_tokens: int = 0
+    cache_read_tokens: int = 0
     latencies_ms: tuple[int, ...] = ()
+
+    @property
+    def output_share_pct(self) -> float:
+        """Part des tokens de SORTIE dans la facture, au tarif du modele.
+
+        C'est le chiffre qui designe le levier. Une facture dominee par
+        l'entree se traite par le cache et des prompts plus courts ; dominee
+        par la sortie, elle se traite par l'effort et rien d'autre.
+        """
+        entree = self.input_tokens * 1
+        sortie = self.output_tokens * 5  # opus-5 : 5 $ / 25 $ par MTok
+        total = entree + sortie
+        return 100.0 * sortie / total if total else 0.0
 
     @property
     def cost_is_reliable(self) -> bool:
@@ -122,6 +138,9 @@ def summarize(runs: list[AgentRun]) -> AgentMetrics:
         failures=sum(1 for r in runs if not r.succeeded),
         unpriced=sum(1 for r in runs if not r.pricing_known),
         total_cost_usd=sum((r.cost_usd for r in runs), Decimal("0")),
+        input_tokens=sum(r.input_tokens for r in runs),
+        output_tokens=sum(r.output_tokens for r in runs),
+        cache_read_tokens=sum(r.cache_read_tokens for r in runs),
         latencies_ms=tuple(r.latency_ms for r in runs),
     )
 
@@ -152,6 +171,9 @@ def format_report(metrics: AgentMetrics, *, decisions_per_hour: float = 12.0) ->
         + ("" if metrics.cost_is_reliable else "   [modele hors grille : cout NON fiable]"),
         f"  cout mensuel estime  {float(metrics.monthly_cost_usd(decisions_per_hour)):>8.2f} $"
         f"   (a {decisions_per_hour:.0f}/h)",
+        f"  tokens/appel         {metrics.input_tokens // max(metrics.runs, 1):>8} in"
+        f" / {metrics.output_tokens // max(metrics.runs, 1)} out"
+        f"   (sortie = {metrics.output_share_pct:.0f} % de la facture)",
         f"  latence p95          {metrics.latency_p95_ms:>8} ms",
         "  " + "-" * 58,
         f"  porte P3 : {_verdict(metrics)}",
