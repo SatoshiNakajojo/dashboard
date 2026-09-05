@@ -802,3 +802,31 @@ def test_le_funding_du_modele_est_la_mediane_mesuree_pas_une_estimation():
     moyenne_mesuree = Decimal("0.069")   # BTC, un an d'historique reel
     assert CostModel().funding_bps_per_hour >= moyenne_mesuree
     assert CostModel().funding_bps_per_hour == mediane_mesuree
+
+
+def test_le_drawdown_croit_avec_la_taille_de_position():
+    """Le Monte-Carlo doit sanctionner un dimensionnement excessif.
+
+    C'est ce qui distingue les deux prescriptions du manuel de risque : son
+    plafond dur (1 %) reste survivable, son quarter-Kelly (7,46 % sur les
+    donnees mesurees) mene a une ruine quasi certaine. Un test qui ne verrait
+    pas la difference ne servirait a rien.
+    """
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+    from monte_carlo_ruine import pire_drawdown
+
+    # Une serie perdante nette : huit pertes de 1 R pour deux gains de 2 R.
+    serie = [-1.0] * 8 + [2.0] * 2
+
+    petit = pire_drawdown(serie, 0.005)
+    moyen = pire_drawdown(serie, 0.01)
+    gros = pire_drawdown(serie, 0.0746)
+
+    assert petit < moyen < gros, "le drawdown doit croitre avec la fraction"
+    assert petit < 0.05, "a 0,5 % du capital, huit pertes restent absorbables"
+    assert gros > 0.30, "a 7,46 %, la meme serie entre en zone de mort"
+
+    # Une serie qui efface tout le capital est plafonnee a 100 %.
+    assert pire_drawdown([-1.0] * 50, 0.5) <= 1.0

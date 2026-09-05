@@ -432,3 +432,48 @@ d'encaisser.
 - **`strategies-uniswap-v3-donnees-alternatives.md`** : hors périmètre. Le
   dépôt trade des perpétuels sur un carnet d'ordres on-chain, pas de la
   liquidité concentrée sur AMM.
+
+
+## Dernier document : un KPI chiffré, et le Monte-Carlo qui manquait
+
+`structure-equipe-trading.md` est organisationnel, mais il porte un critère
+vérifiable : le Risk Manager doit maintenir la **probabilité de ruine sous
+0,01 %**. Combiné au critère de rejet du document de robustesse — *P(DD > 30 %)
+≤ 5 % sur 10 000 itérations* — il désignait le seul test de validation que je
+n'avais pas fait.
+
+### La formule de ruine du manuel de risque ne peut pas y répondre
+
+`P = ((1 − Edge)/(1 + Edge))^C` avec `Edge = p·R − (1−p)` est dérivée pour des
+paris à cote égale, où l'avantage reste dans `[−1, 1]`. Dès que le ratio
+gain/perte est grand — `turtle_breakout` a R = 8,9 — l'Edge dépasse 1, la base
+devient **négative**, et l'élever à une puissance n'a plus de sens.
+
+Le tableau d'asymétrie des pertes du même document reste juste. C'est sa
+généralisation du risque de ruine qui ne l'est pas.
+
+### Le Monte-Carlo par permutation, lui, répond
+
+`scripts/monte_carlo_ruine.py` — 10 000 permutations des trades réels, ce qui
+détruit leur ordre chronologique et pose la question que la courbe historique
+ne pose pas : *que se passerait-il si la série noire tombait d'un bloc ?*
+
+Détail relevé au passage : **la perte médiane vaut −1,27 R, pas −1 R.** Le
+budget de risque est dépassé de 27 % — gaps d'ouverture, frais et slippage
+s'ajoutent au stop. Un « 0,5 % par trade » coûte en réalité 0,64 %.
+
+| risque/trade | `ema_cross` | `turtle_breakout` | `tsmom` | `rsi_reversion` |
+|---|---|---|---|---|
+| **0,5 %** (dépôt) | accepté | accepté | accepté | **rejet** |
+| **1 %** (plafond du doc) | accepté | accepté | accepté | **rejet** |
+| **7,46 %** (quarter-Kelly) | **rejet** | **rejet** | **rejet** | **rejet** |
+
+Au dimensionnement que le quarter-Kelly prescrivait sur ces mêmes données,
+**P(ruine) atteint 99,99 % pour `turtle_breakout`** et 100 % pour
+`rsi_reversion`. Les deux prescriptions du même document — plafond dur et
+quarter-Kelly — ne divergent pas seulement d'un facteur sept : l'une est
+survivable, l'autre est une ruine quasi certaine.
+
+Et `rsi_reversion` échoue à **100 %** dès 0,5 %, avec un drawdown médian de
+40,7 %. C'est la **quatrième méthode indépendante** à la condamner, après le
+modèle nul, le critère de Kelly et le filtre de régime.
