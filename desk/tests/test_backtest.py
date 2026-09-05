@@ -873,14 +873,18 @@ def test_le_signal_de_funding_est_bien_contrarien():
 
     bars = synthetic_bars(count=300, seed=9)
 
-    # Funding calme, puis un pic franc sur la derniere barre.
-    calme = [0.5] * (len(bars) - 1) + [50.0]
+    # Un funding qui oscille — une fenetre CONSTANTE aurait un ecart-type nul
+    # et aucun z-score ne pourrait s'en deduire, ce qui est le comportement
+    # correct de la strategie mais rendrait ce test vide.
+    import math
+    ondule = [0.5 + 0.2 * math.sin(i / 3) for i in range(len(bars) - 1)]
+    calme = [*ondule, 50.0]
     s = FundingExtreme(calme, lookback=42, seuil_z=1.5)
     s.prepare(bars)
     assert s.on_bar(len(bars) - 1, bars, None).side is Side.SHORT
 
     # Creux symetrique : les shorts sont surendettes, on prend le LONG.
-    creux = [0.5] * (len(bars) - 1) + [-50.0]
+    creux = [*ondule, -50.0]
     s2 = FundingExtreme(creux, lookback=42, seuil_z=1.5)
     s2.prepare(bars)
     assert s2.on_bar(len(bars) - 1, bars, None).side is Side.LONG
