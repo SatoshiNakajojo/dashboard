@@ -609,3 +609,66 @@ def test_le_verdict_de_la_grille_dit_ce_qu_on_attendait_du_hasard():
     assert "Aucune cellule" in rendre_verdict(
         [{"strategie": "s", "actif": "A", "intervalle": "1d",
           "net_usd": 0.0, "trades": 0, "p": None}])
+
+
+def test_le_hasard_herite_des_durees_de_detention():
+    """Le contrefactuel doit tenir ses positions aussi longtemps qu'elle.
+
+    Les quatre strategies sortent sur signal (`exit_now`) ; le bras aleatoire
+    ne pouvait sortir qu'au stop ou a la cible. Mesure sur la grille : ses
+    positions tenaient 1,4 a 6,7 fois plus longtemps. La comparaison ne
+    portait donc pas sur le moment d'entree mais sur deux regles de sortie
+    differentes — et une strategie qui coupe vite paraissait brillante face a
+    un hasard qui encaissait toutes les reprises.
+    """
+    from trading_desk.backtest.null_model import EntryShape, RandomEntry
+
+    bars = synthetic_bars(count=600, seed=17)
+    # 10 % de stop : assez large pour survivre a une barre, assez etroit pour
+    # rester sous le plafond du contrat `StopBand`.
+    formes = [EntryShape(side=Side.LONG, stop_frac=Decimal("0.10"),
+                         target_frac=None)]
+
+    # Sans duree, la position ne sort qu'au stop : elle tient tres longtemps.
+    sans = run_backtest(bars, RandomEntry(formes, n_trades=5, seed=1),
+                        limits=RiskLimits(max_stop_distance_bps=Decimal("5000")),
+                        interval="1d")
+    # Avec des durees courtes, elle sort quand elles sont atteintes.
+    avec = run_backtest(bars, RandomEntry(formes, n_trades=5, seed=1,
+                                          holding_bars=[3]),
+                        limits=RiskLimits(max_stop_distance_bps=Decimal("5000")),
+                        interval="1d")
+
+    index = {b.ts_ms: i for i, b in enumerate(bars)}
+    def duree(res):
+        d = [index[t.exit_ts_ms] - index[t.entry_ts_ms] for t in res.trades]
+        return sum(d) / len(d) if d else 0
+
+    assert avec.trades, "le bras aleatoire doit produire des trades"
+    assert duree(avec) < duree(sans), "la duree tiree doit ecourter la detention"
+    assert any(t.reason == "duree tiree au hasard" for t in avec.trades)
+
+
+def test_les_durees_imitees_sont_celles_voulues_pas_les_stops():
+    """Tirer parmi TOUTES les sorties tronquerait deux fois.
+
+    Une duree issue d'un trade stoppe n'est pas une intention, c'est une
+    troncature. La retirer puis lui appliquer un stop raccourcirait encore le
+    bras aleatoire, reduirait son exposition a la derive du marche et le
+    handicaperait — un contrefactuel handicape fabrique des edges.
+    """
+    from trading_desk.backtest.null_model import randomization_test
+    from trading_desk.backtest.strategies import TurtleBreakout
+
+    bars = synthetic_bars(count=900, seed=23)
+    lim = RiskLimits(max_stop_distance_bps=Decimal("5000"))
+    strat = TurtleBreakout(entry_period=40, exit_period=15)
+    obs = run_backtest(bars, strat, limits=lim, interval="1d")
+    if not obs.trades:
+        pytest.skip("aucun trade sur cette serie synthetique")
+
+    res = randomization_test(bars, TurtleBreakout(entry_period=40, exit_period=15),
+                             obs, draws=30, limits=lim, interval="1d")
+    # Le nuage doit contenir des trades : un contrefactuel vide ne compare rien.
+    assert res.mean_trades_random > 0
+    assert 0.0 <= res.p_value <= 1.0
