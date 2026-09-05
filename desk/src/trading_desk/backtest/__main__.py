@@ -24,6 +24,7 @@ from .data import (
     load_synthetic,
 )
 from .engine import benchmark_buy_and_hold, run_backtest
+from .null_model import format_null_report, randomization_test
 from .report import compute_metrics, format_report
 from .strategies import BASELINES
 
@@ -61,6 +62,8 @@ def main() -> int:
                         "Hypothese forte : tester 0 et 0.5 pour voir si la "
                         "conclusion tient.")
     p.add_argument("--out", default="baselines")
+    p.add_argument("--null-draws", type=int, default=200,
+                   help="tirages du modele nul (entrees au hasard). 0 = ignorer.")
     args = p.parse_args()
 
     if args.source == "file" and not args.file:
@@ -125,6 +128,30 @@ def main() -> int:
         }
 
     print(format_report(metrics))
+
+    # Le modele nul repond a la question que les metriques ne posent pas :
+    # d'ou vient le PnL. Comparer a zero suppose qu'une strategie sans
+    # information gagne zero — ce qui est faux des qu'il y a une derive de
+    # marche ou des couts.
+    nuls = []
+    if args.null_draws > 0:
+        for name, cls in BASELINES.items():
+            observed = run_backtest(
+                bars, cls(), costs=costs,
+                initial_equity_usd=Decimal(str(args.equity)),
+                interval=args.interval,
+            )
+            if not observed.trades:
+                continue
+            null = randomization_test(
+                bars, cls(), observed, draws=args.null_draws, costs=costs,
+                initial_equity_usd=Decimal(str(args.equity)),
+                interval=args.interval,
+            )
+            nuls.append(null)
+            payload[name]["modele_nul"] = null.model_dump(mode="json")
+        if nuls:
+            print(format_null_report(nuls))
 
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)

@@ -1093,7 +1093,19 @@
           "funding_usd": "0.010223276063000",
           "reason": "cible"
         }
-      ]
+      ],
+      "modele_nul": {
+        "strategy": "ema_cross",
+        "observed_pnl_usd": "-14.11881036652364136939325",
+        "draws": 200,
+        "percentile": 66.5,
+        "null_mean_usd": -34.7,
+        "null_p5_usd": -110.95,
+        "null_p95_usd": 49.89,
+        "p_value": 0.3383,
+        "mean_trades_random": 77.0,
+        "observed_trades": 77
+      }
     },
     "rsi_reversion": {
       "metrics": {
@@ -2804,7 +2816,19 @@
           "funding_usd": "-0.050442069088125",
           "reason": "cible"
         }
-      ]
+      ],
+      "modele_nul": {
+        "strategy": "rsi_reversion",
+        "observed_pnl_usd": "11.761236900738961594875250",
+        "draws": 200,
+        "percentile": 85.5,
+        "null_mean_usd": -46.48,
+        "null_p5_usd": -126.2,
+        "null_p95_usd": 48.47,
+        "p_value": 0.1493,
+        "mean_trades_random": 129.0,
+        "observed_trades": 129
+      }
     }
   }
 }

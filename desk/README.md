@@ -8,10 +8,12 @@ réconciliation — validée contre un faux exchange.
 Aucun connecteur Hyperliquid réel : ce code ne signe rien et n'envoie aucun
 ordre à un vrai exchange.
 
-> **État au 4 septembre 2026.** Le P2 est franchi sur données réelles, et son
-> résultat est négatif : sur 208 jours de BTC en 1 h, aucune baseline n'a
-> d'edge statistiquement distinguable de zéro. Ce n'est pas un blocage — c'est
-> l'information que la phase devait produire. [Détail et chiffres](#résultat-du-p2--mesuré-pas-espéré).
+> **État au 5 septembre 2026.** Le P2 est franchi sur données réelles. Sur
+> 208 jours de BTC en 1 h, aucune baseline n'a d'edge statistiquement
+> démontré : ni contre zéro (t = 0,24), ni contre un modèle nul à entrées
+> aléatoires (p = 0,15) — ce dernier étant nettement plus favorable à la
+> stratégie que le premier. Ce n'est pas un blocage : c'est l'information que
+> la phase devait produire. [Détail et chiffres](#résultat-du-p2--mesuré-pas-espéré).
 
 ---
 
@@ -98,7 +100,7 @@ puisqu'on ne connaît le coût d'un appel qu'après l'avoir fait.
 Lancer les tests :
 
 ```bash
-python -m pytest tests -q        # 329 tests
+python -m pytest tests -q        # 338 tests
 ```
 
 ---
@@ -109,6 +111,7 @@ python -m pytest tests -q        # 329 tests
 |---|---|
 | `contracts/mandate.py` | **Le mandat.** Bornage, péremption, resserrage monotone. |
 | `agents/budget.py` | **Plafond de dépense**, porté par le client. Incontournable par construction. |
+| `backtest/null_model.py` | **Le modèle nul.** Même profil de risque, entrées au hasard. |
 | `contracts/signals.py` | Un schéma fermé par agent. L'abstention est une réponse valide. |
 | `risk/engine.py` | Les douze invariants. Aucune dépendance vers un LLM. |
 | `risk/sizing.py` | Taille déduite du risque et de la distance de stop, jamais de la conviction. |
@@ -479,6 +482,39 @@ coup d'œil. Le rapport calcule désormais t de Student *et* bootstrap — le
 bootstrap fait foi quand les deux divergent, parce qu'il ne suppose rien de la
 forme de la distribution, et qu'en trading quelques trades portent tout le
 résultat.
+
+### Le hasard aurait-il fait aussi bien ?
+
+Le t de Student dit si un PnL est distinguable de zéro. Il ne dit pas d'où il
+vient — et **zéro est rarement la bonne référence**. Deux forces déplacent le
+résultat qu'on obtiendrait sans aucun signal : la dérive du marché, qui pousse
+vers le haut toute stratégie à biais long quand le prix monte, et les coûts,
+qui poussent vers le bas à proportion du nombre de trades.
+
+`backtest/null_model.py` construit le contrefactuel : **même nombre de trades,
+même mélange long/short, mêmes distances de stop et de cible tirées des propres
+signaux de la stratégie, mêmes coûts, même moteur — entrées à des dates tirées
+au hasard.** La seule chose que le hasard ignore, c'est *quand* entrer. Toute
+la valeur d'un signal d'entrée est exactement cette différence.
+
+| stratégie | observé | hasard (moy.) | p5 | p95 | percentile | p | verdict |
+|---|---|---|---|---|---|---|---|
+| rsi_reversion | +11,76 | −46,48 | −126,20 | +48,47 | 86 % | 0,149 | non distinguable |
+| ema_cross | −14,12 | −34,70 | −110,95 | +49,89 | 66 % | 0,338 | non distinguable |
+
+Le nuage du hasard est centré sur **−46 $** pour le profil de `rsi_reversion` :
+sur cette période, entrer au hasard 129 fois avec ces stops fait perdre de
+l'argent, parce que les coûts dominent la dérive. La stratégie fait donc
+**58 $ de mieux que l'absence de signal**, ce que le simple « +11,76 $ »
+masquait complètement.
+
+Et pourtant : p = 0,149. L'écart n'est pas concluant, parce que la dispersion
+du nuage est énorme ([−126 ; +48]). La lecture honnête est **suggestive, pas
+démontrée** — et c'est une conclusion différente, et plus riche, que celle du
+t de Student seul.
+
+Un percentile élevé dit que le signal a fonctionné sur cet échantillon, pas
+qu'il fonctionnera. La sur-optimisation produit exactement cette signature.
 
 ### Ce que ces chiffres ne disent pas
 
