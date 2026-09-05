@@ -42,6 +42,36 @@ from trading_desk.risk import RiskLimits
 ASSETS = ["BTC", "ETH", "SOL", "BNB", "XRP", "DOGE", "AVAX"]
 INTERVALS = ["1d", "4h"]
 
+BARRES_PAR_JOUR = {"1d": 1, "4h": 6, "1h": 24}
+
+
+def parametres(nom: str, interval: str) -> dict:
+    """Les parametres qui donnent a chaque strategie SON horizon documente.
+
+    Les strategies comptent en barres ; leurs regles d'origine comptent en
+    jours ou en semaines. Instancier `TurtleBreakout()` tel quel sur du 4 h
+    donne un canal de 55 barres, soit neuf jours — ce n'est plus la regle des
+    Turtles, c'est une strategie de cassure a court terme dont rien ne dit
+    qu'elle marche. Le meme piege dans l'autre sens vaut pour `tsmom`, dont
+    le defaut de 168 barres fait 168 JOURS en daily quand la litterature
+    mesure l'effet sur une a quatre semaines.
+
+    Sans cette conversion, la grille compare des horizons differents d'une
+    cellule a l'autre et son verdict ne veut rien dire.
+    """
+    n = BARRES_PAR_JOUR[interval]
+    if nom == "turtle_breakout":
+        # Systeme 2 : cassure 55 jours, sortie 20 jours, ATR sur 20 jours.
+        return {"entry_period": 55 * n, "exit_period": 20 * n,
+                "atr_period": 20 * n}
+    if nom == "tsmom":
+        # Quatre semaines, le haut de la fourchette ou l'effet est mesure.
+        return {"lookback": 28 * n, "atr_period": 20 * n}
+    # EmaCross et RsiReversion utilisent des periodes conventionnelles en
+    # barres (20/50, 14), appliquees telles quelles a toute echelle : c'est
+    # ainsi qu'elles sont employees et documentees.
+    return {}
+
 
 def benjamini_hochberg(pvalues: list[float], alpha: float = 0.05) -> list[bool]:
     """Quelles hypotheses survivent au controle du taux de fausses decouvertes.
@@ -91,8 +121,9 @@ def main() -> int:
                 continue
 
             for nom, cls in BASELINES.items():
+                kw = parametres(nom, interval)
                 obs = run_backtest(
-                    bars, cls(), limits=limits, interval=interval,
+                    bars, cls(**kw), limits=limits, interval=interval,
                     initial_equity_usd=Decimal(str(args.equity)))
                 cell = {
                     "actif": asset, "intervalle": interval, "strategie": nom,
@@ -103,7 +134,7 @@ def main() -> int:
                 }
                 if obs.trades and args.draws > 0:
                     nul = randomization_test(
-                        bars, cls(), obs, draws=args.draws, limits=limits,
+                        bars, cls(**kw), obs, draws=args.draws, limits=limits,
                         interval=interval,
                         initial_equity_usd=Decimal(str(args.equity)))
                     cell["p"] = float(nul.p_value)

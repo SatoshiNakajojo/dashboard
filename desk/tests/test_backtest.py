@@ -548,3 +548,32 @@ def test_aucune_strategie_n_emet_de_stop_negatif():
                     assert sig.stop_price > 0, f"{nom} : stop <= 0 a la barre {i}"
                 if sig.target_price is not None:
                     assert sig.target_price > 0, f"{nom} : cible <= 0 a la barre {i}"
+
+
+def test_les_horizons_sont_convertis_a_l_echelle_de_temps():
+    """Les strategies comptent en barres, leurs regles d'origine en jours.
+
+    `TurtleBreakout()` tel quel sur du 4 h donne un canal de 55 barres, soit
+    neuf jours : ce n'est plus la regle des Turtles. Le meme piege dans
+    l'autre sens vaut pour `tsmom`, dont le defaut de 168 barres fait 168
+    JOURS en daily quand la litterature mesure l'effet sur une a quatre
+    semaines.
+
+    Constate : sur BTC daily, `tsmom` rend +35 a 168 jours et +245 a 28
+    jours. Une grille qui compare des horizons differents d'une cellule a
+    l'autre ne mesure pas ce qu'elle annonce.
+    """
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+    from robustness_grid import BARRES_PAR_JOUR, parametres
+
+    # 55 jours de canal, quelle que soit l'echelle.
+    for iv, n in BARRES_PAR_JOUR.items():
+        assert parametres("turtle_breakout", iv)["entry_period"] == 55 * n
+        assert parametres("turtle_breakout", iv)["exit_period"] == 20 * n
+        assert parametres("tsmom", iv)["lookback"] == 28 * n
+
+    # Les periodes conventionnelles restent en barres, telles qu'employees.
+    assert parametres("ema_cross", "4h") == {}
+    assert parametres("rsi_reversion", "1d") == {}

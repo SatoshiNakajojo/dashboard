@@ -26,9 +26,10 @@ ordre à un vrai exchange.
 > Le chiffre qui compte pour la suite n'est pas le taux, c'est le prix :
 > **0,1335 $ le cycle complet, soit ~1 154 $/mois à 12 décisions/h** (~68 $/mois
 > à 1/h, ~2,85 $/mois à une décision par jour). Le P5 exige de battre les
-> baselines *net de ce montant*, or la meilleure d'entre elles nette
-> +1,72 $/mois sur 1000 USDC. **À ce capital, la couche LLM ne peut pas se
-> payer, quelle que soit la cadence.**
+> baselines *net de ce montant*. Sur 7 actifs en daily, la meilleure baseline
+> nette +46 $/mois et la couche LLM à une décision par jour et par actif coûte
+> ~20 $/mois — soit **43 % du net**. Lourd, mais pas disqualifiant : le verrou
+> n'est pas le coût, c'est l'absence d'edge démontrable.
 >
 > **Le daily a été ouvert le même jour** : six ans de BTC en 1 j (2 209 barres)
 > et deux stratégies documentées — cassure Turtle, momentum temporel. Aucune ne
