@@ -6,9 +6,9 @@
   "net_usd": 25.809135259529715,
   "trades": 33,
   "rejets": 0,
-  "p": 0.1879,
-  "percentile": 81.2,
-  "hasard_moyen": -4.14
+  "p": 0.1824,
+  "percentile": 81.8,
+  "hasard_moyen": -3.21
  },
  {
   "actif": "BTC",
@@ -17,9 +17,9 @@
   "net_usd": -85.10653690551425,
   "trades": 74,
   "rejets": 0,
-  "p": 0.9715,
-  "percentile": 2.9,
-  "hasard_moyen": -15.55
+  "p": 0.9855,
+  "percentile": 1.4,
+  "hasard_moyen": -14.57
  },
  {
   "actif": "BTC",
@@ -28,9 +28,9 @@
   "net_usd": 254.141114324731,
   "trades": 29,
   "rejets": 0,
-  "p": 0.5012,
-  "percentile": 49.9,
-  "hasard_moyen": 243.38
+  "p": 0.0455,
+  "percentile": 95.5,
+  "hasard_moyen": 90.17
  },
  {
   "actif": "BTC",
@@ -39,9 +39,9 @@
   "net_usd": 244.89439118346655,
   "trades": 142,
   "rejets": 0,
-  "p": 0.3113,
-  "percentile": 68.9,
-  "hasard_moyen": 194.75
+  "p": 0.0005,
+  "percentile": 100.0,
+  "hasard_moyen": 31.78
  },
  {
   "actif": "ETH",
@@ -50,9 +50,9 @@
   "net_usd": -16.724600383437288,
   "trades": 31,
   "rejets": 0,
-  "p": 0.5882,
-  "percentile": 41.2,
-  "hasard_moyen": -5.38
+  "p": 0.6872,
+  "percentile": 31.3,
+  "hasard_moyen": -1.96
  },
  {
   "actif": "ETH",
@@ -61,9 +61,9 @@
   "net_usd": -66.02673380366154,
   "trades": 67,
   "rejets": 0,
-  "p": 0.974,
-  "percentile": 2.6,
-  "hasard_moyen": 2.74
+  "p": 0.9695,
+  "percentile": 3.0,
+  "hasard_moyen": -7.83
  },
  {
   "actif": "ETH",
@@ -72,9 +72,9 @@
   "net_usd": 310.8576633779736,
   "trades": 25,
   "rejets": 0,
-  "p": 0.0985,
-  "percentile": 90.2,
-  "hasard_moyen": 165.66
+  "p": 0.032,
+  "percentile": 96.8,
+  "hasard_moyen": 78.57
  },
  {
   "actif": "ETH",
@@ -83,9 +83,9 @@
   "net_usd": 122.86594890463309,
   "trades": 142,
   "rejets": 5,
-  "p": 0.5832,
-  "percentile": 41.7,
-  "hasard_moyen": 130.11
+  "p": 0.0475,
+  "percentile": 95.3,
+  "hasard_moyen": 26.09
  },
  {
   "actif": "SOL",
@@ -94,9 +94,9 @@
   "net_usd": 1.3047897516883697,
   "trades": 33,
   "rejets": 0,
-  "p": 0.4563,
-  "percentile": 54.4,
-  "hasard_moyen": -0.44
+  "p": 0.4318,
+  "percentile": 56.9,
+  "hasard_moyen": -1.81
  },
  {
   "actif": "SOL",
@@ -105,9 +105,9 @@
   "net_usd": -81.39383537806256,
   "trades": 80,
   "rejets": 5,
-  "p": 0.951,
-  "percentile": 4.9,
-  "hasard_moyen": -19.01
+  "p": 0.9585,
+  "percentile": 4.2,
+  "hasard_moyen": -25.65
  },
  {
   "actif": "SOL",
@@ -116,9 +116,9 @@
   "net_usd": 636.6344609685272,
   "trades": 28,
   "rejets": 0,
-  "p": 0.4093,
-  "percentile": 59.1,
-  "hasard_moyen": 820.14
+  "p": 0.0625,
+  "percentile": 93.8,
+  "hasard_moyen": 228.34
  },
  {
   "actif": "SOL",
@@ -127,9 +127,9 @@
   "net_usd": 383.1561241071173,
   "trades": 116,
   "rejets": 24,
-  "p": 0.6697,
-  "percentile": 33.0,
-  "hasard_moyen": 769.39
+  "p": 0.0135,
+  "percentile": 98.7,
+  "hasard_moyen": 75.72
  },
  {
   "actif": "BNB",
@@ -138,9 +138,9 @@
   "net_usd": 16.109268362260146,
   "trades": 27,
   "rejets": 1,
-  "p": 0.2514,
-  "percentile": 74.9,
-  "hasard_moyen": -4.33
+  "p": 0.2279,
+  "percentile": 77.2,
+  "hasard_moyen": -3.71
  },
  {
   "actif": "BNB",
@@ -149,9 +149,9 @@
   "net_usd": -68.41205791899087,
   "trades": 76,
   "rejets": 2,
-  "p": 0.927,
-  "percentile": 7.3,
-  "hasard_moyen": -12.06
+  "p": 0.9565,
+  "percentile": 4.3,
+  "hasard_moyen": -11.62
  },
  {
   "actif": "BNB",
@@ -160,9 +160,9 @@
   "net_usd": 638.8033705375192,
   "trades": 27,
   "rejets": 0,
-  "p": 0.7781,
-  "percentile": 22.2,
-  "hasard_moyen": 1040.35
+  "p": 0.1789,
+  "percentile": 82.2,
+  "hasard_moyen": 348.35
  },
  {
   "actif": "BNB",
@@ -171,9 +171,9 @@
   "net_usd": 264.3537051114437,
   "trades": 173,
   "rejets": 16,
-  "p": 0.938,
-  "percentile": 6.2,
-  "hasard_moyen": 736.29
+  "p": 0.0685,
+  "percentile": 93.2,
+  "hasard_moyen": 77.39
  },
  {
   "actif": "XRP",
@@ -182,9 +182,9 @@
   "net_usd": -23.869785087130456,
   "trades": 36,
   "rejets": 2,
-  "p": 0.6912,
-  "percentile": 30.9,
-  "hasard_moyen": -6.4
+  "p": 0.7316,
+  "percentile": 26.9,
+  "hasard_moyen": -5.71
  },
  {
   "actif": "XRP",
@@ -193,9 +193,9 @@
   "net_usd": -46.40219031165057,
   "trades": 64,
   "rejets": 3,
-  "p": 0.909,
-  "percentile": 9.1,
-  "hasard_moyen": 5.01
+  "p": 0.9375,
+  "percentile": 6.2,
+  "hasard_moyen": 2.78
  },
  {
   "actif": "XRP",
@@ -204,9 +204,9 @@
   "net_usd": 42.45309506521494,
   "trades": 25,
   "rejets": 0,
-  "p": 0.4813,
-  "percentile": 51.9,
-  "hasard_moyen": 35.12
+  "p": 0.3268,
+  "percentile": 67.3,
+  "hasard_moyen": 25.78
  },
  {
   "actif": "XRP",
@@ -215,9 +215,9 @@
   "net_usd": 134.36758119170875,
   "trades": 148,
   "rejets": 38,
-  "p": 0.061,
-  "percentile": 94.0,
-  "hasard_moyen": 13.17
+  "p": 0.077,
+  "percentile": 92.3,
+  "hasard_moyen": 29.64
  },
  {
   "actif": "DOGE",
@@ -226,9 +226,9 @@
   "net_usd": 14.33005040583301,
   "trades": 29,
   "rejets": 0,
-  "p": 0.2459,
-  "percentile": 75.5,
-  "hasard_moyen": -9.57
+  "p": 0.2519,
+  "percentile": 74.8,
+  "hasard_moyen": -4.7
  },
  {
   "actif": "DOGE",
@@ -237,9 +237,9 @@
   "net_usd": -60.54833451979518,
   "trades": 82,
   "rejets": 2,
-  "p": 0.9115,
-  "percentile": 8.8,
-  "hasard_moyen": -8.34
+  "p": 0.9135,
+  "percentile": 8.7,
+  "hasard_moyen": -12.78
  },
  {
   "actif": "DOGE",
@@ -248,9 +248,9 @@
   "net_usd": 1010.322227646108,
   "trades": 35,
   "rejets": 0,
-  "p": 0.5662,
-  "percentile": 43.4,
-  "hasard_moyen": 988.02
+  "p": 0.1424,
+  "percentile": 85.8,
+  "hasard_moyen": 622.62
  },
  {
   "actif": "DOGE",
@@ -259,9 +259,9 @@
   "net_usd": 1131.1182437139923,
   "trades": 123,
   "rejets": 40,
-  "p": 0.0405,
-  "percentile": 96.0,
-  "hasard_moyen": 529.68
+  "p": 0.0045,
+  "percentile": 99.6,
+  "hasard_moyen": 113.39
  },
  {
   "actif": "AVAX",
@@ -270,9 +270,9 @@
   "net_usd": 57.002974623935586,
   "trades": 28,
   "rejets": 1,
-  "p": 0.036,
-  "percentile": 96.5,
-  "hasard_moyen": -3.46
+  "p": 0.0075,
+  "percentile": 99.3,
+  "hasard_moyen": -0.49
  },
  {
   "actif": "AVAX",
@@ -281,9 +281,9 @@
   "net_usd": -98.12342889229696,
   "trades": 68,
   "rejets": 15,
-  "p": 0.9915,
-  "percentile": 0.8,
-  "hasard_moyen": -8.2
+  "p": 0.999,
+  "percentile": 0.1,
+  "hasard_moyen": -6.67
  },
  {
   "actif": "AVAX",
@@ -292,9 +292,9 @@
   "net_usd": 450.05572624213414,
   "trades": 26,
   "rejets": 3,
-  "p": 0.0005,
-  "percentile": 100.0,
-  "hasard_moyen": -36.1
+  "p": 0.065,
+  "percentile": 93.5,
+  "hasard_moyen": 138.84
  },
  {
   "actif": "AVAX",
@@ -303,9 +303,9 @@
   "net_usd": 232.19872543063323,
   "trades": 143,
   "rejets": 61,
-  "p": 0.0005,
-  "percentile": 100.0,
-  "hasard_moyen": -19.56
+  "p": 0.0505,
+  "percentile": 95.0,
+  "hasard_moyen": 62.5
  },
  {
   "actif": "BTC",
@@ -314,9 +314,9 @@
   "net_usd": 59.47674892508647,
   "trades": 81,
   "rejets": 0,
-  "p": 0.0935,
-  "percentile": 90.7,
-  "hasard_moyen": -13.11
+  "p": 0.0215,
+  "percentile": 97.9,
+  "hasard_moyen": -19.46
  },
  {
   "actif": "BTC",
@@ -325,9 +325,9 @@
   "net_usd": -62.442074409314536,
   "trades": 133,
   "rejets": 0,
-  "p": 0.7761,
-  "percentile": 22.4,
-  "hasard_moyen": -20.75
+  "p": 0.8276,
+  "percentile": 17.2,
+  "hasard_moyen": -23.34
  },
  {
   "actif": "BTC",
@@ -336,9 +336,9 @@
   "net_usd": 98.46207016379448,
   "trades": 20,
   "rejets": 0,
-  "p": 0.0005,
-  "percentile": 100.0,
-  "hasard_moyen": -65.33
+  "p": 0.1,
+  "percentile": 90.0,
+  "hasard_moyen": 9.35
  },
  {
   "actif": "BTC",
@@ -347,9 +347,9 @@
   "net_usd": -13.400686019787244,
   "trades": 178,
   "rejets": 0,
-  "p": 0.0565,
-  "percentile": 94.4,
-  "hasard_moyen": -69.26
+  "p": 0.3398,
+  "percentile": 66.0,
+  "hasard_moyen": -36.69
  },
  {
   "actif": "ETH",
@@ -358,9 +358,9 @@
   "net_usd": -52.30560226416652,
   "trades": 88,
   "rejets": 0,
-  "p": 0.7081,
-  "percentile": 29.2,
-  "hasard_moyen": -17.84
+  "p": 0.7756,
+  "percentile": 22.4,
+  "hasard_moyen": -20.32
  },
  {
   "actif": "ETH",
@@ -369,9 +369,9 @@
   "net_usd": -62.367147059582344,
   "trades": 147,
   "rejets": 0,
-  "p": 0.7491,
-  "percentile": 25.1,
-  "hasard_moyen": -21.75
+  "p": 0.8206,
+  "percentile": 17.9,
+  "hasard_moyen": -19.11
  },
  {
   "actif": "ETH",
@@ -380,9 +380,9 @@
   "net_usd": 191.1468358693831,
   "trades": 15,
   "rejets": 0,
-  "p": 0.0005,
-  "percentile": 100.0,
-  "hasard_moyen": -53.34
+  "p": 0.049,
+  "percentile": 95.2,
+  "hasard_moyen": 29.9
  },
  {
   "actif": "ETH",
@@ -391,9 +391,9 @@
   "net_usd": 112.92699260858329,
   "trades": 145,
   "rejets": 0,
-  "p": 0.0005,
-  "percentile": 100.0,
-  "hasard_moyen": -7.16
+  "p": 0.085,
+  "percentile": 91.5,
+  "hasard_moyen": 15.35
  },
  {
   "actif": "SOL",
@@ -402,9 +402,9 @@
   "net_usd": 105.80824295251402,
   "trades": 79,
   "rejets": 0,
-  "p": 0.019,
-  "percentile": 98.2,
-  "hasard_moyen": -14.04
+  "p": 0.0035,
+  "percentile": 99.7,
+  "hasard_moyen": -14.24
  },
  {
   "actif": "SOL",
@@ -413,9 +413,9 @@
   "net_usd": -100.6559073241015,
   "trades": 138,
   "rejets": 0,
-  "p": 0.935,
-  "percentile": 6.5,
-  "hasard_moyen": -15.1
+  "p": 0.9795,
+  "percentile": 2.0,
+  "hasard_moyen": -13.93
  },
  {
   "actif": "SOL",
@@ -424,9 +424,9 @@
   "net_usd": -36.78852303637056,
   "trades": 25,
   "rejets": 0,
-  "p": 0.1839,
-  "percentile": 81.7,
-  "hasard_moyen": -78.98
+  "p": 0.5992,
+  "percentile": 40.1,
+  "hasard_moyen": -13.56
  },
  {
   "actif": "SOL",
@@ -435,9 +435,9 @@
   "net_usd": -19.54096198805613,
   "trades": 143,
   "rejets": 0,
-  "p": 0.2809,
-  "percentile": 72.0,
-  "hasard_moyen": -52.5
+  "p": 0.4533,
+  "percentile": 54.7,
+  "hasard_moyen": -22.73
  },
  {
   "actif": "BNB",
@@ -446,9 +446,9 @@
   "net_usd": 50.71820651353952,
   "trades": 98,
   "rejets": 0,
-  "p": 0.1304,
-  "percentile": 87.0,
-  "hasard_moyen": -15.61
+  "p": 0.007,
+  "percentile": 99.3,
+  "hasard_moyen": -27.31
  },
  {
   "actif": "BNB",
@@ -457,9 +457,9 @@
   "net_usd": -70.46731486417482,
   "trades": 139,
   "rejets": 0,
-  "p": 0.7981,
-  "percentile": 20.2,
-  "hasard_moyen": -24.57
+  "p": 0.8311,
+  "percentile": 16.9,
+  "hasard_moyen": -28.03
  },
  {
   "actif": "BNB",
@@ -468,9 +468,9 @@
   "net_usd": -26.725178188967917,
   "trades": 24,
   "rejets": 0,
-  "p": 0.2034,
-  "percentile": 79.7,
-  "hasard_moyen": -77.46
+  "p": 0.5427,
+  "percentile": 45.8,
+  "hasard_moyen": -13.12
  },
  {
   "actif": "BNB",
@@ -479,9 +479,9 @@
   "net_usd": -26.362450721242144,
   "trades": 177,
   "rejets": 0,
-  "p": 0.1789,
-  "percentile": 82.2,
-  "hasard_moyen": -72.87
+  "p": 0.3878,
+  "percentile": 61.2,
+  "hasard_moyen": -37.7
  },
  {
   "actif": "XRP",
@@ -490,9 +490,9 @@
   "net_usd": 89.12593779272184,
   "trades": 86,
   "rejets": 0,
-  "p": 0.0485,
-  "percentile": 95.2,
-  "hasard_moyen": -8.67
+  "p": 0.0195,
+  "percentile": 98.1,
+  "hasard_moyen": -11.69
  },
  {
   "actif": "XRP",
@@ -501,9 +501,9 @@
   "net_usd": -60.39804783458793,
   "trades": 162,
   "rejets": 0,
-  "p": 0.8201,
-  "percentile": 18.0,
-  "hasard_moyen": -9.63
+  "p": 0.8011,
+  "percentile": 19.9,
+  "hasard_moyen": -18.73
  },
  {
   "actif": "XRP",
@@ -512,9 +512,9 @@
   "net_usd": 201.71922932783565,
   "trades": 17,
   "rejets": 0,
-  "p": 0.1264,
-  "percentile": 87.4,
-  "hasard_moyen": 39.85
+  "p": 0.2939,
+  "percentile": 70.7,
+  "hasard_moyen": 121.95
  },
  {
   "actif": "XRP",
@@ -523,9 +523,9 @@
   "net_usd": 243.6668350780019,
   "trades": 160,
   "rejets": 0,
-  "p": 0.0015,
-  "percentile": 99.9,
-  "hasard_moyen": 23.56
+  "p": 0.043,
+  "percentile": 95.8,
+  "hasard_moyen": 30.22
  },
  {
   "actif": "DOGE",
@@ -534,9 +534,9 @@
   "net_usd": 30.24824119365898,
   "trades": 73,
   "rejets": 0,
-  "p": 0.2409,
-  "percentile": 76.0,
-  "hasard_moyen": -4.69
+  "p": 0.1914,
+  "percentile": 80.9,
+  "hasard_moyen": -7.77
  },
  {
   "actif": "DOGE",
@@ -545,9 +545,9 @@
   "net_usd": -60.08876567601032,
   "trades": 156,
   "rejets": 0,
-  "p": 0.7996,
-  "percentile": 20.1,
-  "hasard_moyen": -10.32
+  "p": 0.8221,
+  "percentile": 17.8,
+  "hasard_moyen": -14.26
  },
  {
   "actif": "DOGE",
@@ -556,9 +556,9 @@
   "net_usd": 91.45652293045067,
   "trades": 20,
   "rejets": 0,
-  "p": 0.0025,
-  "percentile": 99.8,
-  "hasard_moyen": -27.13
+  "p": 0.3673,
+  "percentile": 63.3,
+  "hasard_moyen": 78.6
  },
  {
   "actif": "DOGE",
@@ -567,9 +567,9 @@
   "net_usd": 255.70925725670097,
   "trades": 104,
   "rejets": 0,
-  "p": 0.0005,
-  "percentile": 100.0,
-  "hasard_moyen": -18.35
+  "p": 0.015,
+  "percentile": 98.5,
+  "hasard_moyen": 28.75
  },
  {
   "actif": "AVAX",
@@ -578,9 +578,9 @@
   "net_usd": -32.727099650175894,
   "trades": 94,
   "rejets": 0,
-  "p": 0.6337,
-  "percentile": 36.6,
-  "hasard_moyen": -9.75
+  "p": 0.6832,
+  "percentile": 31.7,
+  "hasard_moyen": -11.9
  },
  {
   "actif": "AVAX",
@@ -589,9 +589,9 @@
   "net_usd": -42.62737230159161,
   "trades": 138,
   "rejets": 0,
-  "p": 0.6417,
-  "percentile": 35.9,
-  "hasard_moyen": -18.17
+  "p": 0.7211,
+  "percentile": 27.9,
+  "hasard_moyen": -13.03
  },
  {
   "actif": "AVAX",
@@ -600,9 +600,9 @@
   "net_usd": -24.450000636283484,
   "trades": 18,
   "rejets": 0,
-  "p": 0.6272,
-  "percentile": 37.3,
-  "hasard_moyen": -10.69
+  "p": 0.5347,
+  "percentile": 46.5,
+  "hasard_moyen": -10.79
  },
  {
   "actif": "AVAX",
@@ -611,8 +611,8 @@
   "net_usd": -55.18479840954281,
   "trades": 179,
   "rejets": 0,
-  "p": 0.9335,
-  "percentile": 6.7,
-  "hasard_moyen": 8.88
+  "p": 0.7506,
+  "percentile": 24.9,
+  "hasard_moyen": -15.58
  }
 ]

@@ -727,6 +727,73 @@ toutes en absolu, à un coût : 80 % de perte maximale.
 
 ---
 
+## Grille de robustesse — un seul survivant sur cinquante-six
+
+`scripts/robustness_grid.py` fait tourner les quatre baselines sur sept actifs
+(BTC, ETH, SOL, BNB, XRP, DOGE, AVAX) et deux intervalles, chaque cellule avec
+son modèle nul à 2000 tirages. Horizons convertis à l'échelle de temps,
+plafond de stop identique partout, **zéro rejet**.
+
+```
+  cellules testees                            56
+  p < 0.05 brut                               14
+  attendues par pur hasard a 5%              2.8
+  survivantes apres Benjamini-Hochberg         1
+
+    tsmom  BTC 1d  net +244.89  142 trades  p 0.0005
+
+  Significativement PIRES que le hasard : 6 cellules
+    rsi_reversion      6 cellules
+```
+
+**Le résultat de fond n'a pas changé : aucun edge robuste.** Un signal qui
+survit sur exactement une cellule sur quatorze est la définition de la
+non-robustesse, et cette grille a été recalculée quatre fois avec des
+spécifications différentes — les degrés de liberté du chercheur sont réels et
+doivent être comptés.
+
+Le signal le plus **constant** de toute la grille pointe dans l'autre sens :
+`rsi_reversion` est significativement pire que le hasard dans six cellules, et
+perd 501 $ *avant tout coût* sur les sept actifs en daily. Le retour à la
+moyenne n'est pas une bonne stratégie abîmée par les frais.
+
+### Le contrefactuel a d'abord donné huit survivants — c'était un artefact
+
+Avec la première version du modèle nul, la grille annonçait **huit** cellules
+survivant à Benjamini-Hochberg. Le contrefactuel promettait de garder « tout
+de la stratégie sauf le moment où elle entre » ; il n'en gardait pas les
+sorties. Les quatre stratégies sortent sur signal, le bras aléatoire ne
+pouvait sortir qu'au stop, et ses positions tenaient **1,4 à 6,7 fois plus
+longtemps**. Cas limite mesuré sur série synthétique : sans durée imitée, le
+hasard produit **un seul trade tenu 546 barres**.
+
+Une stratégie qui coupe vite paraissait donc brillante face à un
+contrefactuel qui encaissait toutes les reprises. Corrigé :
+
+| cellule | ancien p | corrigé |
+|---|---:|---:|
+| `ETH 4h turtle_breakout` | 0,0005 | 0,0598 |
+| `DOGE 4h tsmom` | 0,0010 | 0,0133 |
+
+### L'hypothèse pré-enregistrée mérite d'être lue à part
+
+Liu & Tsyvinski portent spécifiquement sur **BTC, ETH et XRP**, à un horizon
+d'une à quatre semaines. Ce n'est pas une cellule trouvée en fouillant :
+
+| actif | 1 j | 4 h |
+|---|---:|---:|
+| BTC | **p 0,0005** | 0,34 |
+| ETH | 0,0475 | 0,085 |
+| XRP | 0,077 | 0,043 |
+
+Cinq des six cellules sont positives en PnL, trois sont sous 0,05, et la
+direction est constante. Mais **ces trois actifs sont fortement corrélés** :
+ce ne sont pas trois confirmations indépendantes, et une méthode de
+combinaison qui suppose l'indépendance surestimerait la significativité.
+Suggestif, pas établi.
+
+---
+
 ## Roadmap
 
 | | Phase | Porte de sortie |
