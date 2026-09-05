@@ -154,3 +154,66 @@ def test_donchian_encadre_les_prix():
     for h, low in zip(hi, lo):
         if h is not None and low is not None:
             assert h >= low
+
+
+# --------------------------------------------------------------------------
+#  ADX / DMI — le commutateur de regime de la documentation
+# --------------------------------------------------------------------------
+
+def test_une_barre_englobante_n_est_directionnelle_dans_aucun_sens():
+    """Le mouvement directionnel ne compte que ce qui DEPASSE l'oppose.
+
+    Une barre a la fois plus haute et plus basse que la precedente est
+    indecise. La compter dans les deux sens gonflerait la force de tendance
+    mesuree — et c'est precisement ce chiffre qui commuterait le desk entre
+    suivi de tendance et retour a la moyenne.
+    """
+    from trading_desk.features.indicators import dmi
+
+    # Barre 1 englobe strictement la barre 0 : +DM et -DM doivent rester nuls.
+    englobante = [
+        Bar(asset="X", ts_ms=0, open=Decimal("100"), high=Decimal("101"),
+            low=Decimal("99"), close=Decimal("100"), volume=Decimal("1")),
+        Bar(asset="X", ts_ms=1, open=Decimal("100"), high=Decimal("105"),
+            low=Decimal("95"), close=Decimal("100"), volume=Decimal("1")),
+    ]
+    # haut = +4, bas = +4 : ni l'un ni l'autre ne domine, donc aucun DM.
+    plus_di, minus_di = dmi(englobante, period=1)
+    assert plus_di[1] == 0.0 or plus_di[1] is None
+    assert minus_di[1] == 0.0 or minus_di[1] is None
+
+
+def test_l_adx_monte_en_tendance_et_reste_bas_en_range():
+    """Le critere de fond : ADX doit separer les deux regimes.
+
+    Sans cette separation, la regle « > 25 on suit la tendance, < 20 on
+    revient a la moyenne » commuterait au hasard.
+    """
+    from trading_desk.features.indicators import adx
+
+    def serie(prix: list[float]) -> list[Bar]:
+        return [Bar(asset="X", ts_ms=i * 86_400_000, open=Decimal(str(p)),
+                    high=Decimal(str(p + 1)), low=Decimal(str(p - 1)),
+                    close=Decimal(str(p)), volume=Decimal("1"))
+                for i, p in enumerate(prix)]
+
+    tendance = adx(serie([100 + 2 * i for i in range(120)]), 14)
+    plat = adx(serie([100 + (3 if i % 2 else 0) for i in range(120)]), 14)
+
+    t = [v for v in tendance if v is not None]
+    r = [v for v in plat if v is not None]
+    assert t and r
+    assert t[-1] > 25, "une hausse monotone doit donner un ADX de tendance"
+    assert r[-1] < 20, "une oscillation sans direction doit rester en range"
+
+
+def test_l_adx_ne_produit_rien_avant_son_double_lissage():
+    """DX est lisse une fois de plus que +DI/-DI : la premiere valeur arrive
+    vers `2 * period`. Le cout du filtre doit etre visible, pas devine."""
+    from trading_desk.features.indicators import adx
+
+    bars = synthetic_bars(count=60, seed=4)
+    valeurs = adx(bars, 14)
+    premier = next((i for i, v in enumerate(valeurs) if v is not None), None)
+    assert premier is not None
+    assert premier >= 14, "aucune valeur ne peut preceder une fenetre de Wilder"

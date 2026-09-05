@@ -168,6 +168,73 @@ def atr(bars: Sequence[Bar], period: int = 14) -> Series:
     return wilder(true_range(bars), period)
 
 
+
+def dmi(bars: Sequence[Bar], period: int = 14) -> tuple[Series, Series]:
+    """+DI et -DI de Wilder : la force directionnelle, separee par sens.
+
+    Le mouvement directionnel ne compte que ce qui DEPASSE le mouvement
+    oppose. Une barre plus haute ET plus basse que la precedente (englobante)
+    ne compte donc dans aucun des deux sens : elle est indecise, et la traiter
+    comme directionnelle dans les deux sens gonflerait artificiellement la
+    force de tendance mesuree.
+    """
+    plus_dm = [0.0] * len(bars)
+    minus_dm = [0.0] * len(bars)
+    for i in range(1, len(bars)):
+        haut = float(bars[i].high) - float(bars[i - 1].high)
+        bas = float(bars[i - 1].low) - float(bars[i].low)
+        if haut > bas and haut > 0:
+            plus_dm[i] = haut
+        if bas > haut and bas > 0:
+            minus_dm[i] = bas
+
+    tr_liss = wilder(true_range(bars), period)
+    plus_liss = wilder(plus_dm, period)
+    minus_liss = wilder(minus_dm, period)
+
+    plus_di: Series = [None] * len(bars)
+    minus_di: Series = [None] * len(bars)
+    for i in range(len(bars)):
+        t, p, m = tr_liss[i], plus_liss[i], minus_liss[i]
+        if t is None or p is None or m is None or t == 0:
+            continue
+        plus_di[i] = 100.0 * p / t
+        minus_di[i] = 100.0 * m / t
+    return plus_di, minus_di
+
+
+def adx(bars: Sequence[Bar], period: int = 14) -> Series:
+    """Force de tendance, sans son sens. Wilder, 1978.
+
+    `docs/regles-trading-phases-marche.md` en fait le commutateur central du
+    desk : au-dela de 25 on suit la tendance, en dessous de 20 on revient a
+    la moyenne. C'est une regle testable, et c'est a ce titre qu'ADX entre
+    ici — pas parce qu'il est populaire.
+
+    Le double lissage est voulu : DX est deja bruite, et l'ADX est sa moyenne
+    de Wilder. Il en resulte un retard d'environ `2 * period` barres avant
+    qu'une valeur soit disponible — un cout a connaitre avant de s'en servir
+    comme filtre.
+    """
+    plus_di, minus_di = dmi(bars, period)
+    dx: list[float] = []
+    indices: list[int] = []
+    for i in range(len(bars)):
+        p, m = plus_di[i], minus_di[i]
+        if p is None or m is None or (p + m) == 0:
+            continue
+        dx.append(100.0 * abs(p - m) / (p + m))
+        indices.append(i)
+
+    out: Series = [None] * len(bars)
+    if len(dx) < period:
+        return out
+    lisse = wilder(dx, period)
+    for k, i in enumerate(indices):
+        out[i] = lisse[k]
+    return out
+
+
 def realized_vol_bps(values: Sequence[float], period: int = 24) -> Series:
     """Ecart-type des rendements log, en points de base, sur une fenetre."""
     import math

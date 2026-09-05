@@ -6,7 +6,7 @@ développement et que ces documents doivent vivre avec le code qu'ils décrivent
 
 `00-manifeste-indexation-rag.md` est l'index maître : il recense ~24 documents
 et les associe à une phase, un agent destinataire et des tags d'interrogation.
-**Vingt documents sur les vingt-quatre sont présents à ce jour** — le reste est
+**Vingt-cinq documents sont présents** — le corpus annoncé est complet — le reste est
 annoncé comme suivant.
 
 | document | testable avec l'outillage actuel ? |
@@ -232,3 +232,69 @@ jeu d'actifs incluant les délistés avant d'en faire quoi que ce soit.
   aux actions ; l'horloge de funding est mesurable en crypto.
 - **`macro-momentum-equity-narratives.md`** : hors périmètre — le dépôt ne
   traite que des perpétuels crypto.
+
+
+## Cinquième lot : la règle de régime, testée
+
+`regles-trading-phases-marche.md` fait de l'ADX le commutateur central du
+desk : au-delà de 25 on suit la tendance, en dessous de 20 on revient à la
+moyenne. C'est une règle opérationnelle chiffrée, donc testable — et elle
+offrait une porte de sortie à `rsi_reversion`, que deux méthodes
+indépendantes condamnent. **Peut-être n'était-elle mauvaise que parce qu'elle
+tournait dans le mauvais régime.**
+
+ADX et DMI ont été implémentés (`features/indicators.py`, lissage de Wilder,
+formules du document). Distribution sur BTC 1 j : 56 % du temps en tendance,
+23 % en range, 21 % dans la zone morte 20-25.
+
+### Le filtre ne sauve pas le retour à la moyenne
+
+| | net (7 actifs) | trades | écart |
+|---|---:|---:|---|
+| `rsi_reversion` brut | −506,01 | 511 | |
+| `rsi_reversion` + ADX < 20 | −46,63 | 66 | **+459 $** |
+
+La perte chute de 91 % — mais **le nombre de trades chute de 87 %**. Par
+trade, l'amélioration n'est que de **28 %** (−0,99 → −0,71 $). L'essentiel du
+gain vient de *ne pas trader*, pas d'un meilleur signal.
+
+Et le modèle nul tranche : filtrée, la stratégie ne bat toujours le hasard
+nulle part.
+
+| actif | BTC | ETH | SOL | BNB | XRP | DOGE | AVAX |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| p | 0,988 | 0,970 | 0,349 | 0,106 | 0,206 | 0,874 | 0,691 |
+
+BTC, ETH et DOGE restent **significativement pires que le hasard**. Le filtre
+réduit les dégâts sans corriger le signal — et il ne laisse que 6 à 17 trades
+par actif, trop peu pour conclure dans un sens comme dans l'autre.
+
+### Et il dégrade le suivi de tendance
+
+| | brut | + ADX > 25 | écart |
+|---|---:|---:|---:|
+| `turtle_breakout` | +3 343,27 | +2 899,61 | **−443,66 $** |
+| `tsmom` | +2 512,95 | +1 911,20 | **−601,75 $** |
+
+La prescription du document coûte 440 à 600 $ sur ces données. L'ADX a besoin
+d'environ `2 × period` barres avant de produire une valeur, et sa nature
+retardée lui fait manquer précisément les débuts de tendance — là où le suivi
+de tendance gagne son argent.
+
+### Les quatre autres documents
+
+- **`macro-momentum-microstructure-execution-mev.md`** : VWAP/TWAP, MEV,
+  routage convexe. Même remarque que pour Almgren-Chriss — à 44-500 $ de
+  notionnel sur des perpétuels, il n'y a ni impact à diluer ni sandwich à
+  craindre. Hyperliquid est un carnet d'ordres on-chain, pas un AMM : le
+  routage fractionné entre pools ne s'y applique pas.
+- **`sourcing-donnees-temps-reel.md`** : CoinGlass V4, FRED. Ces flux
+  rendraient testables funding, OI et liquidations — les seules séries que le
+  dépôt ne peut pas produire seul, et que `costs.py` traite aujourd'hui comme
+  une constante.
+- **`macro-momentum-nlp-sentiment-finbert.md`** : VADER + FinBERT. Le dépôt
+  a déjà `agents/isolation.py` pour traiter le contenu externe comme donnée
+  et non comme instruction (invariant `I11_PROMPT_ISOLATION`) — c'est la
+  moitié sécurité du problème. La moitié signal reste à mesurer.
+- **`manuel-analyse-fondamentale.pdf`** : archivé, hors périmètre immédiat —
+  le dépôt ne traite que des perpétuels crypto.
