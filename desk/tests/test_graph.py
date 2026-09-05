@@ -480,3 +480,28 @@ def test_la_discrimination_exige_les_deux_populations():
     assert book.issued_expectancy_r() is None
     assert book.discrimination_r() is None
     assert "indéterminée" in book.format_report()
+
+
+def test_le_prompt_de_la_strategie_definit_la_conviction_quil_est_note_dessus():
+    """Le graphe écarte tout setup sous `min_conviction`. Un agent jugé sur
+    un nombre dont personne ne lui a dit l'échelle produit un nombre qui ne
+    veut rien dire — et la porte filtre alors du bruit de notation.
+    """
+    from trading_desk.agents.roster import STRATEGY_SYSTEM
+
+    assert "conviction" in STRATEGY_SYSTEM
+    assert "probabilité" in STRATEGY_SYSTEM
+
+
+def test_le_prompt_ne_revele_pas_le_seuil_de_la_porte():
+    """Donner le seuil inviterait à s'y poser juste au-dessus.
+
+    Le champ ne transporte alors plus d'information : il transporte la
+    connaissance du seuil, que le desk possédait déjà.
+    """
+    from trading_desk.agents.graph import GraphConfig
+    from trading_desk.agents.roster import STRATEGY_SYSTEM
+
+    seuil = str(GraphConfig().min_conviction)          # "0.6"
+    assert seuil not in STRATEGY_SYSTEM
+    assert seuil.replace(".", ",") not in STRATEGY_SYSTEM
