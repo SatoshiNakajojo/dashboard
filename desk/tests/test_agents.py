@@ -570,3 +570,39 @@ def test_la_part_de_sortie_designe_le_levier():
 
     vide = AgentMetrics(agent="x", runs=0, valid=0, abstentions=0)
     assert vide.output_share_pct == 0.0
+
+
+def test_les_bornes_de_longueur_sont_dites_en_mots_et_en_caracteres():
+    """Un modèle ne compte pas les caractères pendant qu'il rédige.
+
+    Mesure du 5 septembre 2026 : neuf des dix dépassements observés portaient
+    sur `thesis_summary`, malgré une consigne en caractères déjà présente.
+    Chacun coûte une tentative entière — un appel complet refacturé.
+    """
+    from trading_desk.agents.runner import limites_de_longueur, payload_schema
+    from trading_desk.contracts.signals import AnalystView
+
+    texte = limites_de_longueur(payload_schema(AnalystView))
+    assert "600 caracteres maximum" in texte
+    assert "85 mots" in texte, "le budget en mots doit accompagner la borne"
+    assert "300 caracteres maximum" in texte
+    assert "42 mots" in texte
+
+
+def test_le_budget_en_mots_garde_une_marge_sous_la_borne():
+    """Plus serré que la conversion exacte : mieux vaut une marge inutilisée
+    qu'un rejet. Le caractère reste la borne qui fait foi."""
+    from trading_desk.agents.runner import limites_de_longueur, payload_schema
+    from trading_desk.contracts.signals import AnalystView
+
+    texte = limites_de_longueur(payload_schema(AnalystView))
+    # 85 mots x ~6 caracteres = ~510, sous les 600 imposes.
+    assert 85 * 6 < 600
+
+
+def test_un_schema_sans_borne_najoute_rien_au_prompt():
+    """Une section vide ferait payer des tokens pour une consigne creuse."""
+    from trading_desk.agents.runner import limites_de_longueur, payload_schema
+    from trading_desk.contracts.signals import RegimeRead
+
+    assert limites_de_longueur(payload_schema(RegimeRead)) == ""

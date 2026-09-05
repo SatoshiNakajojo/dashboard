@@ -99,8 +99,14 @@ def mesurer(nom, bars, debuts, *, plafond, effort, modele, interval):
             suivre(book, entree, bars[debut + WINDOW_BARS:], entree.asset, n)
         marque = "—"
         if entree is not None:
-            etat = entree.outcome or "ouvert"
-            marque = f"{'ÉMIS  ' if entree.issued else 'rejeté'} {etat:>8}"
+            # Relu DEPUIS le livre, pas depuis `entree` : `ShadowEntry` est
+            # figé, donc `resolve()` remplace la case de la liste et la
+            # référence locale reste sur l'ancien objet, éternellement
+            # « ouvert ». Le stockage est juste ; c'est l'affichage qui
+            # mentirait.
+            a_jour = book.entries[-1]
+            etat = a_jour.outcome or "ouvert"
+            marque = f"{'ÉMIS  ' if a_jour.issued else 'rejeté'} {etat:>8}"
         print(f"    {nom:<11} {i}/{len(debuts)} {res.stage.value:<14} "
               f"{marque}  {float(llm.spent_usd):.4f} $", flush=True)
     return book, llm, interrompu

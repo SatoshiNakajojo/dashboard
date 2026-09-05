@@ -90,18 +90,40 @@ def limites_de_longueur(schema: type[BaseModel]) -> str:
     Ces bornes sont lues dans le schema plutot que recopiees dans le prompt :
     une consigne recopiee ment des que quelqu'un modifie le `Field`, et un
     prompt qui ment sur son propre schema est pire que pas de consigne.
+
+    **La borne est doublee d'un budget en MOTS**, et ce n'est pas de la
+    redondance. Un modele ne compte pas les caracteres — il n'a aucun moyen
+    fiable de verifier « 600 caracteres » pendant qu'il redige. Mesure sur les
+    campagnes du 5 septembre 2026 : neuf des dix depassements observes
+    portaient sur `thesis_summary`, malgre une consigne en caracteres deja
+    presente. Chacun coute une tentative entiere, soit un appel complet
+    refacture — et la reprise se fait sous contrainte de longueur, donc rien
+    ne dit qu'elle produit une meilleure analyse.
+
+    Le budget est volontairement PLUS SERRE que la conversion exacte
+    (`max_length // 7` la ou le francais tourne autour de 6 caracteres par
+    mot, espace comprise) : il vaut mieux une marge inutilisee qu'un rejet.
+    Le caractere reste la borne qui fait foi ; le mot est ce que le modele
+    sait viser.
+
+    Ceci reduit les rejets, ne les supprime pas : Pydantic reste le seul
+    arbitre, et c'est bien lui qui doit l'etre.
     """
     bornes = []
     for nom, f in schema.model_fields.items():
         for m in f.metadata:
             longueur = getattr(m, "max_length", None)
             if longueur is not None:
-                bornes.append(f"- `{nom}` : {longueur} caracteres maximum")
+                bornes.append(
+                    f"- `{nom}` : {longueur} caracteres maximum, "
+                    f"soit environ {longueur // 7} mots"
+                )
     if not bornes:
         return ""
     return (
         "\n\nLongueurs imposees par ton schema de sortie. Un champ trop long "
-        "est rejete\net te fait perdre ton tour — sois concis :\n"
+        "est rejete\net te fait perdre ton tour. Vise le budget en mots : "
+        "c'est celui que tu peux\ncontroler en redigeant.\n"
         + "\n".join(bornes)
     )
 
