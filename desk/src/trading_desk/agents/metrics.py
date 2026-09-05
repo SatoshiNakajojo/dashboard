@@ -16,6 +16,7 @@ un agent qui ne s'abstient JAMAIS qui doit inquieter.
 from __future__ import annotations
 
 from decimal import Decimal
+from typing import ClassVar
 
 from ..contracts.common import Frozen
 from .runner import AgentRun
@@ -74,6 +75,28 @@ class AgentMetrics(Frozen):
         per_month = Decimal(str(decisions_per_hour * 24 * 30))
         return self.cost_per_decision_usd * per_month
 
+    # La porte pose DEUX conditions, et les confondre a induit en erreur :
+    # « NON FRANCHIE — avocat_du_diable » se lit comme « cet agent n'est pas
+    # fiable », alors que le fait mesure etait « on ne l'a appele que 15 fois ».
+    # L'un bloque le P4, l'autre demande seulement de tourner plus longtemps.
+
+    MIN_SAMPLE: ClassVar[int] = 30
+
+    @property
+    def sample_is_sufficient(self) -> bool:
+        """A-t-on assez d'appels pour que le taux veuille dire quelque chose ?
+
+        Un agent en aval d'une condition — l'Avocat du diable n'est appele que
+        s'il existe un setup a attaquer — recoit MOINS d'appels qu'il n'y a de
+        cycles. Trente cycles ne font donc pas trente appels pour lui.
+        """
+        return self.runs >= self.MIN_SAMPLE
+
+    @property
+    def quality_passes(self) -> bool:
+        """Le critere de fond : le modele respecte-t-il son schema ?"""
+        return self.valid_rate_pct > 98.0
+
     @property
     def passes_p3_gate(self) -> bool:
         """Porte P3 : > 98 % de sorties valides, sur un echantillon credible.
@@ -81,7 +104,7 @@ class AgentMetrics(Frozen):
         Le seuil d'echantillon compte autant que le taux : 100 % sur trois
         appels ne prouve rien.
         """
-        return self.runs >= 30 and self.valid_rate_pct > 98.0
+        return self.sample_is_sufficient and self.quality_passes
 
 
 def summarize(runs: list[AgentRun]) -> AgentMetrics:
@@ -103,6 +126,20 @@ def summarize(runs: list[AgentRun]) -> AgentMetrics:
     )
 
 
+def _verdict(m: AgentMetrics) -> str:
+    """Le verdict, en nommant ce qui manque.
+
+    « NON FRANCHIE » sans motif envoie chercher un probleme de prompt la ou il
+    n'y a qu'un echantillon trop court.
+    """
+    if m.passes_p3_gate:
+        return "FRANCHIE"
+    if not m.quality_passes:
+        return f"NON FRANCHIE — qualite ({m.valid_rate_pct:.1f} % de sorties valides)"
+    return (f"INDETERMINEE — {m.runs} appels sur {m.MIN_SAMPLE} requis "
+            f"(qualite : {m.valid_rate_pct:.1f} %)")
+
+
 def format_report(metrics: AgentMetrics, *, decisions_per_hour: float = 12.0) -> str:
     lines = [
         "",
@@ -117,8 +154,7 @@ def format_report(metrics: AgentMetrics, *, decisions_per_hour: float = 12.0) ->
         f"   (a {decisions_per_hour:.0f}/h)",
         f"  latence p95          {metrics.latency_p95_ms:>8} ms",
         "  " + "-" * 58,
-        f"  porte P3 : {'FRANCHIE' if metrics.passes_p3_gate else 'NON FRANCHIE'}"
-        f"{'' if metrics.runs >= 30 else '  (echantillon < 30)'}",
+        f"  porte P3 : {_verdict(metrics)}",
         "",
     ]
     return "\n".join(lines)

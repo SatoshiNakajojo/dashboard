@@ -299,6 +299,37 @@ def test_la_porte_p3_echoue_sous_98_pourcent():
     assert not m.passes_p3_gate
 
 
+def test_un_echantillon_court_n_est_pas_un_echec_de_qualite():
+    """Les deux conditions de la porte doivent rester lisibles separement.
+
+    Mesure reelle du 5 septembre 2026 : l'Avocat du diable n'a recu que 15
+    appels sur 30 cycles — il n'intervient que s'il existe un setup a
+    attaquer, et la Strategie s'est abstenue une fois sur deux. Le verdict
+    disait « NON FRANCHIE — avocat_du_diable », ce qui se lit comme un defaut
+    de l'agent alors que sa qualite etait de 100 %.
+    """
+    m = summarize(_runs(15))
+    assert m.quality_passes, "100 % de sorties valides"
+    assert not m.sample_is_sufficient, "15 appels, il en faut 30"
+    assert not m.passes_p3_gate
+
+
+def test_le_verdict_nomme_ce_qui_manque():
+    """« NON FRANCHIE » sans motif envoie chercher un probleme de prompt la
+    ou il n'y a qu'un echantillon trop court."""
+    from trading_desk.agents.metrics import _verdict
+
+    assert _verdict(summarize(_runs(30))) == "FRANCHIE"
+
+    court = _verdict(summarize(_runs(15)))
+    assert court.startswith("INDETERMINEE")
+    assert "15 appels sur 30" in court
+
+    mauvais = _verdict(summarize(_runs(40, failures=5)))
+    assert mauvais.startswith("NON FRANCHIE")
+    assert "qualite" in mauvais
+
+
 def test_extrapolation_du_cout_mensuel():
     m = summarize(_runs(30))
     mensuel = m.monthly_cost_usd(decisions_per_hour=12)

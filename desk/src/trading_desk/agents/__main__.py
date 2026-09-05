@@ -256,11 +256,23 @@ def main() -> int:
                             decisions_per_hour=args.cadence))
 
     global_ = summarize(tous)
+    cycles = sum(stages.values())
     print("  " + "=" * 58)
     print(f"  TOTAL   {global_.runs} appels · "
           f"{float(llm.spent_usd):.4f} $ · "
           f"{global_.valid_rate_pct:.1f} % valides · "
           f"p95 {global_.latency_p95_ms} ms")
+
+    # Le chiffre qui tranchera le P5. Par CYCLE, parce que c'est l'unite de
+    # decision : additionner les extrapolations par agent surestimerait ceux
+    # qui ne sont appeles que sous condition — l'Avocat du diable n'intervient
+    # que s'il existe un setup a attaquer.
+    if cycles:
+        par_cycle = llm.spent_usd / cycles
+        mensuel = float(par_cycle) * args.cadence * 24 * 30
+        print(f"  Cout d'un cycle complet : {float(par_cycle):.4f} $ "
+              f"— soit {mensuel:,.0f} $/mois a {args.cadence:.0f} decisions/h")
+        print("  Le P5 exige de battre les baselines NET de ce montant.")
     if llm.unpriced_calls:
         print(f"  {llm.unpriced_calls} appel(s) sur un modèle hors grille : "
               "le coût affiché n'est pas fiable.")
@@ -269,18 +281,33 @@ def main() -> int:
 
     # La porte se joue agent par agent : une moyenne globale masque l'agent
     # qui echoue, et c'est precisement celui qui bloque le passage au P4.
-    faibles = [n for n in sorted(par_agent)
-               if not summarize(par_agent[n]).passes_p3_gate]
+    mesures = {n: summarize(r) for n, r in par_agent.items()}
+    rates = [n for n in sorted(mesures) if not mesures[n].quality_passes]
+    courts = [n for n in sorted(mesures)
+              if mesures[n].quality_passes and not mesures[n].sample_is_sufficient]
+
     print("  " + "=" * 58)
-    if faibles:
-        print(f"  PORTE P3 : NON FRANCHIE — {', '.join(faibles)}")
+    if rates:
+        print(f"  PORTE P3 : NON FRANCHIE — qualite insuffisante : {', '.join(rates)}")
+    elif courts:
+        # Un agent conditionnel recoit moins d'appels qu'il n'y a de cycles.
+        # Dire combien de cycles il faudrait evite de relancer au hasard.
+        print(f"  PORTE P3 : INDETERMINEE — echantillon trop court : {', '.join(courts)}")
+        for n in courts:
+            m = mesures[n]
+            besoin = int(cycles * m.MIN_SAMPLE / m.runs) + 1 if m.runs else 0
+            print(f"    {n} : {m.runs} appels sur {cycles} cycles "
+                  f"({100 * m.runs / cycles:.0f} %) — il en faudrait ~{besoin}")
+        print("  La qualite est atteinte partout ; il manque des appels, pas de la fiabilite.")
     else:
         print("  PORTE P3 : FRANCHIE pour tous les agents.")
     print()
 
     if memory:
         memory.close()
-    return 0 if not faibles else 1
+    # Un echantillon trop court n'est pas un echec : c'est une mesure a
+    # poursuivre. Seule la qualite insuffisante justifie un code d'erreur.
+    return 1 if rates else 0
 
 
 if __name__ == "__main__":

@@ -14,6 +14,18 @@ ordre à un vrai exchange.
 > aléatoires (p = 0,15) — ce dernier étant nettement plus favorable à la
 > stratégie que le premier. Ce n'est pas un blocage : c'est l'information que
 > la phase devait produire. [Détail et chiffres](#résultat-du-p2--mesuré-pas-espéré).
+>
+> **Le P3 a tourné le même jour**, 30 cycles sur ce même historique, 135 appels
+> à `claude-opus-5`, 4,01 $. **100 % de sorties structurées valides pour les
+> cinq agents appelés** — le critère de fond est atteint partout. La porte
+> reste néanmoins *indéterminée* pour l'Avocat du diable, qui n'a reçu que 15
+> appels : il n'intervient que s'il existe un setup à attaquer, et la
+> Stratégie s'est abstenue une fois sur deux. Il faudrait ~61 cycles pour le
+> mesurer. [Détail et chiffres](#résultat-du-p3--la-qualité-est-là-le-coût-interroge).
+>
+> Le chiffre qui compte pour la suite n'est pas le taux, c'est le prix :
+> **0,1335 $ le cycle complet, soit ~1 154 $/mois à 12 décisions/h.** Le P5
+> exige de battre les baselines *net de ce montant*.
 
 ---
 
@@ -117,7 +129,7 @@ puisqu'on ne connaît le coût d'un appel qu'après l'avoir fait.
 Lancer les tests :
 
 ```bash
-python -m pytest tests -q        # 344 tests
+python -m pytest tests -q        # 363 tests
 ```
 
 ---
@@ -550,6 +562,80 @@ qu'il fonctionnera. La sur-optimisation produit exactement cette signature.
 
 ---
 
+## Résultat du P3 — la qualité est là, le coût interroge
+
+30 cycles sur `data/BTC_1h_real.json` (les mêmes 208 jours que le P2), fenêtres
+de 300 barres réparties sur toute la période, `claude-opus-5` à effort moyen,
+plafond 5 $. Le 5 septembre 2026.
+
+| agent | appels | sorties valides | abstentions | coût/appel | p95 | porte |
+|---|---:|---:|---:|---:|---:|---|
+| `regime` | 30 | 100 % | 0 % | 0,0142 $ | 10,1 s | franchie |
+| `quant` | 30 | 100 % | 0 % | 0,0316 $ | 20,2 s | franchie |
+| `analyste` | 30 | 100 % | 0 % | 0,0211 $ | 10,8 s | franchie |
+| `strategie` | 30 | 100 % | **50 %** | 0,0323 $ | 13,3 s | franchie |
+| `avocat_du_diable` | **15** | 100 % | 0 % | 0,0688 $ | 45,0 s | *indéterminée* |
+
+**135 appels, 4,01 $, 100 % de sorties structurées valides.** Le critère de
+fond — « > 98 % » — est atteint par tous les agents appelés, sans exception.
+
+**Pourquoi l'Avocat du diable n'a que 15 appels.** Le graphe est conditionnel :
+il n'est appelé que s'il existe un setup à attaquer. Sur 30 cycles, la
+Stratégie s'est abstenue 15 fois — ce que son prompt encourage explicitement
+(« Ne rien proposer est la réponse par défaut »). L'arithmétique est exacte :
+15 cycles `PAS_DE_SETUP`, 15 appels à l'Avocat. **Trente cycles ne font pas
+trente appels pour un agent conditionnel**, et la porte confondait les deux.
+
+C'était un défaut de l'outil de mesure, pas de l'agent. Le verdict affichait
+« NON FRANCHIE — avocat_du_diable », ce qui se lit comme un manque de
+fiabilité alors que sa qualité était de 100 %. La porte distingue désormais
+`quality_passes` de `sample_is_sufficient`, n'échoue (code 1) que sur la
+qualité, et dit combien de cycles il faudrait : **~61**.
+
+### Le chiffre qui décidera du P5
+
+Le coût par agent induit en erreur : additionner les extrapolations mensuelles
+surestime ceux qui ne tournent pas à chaque tour. L'unité qui compte est le
+**cycle de décision complet** :
+
+```
+0,1335 $ le cycle  →  ~1 154 $/mois à 12 décisions/h
+                   →  ~96 $/mois à 1 décision/h
+```
+
+À rapprocher du P2 : sur ces mêmes 208 jours, la meilleure baseline produisait
+**+66,77 $ brut** avant coûts, et rien de statistiquement démontrable après.
+**Le desk doit donc battre les baselines de plus de mille dollars par mois
+avant d'être rentable à cadence nominale.** C'est la cadence, pas la qualité
+des agents, qui est le premier levier — et c'est exactement ce que le P3
+devait faire apparaître avant le P5.
+
+### Deux bugs bloquants trouvés en franchissant la porte
+
+**Le socle `AgentOutput` partait dans le schéma de sortie.** Ses huit champs
+d'enveloppe — dont `cost_usd`, `latency_ms`, `model_id`, que le runner écrase
+juste après l'appel — étaient demandés au modèle. On demandait donc à chaque
+agent d'inventer son propre coût et sa propre latence, les deux chiffres mêmes
+que cette porte doit établir honnêtement. Et le décodage contraint compile le
+schéma en automate : mesuré contre l'API, **douze champs optionnels passent,
+treize non**. Le socle poussait quatre agents au-delà — ils recevaient un
+`400 Schema is too complex` à chaque appel.
+
+**Les bornes `max_length` n'étaient dites nulle part.** Le décodage contraint
+garantit la forme, pas les longueurs. L'analyste écrivait une thèse de longueur
+naturelle, Pydantic la rejetait à 600 caractères, deux fois, abstention — à
+chaque cycle. Les bornes sont maintenant lues dans le schéma et annoncées au
+modèle, plutôt que recopiées dans un prompt qui mentirait à la première
+modification d'un `Field`.
+
+Aucun des deux n'était visible en test : la suite dépensait à la place. Le test
+« sans clé » retirait `ANTHROPIC_API_KEY` et `ANTHROPIC_AUTH_TOKEN` mais pas
+`DESK_ANTHROPIC_API_KEY`, ajoutée depuis — sur une machine où la clé du projet
+est posée, il partait faire trente cycles facturés, et le seul symptôme était
+une suite lente. Une fixture `autouse` isole désormais toute la suite.
+
+---
+
 ## Roadmap
 
 | | Phase | Porte de sortie |
@@ -557,7 +643,7 @@ qu'il fonctionnera. La sur-optimisation produit exactement cette signature.
 | P0 ✓ | Fondations et ingestion | 72 h sans intervention, aucun trou de données |
 | P1 | Cœur d'exécution déterministe | 200 aller-retours testnet sans divergence ; kill switch < 5 s |
 | P2 ✓ | Features, backtest, **baseline sans IA** | Chiffres de référence publiés et rejouables — *franchie, et le résultat est négatif : voir ci-dessous* |
-| P3 | Premier agent, en mode fantôme | > 98 % de sorties structurées valides sur ≥ 30 appels ; coût connu — *outillage prêt, `python -m trading_desk.agents`, en attente d'une clé API* |
+| P3 ~ | Premier agent, en mode fantôme | > 98 % de sorties structurées valides sur ≥ 30 appels ; coût connu — *mesuré le 5 sept. : 100 % de sorties valides, 0,1335 $/cycle ; indéterminé pour l'Avocat du diable (15 appels sur 30 requis)* |
 | **P4** | Graphe complet, toujours fantôme | 2 semaines sans mandat violant un invariant |
 | P5 | Paper trading temps réel | **Bat les baselines net de tous les coûts, LLM inclus, sur 4 semaines** |
 | P6 | Live micro-capital (200–500 USDC) | 4 semaines sans intervention d'urgence |

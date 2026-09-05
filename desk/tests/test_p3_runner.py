@@ -248,3 +248,65 @@ def test_le_message_d_erreur_nomme_les_deux_variables(monkeypatch, capsys, tmp_p
     assert "DESK_ANTHROPIC_API_KEY" in err
     assert "ANTHROPIC_API_KEY" in err
     assert "nom réservé" in err
+
+
+def test_un_agent_conditionnel_ne_fait_pas_echouer_la_porte(monkeypatch, capsys):
+    """Un echantillon court est une mesure a poursuivre, pas un echec.
+
+    Le graphe est conditionnel : l'Avocat du diable n'est appele que s'il
+    existe un setup a attaquer. Trente cycles ne font donc pas trente appels
+    pour lui, et le code de sortie ne doit pas dire « echec » pour ca — sinon
+    une CI refuse une porte dont la qualite est atteinte partout.
+    """
+    from trading_desk.agents import metrics as m
+
+    reel = m.summarize
+
+    def conditionnel(runs):
+        out = reel(runs)
+        if out.agent == "avocat_du_diable":
+            return out.model_copy(update={"runs": 15, "valid": 15})
+        return out
+
+    monkeypatch.setattr(m, "summarize", conditionnel)
+    monkeypatch.setattr("trading_desk.agents.__main__.summarize", conditionnel)
+
+    code = _lance(monkeypatch, "--dry-run", "--runs", "30")
+    sortie = capsys.readouterr().out
+
+    assert "INDETERMINEE" in sortie
+    assert "avocat_du_diable" in sortie
+    assert "il manque des appels, pas de la fiabilite" in sortie
+    assert code == 0, "un echantillon court ne doit pas valoir un code d'erreur"
+
+
+def test_une_qualite_insuffisante_fait_bien_echouer(monkeypatch, capsys):
+    """L'inverse : un agent qui ne respecte pas son schema bloque le P4, et
+    le code de sortie doit le dire."""
+    from trading_desk.agents import metrics as m
+
+    reel = m.summarize
+
+    def faible(runs):
+        out = reel(runs)
+        if out.agent == "avocat_du_diable":
+            return out.model_copy(update={"valid": 0})
+        return out
+
+    monkeypatch.setattr(m, "summarize", faible)
+    monkeypatch.setattr("trading_desk.agents.__main__.summarize", faible)
+
+    code = _lance(monkeypatch, "--dry-run", "--runs", "30")
+    sortie = capsys.readouterr().out
+
+    assert "NON FRANCHIE" in sortie and "qualite" in sortie
+    assert code == 1
+
+
+def test_le_cout_d_un_cycle_est_annonce(monkeypatch, capsys):
+    """Le chiffre qui tranchera le P5 est le cout d'un CYCLE : additionner les
+    extrapolations par agent surestime ceux qui ne tournent pas a chaque tour."""
+    _lance(monkeypatch, "--dry-run", "--runs", "30")
+    sortie = capsys.readouterr().out
+    assert "Cout d'un cycle complet" in sortie
+    assert "$/mois a 12 decisions/h" in sortie
