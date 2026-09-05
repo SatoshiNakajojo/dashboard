@@ -909,3 +909,78 @@ La cadence écrase tout le reste de deux ordres de grandeur, et elle ne se
 justifie que par un edge. À 1 154 $/mois à cadence nominale contre une
 meilleure baseline à +66,77 $ bruts sur 208 jours, **le premier levier de coût
 reste de ne pas décider douze fois par heure.**
+
+
+---
+
+## La qualité de décision, enfin mesurée — et le desk n'a jamais tranché
+
+85 cycles sur `data/BTC_1h_real.json`, politique `diversifie`, 5,14 $. Chaque
+setup formulé est confronté aux barres qui ont réellement suivi sa fenêtre.
+
+```
+  LECTURE          1    1,2 %
+  PAS_DE_SETUP    37   43,5 %
+  VETO             1    1,2 %
+  OBJECTION        2    2,4 %
+  CONVICTION      44   51,8 %
+  MANDAT           0    0,0 %
+```
+
+### Zéro mandat, et la raison n'est pas celle qu'on croit
+
+Ce n'est pas que la porte est sévère. **La conviction de la Stratégie n'a
+jamais atteint le seuil, sur aucun des 47 setups** : elle va de 0,34 à 0,55,
+la porte est à 0,60. Zéro sur quarante-sept.
+
+Le prompt de la Stratégie **ne mentionnait nulle part le mot conviction**. Le
+champ existait au schéma avec un défaut de 0, le graphe l'écartait sous 0,60,
+et l'agent n'avait jamais su ni que ce nombre existe, ni sur quelle échelle il
+vit, ni qu'une décision en dépend. C'est l'image en miroir de
+`strategies_allowed`, produit et jamais lu : ici le champ est **lu et jamais
+expliqué**. Corrigé — la mesure ci-dessus décrit l'état antérieur.
+
+Trois portes ne se sont jamais déclenchées : `QUOTA`, `ASYMETRIE`,
+`REJET_CHEF`. Cette dernière est la plus parlante : **le Chef de desk n'a
+jamais été appelé.** Le graphe s'arrêtait toujours avant lui.
+
+### Le desk rejette-t-il des trades gagnants ?
+
+```
+  espérance des rejets : +0,35 R   [IC 95 % : −0,05 ; +0,75]
+```
+
+L'intervalle contient zéro (bootstrap 20 000 tirages, p = 0,088). Et avec la
+perte réelle mesurée au Monte-Carlo — **−1,27 R au stop, pas −1 R** — il
+tombe à **+0,22 R, IC [−0,21 ; +0,66]**, t = 0,98.
+
+**Le signe est suggestif, l'effet n'est pas établi.** C'est exactement le
+genre de chiffre qu'une lecture pressée transformerait en alarme. Le registre
+affiche désormais son intervalle et le mot « compatible avec zéro » à côté de
+chaque espérance — un nombre nu se lit comme un fait.
+
+### La conviction ne prédit rien
+
+| moitié | conviction moyenne | résultat |
+|---|---:|---:|
+| basse | 0,47 | **+0,39 R** sur 23 setups |
+| haute | 0,55 | **+0,31 R** sur 24 setups |
+
+Écart **−0,08 R** : légèrement inversé, c'est-à-dire du bruit. Réserve
+importante — l'amplitude de conviction est minuscule (0,47 contre 0,55), donc
+ce test est faible par construction. On ne peut pas conclure « la conviction
+est inutile » ; on peut conclure que **sur la plage que l'agent utilise
+réellement, elle ne sépare rien**.
+
+### Ce que ça change
+
+La `DISCRIMINATION` — espérance(émis) − espérance(rejetés), le chiffre qui
+juge la couche décisionnelle — reste **indéterminée par construction** et non
+par manque d'échantillon : il n'existe qu'une population.
+
+Tant que le desk n'émet aucun mandat, la question « les six agents
+valent-ils leur coût » ne peut pas recevoir de réponse : **une couche de
+délibération qui refuse tout est indiscernable d'une couche qui refuse au
+hasard, et un `return FLAT` obtiendrait le même résultat pour 0 $.** C'est le
+verrou à lever avant le P5, et il se lève par le correctif de prompt, pas par
+un desserrage de seuil.

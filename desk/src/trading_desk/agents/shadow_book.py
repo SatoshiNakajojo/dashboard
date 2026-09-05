@@ -26,6 +26,7 @@ autres.
 
 from __future__ import annotations
 
+import random
 from decimal import Decimal
 
 from pydantic import Field
@@ -202,11 +203,50 @@ class ShadowBook:
         return StageStats(counts=counts, total=len(self.stages))
 
     @staticmethod
-    def _esperance(entrees: list[ShadowEntry], *, minimum: int) -> Decimal | None:
-        resolus = [e for e in entrees if e.resolved and e.pnl_r is not None]
+    def _resolus(entrees: list[ShadowEntry]) -> list[Decimal]:
+        return [e.pnl_r for e in entrees if e.resolved and e.pnl_r is not None]
+
+    @classmethod
+    def _esperance(cls, entrees: list[ShadowEntry], *,
+                   minimum: int) -> Decimal | None:
+        resolus = cls._resolus(entrees)
         if len(resolus) < minimum:
             return None
-        return sum((e.pnl_r for e in resolus), Decimal("0")) / len(resolus)
+        return sum(resolus, Decimal("0")) / len(resolus)
+
+    @classmethod
+    def intervalle(cls, entrees: list[ShadowEntry], *, minimum: int = 30,
+                   tirages: int = 20_000, graine: int = 7,
+                   ) -> tuple[Decimal, Decimal] | None:
+        """Intervalle de confiance a 95 % de l'esperance, par bootstrap.
+
+        Une esperance affichee nue invite a la lire comme un fait. Mesure du
+        5 septembre 2026 : +0,35 R sur 47 setups rejetes se lit « le desk
+        rejette des trades gagnants », alors que l'intervalle vaut
+        [-0,05 ; +0,75] — il contient zero, et la meme mesure avec la perte
+        reelle au stop (-1,27 R, mesuree au Monte-Carlo) tombe a +0,22 R avec
+        un intervalle encore plus large.
+
+        Le bootstrap plutot qu'un t de Student : la distribution des
+        resultats en R est fortement bimodale — un stop vaut -1, une cible
+        vaut +2 a +3 — et n'a rien de normal. Sur une quarantaine de points,
+        l'approximation normale n'est pas acquise ; le reechantillonnage ne
+        suppose rien.
+
+        La graine est fixe pour que deux lectures du meme registre donnent le
+        meme intervalle : un intervalle qui bouge d'un affichage a l'autre
+        ferait douter du chiffre plutot que de la mesure.
+        """
+        resolus = cls._resolus(entrees)
+        n = len(resolus)
+        if n < minimum:
+            return None
+        alea = random.Random(graine)
+        moyennes = sorted(
+            sum(alea.choices(resolus, k=n), Decimal("0")) / n
+            for _ in range(tirages)
+        )
+        return moyennes[int(0.025 * tirages)], moyennes[int(0.975 * tirages)]
 
     def issued_expectancy_r(self, *, minimum: int = 30) -> Decimal | None:
         """Espérance des mandats ÉMIS, en multiples du risque."""
@@ -265,7 +305,13 @@ class ShadowBook:
                 lignes.append(f"  espérance des {libelle:<7}: échantillon "
                               f"insuffisant ({resolus} résolus, 30 requis)")
             else:
-                lignes.append(f"  espérance des {libelle:<7}: {float(valeur):+.2f} R")
+                ic = self.intervalle(population)
+                borne = (f"   [IC 95 % : {float(ic[0]):+.2f} ; {float(ic[1]):+.2f}]"
+                         if ic else "")
+                zero = ic is not None and ic[0] <= 0 <= ic[1]
+                note = "   — compatible avec zéro" if zero else ""
+                lignes.append(f"  espérance des {libelle:<7}: "
+                              f"{float(valeur):+.2f} R{borne}{note}")
 
         ecart = self.discrimination_r()
         if ecart is None:

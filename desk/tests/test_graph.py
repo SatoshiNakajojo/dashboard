@@ -529,3 +529,47 @@ def test_aucun_prompt_ne_revele_le_seuil_de_sa_porte():
                           (cfg.max_objection_severity, DEVIL_SYSTEM)):
         for forme in (str(seuil), str(seuil).replace(".", ",")):
             assert forme not in prompt, f"seuil {forme} révélé"
+
+
+def _entree_r(pnl: str, issued: bool = False) -> "ShadowEntry":
+    from trading_desk.agents.shadow_book import ShadowEntry
+    return ShadowEntry(
+        ts_ms=0, stage=Stage.CONVICTION, reason="t", asset="BTC",
+        side=Side.LONG, entry_price=Decimal("100"), stop_price=Decimal("95"),
+        issued=issued, resolved=True, outcome="cible", pnl_r=Decimal(pnl))
+
+
+def test_lesperance_est_accompagnee_de_son_intervalle():
+    """Une espérance nue se lit comme un fait.
+
+    Mesure du 5 septembre : +0,35 R sur 47 rejets se lit « le desk rejette
+    des trades gagnants », alors que l'intervalle contient zéro.
+    """
+    book = ShadowBook()
+    book.entries = [_entree_r("2")] * 20 + [_entree_r("-1")] * 25
+    rapport = book.format_report()
+    assert "IC 95 %" in rapport
+    assert "compatible avec zéro" in rapport
+
+
+def test_un_effet_franc_nest_pas_dit_compatible_avec_zero():
+    book = ShadowBook()
+    book.entries = [_entree_r("2")] * 40
+    assert book.intervalle(book.entries)[0] > 0
+    assert "compatible avec zéro" not in book.format_report()
+
+
+def test_lintervalle_exige_le_meme_echantillon_que_lesperance():
+    book = ShadowBook()
+    book.entries = [_entree_r("1")] * 29
+    assert book.intervalle(book.entries) is None
+    book.entries.append(_entree_r("1"))
+    assert book.intervalle(book.entries) is not None
+
+
+def test_lintervalle_ne_bouge_pas_dun_affichage_a_lautre():
+    """Un intervalle qui change ferait douter du chiffre plutôt que de la
+    mesure."""
+    book = ShadowBook()
+    book.entries = [_entree_r("2")] * 20 + [_entree_r("-1")] * 25
+    assert book.intervalle(book.entries) == book.intervalle(book.entries)
