@@ -298,3 +298,71 @@ de tendance gagne son argent.
   moitié sécurité du problème. La moitié signal reste à mesurer.
 - **`manuel-analyse-fondamentale.pdf`** : archivé, hors périmètre immédiat —
   le dépôt ne traite que des perpétuels crypto.
+
+
+## Sixième lot : le pairs trading, et le défaut inscrit dans son propre code
+
+Trois des cinq documents étaient des doublons. Deux étaient nouveaux.
+
+### `sourcing-hyperliquid-agent-key.md` — un piège que le dépôt évite déjà
+
+Le document signale un échec silencieux : interroger l'Info API avec l'adresse
+de **l'agent** plutôt que celle du **master wallet** renvoie un dictionnaire
+vide, sans lever d'erreur. Vérifié — `hyperliquid_client.py` utilise
+`self.account_address` (le master) pour `clearinghouseState`,
+`frontendOpenOrders` et les fills, séparément de la clé de signature. Le piège
+est déjà refermé.
+
+### `strategies-arbitrage-statistique-cointegration.md` — la seule idée neuve
+
+Le pairs trading est structurellement différent de tout ce qui a été testé :
+le retour à la moyenne porte sur un **spread**, pas sur un prix. Le retour à la
+moyenne sur prix est un perdant établi ici ; celui sur spread est une autre
+hypothèse, et elle méritait d'être testée.
+
+Engle-Granger implémenté en Python pur (`scripts/cointegration.py`) — ni
+numpy, ni scipy, ni statsmodels, que le dépôt n'embarque pas. Valeurs
+critiques de MacKinnon, et non celles d'un ADF ordinaire : le document le
+signale à juste titre, l'estimation OLS préalable biaise le test vers la
+stationnarité.
+
+**En plein échantillon, le résultat semblait bon :**
+
+| paire | t (ADF) | verdict |
+|---|---:|---|
+| ETH/SOL | −4,098 | co-intégrée (1 %) |
+| DOGE/SOL | −3,572 | co-intégrée (5 %) |
+| BNB/SOL | −3,457 | co-intégrée (5 %) |
+| DOGE/ETH | −3,411 | co-intégrée (5 %) |
+| ETH/XRP | −3,404 | co-intégrée (5 %) |
+
+**5 paires sur 21, contre 1,1 attendues par hasard.**
+
+### Le défaut est dans le code du document
+
+`test_pair()` ajuste le bêta de couverture par OLS sur **toute** la série,
+puis `generate_signals()` trade sur cette même période — en la qualifiant de
+« backtest itératif sans biais d'anticipation ». Le ratio de couverture
+connaît le futur. C'est la même faute que le filtre Savitzky-Golay du document
+d'analyse graphique, et elle est ici invisible parce qu'elle est enfouie dans
+une étape de calibrage.
+
+**Le test qui décide** : bêta calibré sur la première moitié, résidus testés
+sur la seconde.
+
+| paire | t plein | t hors échantillon | tient ? |
+|---|---:|---:|---|
+| ETH/SOL | −4,098 | **−1,367** | non |
+| DOGE/SOL | −3,572 | **−0,359** | non |
+| BNB/SOL | −3,457 | **−1,203** | non |
+| DOGE/ETH | −3,411 | **−1,535** | non |
+| ETH/XRP | −3,404 | **−0,482** | non |
+
+**Zéro sur cinq.** Les t s'effondrent bien en deçà du seuil de −3,34. Les
+co-intégrations mesurées en plein échantillon étaient un artefact — et sur
+sept actifs qui ont tous monté ensemble pendant six ans, une relation de long
+terme apparente est exactement ce qu'on doit s'attendre à trouver par
+construction.
+
+La vérification hors échantillon est désormais le comportement **par défaut**
+du script ; `--in-sample-only` permet de la sauter, ce qui est déconseillé.

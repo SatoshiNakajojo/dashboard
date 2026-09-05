@@ -743,3 +743,38 @@ def test_le_balayage_distingue_un_plateau_d_un_pic():
         # Le parametre balaye doit exister sur la strategie.
         instance = cls(**{param: valeurs[0]})
         assert getattr(instance, param) == valeurs[0]
+
+
+def test_engle_granger_reconnait_une_paire_construite_co_integree():
+    """Le test doit trouver ce qui EST co-integre, et rejeter ce qui ne l'est pas.
+
+    Sans ces deux cotes, un test qui ne trouve jamais rien passerait pour
+    prudent alors qu'il serait simplement casse.
+    """
+    import random
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+    from cointegration import MACKINNON, engle_granger
+
+    rng = random.Random(42)
+
+    # Co-integree par construction : y = 1.5x + 10 + bruit stationnaire.
+    x, prix = [], 100.0
+    for _ in range(600):
+        prix += rng.gauss(0, 1)
+        x.append(prix)
+    y = [1.5 * xi + 10 + rng.gauss(0, 0.5) for xi in x]
+    beta, t = engle_granger(y, x)
+    assert abs(beta - 1.5) < 0.05, "le ratio de couverture doit etre retrouve"
+    assert t <= MACKINNON[0.01], "une paire construite doit etre detectee"
+
+    # Deux marches aleatoires independantes : aucune relation stable.
+    a, b, pa, pb = [], [], 100.0, 100.0
+    for _ in range(600):
+        pa += rng.gauss(0, 1)
+        pb += rng.gauss(0, 1)
+        a.append(pa)
+        b.append(pb)
+    _, t_faux = engle_granger(a, b)
+    assert t_faux > MACKINNON[0.05], "deux marches independantes ne le sont pas"
