@@ -34,11 +34,22 @@ from ..features.bars import Bar
 from .budget import BudgetedLLM, BudgetExceeded
 from .graph import run_desk_cycle
 from .llm import (
-    API_KEY_VARS, DEFAULT_MODEL, OFFICIAL_BASE_URL, AnthropicLLM, LLMClient,
-    LLMError, LLMRefusal, ScriptedLLM, api_key_source, desk_api_key,
+    API_KEY_VARS,
+    DEFAULT_MODEL,
+    OFFICIAL_BASE_URL,
+    AnthropicLLM,
+    LLMClient,
+    LLMError,
+    LLMRefusal,
+    RoutedLLM,
+    ScriptedLLM,
+    api_key_source,
+    desk_api_key,
 )
 from .memory import SqliteLessonStore
 from .metrics import format_report, summarize
+from .roster import POLITIQUES
+
 
 def _credential_available() -> bool:
     """Y a-t-il de quoi s'authentifier ?
@@ -95,7 +106,11 @@ def _script() -> list:
 def _build_llm(args) -> LLMClient:
     if args.dry_run:
         return ScriptedLLM(_script() * (args.runs + 2))
-    return AnthropicLLM(model=args.model, effort=args.effort)
+    if args.politique == "uniforme":
+        # Pas de `RoutedLLM` inutile : un seul modele, un seul client, et le
+        # journal continue de nommer un modele unique sans indirection.
+        return AnthropicLLM(model=args.model, effort=args.effort)
+    return RoutedLLM(POLITIQUES[args.politique], effort=args.effort)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -114,6 +129,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--model", default=DEFAULT_MODEL)
     p.add_argument("--effort", default="medium",
                    choices=["low", "medium", "high", "xhigh", "max"])
+    p.add_argument("--politique", default="uniforme", choices=sorted(POLITIQUES),
+                   help="repartition des modeles par role. `uniforme` met tout "
+                        "sur --model ; les autres routent les roles de lecture "
+                        "vers un modele moins cher. Voir agents/roster.py.")
     p.add_argument("--budget-usd", type=float, default=5.0,
                    help="plafond de depense. Aucun appel au-dela.")
     p.add_argument("--cadence", type=float, default=12.0,
@@ -158,7 +177,7 @@ def _check(args) -> int:
         print("  Causes probables, dans l'ordre :")
         print("   1. clé absente, expirée ou révoquée")
         print("   2. crédit épuisé (console Anthropic → Billing)")
-        print(f"   3. api.anthropic.com bloqué par la politique réseau")
+        print("   3. api.anthropic.com bloqué par la politique réseau")
         print(f"   4. modèle « {args.model} » inconnu de ce compte\n")
         return 2
 
@@ -217,7 +236,16 @@ def main() -> int:
     llm = BudgetedLLM(_build_llm(args), max_usd=Decimal(str(args.budget_usd)))
     memory = SqliteLessonStore(args.memory_db) if args.memory_db else None
 
-    print(f"\n  {args.runs} cycles fantômes · {args.model} · effort {args.effort}"
+    # Le bandeau doit dire ce qui a REELLEMENT tourne : afficher `--model`
+    # sous une politique heterogene ferait lire au rapport un modele unique
+    # la ou plusieurs ont decide.
+    if args.politique == "uniforme":
+        modeles = args.model
+    else:
+        pol = POLITIQUES[args.politique]
+        distincts = sorted(set(pol.model_dump().values()))
+        modeles = f"politique {args.politique} ({', '.join(distincts)})"
+    print(f"\n  {args.runs} cycles fantômes · {modeles} · effort {args.effort}"
           f" · plafond {args.budget_usd:.2f} $")
     if not args.dry_run:
         print("  Aucun ordre n'est émis. Le mandat est journalisé puis jeté.\n")

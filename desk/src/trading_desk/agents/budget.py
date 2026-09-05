@@ -65,6 +65,7 @@ class BudgetedLLM:
 
     def structured(
         self, *, system: str, user: str, schema: type[T], max_tokens: int = 4000,
+        agent: str = "",
     ) -> tuple[T, LLMResponse]:
         if self.exhausted:
             raise BudgetExceeded(
@@ -73,7 +74,8 @@ class BudgetedLLM:
             )
 
         output, meta = self.inner.structured(
-            system=system, user=user, schema=schema, max_tokens=max_tokens
+            system=system, user=user, schema=schema, max_tokens=max_tokens,
+            agent=agent,
         )
         self.calls += 1
         self.spent_usd += meta.cost_usd

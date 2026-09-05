@@ -167,7 +167,8 @@ def run_agent(
     for attempt in range(1, MAX_ATTEMPTS + 1):
         try:
             payload, meta = llm.structured(
-                system=consignes, user=user, schema=demande, max_tokens=max_tokens
+                system=consignes, user=user, schema=demande,
+                max_tokens=max_tokens, agent=name,
             )
             # Reconstruit dans le `try` a dessein : une abstention sans motif
             # est refusee par le validateur du contrat, et doit compter comme

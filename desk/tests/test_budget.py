@@ -34,7 +34,7 @@ class CostlyLLM:
         self.calls = 0
         self._script = ScriptedLLM(list(script) * 40) if script else None
 
-    def structured(self, *, system, user, schema, max_tokens=4000):
+    def structured(self, *, system, user, schema, max_tokens=4000, agent=""):
         self.calls += 1
         if self._script is not None:
             output, _ = self._script.structured(

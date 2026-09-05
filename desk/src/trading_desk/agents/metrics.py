@@ -45,6 +45,15 @@ class AgentMetrics(Frozen):
     output_tokens: int = 0
     cache_read_tokens: int = 0
     latencies_ms: tuple[int, ...] = ()
+    models: tuple[str, ...] = ()
+    """Les modeles qui ont REELLEMENT repondu, par ordre alphabetique.
+
+    Renseigne depuis la reponse de l'API, pas depuis ce qu'on a demande : sous
+    une politique heterogene, « quel modele a decide » ne peut plus se lire
+    dans le bandeau de la commande. Plusieurs entrees signalent aussi un
+    routage qui a bouge en cours de mesure — auquel cas les taux agreges
+    melangent deux populations et ne se comparent pas.
+    """
 
     @property
     def output_share_pct(self) -> float:
@@ -55,7 +64,12 @@ class AgentMetrics(Frozen):
         par la sortie, elle se traite par l'effort et rien d'autre.
         """
         entree = self.input_tokens * 1
-        sortie = self.output_tokens * 5  # opus-5 : 5 $ / 25 $ par MTok
+        # Le facteur 5 tient pour les TROIS modeles de la grille : Opus 5/25,
+        # Sonnet 2/10, Haiku 1/5 ont tous un rapport sortie/entree de 5. Cette
+        # part reste donc lisible sous une politique heterogene. Si une future
+        # ligne tarifaire rompt ce rapport, ce calcul devra etre pondere par
+        # modele — d'ou la note plutot qu'un 5 nu.
+        sortie = self.output_tokens * 5
         total = entree + sortie
         return 100.0 * sortie / total if total else 0.0
 
@@ -142,6 +156,7 @@ def summarize(runs: list[AgentRun]) -> AgentMetrics:
         output_tokens=sum(r.output_tokens for r in runs),
         cache_read_tokens=sum(r.cache_read_tokens for r in runs),
         latencies_ms=tuple(r.latency_ms for r in runs),
+        models=tuple(sorted({r.model for r in runs if r.model})),
     )
 
 
@@ -175,6 +190,7 @@ def format_report(metrics: AgentMetrics, *, decisions_per_hour: float = 12.0) ->
         f" / {metrics.output_tokens // max(metrics.runs, 1)} out"
         f"   (sortie = {metrics.output_share_pct:.0f} % de la facture)",
         f"  latence p95          {metrics.latency_p95_ms:>8} ms",
+        f"  modele               {', '.join(metrics.models) or '?':>8}",
         "  " + "-" * 58,
         f"  porte P3 : {_verdict(metrics)}",
         "",
