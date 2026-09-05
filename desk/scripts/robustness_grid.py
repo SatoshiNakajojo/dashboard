@@ -96,6 +96,62 @@ def benjamini_hochberg(pvalues: list[float], alpha: float = 0.05) -> list[bool]:
     return garde
 
 
+
+def rendre_verdict(cellules: list[dict], alpha: float = 0.05) -> str:
+    """La grille, lue comme un criblage — pas comme 56 resultats separes.
+
+    Deux lectures, et la seconde compte autant que la premiere : combien de
+    cellules battent le hasard, et combien on en attendait sans aucun signal.
+    Sans ce second chiffre, trois cellules a p < 0,05 sur 56 se lisent comme
+    une decouverte alors que c'est le resultat nul.
+    """
+    testees = [c for c in cellules if c["p"] is not None]
+    if not testees:
+        return "\n  Aucune cellule exploitable.\n"
+
+    ps = [c["p"] for c in testees]
+    garde = benjamini_hochberg(ps, alpha)
+    survivants = [c for c, k in zip(testees, garde) if k]
+    bruts = [c for c in testees if c["p"] < alpha]
+    pires = [c for c in testees if c["p"] > 1 - alpha]
+
+    lignes = [
+        "",
+        "  VERDICT DE LA GRILLE",
+        "  " + "─" * 68,
+        f"  cellules testees                          {len(testees):>4}",
+        f"  p < {alpha} brut                             {len(bruts):>4}",
+        f"  attendues par pur hasard a {alpha:.0%}          {alpha * len(testees):>6.1f}",
+        f"  survivantes apres Benjamini-Hochberg      {len(survivants):>4}",
+        "  " + "─" * 68,
+    ]
+
+    if survivants:
+        lignes.append("  Ce qui survit au controle du taux de fausses decouvertes :")
+        for c in sorted(survivants, key=lambda x: x["p"]):
+            lignes.append(
+                f"    {c['strategie']:<17}{c['actif']:<6}{c['intervalle']:<4}"
+                f"net {c['net_usd']:>+9.2f}  {c['trades']:>4} trades  p {c['p']:.4f}")
+    else:
+        lignes += [
+            f"  AUCUNE. Les {len(bruts)} cellule(s) a p < {alpha} sont compatibles avec",
+            f"  le bruit de {len(testees)} tests simultanes : aucune strategie ne montre",
+            "  d'edge qui survive au changement d'actif et d'echelle de temps.",
+        ]
+
+    if pires:
+        lignes += ["", f"  Significativement PIRES que le hasard : {len(pires)} cellules"]
+        compte: dict[str, int] = {}
+        for c in pires:
+            compte[c["strategie"]] = compte.get(c["strategie"], 0) + 1
+        for nom, n in sorted(compte.items(), key=lambda x: -x[1]):
+            lignes.append(f"    {nom:<17} {n:>2} cellules")
+        lignes.append("  Un signal constant dans CE sens est un resultat, pas du bruit.")
+
+    lignes += ["  " + "─" * 68, ""]
+    return "\n".join(lignes)
+
+
 def main() -> int:
     p = argparse.ArgumentParser(description="Grille de robustesse multi-actifs")
     p.add_argument("--draws", type=int, default=200,
@@ -106,7 +162,14 @@ def main() -> int:
                         "le contrat StopBand ; au-dela d'un stop a 50 %% le "
                         "dimensionnement par le risque n'a plus de sens.")
     p.add_argument("--out", default="baselines/grille.json")
+    p.add_argument("--from-json", default=None,
+                   help="relire une grille deja calculee et n'en refaire que "
+                        "la lecture, sans repasser des heures de tirages")
     args = p.parse_args()
+
+    if args.from_json:
+        print(rendre_verdict(json.loads(Path(args.from_json).read_text())))
+        return 0
 
     limits = RiskLimits(max_stop_distance_bps=Decimal(str(args.max_stop_bps)))
     cellules = []
@@ -149,7 +212,8 @@ def main() -> int:
 
     Path(args.out).parent.mkdir(parents=True, exist_ok=True)
     Path(args.out).write_text(json.dumps(cellules, indent=1), encoding="utf-8")
-    print(f"\n  {len(cellules)} cellules -> {args.out}")
+    print(rendre_verdict(cellules))
+    print(f"  {len(cellules)} cellules -> {args.out}")
     return 0
 
 

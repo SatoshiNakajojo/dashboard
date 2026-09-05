@@ -577,3 +577,35 @@ def test_les_horizons_sont_convertis_a_l_echelle_de_temps():
     # Les periodes conventionnelles restent en barres, telles qu'employees.
     assert parametres("ema_cross", "4h") == {}
     assert parametres("rsi_reversion", "1d") == {}
+
+
+def test_le_verdict_de_la_grille_dit_ce_qu_on_attendait_du_hasard():
+    """Trois cellules a p < 0,05 sur 56 ne sont pas une decouverte.
+
+    Un criblage qui affiche ses cellules significatives sans afficher combien
+    on en attendait sans aucun signal se lit a l'envers. Les deux chiffres
+    doivent apparaitre ensemble.
+    """
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+    from robustness_grid import rendre_verdict
+
+    # 56 cellules de pur bruit, dont 3 sous 0,05 par hasard.
+    bruit = [{"strategie": "s", "actif": "A", "intervalle": "1d",
+              "net_usd": 1.0, "trades": 10, "p": p}
+             for p in ([0.01, 0.02, 0.04] + [0.3] * 53)]
+    texte = rendre_verdict(bruit)
+    assert "56" in texte and "2.8" in texte, "l'attendu du hasard doit figurer"
+    assert "AUCUNE" in texte, "aucune ne doit survivre a BH"
+
+    # Une cellule ecrasante survit, meme noyee dans 55 autres.
+    fort = [{"strategie": "s", "actif": "A", "intervalle": "1d",
+             "net_usd": 1.0, "trades": 10, "p": p}
+            for p in ([0.00001] + [0.5] * 55)]
+    assert "AUCUNE" not in rendre_verdict(fort)
+
+    # Une grille sans aucun test exploitable ne doit pas planter.
+    assert "Aucune cellule" in rendre_verdict(
+        [{"strategie": "s", "actif": "A", "intervalle": "1d",
+          "net_usd": 0.0, "trades": 0, "p": None}])
