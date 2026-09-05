@@ -720,3 +720,26 @@ def test_kelly_refuse_une_esperance_defavorable():
 
     # Une serie de 8 pertes est quasi certaine a ce taux de reussite.
     assert proba_serie_perdante(0.369, 8, 500) > 0.95
+
+
+def test_le_balayage_distingue_un_plateau_d_un_pic():
+    """Un p-value spectaculaire sur UNE valeur de parametre ne prouve rien.
+
+    Avec assez de valeurs essayees, l'une finit par bien tomber. Ce qui
+    distingue un signal d'un artefact, c'est qu'il survive au voisinage.
+    Mesure sur BTC 1d : `tsmom` tient sur 7 valeurs de lookback sur 8
+    (14 a 56 jours), `turtle_breakout` sur 3 sur 7 et decroit de facon
+    monotone.
+    """
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+    from sensibilite_parametres import BALAYAGES
+
+    # Chaque balayage doit couvrir un voisinage large, pas trois valeurs.
+    for nom, (param, valeurs, cls) in BALAYAGES.items():
+        assert len(valeurs) >= 7, f"{nom} : voisinage trop etroit pour conclure"
+        assert valeurs == sorted(valeurs)
+        # Le parametre balaye doit exister sur la strategie.
+        instance = cls(**{param: valeurs[0]})
+        assert getattr(instance, param) == valeurs[0]

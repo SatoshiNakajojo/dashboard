@@ -6,7 +6,7 @@ développement et que ces documents doivent vivre avec le code qu'ils décrivent
 
 `00-manifeste-indexation-rag.md` est l'index maître : il recense ~24 documents
 et les associe à une phase, un agent destinataire et des tags d'interrogation.
-**Quinze documents sur les vingt-quatre sont présents à ce jour** — le reste est
+**Vingt documents sur les vingt-quatre sont présents à ce jour** — le reste est
 annoncé comme suivant.
 
 | document | testable avec l'outillage actuel ? |
@@ -166,3 +166,69 @@ commutation entre une stratégie de tendance et une stratégie de range n'a de
 valeur que si au moins l'une des deux a un edge dans son régime — ce qui
 reste à établir. `rsi_reversion`, la candidate naturelle du régime *range*,
 est significativement pire que le hasard dans six cellules.
+
+
+## Quatrième lot : le document méthodologique, et ce qu'il me reproche
+
+`indicateurs-strategies-validation-robustesse.md` est le plus important du
+corpus pour ce dépôt : c'est la grille de validation que tout le reste doit
+franchir. Confrontée au travail fait cette session, elle valide trois choses
+et en reproche quatre.
+
+### Ce qui était déjà fait
+
+| exigence | état |
+|---|---|
+| Correction pour tests multiples | Benjamini-Hochberg sur 56 cellules — plus strict que le `1-(1-α)^N` du document |
+| Look-ahead bias | `donchian` exclut la bougie courante ; le filtre Savitzky-Golay du doc voisin est signalé comme non causal |
+| Slippage et commissions | `backtest/costs.py`, frais + funding + slippage dès le premier run |
+
+### Ce qui manquait — dont une faute de ma part
+
+**Biais de survie.** J'ai bâti la grille sur sept actifs qui existent
+*aujourd'hui* sur Hyperliquid. L'API en liste 233, dont **56 marqués
+délistés** (MATIC, RNDR, FTM, FXS, UNIBOT…). Les actifs morts pendant la
+période sont absents de mes chiffres. C'est le biais que le document nomme,
+et je l'ai introduit sans le voir.
+
+**Walk-Forward Analysis et WFE**, **Monte-Carlo par permutation** : non faits.
+Le document en fait des critères de rejet (WFE < 50 %, P(DD > 30 %) > 5 %).
+
+### Sensibilité des paramètres : le test que j'ai fait, et son résultat
+
+`scripts/sensibilite_parametres.py`. Le document : « ne choisissez jamais le
+pic absolu ; choisissez le centre de gravité du plateau le plus large ».
+
+**`tsmom` sur BTC 1 j — le seul survivant de Benjamini-Hochberg :**
+
+| lookback (j) | 7 | 14 | 21 | 28 | 35 | 42 | 49 | 56 |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| p | 0,096 | **0,012** | **0,032** | **0,002** | **0,002** | **0,002** | **0,014** | **0,002** |
+
+**7 valeurs sur 8 sous le seuil — un plateau.** C'est le premier résultat de
+cette session qui survit à un test conçu pour le tuer.
+
+**`turtle_breakout` sur BTC 1 j**, pour comparaison : 3 sur 7, avec une
+décroissance monotone (p passe de 0,012 à 0,609 quand `entry_period` va de 20
+à 100). Ni plateau, ni pic isolé — cohérent avec son échec à la grille.
+
+**Ce que ce plateau ne prouve pas.** Il élimine l'explication « un paramètre
+bien tombé ». Il ne dit rien du hors-échantillon, il porte sur **un seul
+actif** — le survivant par excellence — et les frères pré-enregistrés sont
+plus faibles (ETH p = 0,047, XRP p = 0,077). Il reste WFO, Monte-Carlo, et un
+jeu d'actifs incluant les délistés avant d'en faire quoi que ce soit.
+
+### Les quatre autres documents
+
+- **`indicateurs-techniques-maths.md`** : le dépôt implémente déjà EMA, RSI de
+  Wilder, MACD, ATR avec ces formules exactes. Manquent ADX, Bollinger et la
+  détection de divergences.
+- **`macro-momentum-crypto-onchain.md`** : funding, open interest, MVRV,
+  liquidations — aucune de ces séries n'est dans le dépôt. `costs.py` traite
+  le funding comme une constante, ce que le README signale déjà comme une
+  limite.
+- **`macro-momentum-intraday-vs-swing`** : l'exposant de Hurst et le profil en
+  U sont mesurables sur les données existantes. Le profil en U est spécifique
+  aux actions ; l'horloge de funding est mesurable en crypto.
+- **`macro-momentum-equity-narratives.md`** : hors périmètre — le dépôt ne
+  traite que des perpétuels crypto.
