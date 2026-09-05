@@ -672,3 +672,25 @@ def test_les_durees_imitees_sont_celles_voulues_pas_les_stops():
     # Le nuage doit contenir des trades : un contrefactuel vide ne compare rien.
     assert res.mean_trades_random > 0
     assert 0.0 <= res.p_value <= 1.0
+
+
+def test_l_effet_week_end_se_mesure_sur_les_queues_pas_la_mediane():
+    """Une affirmation sur des MECHES porte sur la queue, pas sur le courant.
+
+    La documentation annonce des meches de liquidation le week-end. Mesurer
+    la seule mediane ne peut ni la confirmer ni l'infirmer : une distribution
+    peut etre plus calme d'ordinaire et plus violente dans ses extremes.
+    """
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+    from weekend_effect import ecart_pct, quantile
+
+    # Distribution calme en median, violente en queue : le p99 doit le voir.
+    calme_mais_extreme = [1.0] * 99 + [50.0]
+    assert quantile(calme_mais_extreme, 0.50) == 1.0
+    assert quantile(calme_mais_extreme, 0.99) == 50.0
+
+    assert quantile([], 0.95) == 0.0, "une serie vide ne doit pas lever"
+    assert ecart_pct(100.0, 57.0) == -43.0
+    assert ecart_pct(0.0, 5.0) == 0.0, "pas de division par zero"
