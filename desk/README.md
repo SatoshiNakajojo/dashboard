@@ -99,9 +99,16 @@ python -m trading_desk.backtest --source hyperliquid --asset BTC --days 208
 ```
 
 `candleSnapshot` ne conserve qu'environ **5000 bougies par intervalle** :
-208 jours en 1 h, 833 jours en 4 h, treize ans en 1 j. Demander davantage ne
+208 jours en 1 h, 833 jours en 4 h, six ans en 1 j. Demander davantage ne
 renvoie pas d'erreur — juste une série plus courte. Les deux outils le
 signalent désormais explicitement.
+
+**C'est pourquoi `data/` est versionné.** Ces séries sont périssables : la
+fenêtre glisse, et l'historique qui en sort n'est plus récupérable auprès de
+l'API. Dans un an, personne ne pourra refetcher le BTC daily de 2020. Les
+8 Mo de JSON ne sont pas de l'encombrement — ce sont les seules données qui
+rendent les baselines rejouables, et donc la seule chose qui empêche la
+référence du P5 de devenir invérifiable.
 
 Faire tourner le desk d'agents en mode fantôme (**la porte P3**) :
 
@@ -139,7 +146,7 @@ puisqu'on ne connaît le coût d'un appel qu'après l'avoir fait.
 Lancer les tests :
 
 ```bash
-python -m pytest tests -q        # 368 tests
+python -m pytest tests -q        # 372 tests
 ```
 
 ---
