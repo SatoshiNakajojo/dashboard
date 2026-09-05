@@ -111,7 +111,7 @@ def rendre_verdict(cellules: list[dict], alpha: float = 0.05) -> str:
 
     ps = [c["p"] for c in testees]
     garde = benjamini_hochberg(ps, alpha)
-    survivants = [c for c, k in zip(testees, garde) if k]
+    survivants = [c for c, k in zip(testees, garde, strict=True) if k]
     bruts = [c for c in testees if c["p"] < alpha]
     pires = [c for c in testees if c["p"] > 1 - alpha]
 
