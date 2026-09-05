@@ -176,22 +176,43 @@ def run_desk_cycle(
         news_run = run_news(llm=llm, items=news_items, store=store)
         runs.append(news_run)
 
-    regime_run = run_regime(llm=llm, context=context, store=store)
-    runs.append(regime_run)
+    # Porte 1 — une lecture amont manquante rend la suite indécidable, donc
+    # elle se vérifie APRÈS CHAQUE lecture et non après les trois.
+    #
+    # Le verdict est rigoureusement le même : une seule abstention suffisait
+    # déjà à fermer la porte. Ce qui change est ce qu'on a payé avant de le
+    # savoir. Une abstention du Régime faisait appeler le Quant et l'Analyste
+    # pour un cycle dont l'issue était acquise — deux appels dont le résultat
+    # partait à la poubelle.
+    #
+    # L'ordre est inchangé. Le trier par coût croissant (Régime 0,0142 $,
+    # Analyste 0,0211 $, Quant 0,0316 $) ne rapporterait qu'à la marge : une
+    # lecture ne s'abstient que sur ~1 cycle sur 10, et l'écart entre deux
+    # ordres vaut alors moins de 1 % du cycle. C'est l'arrêt anticipé qui
+    # rapporte, pas la permutation — et l'ordre actuel est celui que les
+    # scripts de test rejouent.
+    lectures = (
+        ("regime", lambda: run_regime(llm=llm, context=context, store=store)),
+        ("quant", lambda: run_quant(
+            llm=llm, indicators=context["indicateurs"], store=store)),
+        ("analyste", lambda: run_analyst(llm=llm, bars=bars, store=store)),
+    )
+    faites: dict[str, AgentRun] = {}
+    for nom, appel in lectures:
+        run = appel()
+        runs.append(run)
+        faites[nom] = run
+        if run.abstained:
+            # Nommer explicitement ce qui n'a PAS été demandé : sans ça, le
+            # journal se lirait comme « seul le Régime s'est abstenu » alors
+            # que les autres n'ont jamais été interrogés.
+            restantes = [n for n, _ in lectures if n not in faites]
+            suite = (f" ; {', '.join(restantes)} non demandé(s)"
+                     if restantes else "")
+            return flat(Stage.LECTURE, f"lecture indisponible : {nom}{suite}")
 
-    quant_run = run_quant(llm=llm, indicators=context["indicateurs"], store=store)
-    runs.append(quant_run)
-
-    analyst_run = run_analyst(llm=llm, bars=bars, store=store)
-    runs.append(analyst_run)
-
-    # Porte 1 — une lecture amont manquante rend la suite indécidable.
-    # Continuer produirait une décision fondée sur un trou.
-    manquantes = [
-        r.agent for r in (regime_run, quant_run, analyst_run) if r.abstained
-    ]
-    if manquantes:
-        return flat(Stage.LECTURE, f"lectures indisponibles : {', '.join(manquantes)}")
+    regime_run, quant_run, analyst_run = (
+        faites["regime"], faites["quant"], faites["analyste"])
 
     regime: RegimeRead = regime_run.output       # type: ignore[assignment]
     quant: QuantRead = quant_run.output          # type: ignore[assignment]

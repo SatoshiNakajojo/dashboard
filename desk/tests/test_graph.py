@@ -383,3 +383,46 @@ def test_aucun_module_d_agents_n_importe_l_execution():
         source = fichier.read_text(encoding="utf-8")
         for interdit in ("from ..execution", "OrderIntent", "OrderManager"):
             assert interdit not in source, f"{fichier.name} référence {interdit}"
+
+
+def test_une_lecture_qui_sabstient_arrete_avant_les_suivantes():
+    """La porte 1 se vérifie après CHAQUE lecture, pas après les trois.
+
+    Le verdict est le même — une seule abstention suffisait déjà à fermer la
+    porte. Ce qui change est ce qu'on a payé avant de le savoir : une
+    abstention du Régime faisait appeler le Quant et l'Analyste pour un cycle
+    dont l'issue était acquise.
+    """
+    from trading_desk.agents.graph import Stage, run_desk_cycle
+    from trading_desk.agents.llm import ScriptedLLM
+    from trading_desk.features import synthetic_bars
+
+    llm = ScriptedLLM([
+        {"regime": "UNKNOWN", "abstained": True,
+         "abstain_reason": "données insuffisantes"},
+    ])
+    res = run_desk_cycle(llm=llm, bars=synthetic_bars(count=300, seed=1))
+
+    assert res.stage is Stage.LECTURE
+    assert [c["agent"] for c in llm.calls] == ["regime"], \
+        "des lectures ont été payées après la fermeture de la porte"
+    assert "quant" in res.reason and "analyste" in res.reason, \
+        "le journal doit nommer ce qui n'a PAS été demandé"
+
+
+def test_la_derniere_lecture_qui_sabstient_ne_promet_rien_de_non_demande():
+    """Sur la dernière, il ne reste rien à ne pas demander — la phrase ne
+    doit pas se terminer par une liste vide."""
+    from trading_desk.agents.graph import Stage, run_desk_cycle
+    from trading_desk.agents.llm import ScriptedLLM
+    from trading_desk.features import synthetic_bars
+
+    llm = ScriptedLLM([
+        {"regime": "RANGE", "confidence": "0.6"},
+        {"liquidity_note": "carnet normal"},
+        {"abstained": True, "abstain_reason": "structure illisible"},
+    ])
+    res = run_desk_cycle(llm=llm, bars=synthetic_bars(count=300, seed=1))
+    assert res.stage is Stage.LECTURE
+    assert [c["agent"] for c in llm.calls] == ["regime", "quant", "analyste"]
+    assert "non demandé" not in res.reason
