@@ -301,13 +301,21 @@ def test_les_news_passent_par_l_isolation():
 #  Registre fantôme
 # --------------------------------------------------------------------------
 
-def test_le_registre_suit_les_setups_rejetes():
+def test_le_registre_suit_les_rejets_ET_les_mandats():
+    """Les deux, et à l'identique.
+
+    Une espérance négative sur les seuls rejets est compatible avec un desk
+    qui refuse au hasard dans un univers de setups globalement perdants — et
+    le P2 a montré que c'est l'univers dans lequel on est. Sans les mandats
+    émis comme point de comparaison, la mesure ne peut pas trancher.
+    """
     book = ShadowBook()
     book.record(run_desk_cycle(llm=_script(counter=_counter(veto=True)), bars=BARS))
     book.record(run_desk_cycle(llm=_script(), bars=BARS))
 
-    assert len(book.entries) == 1, "seul le setup rejeté est suivi"
-    assert book.entries[0].stage is Stage.VETO
+    assert len(book.entries) == 2
+    assert [e.stage for e in book.rejetes] == [Stage.VETO]
+    assert [e.stage for e in book.emis] == [Stage.MANDAT]
     assert book.stage_stats().total == 2
     assert book.stage_stats().mandate_rate_pct == 50.0
 
@@ -426,3 +434,49 @@ def test_la_derniere_lecture_qui_sabstient_ne_promet_rien_de_non_demande():
     assert res.stage is Stage.LECTURE
     assert [c["agent"] for c in llm.calls] == ["regime", "quant", "analyste"]
     assert "non demandé" not in res.reason
+
+
+def test_la_cloture_dhorizon_compte_les_setups_qui_ne_bougent_pas():
+    """Sans elle, la mesure ne retient que les setups à forte amplitude.
+
+    Un trade qui n'atteint ni sa cible ni son stop reste « non résolu » et
+    sort de l'espérance. Ce filtrage n'est pas neutre : il jette les setups
+    calmes et gonfle la dispersion des deux populations qu'on veut comparer.
+    """
+    book = ShadowBook()
+    book.record(run_desk_cycle(llm=_script(counter=_counter(veto=True)), bars=BARS))
+    entree = book.entries[0]
+
+    # Un prix qui ne touche ni le stop ni la cible.
+    entre_les_deux = (entree.entry_price + entree.target_price) / 2
+    assert book.resolve("BTC", high=entre_les_deux, low=entre_les_deux) == 0
+    assert not book.entries[0].resolved
+
+    assert book.cloturer("BTC", entre_les_deux) == 1
+    resolu = book.entries[0]
+    assert resolu.outcome == "horizon"
+    attendu = (entre_les_deux - resolu.entry_price) / resolu.risk_per_unit
+    assert resolu.pnl_r == attendu
+
+
+def test_la_cloture_ne_touche_pas_une_entree_deja_resolue():
+    book = ShadowBook()
+    book.record(run_desk_cycle(llm=_script(counter=_counter(veto=True)), bars=BARS))
+    book.resolve("BTC", high=Decimal("67000"), low=Decimal("62500"))
+    assert book.entries[0].outcome == "stop"
+    assert book.cloturer("BTC", Decimal("66000")) == 0
+    assert book.entries[0].pnl_r == Decimal("-1")
+
+
+def test_la_discrimination_exige_les_deux_populations():
+    """Une espérance négative sur les seuls rejets est compatible avec un
+    desk qui refuse au hasard. Sans les mandats, on ne peut pas trancher."""
+    book = ShadowBook()
+    for _ in range(35):
+        book.record(run_desk_cycle(llm=_script(counter=_counter(veto=True)),
+                                   bars=BARS))
+    book.resolve("BTC", high=Decimal("67000"), low=Decimal("62500"))
+    assert book.rejected_expectancy_r() == Decimal("-1")
+    assert book.issued_expectancy_r() is None
+    assert book.discrimination_r() is None
+    assert "indéterminée" in book.format_report()

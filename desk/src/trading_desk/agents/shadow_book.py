@@ -1,9 +1,17 @@
-"""Le registre fantôme : mesurer ce que le desk refuse.
+"""Le registre fantôme : mesurer ce que le desk décide, refus compris.
 
-Idée peu coûteuse et très instructive. Chaque setup **rejeté** est enregistré
-puis suivi comme s'il avait été pris, jusqu'à sa cible ou son stop. Au bout de
-quelques semaines, on sait si la couche décisionnelle filtre du bruit ou
-détruit de l'alpha.
+Idée peu coûteuse et très instructive. Chaque setup formulé est enregistré
+puis suivi comme s'il avait été pris, jusqu'à sa cible, son stop, ou la fin de
+son horizon. Au bout de quelques semaines, on sait si la couche décisionnelle
+filtre du bruit ou détruit de l'alpha.
+
+**Les mandats émis sont suivis aussi, et c'est ce qui rend la mesure
+concluante.** Une espérance négative sur les rejets ne prouve rien seule : si
+les mandats émis sont tout aussi mauvais, le desk ne trie pas, il refuse au
+hasard. La question n'est pas « les rejets étaient-ils mauvais » mais
+« émis et rejetés se distinguent-ils ». C'est le seul critère de qualité de
+décision qui ne soit pas une opinion — et notamment, ce n'est pas la
+conformité au schéma, qui ne dit rien de la pertinence d'un avis.
 
 Sans cette mesure, la question « le Chef de desk sert-il à quelque chose »
 n'a que des réponses d'opinion — et les opinions, sur un desk, coûtent cher.
@@ -23,7 +31,6 @@ from decimal import Decimal
 from pydantic import Field
 
 from ..contracts.common import Frozen, Side, now_ms
-from ..contracts.signals import SetupProposal
 from .graph import GraphResult, Stage
 
 
@@ -39,6 +46,13 @@ class ShadowEntry(Frozen):
     stop_price: Decimal
     target_price: Decimal | None = None
     conviction: Decimal = Decimal("0")
+    issued: bool = False
+    """Le desk a-t-il émis ce setup, ou l'a-t-il rejeté ?
+
+    Les deux sont suivis à l'identique — même convention de résolution, même
+    horizon. C'est la seule façon de comparer ce que le desk a pris à ce
+    qu'il a laissé.
+    """
     resolved: bool = False
     outcome: str = ""            # "cible", "stop", ou "" tant que non résolu
     pnl_r: Decimal | None = None  # résultat en multiples du risque
@@ -86,7 +100,7 @@ class ShadowBook:
         n'ont rien à suivre."""
         self.stages.append(result.stage)
 
-        if result.stage is Stage.MANDAT or result.setup is None:
+        if result.setup is None:
             return None
 
         setup = result.setup
@@ -98,11 +112,20 @@ class ShadowBook:
             asset=setup.asset, side=setup.side,
             entry_price=setup.entry_price, stop_price=setup.stop_price,
             target_price=setup.target_price, conviction=setup.conviction,
+            issued=result.stage is Stage.MANDAT,
         )
         self.entries.append(entry)
         if self.store is not None:
             self.store.journal("shadow_setup", entry.model_dump(mode="json"))
         return entry
+
+    @property
+    def rejetes(self) -> list[ShadowEntry]:
+        return [e for e in self.entries if not e.issued]
+
+    @property
+    def emis(self) -> list[ShadowEntry]:
+        return [e for e in self.entries if e.issued]
 
     def resolve(self, asset: str, high: Decimal, low: Decimal) -> int:
         """Résout les entrées non closes avec un nouvel extrême de prix.
@@ -141,6 +164,35 @@ class ShadowBook:
                 resolved += 1
         return resolved
 
+    def cloturer(self, asset: str, price: Decimal, *,
+                 raison: str = "horizon") -> int:
+        """Clôt au prix courant les entrées qui n'ont touché aucun niveau.
+
+        Sans ça, la mesure ne compte que les setups qui BOUGENT VITE : un
+        trade qui n'atteint ni sa cible ni son stop dans l'horizon reste
+        « non résolu » et sort de l'espérance. Ce filtrage n'est pas neutre —
+        il retient les setups à forte amplitude et jette les autres, ce qui
+        gonfle la dispersion des deux populations qu'on veut comparer.
+
+        Le résultat est compté en multiples du risque, comme une sortie au
+        marché à la fin de l'horizon. C'est ce qu'un opérateur ferait d'un
+        trade dont la thèse a expiré sans se réaliser.
+        """
+        clos = 0
+        for index, entry in enumerate(self.entries):
+            if entry.resolved or entry.asset != asset:
+                continue
+            risque = entry.risk_per_unit
+            if risque <= 0:
+                continue
+            sens = 1 if entry.side is Side.LONG else -1
+            self.entries[index] = entry.model_copy(update={
+                "resolved": True, "outcome": raison,
+                "pnl_r": sens * (price - entry.entry_price) / risque,
+            })
+            clos += 1
+        return clos
+
     # ----------------------------------------------------------- statistiques
 
     def stage_stats(self) -> StageStats:
@@ -149,7 +201,38 @@ class ShadowBook:
             counts[stage.value] = counts.get(stage.value, 0) + 1
         return StageStats(counts=counts, total=len(self.stages))
 
-    def rejected_expectancy_r(self) -> Decimal | None:
+    @staticmethod
+    def _esperance(entrees: list[ShadowEntry], *, minimum: int) -> Decimal | None:
+        resolus = [e for e in entrees if e.resolved and e.pnl_r is not None]
+        if len(resolus) < minimum:
+            return None
+        return sum((e.pnl_r for e in resolus), Decimal("0")) / len(resolus)
+
+    def issued_expectancy_r(self, *, minimum: int = 30) -> Decimal | None:
+        """Espérance des mandats ÉMIS, en multiples du risque."""
+        return self._esperance(self.emis, minimum=minimum)
+
+    def discrimination_r(self, *, minimum: int = 30) -> Decimal | None:
+        """Émis moins rejetés. **Le chiffre qui juge la couche décisionnelle.**
+
+        Positif : le desk garde les meilleurs setups et écarte les pires — il
+        trie. Nul : il refuse au hasard, et toute la dépense en délibération
+        ne produit qu'un filtre aléatoire, qu'un tirage à pile ou face
+        obtiendrait gratuitement. Négatif : il garde systématiquement les
+        mauvais, ce qui est pire que ne rien filtrer.
+
+        Une espérance négative sur les seuls rejets ne dit rien de tout ça :
+        elle est compatible avec un desk qui refuse au hasard dans un univers
+        de setups globalement perdants — et le P2 a montré que c'est
+        exactement l'univers dans lequel on est.
+        """
+        emis = self.issued_expectancy_r(minimum=minimum)
+        rejetes = self.rejected_expectancy_r(minimum=minimum)
+        if emis is None or rejetes is None:
+            return None
+        return emis - rejetes
+
+    def rejected_expectancy_r(self, *, minimum: int = 30) -> Decimal | None:
         """Espérance des setups rejetés, en multiples du risque.
 
         **Positive et significative, elle est un signal d'alarme** : le desk
@@ -157,16 +240,14 @@ class ShadowBook:
         travail. Sur moins d'une trentaine de setups résolus, elle ne veut
         rien dire — d'où le `None`.
         """
-        resolus = [e for e in self.entries if e.resolved and e.pnl_r is not None]
-        if len(resolus) < 30:
-            return None
-        return sum((e.pnl_r for e in resolus), Decimal("0")) / len(resolus)
+        return self._esperance(self.rejetes, minimum=minimum)
 
     def format_report(self) -> str:
         stats = self.stage_stats()
         lignes = [
             "",
-            f"  REGISTRE FANTÔME — {stats.total} cycles, {len(self.entries)} setups rejetés",
+            f"  REGISTRE FANTÔME — {stats.total} cycles, "
+            f"{len(self.emis)} émis / {len(self.rejetes)} rejetés",
             "  " + "-" * 62,
         ]
         for stage in Stage:
@@ -175,15 +256,27 @@ class ShadowBook:
                 lignes.append(f"  {stage.value:<16}{n:>6}   {stats.pct(stage):>6.1f} %")
         lignes.append("  " + "-" * 62)
 
-        esperance = self.rejected_expectancy_r()
-        if esperance is None:
-            resolus = sum(1 for e in self.entries if e.resolved)
-            lignes.append(f"  espérance des rejets : échantillon insuffisant "
-                          f"({resolus} résolus, 30 requis)")
+        for libelle, population, valeur in (
+            ("émis", self.emis, self.issued_expectancy_r()),
+            ("rejets", self.rejetes, self.rejected_expectancy_r()),
+        ):
+            if valeur is None:
+                resolus = sum(1 for e in population if e.resolved)
+                lignes.append(f"  espérance des {libelle:<7}: échantillon "
+                              f"insuffisant ({resolus} résolus, 30 requis)")
+            else:
+                lignes.append(f"  espérance des {libelle:<7}: {float(valeur):+.2f} R")
+
+        ecart = self.discrimination_r()
+        if ecart is None:
+            lignes.append("  DISCRIMINATION       : indéterminée — il faut les "
+                          "deux populations")
+        elif ecart > 0:
+            lignes.append(f"  DISCRIMINATION       : {float(ecart):+.2f} R — "
+                          "le desk trie")
         else:
-            verdict = ("ALERTE — le desk rejette des trades gagnants"
-                       if esperance > 0 else "le filtrage fait son travail")
-            lignes.append(f"  espérance des rejets : {float(esperance):+.2f} R   — {verdict}")
+            lignes.append(f"  DISCRIMINATION       : {float(ecart):+.2f} R — "
+                          "le desk ne trie pas mieux qu'un tirage au sort")
 
         if stats.dead_gates:
             lignes.append(f"  portes inertes : {', '.join(stats.dead_gates)}")
