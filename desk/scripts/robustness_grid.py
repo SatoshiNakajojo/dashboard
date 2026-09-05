@@ -7,10 +7,13 @@ signal survit-il quand on change d'actif et d'echelle de temps.
 
     python scripts/robustness_grid.py --draws 200
 
-**La correction pour tests multiples n'est pas optionnelle ici.** Quatre
-strategies sur sept actifs et deux intervalles font 56 tests. A 5 %, on attend
-~2,8 cellules significatives par pur hasard : trouver deux ou trois « edges »
-dans cette grille est le resultat NUL, pas une decouverte. La procedure de
+**La correction pour tests multiples n'est pas optionnelle ici.** Cinq
+strategies sur sept actifs et deux intervalles font 70 tests. A 5 %, on attend
+~3,5 cellules significatives par pur hasard : trouver trois ou quatre « edges »
+dans cette grille est le resultat NUL, pas une decouverte. Et le compte des
+hypotheses doit inclure celles deja testees dans les campagnes precedentes —
+chaque strategie ajoutee augmente le nombre de tirages, donc le nombre de
+faux positifs attendus. La procedure de
 Benjamini-Hochberg controle le taux de fausses decouvertes plutot que de
 corriger chaque test isolement — moins brutal que Bonferroni, et c'est le bon
 compromis pour un criblage dont on veut ensuite verifier les survivants.
@@ -67,9 +70,13 @@ def parametres(nom: str, interval: str) -> dict:
     if nom == "tsmom":
         # Quatre semaines, le haut de la fourchette ou l'effet est mesure.
         return {"lookback": 28 * n, "atr_period": 20 * n}
-    # EmaCross et RsiReversion utilisent des periodes conventionnelles en
-    # barres (20/50, 14), appliquees telles quelles a toute echelle : c'est
-    # ainsi qu'elles sont employees et documentees.
+    # EmaCross, RsiReversion et TrendFollowerATR utilisent des periodes
+    # conventionnelles en BARRES (20/50, 14, 21/50/200), appliquees telles
+    # quelles a toute echelle : c'est ainsi qu'elles sont employees et
+    # documentees. Le « EMA 200 » du Pine Script en particulier est un filtre
+    # de regime que ses utilisateurs posent sur l'unite de temps affichee,
+    # quelle qu'elle soit — le convertir en 200 jours serait ma regle, pas la
+    # sienne.
     return {}
 
 
@@ -162,13 +169,36 @@ def main() -> int:
                         "le contrat StopBand ; au-dela d'un stop a 50 %% le "
                         "dimensionnement par le risque n'a plus de sens.")
     p.add_argument("--out", default="baselines/grille.json")
-    p.add_argument("--from-json", default=None,
-                   help="relire une grille deja calculee et n'en refaire que "
-                        "la lecture, sans repasser des heures de tirages")
+    p.add_argument("--from-json", nargs="+", default=None,
+                   help="relire une ou plusieurs grilles deja calculees et "
+                        "n'en refaire que la lecture, sans repasser des "
+                        "heures de tirages. Plusieurs fichiers sont FUSIONNES "
+                        "avant la correction de Benjamini-Hochberg : c'est "
+                        "l'usage important. Ajouter une strategie et corriger "
+                        "sa grille toute seule sous-estimerait le nombre "
+                        "d'hypotheses testees, donc le nombre de faux "
+                        "positifs attendus.")
+    p.add_argument("--strategies", nargs="+", default=None,
+                   help="ne calculer que ces strategies. Sert a mesurer une "
+                        "strategie ajoutee sans relancer des heures de "
+                        "tirages pour les autres — le resultat doit ensuite "
+                        "etre relu FUSIONNE, via --from-json.")
     args = p.parse_args()
 
     if args.from_json:
-        print(rendre_verdict(json.loads(Path(args.from_json).read_text())))
+        cellules = []
+        vues = set()
+        for chemin in args.from_json:
+            for c in json.loads(Path(chemin).read_text()):
+                cle = (c["actif"], c["intervalle"], c["strategie"])
+                if cle in vues:
+                    print(f"  cellule en double, ignoree : {cle}", file=sys.stderr)
+                    continue
+                vues.add(cle)
+                cellules.append(c)
+        print(f"\n  {len(cellules)} cellules relues depuis "
+              f"{len(args.from_json)} fichier(s).")
+        print(rendre_verdict(cellules))
         return 0
 
     limits = RiskLimits(max_stop_distance_bps=Decimal(str(args.max_stop_bps)))
@@ -184,6 +214,8 @@ def main() -> int:
                 continue
 
             for nom, cls in BASELINES.items():
+                if args.strategies and nom not in args.strategies:
+                    continue
                 kw = parametres(nom, interval)
                 obs = run_backtest(
                     bars, cls(**kw), limits=limits, interval=interval,

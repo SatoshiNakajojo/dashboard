@@ -420,10 +420,13 @@ d'encaisser.
 ### Les trois autres documents
 
 - **`strategies-pinescript-v5.md`** : la stratégie de référence (EMA 200 +
-  croisement 21/50 + RSI > 50, stop 2×ATR, TP 3,5×ATR) est un assemblage de
-  briques que le dépôt possède déjà. Elle est directement implémentable comme
-  cinquième baseline — mais elle appartient à la famille `ema_cross`, qui ne
-  se distingue du hasard sur aucune cellule de la grille.
+  croisement 21/50 + RSI > 50, stop 2×ATR, TP 3,5×ATR, stop à l'équilibre à
+  1,5×ATR). **Mesurée depuis** — voir « Les hybrides » plus bas. Mon
+  classement initial (« elle appartient à la famille `ema_cross` ») était un
+  raisonnement, pas une mesure, et il était faux sur deux points : le stop à
+  l'équilibre n'existait dans aucune baseline et le moteur ne savait pas
+  l'exprimer, et le filtre EMA 200 + RSI n'appartient pas à la famille du
+  croisement.
 - **`strategies-optimisation-portefeuille-black-litterman.md`** : Black-Litterman
   injecte les opinions des agents dans l'allocation via le vecteur Q. Même
   tension qu'avec le cahier des charges — `I05_NO_LLM_WIDENING` interdit qu'un
@@ -506,3 +509,78 @@ Réserve : six actifs, et seulement ceux dont Hyperliquid sert encore
 l'historique. Un jeton effondré en quelques jours puis retiré ne figure
 probablement pas ici. Le biais existe donc peut-être encore, mais il n'a pas
 l'ampleur ni le signe que je supposais.
+
+
+---
+
+## Les hybrides : mélanger des familles ne crée pas d'edge non plus
+
+Cinq familles avaient été testées séparément — tendance, retour à la moyenne,
+TSMOM, arbitrage statistique, positionnement/funding — sans qu'aucune ne se
+distingue du hasard. Restait la question posée ensuite : **et en les
+mélangeant ?**
+
+Deux hybrides, choisis pour être des mélanges réels et non des filtres.
+
+### `trend_follower_atr` — l'empilement du Pine Script
+
+Quatre briques de trois familles : filtre de régime EMA 200 (tendance),
+déclencheur croisement 21/50 (tendance), confirmation RSI > 50 (momentum),
+stop 2×ATR / cible 3,5×ATR / seuil à l'équilibre 1,5×ATR (volatilité). Long
+seulement, comme son Pine Script.
+
+Le seuil à l'équilibre a demandé une modification du moteur : sur une
+position ouverte, il n'honorait que `exit_now` et ignorait `stop_price`. Un
+stop ne peut désormais que **se rapprocher du prix** — jamais s'en éloigner.
+
+| | 1d | 4h |
+|---|---|---|
+| cellules positives | 5 / 7 | 3 / 7 |
+| p < 0,05 | 0 | 2 (SOL, BNB) |
+| **p > 0,95 (pire que le hasard)** | **2** (BNB, DOGE) | 0 |
+| trades par cellule | 4 à 15 | 16 à 27 |
+
+**Le nombre de trades est le chiffre à lire en premier.** Quatre trades sur
+2 183 jours, c'est un échantillon dont aucun test ne peut rien conclure — ni
+dans un sens ni dans l'autre. Le triple filtre plus le long-seulement rendent
+cette stratégie *intestable* sur cette période, ce qui n'est pas la même
+chose que « sans edge ».
+
+### `regime_switch` — commuter, pas filtrer
+
+C'est la distinction qui justifiait de l'écrire. Un **filtre** ne fait que
+retirer des trades : mesuré plus haut, `rsi_reversion + ADX < 20` réduit la
+perte de 91 % mais le nombre de trades de 87 %, et l'essentiel du gain venait
+de *ne pas trader*. Un **commutateur** remplace un signal par un autre :
+tendance quand l'ADX ≥ 25, retour à la moyenne quand l'ADX ≤ 20, rien entre
+les deux. La thèse testée est celle des forums — chaque famille saigne dans le
+régime de l'autre, donc leur combinaison doit battre les deux prises seules.
+
+Une cellule sur 14 à p < 0,05 (AVAX 1d, p = 0,040), pour 0,7 attendue par
+hasard. Aucune ne survit à la correction.
+
+**Le commutateur ne bat pas ses composantes.** Il fait 15 à 47 trades par
+cellule là où `rsi_reversion` seule en fait 64 à 162 : il coupe surtout du
+volume. Et sa réserve était posée d'avance — l'ADX met environ `2 × period`
+barres à se former et son retard lui fait manquer les débuts de tendance ;
+il coûtait déjà 440 à 600 $ en filtre. Un échec ici peut venir du
+classificateur autant que de la thèse.
+
+### Le verdict, corrigé sur l'ensemble des hypothèses
+
+La correction doit porter sur **toutes** les cellules ensemble. Corriger la
+grille d'une stratégie nouvellement ajoutée toute seule sous-estimerait le
+nombre d'hypothèses testées, donc le nombre de faux positifs attendus.
+
+```
+  84 cellules (6 stratégies × 7 actifs × 2 intervalles)
+  p < 0,05 brut                            16
+  attendues par pur hasard à 5 %          4,2
+  survivantes après Benjamini-Hochberg      0
+```
+
+Seize cellules « significatives » sur 84 tests, quand le bruit seul en produit
+4,2 — et aucune ne survit. **Mélanger les familles ne fait pas apparaître
+d'edge là où chacune n'en avait pas.** Le seul signal constant reste dans
+l'autre sens : `rsi_reversion` est significativement *pire* que le hasard sur
+6 cellules, `trend_follower_atr` sur 2.

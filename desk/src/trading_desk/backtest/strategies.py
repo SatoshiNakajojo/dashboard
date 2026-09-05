@@ -19,7 +19,15 @@ from pydantic import Field
 
 from ..contracts.common import Frozen, Side
 from ..features.bars import Bar
-from ..features.indicators import Series, atr, closes, donchian, ema, rsi
+from ..features.indicators import (
+    Series,
+    adx,
+    atr,
+    closes,
+    donchian,
+    ema,
+    rsi,
+)
 
 
 class Signal(Frozen):
@@ -469,6 +477,89 @@ class TrendFollowerATR:
                       note="tendance confirmee")
 
 
+class RegimeSwitch:
+    """Deux familles opposees, choisies par le regime — pas filtrees par lui.
+
+    C'est la difference qui justifie cette classe. Un FILTRE ne fait que
+    retirer des trades : mesure sur cette grille, `rsi_reversion + ADX < 20`
+    reduit la perte de 91 % mais le nombre de trades de 87 %, et
+    l'amelioration par trade n'est que de 28 %. L'essentiel du gain venait de
+    ne pas trader, pas d'un meilleur signal. Un COMMUTATEUR, lui, remplace un
+    signal par un autre : quand le suivi de tendance se tait, le retour a la
+    moyenne parle.
+
+    La these testee est celle que repetent forums et manuels : la tendance
+    paie quand le marche tend, le retour a la moyenne quand il range, et
+    chacune saigne dans le regime de l'autre. Si elle est vraie, la
+    combinaison doit battre ses deux composantes prises seules.
+
+    Le classificateur est l'ADX, comme le prescrit
+    `docs/indicateurs-techniques-maths.md` : au-dessus de `adx_tendance` on
+    suit la tendance, en dessous de `adx_range` on joue le retour a la
+    moyenne, et **entre les deux on ne fait rien**. Cette bande morte n'est
+    pas une precaution cosmetique : sans elle, un ADX qui oscille autour d'un
+    seuil unique ferait alterner les deux logiques d'une barre a l'autre.
+
+    Une reserve a poser d'avance, parce qu'elle limite ce que le resultat
+    pourra dire : j'ai deja mesure que l'ADX a besoin d'environ `2 x period`
+    barres pour se former et que son retard lui fait manquer les debuts de
+    tendance — il coutait 440 a 600 $ en filtre sur `turtle_breakout` et
+    `tsmom`. Un echec de ce commutateur pourra donc venir du classificateur
+    autant que de la these.
+
+    **Qui a ouvert gere.** Une fois la position prise, c'est la sous-strategie
+    qui l'a ouverte qui decide de la sortie, meme si le regime a change
+    entre-temps. Laisser l'autre reprendre la main en cours de position lui
+    ferait gerer un trade dont elle ignore la logique d'entree — et le
+    resultat ne mesurerait plus aucune des deux.
+    """
+
+    name = "regime_switch"
+
+    def __init__(self, adx_period: int = 14, adx_tendance: float = 25.0,
+                 adx_range: float = 20.0, tendance: Strategy | None = None,
+                 retour: Strategy | None = None) -> None:
+        if adx_range > adx_tendance:
+            raise ValueError("la bande morte est inversee : adx_range > adx_tendance")
+        self.adx_period = adx_period
+        self.adx_tendance, self.adx_range = adx_tendance, adx_range
+        self.tendance = tendance or EmaCross()
+        self.retour = retour or RsiReversion()
+        self._adx: Series = []
+        self._proprietaire: Strategy | None = None
+
+    def prepare(self, bars: list[Bar]) -> None:
+        self._adx = adx(bars, self.adx_period)
+        self.tendance.prepare(bars)
+        self.retour.prepare(bars)
+        self._proprietaire = None
+
+    def on_bar(self, i: int, bars: list[Bar], in_position: Side | None) -> Signal:
+        if in_position is not None:
+            if self._proprietaire is None:
+                # Position ouverte sans proprietaire connu : ne peut arriver
+                # que si le moteur a ouvert autrement qu'a notre demande. On
+                # ne la gere pas plutot que de la gerer au hasard.
+                return FLAT
+            return self._proprietaire.on_bar(i, bars, in_position)
+
+        self._proprietaire = None
+        a = self._adx[i]
+        if a is None:
+            return FLAT
+        if a >= self.adx_tendance:
+            choisie = self.tendance
+        elif a <= self.adx_range:
+            choisie = self.retour
+        else:
+            return FLAT  # bande morte
+
+        sig = choisie.on_bar(i, bars, None)
+        if sig.side is not None:
+            self._proprietaire = choisie
+        return sig
+
+
 # Les strategies actives. `buy_and_hold` n'y figure pas : ce n'est pas une
 # strategie mais une reference, calculee par `engine.benchmark_buy_and_hold`
 # qui ne lui impose ni stop ni dimensionnement par le risque.
@@ -478,4 +569,5 @@ BASELINES: dict[str, type] = {
     "turtle_breakout": TurtleBreakout,
     "tsmom": TimeSeriesMomentum,
     "trend_follower_atr": TrendFollowerATR,
+    "regime_switch": RegimeSwitch,
 }
