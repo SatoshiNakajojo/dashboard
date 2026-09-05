@@ -859,3 +859,33 @@ def test_le_walk_forward_ne_confond_pas_optimise_et_fixe():
 
     # Une fenetre vide ne doit pas diviser par zero.
     assert rendement_annualise(5.0, 1000.0, 0, 365) == 0.0
+
+
+def test_le_signal_de_funding_est_bien_contrarien():
+    """Funding fortement positif = longs surendettes => on prend le SHORT.
+
+    C'est la these du document : le desequilibre de levier annonce la
+    cascade de liquidations qui le corrige. Se tromper de sens ici ferait
+    suivre la foule endettee au lieu de la contrer, et le backtest mesurerait
+    une strategie qui n'est pas celle qu'on croit tester.
+    """
+    from trading_desk.backtest.strategies import FundingExtreme
+
+    bars = synthetic_bars(count=300, seed=9)
+
+    # Funding calme, puis un pic franc sur la derniere barre.
+    calme = [0.5] * (len(bars) - 1) + [50.0]
+    s = FundingExtreme(calme, lookback=42, seuil_z=1.5)
+    s.prepare(bars)
+    assert s.on_bar(len(bars) - 1, bars, None).side is Side.SHORT
+
+    # Creux symetrique : les shorts sont surendettes, on prend le LONG.
+    creux = [0.5] * (len(bars) - 1) + [-50.0]
+    s2 = FundingExtreme(creux, lookback=42, seuil_z=1.5)
+    s2.prepare(bars)
+    assert s2.on_bar(len(bars) - 1, bars, None).side is Side.LONG
+
+    # Sans serie de funding, la strategie s'abstient plutot que d'inventer.
+    s3 = FundingExtreme(None)
+    s3.prepare(bars)
+    assert s3.on_bar(len(bars) - 1, bars, None).side is None

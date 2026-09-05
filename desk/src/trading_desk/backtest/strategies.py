@@ -299,6 +299,74 @@ class TimeSeriesMomentum:
                       note=f"momentum {signe} sur {self.lookback} barres")
 
 
+
+class FundingExtreme:
+    """Contrarien sur le taux de financement — la seule famille que le depot
+    ne pouvait pas tester avant que `api.hyperliquid.xyz` redevienne joignable.
+
+    `docs/macro-momentum-crypto-onchain.md` : un funding fortement positif et
+    persistant signale un marche sur-effet-de-levier a l'achat, mur pour une
+    cascade de liquidations baissiere (long squeeze). Fortement negatif,
+    l'inverse. On prend donc le SENS OPPOSE a la foule endettee.
+
+    C'est structurellement different des quatre autres baselines : le signal
+    ne vient pas du prix mais du **positionnement**. Un prix qui monte ne dit
+    pas si la hausse est portee par des acheteurs comptants ou par du levier ;
+    le funding, si.
+
+    `funding_par_barre` doit etre aligne sur `bars`, en bps par barre. La
+    strategie ne recalcule rien : elle interprete une serie fournie, comme
+    l'agent Quant interprete des indicateurs deja calcules.
+    """
+
+    name = "funding_extreme"
+
+    def __init__(self, funding_par_barre: list[float] | None = None,
+                 lookback: int = 42, seuil_z: float = 1.5,
+                 atr_period: int = 20, atr_stop: float = 2.5) -> None:
+        self.funding = funding_par_barre or []
+        self.lookback = lookback
+        self.seuil_z = seuil_z
+        self.atr_period, self.atr_stop = atr_period, atr_stop
+        self._atr: Series = []
+        self._z: Series = []
+
+    def prepare(self, bars: list[Bar]) -> None:
+        self._atr = atr(bars, self.atr_period)
+        self._z = [None] * len(bars)
+        if len(self.funding) < len(bars):
+            return
+        for i in range(self.lookback, len(bars)):
+            fenetre = self.funding[i - self.lookback:i]
+            moyenne = sum(fenetre) / len(fenetre)
+            var = sum((x - moyenne) ** 2 for x in fenetre) / len(fenetre)
+            ecart = var ** 0.5
+            if ecart > 0:
+                self._z[i] = (self.funding[i] - moyenne) / ecart
+
+    def on_bar(self, i: int, bars: list[Bar], in_position: Side | None) -> Signal:
+        z, a = self._z[i], self._atr[i]
+        if z is None or a is None or not a:
+            return FLAT
+
+        # Sortie des que l'exces se resorbe : la these est que le
+        # desequilibre se corrige, pas qu'une tendance s'installe.
+        if in_position is not None:
+            if abs(z) < 0.5:
+                return Signal(exit_now=True, note="funding revenu a la normale")
+            return FLAT
+
+        close = bars[i].close
+        span = Decimal(str(a)) * Decimal(str(self.atr_stop))
+        if z > self.seuil_z and (st := _stop(close, span, Side.SHORT)):
+            return Signal(side=Side.SHORT, stop_price=st,
+                          note=f"funding +{z:.1f} ecarts — longs surendettes")
+        if z < -self.seuil_z and (st := _stop(close, span, Side.LONG)):
+            return Signal(side=Side.LONG, stop_price=st,
+                          note=f"funding {z:.1f} ecarts — shorts surendettes")
+        return FLAT
+
+
 # Les strategies actives. `buy_and_hold` n'y figure pas : ce n'est pas une
 # strategie mais une reference, calculee par `engine.benchmark_buy_and_hold`
 # qui ne lui impose ni stop ni dimensionnement par le risque.
