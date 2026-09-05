@@ -24,8 +24,17 @@ ordre à un vrai exchange.
 > mesurer. [Détail et chiffres](#résultat-du-p3--la-qualité-est-là-le-coût-interroge).
 >
 > Le chiffre qui compte pour la suite n'est pas le taux, c'est le prix :
-> **0,1335 $ le cycle complet, soit ~1 154 $/mois à 12 décisions/h.** Le P5
-> exige de battre les baselines *net de ce montant*.
+> **0,1335 $ le cycle complet, soit ~1 154 $/mois à 12 décisions/h** (~68 $/mois
+> à 1/h, ~2,85 $/mois à une décision par jour). Le P5 exige de battre les
+> baselines *net de ce montant*, or la meilleure d'entre elles nette
+> +1,72 $/mois sur 1000 USDC. **À ce capital, la couche LLM ne peut pas se
+> payer, quelle que soit la cadence.**
+>
+> **Le daily a été ouvert le même jour** : six ans de BTC en 1 j (2 209 barres)
+> et deux stratégies documentées — cassure Turtle, momentum temporel. Aucune ne
+> se distingue d'entrées aléatoires ; `rsi_reversion` est un perdant établi.
+> Le backtest rejetait au passage 86 à 100 % des signaux en silence.
+> [Détail et chiffres](#résultat-du-daily--les-stratégies-publiées-ne-survivent-pas-non-plus).
 
 ---
 
@@ -129,7 +138,7 @@ puisqu'on ne connaît le coût d'un appel qu'après l'avoir fait.
 Lancer les tests :
 
 ```bash
-python -m pytest tests -q        # 363 tests
+python -m pytest tests -q        # 368 tests
 ```
 
 ---
@@ -154,7 +163,7 @@ python -m pytest tests -q        # 363 tests
 | `features/bars.py` | Bougies. Les trous ne sont **pas** comblés : un trou doit rester visible. |
 | `backtest/engine.py` | Backtest événementiel qui **réutilise `size_position` du live**. |
 | `backtest/costs.py` | Frais, funding, slippage — présents dès le premier run. |
-| `backtest/strategies.py` | Les baselines sans IA : croisement d'EMA, retour à la moyenne RSI. |
+| `backtest/strategies.py` | Les baselines sans IA : croisement d'EMA, retour à la moyenne RSI, **cassure Turtle**, **momentum temporel**. |
 | `execution/exchange.py` | L'interface d'exchange, et un simulateur qui sait tomber en panne. |
 | `execution/order_manager.py` | Seul chemin vers l'exchange. Timeouts, stop obligatoire, sorties toujours permises. |
 | `execution/reconciler.py` | Démarrage après crash : l'exchange est la source de vérité. |
@@ -633,6 +642,80 @@ Aucun des deux n'était visible en test : la suite dépensait à la place. Le te
 `DESK_ANTHROPIC_API_KEY`, ajoutée depuis — sur une machine où la clé du projet
 est posée, il partait faire trente cycles facturés, et le seul symptôme était
 une suite lente. Une fixture `autouse` isole désormais toute la suite.
+
+---
+
+## Résultat du daily — les stratégies publiées ne survivent pas non plus
+
+Le P2 tournait sur 208 jours de BTC en 1 h, la limite de `candleSnapshot` à
+cet intervalle. En 1 j la même API conserve **2 209 barres, soit six ans**
+(19 août 2020 → 5 septembre 2026) — c'est le rétablissement de l'accès réseau
+qui l'a rendu récupérable. Deux stratégies documentées ont été ajoutées et
+testées sur cet historique :
+
+- **`turtle_breakout`** — le « Système 2 » des Turtles (Dennis & Eckhardt,
+  1983) : entrée sur cassure du canal Donchian 55, sortie sur cassure opposée
+  du canal 20, stop à 2N. Le Système 2 plutôt que le Système 1 parce qu'il n'a
+  pas la règle de saut, qui ferait dépendre le backtest de son propre
+  historique.
+- **`tsmom`** — momentum temporel, la règle de Moskowitz, Ooi & Pedersen
+  (2012), confirmée sur BTC/ETH/XRP par Liu & Tsyvinski (2018, 2021) sur des
+  horizons d'une à quatre semaines. Le signal est le signe du rendement passé.
+  Rien d'autre : ni seuil, ni filtre, ni paramètre ajusté sur ces données.
+
+### Ce que le backtest a d'abord répondu — et pourquoi c'était faux
+
+| stratégie | net | trades | **rejets** | expo | verdict initial |
+|---|---:|---:|---:|---:|---|
+| `turtle_breakout` | +22,35 | 4 | **110** | 3 % | *« BAT LE HASARD, p = 0,010 »* |
+| `tsmom` | +0,00 | 0 | **2 040** | 0 % | *absent du tableau* |
+
+Le moteur de risque refuse toute distance de stop hors de
+`[min_stop_distance_bps, max_stop_distance_bps]`, et le plafond par défaut est
+de **500 bps** — calibré pour l'intraday. Or un stop ATR en daily vaut 800 à
+1 230 bps : **86 à 100 % des signaux étaient rejetés en silence.** Le rapport
+affichait « 0 trades » sans dire pourquoi.
+
+Les rares trades survivants n'étaient pas un échantillon aléatoire : le
+plafond porte sur la distance de stop, donc sur la volatilité. Le backtest ne
+mesurait que **les moments les plus calmes**. C'est ainsi qu'une non-edge
+s'affichait au percentile 100 avec p = 0,010.
+
+Le compteur `rejected_by_risk` existait dans `BacktestResult` et était
+correctement alimenté — il n'était simplement **jamais affiché**. Il l'est
+désormais, avec une alerte dès qu'il dépasse le nombre de trades, et
+`--max-stop-bps` rend le plafond réglable au lieu d'être un blocage invisible.
+
+### Ce que le backtest répond une fois les signaux admis
+
+BTC 1 j, 2 209 barres, 1000 USDC, `--max-stop-bps 2500` :
+
+| stratégie | net | net % | Sharpe | DD max | trades | expo | vs hasard | p |
+|---|---:|---:|---:|---:|---:|---:|---|---:|
+| `buy_and_hold` | +5 640,25 | +564 % | 0,82 | 80,0 % | 1 | 98 % | — | — |
+| `turtle_breakout` | +254,14 | +25,4 % | 0,64 | 10,4 % | 29 | 58 % | **non distinguable** | 0,48 |
+| `tsmom` | +36,36 | +3,6 % | 0,23 | 4,9 % | 33 | 89 % | **non distinguable** | 0,71 |
+| `ema_cross` | +25,81 | +2,6 % | 0,31 | 3,8 % | 33 | 20 % | **non distinguable** | 0,20 |
+| `rsi_reversion` | −87,27 | −8,7 % | −0,98 | 8,9 % | 73 | 33 % | **pire que le hasard** | 0,96 |
+
+`turtle_breakout` est dix fois meilleure que l'ancienne meilleure baseline, et
+sa perte maximale est huit fois plus faible que celle du buy-and-hold. Mais le
+modèle nul est sans appel : **des entrées tirées au hasard, à profil de risque
+et exposition identiques, rapportent +231,98 en moyenne contre +254,14
+observés.** Percentile 52. Le gain vient de la dérive du marché et du temps
+passé exposé, pas du signal de cassure.
+
+`rsi_reversion`, elle, est désormais un perdant statistiquement établi
+(p = 0,01, IC 95 % entièrement négatif) — sur les 208 jours en 1 h elle était
+seulement « indécise ».
+
+**Aucune des quatre baselines, y compris les deux tirées de la littérature,
+ne démontre d'edge sur BTC daily 2020-2026.** Le buy-and-hold les écrase
+toutes en absolu, à un coût : 80 % de perte maximale.
+
+> `--max-stop-bps 2500` sert à *mesurer* les stratégies daily, pas à
+> recommander un stop de 25 % en production. Élargir le plafond en live est
+> une décision de risque, distincte de celle de pouvoir tester.
 
 ---
 

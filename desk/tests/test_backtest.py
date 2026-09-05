@@ -414,3 +414,81 @@ def test_sharpe_absent_si_trop_peu_de_points():
     bars = synthetic_bars(count=60, seed=3)
     m = compute_metrics(run_backtest(bars, EmaCross(), warmup=20))
     assert m.sharpe is None or isinstance(m.sharpe, float)
+
+
+# --------------------------------------------------------------------------
+#  Les strategies documentees, et le piege qu'elles ont revele
+# --------------------------------------------------------------------------
+
+def test_la_cassure_turtle_ne_lit_jamais_la_barre_courante():
+    """Le canal doit exclure la bougie qui le teste.
+
+    L'inclure ferait « casser » le canal par la barre qui le definit : une
+    fuite de futur discrete, qui rend n'importe quelle strategie de cassure
+    brillante.
+    """
+    from trading_desk.backtest.strategies import TurtleBreakout
+
+    bars = synthetic_bars(count=400, seed=11)
+    s = TurtleBreakout(entry_period=20, exit_period=10)
+    s.prepare(bars)
+
+    # Une barre qui explose a la hausse ne doit pas relever le canal qui lui
+    # sert de reference : le signal se juge contre le passe, pas contre soi.
+    haut_du_canal = s._eh[300]
+    assert haut_du_canal == max(float(b.high) for b in bars[280:300])
+
+
+def test_le_momentum_temporel_suit_le_signe_du_rendement_passe():
+    """La regle de Moskowitz-Ooi-Pedersen, telle quelle : rien qu'un signe."""
+    from trading_desk.backtest.strategies import TimeSeriesMomentum
+
+    montant = [
+        Bar(asset="BTC", ts_ms=i * 86_400_000,
+            open=Decimal(100 + i), high=Decimal(101 + i),
+            low=Decimal(99 + i), close=Decimal(100 + i), volume=Decimal("1"))
+        for i in range(60)
+    ]
+    s = TimeSeriesMomentum(lookback=20, atr_period=5)
+    s.prepare(montant)
+    assert s._sens(50, montant) is Side.LONG
+
+    baissier = list(reversed(montant))
+    # Reconstruire des horodatages croissants apres inversion.
+    baissier = [b.model_copy(update={"ts_ms": i * 86_400_000})
+                for i, b in enumerate(baissier)]
+    s2 = TimeSeriesMomentum(lookback=20, atr_period=5)
+    s2.prepare(baissier)
+    assert s2._sens(50, baissier) is Side.SHORT
+
+    # Avant le lookback, aucun avis — surtout pas un avis neutre par defaut.
+    assert s.on_bar(5, montant, None).side is None
+
+
+def test_un_signal_refuse_par_le_risque_est_compte():
+    """Un backtest qui jette ses signaux en silence ne mesure pas la
+    strategie : il mesure le sous-echantillon que le moteur a laisse passer.
+
+    Et ce sous-echantillon n'est pas aleatoire — le plafond porte sur la
+    distance de stop, donc sur la volatilite. Constate sur BTC daily :
+    `turtle_breakout` affichait « BAT LE HASARD, p = 0,010 » sur les 4 % de
+    signaux acceptes, et « non distinguable du hasard, p = 0,48 » une fois
+    les 96 % restants admis.
+    """
+    from trading_desk.backtest.strategies import TurtleBreakout
+
+    bars = synthetic_bars(count=600, seed=3)
+
+    # Un plafond volontairement etroit refuse tout stop ATR un peu large.
+    etroit = run_backtest(
+        bars, TurtleBreakout(entry_period=20, exit_period=10),
+        limits=RiskLimits(min_stop_distance_bps=Decimal("1"),
+                          max_stop_distance_bps=Decimal("5")),
+        interval="1d")
+    assert etroit.rejected_by_risk > 0, "les refus doivent etre comptes"
+    assert not etroit.trades, "un plafond a 5 bps ne laisse rien passer"
+
+    large = run_backtest(bars, TurtleBreakout(entry_period=20, exit_period=10),
+                         limits=RiskLimits(max_stop_distance_bps=Decimal("5000")),
+                         interval="1d")
+    assert large.rejected_by_risk < etroit.rejected_by_risk

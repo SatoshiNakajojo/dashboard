@@ -18,6 +18,7 @@ from decimal import Decimal
 from pathlib import Path
 
 from ..features.bars import Bar
+from ..risk import RiskLimits
 from .costs import FRICTIONLESS, CostModel
 from .data import (
     DataUnavailable, fetch_hyperliquid, load_from_file, load_from_store,
@@ -62,6 +63,10 @@ def main() -> int:
                         "Hypothese forte : tester 0 et 0.5 pour voir si la "
                         "conclusion tient.")
     p.add_argument("--out", default="baselines")
+    p.add_argument("--max-stop-bps", type=float, default=None,
+                   help="plafond de distance de stop, en bps. Le defaut (500) "
+                        "est calibre pour l'intraday et refuse tout stop ATR "
+                        "en daily — voir la colonne « rejets » du rapport.")
     p.add_argument("--null-draws", type=int, default=200,
                    help="tirages du modele nul (entrees au hasard). 0 = ignorer.")
     args = p.parse_args()
@@ -86,6 +91,13 @@ def main() -> int:
               "moteur,\n  ils ne disent RIEN de la rentabilité d'une stratégie.")
 
     costs = CostModel(funding_bps_per_hour=Decimal(str(args.funding_bps)))
+
+    # Le plafond de distance de stop decide de ce que le moteur laisse passer,
+    # donc de ce que le backtest mesure. En daily, un stop ATR vaut 800 a 1200
+    # bps quand le defaut en autorise 500 : sans ce reglage, 100 % des signaux
+    # sont refuses et le rapport affiche « 0 trades » sans dire pourquoi.
+    limits = (RiskLimits(max_stop_distance_bps=Decimal(str(args.max_stop_bps)))
+              if args.max_stop_bps else RiskLimits())
     metrics = []
     payload = {}
 
@@ -107,7 +119,7 @@ def main() -> int:
 
     for name, cls in BASELINES.items():
         result = run_backtest(
-            bars, cls(), costs=costs,
+            bars, cls(), costs=costs, limits=limits,
             initial_equity_usd=Decimal(str(args.equity)),
             interval=args.interval,
         )
@@ -117,7 +129,7 @@ def main() -> int:
         # Le meme run sans aucun cout : l'ecart mesure exactement ce que les
         # frais et le funding retirent a la strategie.
         gross_run = run_backtest(
-            bars, cls(), costs=FRICTIONLESS,
+            bars, cls(), costs=FRICTIONLESS, limits=limits,
             initial_equity_usd=Decimal(str(args.equity)),
             interval=args.interval,
         )
@@ -137,7 +149,7 @@ def main() -> int:
     if args.null_draws > 0:
         for name, cls in BASELINES.items():
             observed = run_backtest(
-                bars, cls(), costs=costs,
+                bars, cls(), costs=costs, limits=limits,
                 initial_equity_usd=Decimal(str(args.equity)),
                 interval=args.interval,
             )
@@ -145,6 +157,7 @@ def main() -> int:
                 continue
             null = randomization_test(
                 bars, cls(), observed, draws=args.null_draws, costs=costs,
+                limits=limits,
                 initial_equity_usd=Decimal(str(args.equity)),
                 interval=args.interval,
             )
