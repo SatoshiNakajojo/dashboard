@@ -246,16 +246,21 @@ def _try_open(
         return None
     distance_bps = abs(entry - stop) / entry * Decimal("10000")
 
-    band = StopBand(
-        min_bps=min(limits.min_stop_distance_bps, distance_bps),
-        max_bps=max(limits.max_stop_distance_bps, distance_bps + 1),
-    )
     account = AccountState(
         equity_usd=equity,
         available_margin_usd=equity,
         used_margin_usd=Decimal("0"),
     )
+    # La fourchette est construite DANS le `try` : un stop plus large que ce
+    # que le contrat `StopBand` autorise doit compter comme un signal refuse,
+    # pas faire remonter une exception. Sur un actif volatil — AVAX, SOL — un
+    # stop ATR depasse les 5000 bps du contrat, et la construction hors du
+    # `try` arretait le backtest entier au milieu de la serie.
     try:
+        band = StopBand(
+            min_bps=min(limits.min_stop_distance_bps, distance_bps),
+            max_bps=max(limits.max_stop_distance_bps, distance_bps + 1),
+        )
         mandate = Mandate(
             bias=Bias.LONG if side is Side.LONG else Bias.SHORT,
             universe=(bar.asset,),

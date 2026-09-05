@@ -492,3 +492,59 @@ def test_un_signal_refuse_par_le_risque_est_compte():
                          limits=RiskLimits(max_stop_distance_bps=Decimal("5000")),
                          interval="1d")
     assert large.rejected_by_risk < etroit.rejected_by_risk
+
+
+def test_un_stop_hors_contrat_est_refuse_pas_fatal():
+    """Un stop trop large doit compter comme un signal refuse.
+
+    `StopBand` plafonne `max_bps` a 5000. Sur un actif volatil, un stop ATR
+    le depasse : construire la fourchette hors du `try` arretait le backtest
+    entier au milieu de la serie, avec une ValidationError pydantic. Un
+    moteur qui tombe sur une entree qu'il aurait simplement du refuser est
+    une panne, pas une validation.
+    """
+    from trading_desk.backtest.engine import _try_open
+    from trading_desk.backtest.costs import FRICTIONLESS
+
+    bar = Bar(asset="AVAX", ts_ms=0, open=Decimal("100"), high=Decimal("101"),
+              low=Decimal("99"), close=Decimal("100"), volume=Decimal("1"))
+
+    # Stop a 60 % : au-dela des 5000 bps que le contrat autorise.
+    ouvert = _try_open(
+        bar=bar, side=Side.LONG, stop=Decimal("40"), target=None,
+        equity=Decimal("1000"),
+        limits=RiskLimits(max_stop_distance_bps=Decimal("5000")),
+        costs=FRICTIONLESS,
+    )
+    assert ouvert is None, "refus attendu, pas d'exception"
+
+
+def test_aucune_strategie_n_emet_de_stop_negatif():
+    """Sur un actif dont l'ATR approche le prix, `close - k*ATR` passe sous
+    zero. `Signal.stop_price` exige `> 0` : emettre cette valeur arrete le
+    backtest au milieu de la serie.
+
+    Le defaut etait present dans les deux baselines d'origine ; il n'etait
+    jamais apparu parce qu'elles n'avaient tourne que sur BTC.
+    """
+    from trading_desk.backtest.strategies import BASELINES
+
+    # Prix minuscule, amplitude enorme : l'ATR depasse largement le prix.
+    extremes = []
+    for i in range(400):
+        cloture = Decimal("0.80") if i % 3 else Decimal("0.10")
+        extremes.append(Bar(
+            asset="MEME", ts_ms=i * 86_400_000, open=Decimal("0.30"),
+            high=Decimal("0.95"), low=Decimal("0.05"),
+            close=cloture, volume=Decimal("1")))
+
+    for nom, cls in BASELINES.items():
+        s = cls()
+        s.prepare(extremes)
+        for i in range(len(extremes)):
+            for pos in (None, Side.LONG, Side.SHORT):
+                sig = s.on_bar(i, extremes, pos)
+                if sig.stop_price is not None:
+                    assert sig.stop_price > 0, f"{nom} : stop <= 0 a la barre {i}"
+                if sig.target_price is not None:
+                    assert sig.target_price > 0, f"{nom} : cible <= 0 a la barre {i}"

@@ -35,6 +35,24 @@ class Signal(Frozen):
 FLAT = Signal()
 
 
+def _stop(close: Decimal, span: Decimal, side: Side) -> Decimal | None:
+    """Le stop derive de l'ATR, ou `None` s'il n'a pas de sens.
+
+    Sur un actif dont l'ATR approche le prix — un actif a petit nominal en
+    forte volatilite — `close - k*ATR` passe sous zero. `Signal.stop_price`
+    exige `> 0` : emettre cette valeur fait remonter une ValidationError et
+    arrete le backtest au milieu de la serie.
+
+    Une strategie qui ne sait pas ou poser son stop ne doit pas prendre la
+    position. S'abstenir est la reponse correcte, pas ecreter a un prix
+    plancher arbitraire qui inventerait une distance de risque.
+    """
+    prix = close - span if side is Side.LONG else close + span
+    return prix if prix > 0 else None
+
+
+
+
 class Strategy(Protocol):
     name: str
 
@@ -90,20 +108,16 @@ class EmaCross:
         if in_position is not None:
             return FLAT
 
-        if crossed_up:
-            return Signal(
-                side=Side.LONG,
-                stop_price=close - span * Decimal(str(self.atr_stop)),
-                target_price=close + span * Decimal(str(self.atr_target)),
-                note="croisement haussier",
-            )
-        if crossed_down:
-            return Signal(
-                side=Side.SHORT,
-                stop_price=close + span * Decimal(str(self.atr_stop)),
-                target_price=close - span * Decimal(str(self.atr_target)),
-                note="croisement baissier",
-            )
+        ecart = span * Decimal(str(self.atr_stop))
+        cible = span * Decimal(str(self.atr_target))
+        if crossed_up and (st := _stop(close, ecart, Side.LONG)):
+            return Signal(side=Side.LONG, stop_price=st,
+                          target_price=close + cible, note="croisement haussier")
+        if crossed_down and (st := _stop(close, ecart, Side.SHORT)):
+            cible_bas = close - cible
+            return Signal(side=Side.SHORT, stop_price=st,
+                          target_price=cible_bas if cible_bas > 0 else None,
+                          note="croisement baissier")
         return FLAT
 
 
@@ -143,12 +157,14 @@ class RsiReversion:
         if in_position is not None:
             return FLAT
 
-        if r <= self.low:
-            return Signal(side=Side.LONG, stop_price=close - span,
+        if r <= self.low and (st := _stop(close, span, Side.LONG)):
+            return Signal(side=Side.LONG, stop_price=st,
                           target_price=close + span, note=f"RSI {r:.0f}")
-        if r >= self.high:
-            return Signal(side=Side.SHORT, stop_price=close + span,
-                          target_price=close - span, note=f"RSI {r:.0f}")
+        if r >= self.high and (st := _stop(close, span, Side.SHORT)):
+            bas = close - span
+            return Signal(side=Side.SHORT, stop_price=st,
+                          target_price=bas if bas > 0 else None,
+                          note=f"RSI {r:.0f}")
         return FLAT
 
 
@@ -210,11 +226,11 @@ class TurtleBreakout:
         if in_position is not None:
             return FLAT
 
-        if float(close) > eh:
-            return Signal(side=Side.LONG, stop_price=close - span,
+        if float(close) > eh and (st := _stop(close, span, Side.LONG)):
+            return Signal(side=Side.LONG, stop_price=st,
                           note=f"cassure haute {self.entry_period}")
-        if float(close) < el:
-            return Signal(side=Side.SHORT, stop_price=close + span,
+        if float(close) < el and (st := _stop(close, span, Side.SHORT)):
+            return Signal(side=Side.SHORT, stop_price=st,
                           note=f"cassure basse {self.entry_period}")
         return FLAT
 
@@ -275,12 +291,12 @@ class TimeSeriesMomentum:
 
         close = bars[i].close
         span = Decimal(str(a)) * Decimal(str(self.atr_stop))
+        st = _stop(close, span, sens)
+        if st is None:
+            return FLAT
         signe = "+" if sens is Side.LONG else "-"
-        return Signal(
-            side=sens,
-            stop_price=close - span if sens is Side.LONG else close + span,
-            note=f"momentum {signe} sur {self.lookback} barres",
-        )
+        return Signal(side=sens, stop_price=st,
+                      note=f"momentum {signe} sur {self.lookback} barres")
 
 
 # Les strategies actives. `buy_and_hold` n'y figure pas : ce n'est pas une
