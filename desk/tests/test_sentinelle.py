@@ -17,6 +17,7 @@ from trading_desk.features.bars import Bar
 from trading_desk.sentinelle.triggers import (
     Declenchement,
     cascade_liquidations,
+    deblocage_annonce,
     funding_extreme,
     pic_de_volume,
     rupture_volatilite,
@@ -283,3 +284,100 @@ def test_benjamini_hochberg_est_un_pas_montant():
     assert benjamini_hochberg([0.001, 0.9, 0.9, 0.9]) == [True, False, False, False]
     assert benjamini_hochberg([0.03, 0.04]) == [True, True]
     assert benjamini_hochberg([0.06] * 10) == [False] * 10
+
+
+# --------------------------------------------------------------------------
+#  Le déclencheur de déblocage : le seul dont l'edge directionnel est mesuré
+# --------------------------------------------------------------------------
+#
+# Les quatre autres réveillent sur une condition de prix, et aucun ne prédit
+# le SENS (0 survivant sur 98 cellules). Celui-ci réveille sur un calendrier
+# public, et son edge a survécu à six contrôles. Ces tests protègent la
+# seule chose qui rende ce déclencheur légitime : il porte exactement les
+# bornes qui ont été validées, et pas un pouce de plus.
+
+JOUR_MS_ = 86_400_000
+
+
+def _serie_jours(n=120):
+    return [Bar(asset="T", ts_ms=i * JOUR_MS_, open=Decimal("100"),
+                high=Decimal("101"), low=Decimal("99"), close=Decimal("100"),
+                volume=Decimal("10"))
+            for i in range(n)]
+
+
+def test_le_reveil_tombe_SEPT_JOURS_avant_le_deblocage():
+    """La fenêtre d'anticipation J-7/J-1 est la seule des quatre testées qui
+    survive. Un réveil au jour du déblocage mesurerait la fenêtre d'impact,
+    dont le pooling donne p = 0,85."""
+    bars = _serie_jours()
+    d = deblocage_annonce(bars, deblocages=[
+        {"ts_ms": 50 * JOUR_MS_, "part_offre": 0.03}])
+    assert len(d) == 1
+    assert d[0].index == 43, "le réveil doit précéder le déblocage de 7 jours"
+    assert d[0].sens == -1, "l'hypothèse est baissière, posée d'avance"
+
+
+def test_les_bornes_de_taille_sont_celles_qui_ont_ete_VALIDEES():
+    """Ce ne sont pas des réglages, ce sont les limites du domaine mesuré.
+
+    En dessous de 2 %, aucun contrôle ne survit (p = 0,40 au décalage
+    calendaire net). Au-dessus de 25 %, on sort de la borne la plus serrée
+    qu'ait validée l'épreuve des dénominateurs — un déblocage de 65 % de
+    l'offre n'est pas un gros déblocage, c'est un autre événement.
+    """
+    bars = _serie_jours()
+    for part, attendu in ((0.01, 0), (0.02, 1), (0.24, 1), (0.25, 0), (0.65, 0)):
+        d = deblocage_annonce(bars, deblocages=[
+            {"ts_ms": 50 * JOUR_MS_, "part_offre": part}])
+        assert len(d) == attendu, f"part {part:.0%} : {len(d)} réveil(s)"
+
+
+def test_deux_deblocages_rapproches_ne_reveillent_QU_UNE_fois():
+    """Deux déblocages à trois jours d'écart produisent des fenêtres qui se
+    recouvrent, donc une position tenue une fois. La validation applique la
+    même règle ; s'en écarter ici mesurerait une autre stratégie."""
+    bars = _serie_jours()
+    d = deblocage_annonce(bars, deblocages=[
+        {"ts_ms": 50 * JOUR_MS_, "part_offre": 0.03},
+        {"ts_ms": 53 * JOUR_MS_, "part_offre": 0.04},
+        {"ts_ms": 70 * JOUR_MS_, "part_offre": 0.03},
+    ])
+    assert [x.index for x in d] == [43, 63]
+
+
+def test_le_declencheur_de_deblocage_ne_lit_aucun_prix_futur():
+    """La frontière exacte de ce déclencheur.
+
+    Il lit un calendrier qui contient des dates postérieures à `i`, et c'est
+    légitime : ce calendrier est PUBLIC au moment `i`, DefiLlama le publie
+    des mois à l'avance. Ce qu'il ne doit jamais lire, c'est un PRIX
+    postérieur à `i`.
+
+    Tronquer la série après le réveil ne doit donc rien changer à ce réveil.
+    """
+    complet = _serie_jours(120)
+    deblocages = [{"ts_ms": 50 * JOUR_MS_, "part_offre": 0.03}]
+    plein = deblocage_annonce(complet, deblocages=deblocages)
+    # On coupe juste après le réveil, bien avant le déblocage lui-même.
+    tronque = deblocage_annonce(complet[:44], deblocages=deblocages)
+    assert [x.index for x in plein] == [x.index for x in tronque] == [43]
+
+
+def test_un_deblocage_sans_barre_a_J_moins_7_est_ecarte():
+    """Prendre la barre la plus proche décalerait l'événement, et un
+    décalage d'un jour sur un événement daté détruit ce qu'on mesure."""
+    bars = _serie_jours(120)
+    assert deblocage_annonce(bars, deblocages=[
+        {"ts_ms": 3 * JOUR_MS_, "part_offre": 0.03}]) == []
+    assert deblocage_annonce(bars, deblocages=[
+        {"ts_ms": 500 * JOUR_MS_, "part_offre": 0.03}]) == []
+
+
+def test_une_entree_malformee_ne_leve_jamais():
+    """Le calendrier vient d'une source externe. Le desk doit l'écarter, pas
+    tomber au milieu d'un cycle de décision."""
+    bars = _serie_jours()
+    assert deblocage_annonce(bars, deblocages=[]) == []
+    assert deblocage_annonce(bars, deblocages=[
+        {"ts_ms": 50 * JOUR_MS_}]) == [], "part_offre absente => écarté"

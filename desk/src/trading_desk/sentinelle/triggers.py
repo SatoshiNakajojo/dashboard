@@ -300,6 +300,79 @@ def rupture_volatilite(bars: list[Bar], *, courte: int = 24, longue: int = 168,
     return out
 
 
+BAISSIER = "baissier"           # une direction posee d'avance, quel que soit
+#                                 le mouvement de la barre elle-meme
+
+
+def deblocage_annonce(
+    bars: list[Bar], *, deblocages: Sequence[dict],
+    part_min: float = 0.02, part_max: float = 0.25,
+    avance_j: int = 7, duree_j: int = 6,
+) -> list[Declenchement]:
+    """Le seul declencheur dont l'edge directionnel a ete MESURE.
+
+    Les quatre autres reveillent le desk sur une condition de prix. Celui-ci
+    reveille sur un CALENDRIER : la date d'un deblocage de jetons, publiee
+    des mois a l'avance. Il se declenche `avance_j` jours avant, et
+    l'hypothese est baissiere — c'est la fenetre d'anticipation J-7/J-1, la
+    seule des quatre testees qui survive.
+
+    ## Six controles, et ce qu'ils autorisent
+
+    +290 bps sur la tranche 2-5 %, apres correction de Benjamini-Hochberg,
+    et l'effet survit aux denominateurs aberrants, au jackknife par jeton, a
+    la coupe temporelle, a la neutralisation par BTC, au decalage
+    calendaire, et au decalage calendaire sur le rendement net.
+
+    Les bornes ci-dessous ne sont pas des reglages, ce sont les LIMITES de
+    ce qui a ete valide, et les depasser sortirait du domaine mesure :
+
+    - `part_min = 2 %` : la tranche 0,5-2 % ne survit a aucun controle ;
+    - `part_max = 25 %` : borne la plus serree que l'epreuve des
+      denominateurs ait validee. Un deblocage de 65 % de l'offre n'est pas
+      un gros deblocage, c'est un autre evenement.
+
+    ## Pourquoi lire une date FUTURE n'est pas regarder l'avenir
+
+    Les autres declencheurs n'ont pas le droit de lire au-dela de `i`. Celui
+    ci lit un calendrier qui contient des dates posterieures a `i` — et ce
+    n'est pas la meme chose : ce calendrier est **public au moment `i`**.
+    DefiLlama le publie des mois a l'avance, et un trader du jour `i` le
+    connait aussi bien que nous.
+
+    Ce qu'il ne lit jamais, c'est un PRIX posterieur a `i`. C'est la la
+    frontiere, et `test_le_declencheur_de_deblocage_ne_lit_aucun_prix_futur`
+    la verifie en tronquant la serie.
+
+    Une hypothese demeure, et il faut la nommer : `part_offre` rapporte le
+    deblocage a l'offre deja debloquee a sa date, donc au calendrier tel
+    qu'il s'executera. Un projet qui reporte ou annule un deblocage rend
+    cette part fausse apres coup. C'est rare et c'est public, mais ce n'est
+    pas nul.
+    """
+    par_jour = {b.ts_ms // 86_400_000: i for i, b in enumerate(bars)}
+    candidats: list[Declenchement] = []
+    for e in sorted(deblocages, key=lambda v: v["ts_ms"]):
+        part = float(e.get("part_offre", 0.0))
+        if not part_min <= part < part_max:
+            continue
+        i = par_jour.get(e["ts_ms"] // 86_400_000 - avance_j)
+        if i is None:
+            continue
+        candidats.append(Declenchement(i, -1, part, "deblocage_annonce"))
+    # Un seul reveil par fenetre : deux deblocages rapproches produisent des
+    # fenetres qui se recouvrent, donc une position tenue une fois. La
+    # validation applique la meme regle, et s'en ecarter ici mesurerait une
+    # strategie differente de celle qui a ete mesuree.
+    gardes: list[Declenchement] = []
+    dernier = -10**9
+    for d in candidats:
+        if d.index - dernier >= duree_j:
+            gardes.append(d)
+            dernier = d.index
+    return gardes
+
+
 DECLENCHEURS = {
     "pic_volume": (pic_de_volume, CONTINUATION),
     "funding_extreme": (funding_extreme, CONTRARIEN),

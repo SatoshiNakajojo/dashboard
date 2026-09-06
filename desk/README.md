@@ -1570,5 +1570,33 @@ chaque fois. Avec un écart-type de 1 050 bps, distinguer +290 de zéro en
 demande cinquante à cent — soit six mois à un an. Dix trades gagnants ne
 sont que du bruit, quelle que soit leur allure.
 
-L'analogue direct sur actions — les *lockup expiries* des IPO — reste le
-candidat naturel pour tester si l'effet est propre à la crypto ou général.
+### L'edge est branché dans le desk
+
+`sentinelle.deblocage_annonce` — le **septième** déclencheur, et le seul dont
+l'edge directionnel ait été mesuré. Les six autres réveillent sur une
+condition de prix, et la campagne a donné zéro survivant sur 98 cellules pour
+la direction : ils savent dire qu'il se passe quelque chose, pas dans quel
+sens.
+
+Trois choses le distinguent :
+
+- **Il n'a aucun seuil à régler.** Ses bornes — 2 % et 25 % de l'offre — ne
+  sont pas des paramètres mais les limites du domaine validé.
+- **Il lit des dates futures, et ce n'est pas regarder l'avenir.** Le
+  calendrier de déblocage est public au moment du réveil ; DefiLlama le
+  publie des mois à l'avance. La frontière est ailleurs : il ne lit jamais un
+  *prix* postérieur, et un test le vérifie en tronquant la série juste après
+  le réveil.
+- **Il n'appelle aucun modèle.** Du Python pur sur un calendrier — la forme
+  d'agent algorithmique que le pivot demandait.
+
+### Le chantier actions est bloqué de mon côté
+
+Le test de généralité — les *lockup expiries* d'IPO, l'analogue direct sur
+actions — demande des cours d'actions et des dates d'introduction. La
+politique réseau de l'environnement où ce code est écrit refuse stooq,
+nasdaq, sec.gov et yahoo (403 sur les quatre). Écrire un collecteur que je
+ne peux pas exécuter contre la source réelle est exactement ce qui a produit
+le `fetch_unlocks.py` de la première version, contre une API devenue payante
+et une structure de données supposée. Ce chantier attend une machine qui
+atteint ces sources.

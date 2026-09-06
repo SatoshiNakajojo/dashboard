@@ -19,6 +19,42 @@ l'historique déjà en dépôt, avant toute mise en production.
 | 5 | Saut d'open interest | ΔOI 1 h > 3σ à prix stable | ❌ enregistrement requis |
 | 6 | Smart money | prise de position massive d'un portefeuille suivi | ❌ enregistrement requis |
 
+---
+
+## Déclencheur n°7 : le déblocage annoncé — **le seul dont l'edge est mesuré**
+
+Les six précédents réveillent le desk sur une condition de PRIX, et la
+campagne de validation a été nette : **zéro survivant sur 98 cellules** pour
+la direction. Ils savent dire qu'il se passe quelque chose, pas dans quel
+sens.
+
+Celui-ci est d'une autre nature. Il réveille sur un **calendrier public**,
+sept jours avant un déblocage de jetons, avec une hypothèse baissière posée
+d'avance. Son edge a survécu à six contrôles : dénominateurs aberrants,
+jackknife par jeton, coupe temporelle, neutralisation par BTC, décalage
+calendaire, et décalage calendaire sur le rendement net. +290 bps sur la
+tranche 2-5 %.
+
+`sentinelle.deblocage_annonce`. Trois propriétés le distinguent des autres :
+
+- **Il n'a pas de seuil à régler.** Ses bornes — 2 % et 25 % de l'offre —
+  ne sont pas des paramètres mais les limites du domaine validé. En dessous
+  aucun contrôle ne survit ; au-dessus on sort de la plage mesurée, et un
+  déblocage de 65 % de l'offre n'est pas un gros déblocage, c'est un autre
+  événement.
+- **Il lit des dates futures, et ce n'est pas regarder l'avenir.** Le
+  calendrier est public au moment du réveil. La frontière est ailleurs : il
+  ne lit jamais un PRIX postérieur, et un test le vérifie en tronquant la
+  série juste après le réveil.
+- **Il n'appelle aucun modèle.** C'est du Python pur sur un calendrier —
+  exactement la forme d'agent algorithmique que le pivot demandait.
+
+Ce qu'il ne prouve pas : que l'effet tienne demain. Six contrôles
+historiques partagent le même défaut, qui ne se corrige pas — ils ont été
+construits en connaissant les données. `scripts/journal_unlocks.py` inscrit
+les positions avant les faits ; c'est la seule réponse possible, et elle
+prend six mois à un an.
+
 ## Protocole de validation — le même que celui qui a recalé six stratégies
 
 ```
