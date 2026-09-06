@@ -27,8 +27,16 @@ _spec.loader.exec_module(qualite)
 
 
 def _bar(high: str, low: str) -> Bar:
-    return Bar(asset="BTC", ts_ms=0, open=Decimal("100"), high=Decimal(high),
-               low=Decimal(low), close=Decimal("100"))
+    """Une bougie dont on ne fixe que les extrêmes.
+
+    `open` et `close` sont placés au milieu : le contrat `Bar` exige qu'ils
+    tiennent dans [low, high], et aucun test ici ne dépend de leur valeur —
+    sauf la clôture d'horizon, qui lit `close` et pour laquelle le milieu est
+    une valeur parfaitement définie.
+    """
+    milieu = (Decimal(high) + Decimal(low)) / 2
+    return Bar(asset="BTC", ts_ms=0, open=milieu, high=Decimal(high),
+               low=Decimal(low), close=milieu)
 
 
 def _livre(target="110", stop="95") -> tuple[ShadowBook, ShadowEntry]:
@@ -149,3 +157,66 @@ def test_la_mediane_nest_pas_la_centrale_haute():
 def test_la_calibration_refuse_un_echantillon_trop_court():
     texte = qualite.calibration([_e(0.5, 1)] * 9)
     assert "trop peu" in texte
+
+
+# --------------------------------------------------------------------------
+#  Un setup n'est pas un trade
+# --------------------------------------------------------------------------
+
+def _livre_limite(entree="90", stop="85", target="100"):
+    """Un setup dont l'entrée est SOUS le marché — un ordre à cours limité."""
+    book = ShadowBook()
+    e = ShadowEntry(
+        ts_ms=0, stage="VETO", reason="t", asset="BTC", side=Side.LONG,
+        entry_price=Decimal(entree), stop_price=Decimal(stop),
+        target_price=Decimal(target))
+    book.entries.append(e)
+    return book, e
+
+
+def test_une_entree_jamais_atteinte_nest_pas_notee():
+    """Le défaut qui produisait +0,35 R au lieu de +0,05 R.
+
+    Le marché monte de 100 à 105 sans jamais redescendre à 90. Le stop, à 85,
+    est de l'autre côté et n'est donc jamais touché ; la cible à 100 l'est
+    immédiatement. Sans exiger l'exécution, ce setup encaissait +2 R sur une
+    position qui n'a jamais été ouverte.
+    """
+    book, entree = _livre_limite()
+    monte = [_bar(str(100 + i), str(99 + i)) for i in range(6)]
+    qualite.suivre(book, entree, monte, "BTC", 10)
+    resolu = book.entries[0]
+    assert not resolu.filled
+    assert resolu.outcome == "non_execute"
+    assert resolu.pnl_r is None, "un setup non exécuté ne doit pas être chiffré"
+
+
+def test_une_entree_atteinte_est_notee_normalement():
+    book, entree = _livre_limite()
+    # Le marché redescend toucher 90, puis remonte à la cible.
+    suite = [_bar("101", "89")] + [_bar("101", "99")] * 3
+    qualite.suivre(book, entree, suite, "BTC", 10)
+    assert book.entries[0].filled
+    assert book.entries[0].outcome == "cible"
+
+
+def test_entree_et_stop_sur_la_meme_bougie_donnent_un_trade_stoppe():
+    """Amorcer avant résoudre. L'ordre inverse ignorerait la mèche qui fait
+    les deux, et transformerait une perte en trade jamais pris."""
+    book, entree = _livre_limite()
+    qualite.suivre(book, entree, [_bar("95", "84")], "BTC", 5)
+    assert book.entries[0].filled
+    assert book.entries[0].outcome == "stop"
+    assert book.entries[0].pnl_r == Decimal("-1")
+
+
+def test_un_setup_non_execute_sort_de_lesperance_sans_la_tirer_vers_zero():
+    """`pnl_r=None` et non zéro : un zéro se mêlerait aux vrais résultats."""
+    book = ShadowBook()
+    for _ in range(30):
+        b, e = _livre_limite()
+        book.entries.append(b.entries[0])
+    for e in list(book.entries):
+        qualite.suivre(book, e, [_bar("105", "104")] * 3, "BTC", 3)
+    assert all(x.outcome == "non_execute" for x in book.entries)
+    assert book.rejected_expectancy_r() is None

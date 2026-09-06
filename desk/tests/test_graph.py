@@ -335,7 +335,8 @@ def test_le_registre_resout_avec_le_stop_prioritaire():
     book = ShadowBook()
     book.record(run_desk_cycle(llm=_script(counter=_counter(veto=True)), bars=BARS))
 
-    # Une bougie qui contient stop ET cible.
+    # Une bougie qui contient l'entrée, le stop ET la cible.
+    book.amorcer("BTC", high=Decimal("67000"), low=Decimal("62500"))
     book.resolve("BTC", high=Decimal("67000"), low=Decimal("62500"))
     assert book.entries[0].outcome == "stop"
     assert book.entries[0].pnl_r == Decimal("-1")
@@ -344,6 +345,7 @@ def test_le_registre_resout_avec_le_stop_prioritaire():
 def test_le_registre_resout_une_cible():
     book = ShadowBook()
     book.record(run_desk_cycle(llm=_script(counter=_counter(veto=True)), bars=BARS))
+    book.amorcer("BTC", high=Decimal("67000"), low=Decimal("63500"))
     book.resolve("BTC", high=Decimal("67000"), low=Decimal("63500"))
 
     assert book.entries[0].outcome == "cible"
@@ -449,6 +451,7 @@ def test_la_cloture_dhorizon_compte_les_setups_qui_ne_bougent_pas():
 
     # Un prix qui ne touche ni le stop ni la cible.
     entre_les_deux = (entree.entry_price + entree.target_price) / 2
+    book.amorcer("BTC", high=entree.entry_price, low=entree.entry_price)
     assert book.resolve("BTC", high=entre_les_deux, low=entre_les_deux) == 0
     assert not book.entries[0].resolved
 
@@ -462,6 +465,7 @@ def test_la_cloture_dhorizon_compte_les_setups_qui_ne_bougent_pas():
 def test_la_cloture_ne_touche_pas_une_entree_deja_resolue():
     book = ShadowBook()
     book.record(run_desk_cycle(llm=_script(counter=_counter(veto=True)), bars=BARS))
+    book.amorcer("BTC", high=Decimal("67000"), low=Decimal("62500"))
     book.resolve("BTC", high=Decimal("67000"), low=Decimal("62500"))
     assert book.entries[0].outcome == "stop"
     assert book.cloturer("BTC", Decimal("66000")) == 0
@@ -475,6 +479,7 @@ def test_la_discrimination_exige_les_deux_populations():
     for _ in range(35):
         book.record(run_desk_cycle(llm=_script(counter=_counter(veto=True)),
                                    bars=BARS))
+    book.amorcer("BTC", high=Decimal("67000"), low=Decimal("62500"))
     book.resolve("BTC", high=Decimal("67000"), low=Decimal("62500"))
     assert book.rejected_expectancy_r() == Decimal("-1")
     assert book.issued_expectancy_r() is None
@@ -536,7 +541,8 @@ def _entree_r(pnl: str, issued: bool = False) -> "ShadowEntry":
     return ShadowEntry(
         ts_ms=0, stage=Stage.CONVICTION, reason="t", asset="BTC",
         side=Side.LONG, entry_price=Decimal("100"), stop_price=Decimal("95"),
-        issued=issued, resolved=True, outcome="cible", pnl_r=Decimal(pnl))
+        issued=issued, filled=True, resolved=True, outcome="cible",
+        pnl_r=Decimal(pnl))
 
 
 def test_lesperance_est_accompagnee_de_son_intervalle():

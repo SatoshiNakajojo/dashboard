@@ -72,6 +72,13 @@ def suivre(book: ShadowBook, entree, suite, asset: str, barres_horizon: int) -> 
     cible est atteinte à la barre 40. Agréger inverserait le résultat.
     """
     for bar in suite[:barres_horizon]:
+        # Amorcer AVANT resoudre : une entree touchee et un stop touche sur
+        # la meme bougie donnent un trade pris puis stoppe, pas un trade
+        # ignore. L'ordre inverse laisserait passer les meches qui font les
+        # deux — et surtout, sans amorcage du tout, un setup dont le marche
+        # n'atteint jamais l'entree encaisse sa cible sans jamais avoir ete
+        # ouvert.
+        book.amorcer(asset, high=bar.high, low=bar.low)
         if book.resolve(asset, high=bar.high, low=bar.low):
             return
     if suite:
@@ -192,6 +199,11 @@ def main() -> int:
                         "ne rend pas la mesure concluante — ça la rend "
                         "bruyante en silence.")
     p.add_argument("--sortie", default=None)
+    p.add_argument("--limite", type=int, default=None,
+                   help="n'executer que N fenetres de la grille --runs, "
+                        "reparties regulierement. Sert a sonder un correctif "
+                        "sur les MEMES fenetres qu'une campagne complete, "
+                        "sans en repayer le prix.")
     p.add_argument("--from-json", default=None,
                    help="relire une campagne deja payee et n'en refaire que "
                         "la lecture")
@@ -227,6 +239,16 @@ def main() -> int:
         return 2
     pas = span / args.runs
     debuts = [int(i * pas) for i in range(args.runs)]
+
+    if args.limite and args.limite < len(debuts):
+        # Sous-echantillon REGULIER de la meme grille, pas ses N premieres
+        # fenetres. Les N premieres ne couvriraient que le debut de la
+        # periode : une sonde qui ne verrait qu'un seul regime de marche
+        # dirait autant de choses sur la periode choisie que sur ce qu'on
+        # mesure. Regulier, chaque fenetre reste comparable a celle du meme
+        # rang dans la campagne complete.
+        k = len(debuts) / args.limite
+        debuts = [debuts[int(i * k)] for i in range(args.limite)]
 
     print(f"\n  {len(bars)} barres, {args.runs} fenêtres de {WINDOW_BARS}, "
           f"{marge} barres de marge pour l'horizon.")

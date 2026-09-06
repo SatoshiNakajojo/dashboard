@@ -944,20 +944,42 @@ Trois portes ne se sont jamais déclenchées : `QUOTA`, `ASYMETRIE`,
 `REJET_CHEF`. Cette dernière est la plus parlante : **le Chef de desk n'a
 jamais été appelé.** Le graphe s'arrêtait toujours avant lui.
 
-### Le desk rejette-t-il des trades gagnants ?
+### Le desk rejette-t-il des trades gagnants ? Non — c'était mon instrument
 
-```
-  espérance des rejets : +0,35 R   [IC 95 % : −0,05 ; +0,75]
-```
+Le registre annonçait **+0,35 R** sur les 47 setups rejetés, ce qui se lit
+« le desk jette des trades qui gagnaient ». Le modèle nul confirmait même à
+p ≈ 0,03 contre des entrées au hasard.
 
-L'intervalle contient zéro (bootstrap 20 000 tirages, p = 0,088). Et avec la
-perte réelle mesurée au Monte-Carlo — **−1,27 R au stop, pas −1 R** — il
-tombe à **+0,22 R, IC [−0,21 ; +0,66]**, t = 0,98.
+**Les deux mesuraient un défaut du registre, pas une propriété du desk.**
 
-**Le signe est suggestif, l'effet n'est pas établi.** C'est exactement le
-genre de chiffre qu'une lecture pressée transformerait en alarme. Le registre
-affiche désormais son intervalle et le mot « compatible avec zéro » à côté de
-chaque espérance — un nombre nu se lit comme un fait.
+Un setup n'est pas un trade. La Stratégie propose un *prix* d'entrée, et
+**38 % des siens sont à plus de 50 bps du dernier cours vu** — des ordres à
+cours limité, qui n'existent que si le marché revient les chercher. Le
+registre ne vérifiait jamais cette exécution. Un setup dont l'entrée n'est
+jamais atteinte a son stop de l'autre côté du marché : il n'est donc jamais
+touché, et la cible finit souvent par l'être.
+
+| population | n | espérance |
+|---|---:|---:|
+| entrée **jamais atteinte** en 24 h | 7 | **+2,07 R** — profit fictif |
+| entrée réellement atteinte | 40 | **+0,05 R** |
+| *total publié à tort* | *47* | *+0,35 R* |
+
+Sept setups sur quarante-sept, jamais ouverts, portaient toute la conclusion.
+Corrigé : `ShadowBook.amorcer()` exige que le prix touche le niveau d'entrée,
+`resolve()` ignore les entrées non exécutées, et une entrée jamais atteinte
+sort avec `pnl_r = None` — pas zéro, qui se mêlerait aux vrais résultats.
+
+L'amorçage passe **avant** la résolution sur chaque barre : une mèche qui
+touche l'entrée puis le stop donne un trade pris puis stoppé, pas un trade
+ignoré.
+
+Reste **+0,05 R sur 40 setups**, IC 95 % ≈ [−0,36 ; +0,45] : indistinguable
+de zéro. Le desk ne détruit pas d'alpha en rejetant — il n'y en avait pas.
+
+Le registre affiche désormais son intervalle bootstrap et la mention
+« compatible avec zéro » à côté de chaque espérance : un nombre nu se lit
+comme un fait, et celui-là s'est lu comme une alarme pendant une heure.
 
 ### La conviction ne prédit rien
 

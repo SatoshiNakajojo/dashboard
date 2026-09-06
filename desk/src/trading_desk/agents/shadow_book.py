@@ -47,6 +47,28 @@ class ShadowEntry(Frozen):
     stop_price: Decimal
     target_price: Decimal | None = None
     conviction: Decimal = Decimal("0")
+    horizon_hours: Decimal = Decimal("0")
+    """L'horizon que la Strategie a demande pour ce setup.
+
+    Sans lui, le registre ne permet pas de rejouer sa propre mesure : on sait
+    ce que le setup est devenu, pas sur quelle duree il avait le droit de le
+    devenir. Un modele nul qui tire des dates d'entree au hasard doit tenir
+    cette duree constante, sinon il compare des expositions differentes.
+    """
+    filled: bool = False
+    """Le prix a-t-il seulement atteint le niveau d'entrée proposé ?
+
+    Un setup n'est pas un trade. La Stratégie propose un PRIX d'entrée, et
+    38 % des siens sont à plus de 50 bps du dernier cours vu — des ordres à
+    cours limité, qui n'existent que si le marché revient les chercher.
+
+    Sans cette distinction, un setup dont l'entrée n'est jamais touchée est
+    quand même noté : son stop est de l'autre côté du marché, il n'est donc
+    jamais atteint, et la cible finit souvent par l'être. Mesure du
+    5 septembre 2026 : les 7 setups jamais exécutés portaient **+2,07 R** de
+    profit fictif et tiraient l'espérance de +0,05 R à +0,35 R. Toute la
+    conclusion « le desk rejette des trades gagnants » venait de là.
+    """
     issued: bool = False
     """Le desk a-t-il émis ce setup, ou l'a-t-il rejeté ?
 
@@ -113,6 +135,7 @@ class ShadowBook:
             asset=setup.asset, side=setup.side,
             entry_price=setup.entry_price, stop_price=setup.stop_price,
             target_price=setup.target_price, conviction=setup.conviction,
+            horizon_hours=setup.horizon_hours,
             issued=result.stage is Stage.MANDAT,
         )
         self.entries.append(entry)
@@ -128,6 +151,23 @@ class ShadowBook:
     def emis(self) -> list[ShadowEntry]:
         return [e for e in self.entries if e.issued]
 
+    def amorcer(self, asset: str, high: Decimal, low: Decimal) -> int:
+        """Marque exécutées les entrées dont le prix a été atteint.
+
+        À appeler AVANT `resolve` sur chaque barre : une entrée touchée et un
+        stop touché sur la même bougie donnent un trade pris puis stoppé, pas
+        un trade ignoré. L'inverse — résoudre avant d'amorcer — laisserait
+        passer les mèches qui font les deux.
+        """
+        touchees = 0
+        for index, entry in enumerate(self.entries):
+            if entry.filled or entry.resolved or entry.asset != asset:
+                continue
+            if low <= entry.entry_price <= high:
+                self.entries[index] = entry.model_copy(update={"filled": True})
+                touchees += 1
+        return touchees
+
     def resolve(self, asset: str, high: Decimal, low: Decimal) -> int:
         """Résout les entrées non closes avec un nouvel extrême de prix.
 
@@ -138,7 +178,10 @@ class ShadowBook:
         """
         resolved = 0
         for index, entry in enumerate(self.entries):
-            if entry.resolved or entry.asset != asset:
+            # `filled` d'abord : un setup dont le marche n'a jamais atteint
+            # le prix d'entree n'est pas un trade, et le noter revient a
+            # encaisser une cible sur une position jamais ouverte.
+            if entry.resolved or not entry.filled or entry.asset != asset:
                 continue
 
             touche_stop = (
@@ -182,6 +225,16 @@ class ShadowBook:
         clos = 0
         for index, entry in enumerate(self.entries):
             if entry.resolved or entry.asset != asset:
+                continue
+            if not entry.filled:
+                # Jamais executee : classee, jamais chiffree. `pnl_r` reste
+                # `None`, donc elle sort des esperances au lieu d'y entrer
+                # avec un zero — un zero se melerait aux vrais resultats et
+                # tirerait la moyenne vers le milieu.
+                self.entries[index] = entry.model_copy(update={
+                    "resolved": True, "outcome": "non_execute", "pnl_r": None,
+                })
+                clos += 1
                 continue
             risque = entry.risk_per_unit
             if risque <= 0:
