@@ -347,3 +347,83 @@ def test_le_libelle_du_signe_nest_pas_inverse():
                 close=Decimal(str(p)))
             for i, p in enumerate([100, 90, 80])]
     assert _rendement(bars, 0, 2, -1) > 0, "prix en baisse => rendement positif"
+
+
+def test_la_coupe_temporelle_voit_un_effet_qui_disparait(tmp_path, monkeypatch):
+    """L'épreuve la plus décisive des trois, vérifiée sur un cas construit.
+
+    Un effet présent dans la première moitié et absent dans la seconde a été
+    arbitré : le trader d'aujourd'hui perdrait de l'argent à le suivre. Si
+    `robustesse` ne savait pas distinguer ce cas, elle validerait des edges
+    morts.
+    """
+    import contextlib
+    import io
+    import os
+
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "data").mkdir(exist_ok=True)
+    alea = random.Random(3)
+    unlocks = {}
+    for k in range(10):
+        px, bars = 100.0, []
+        # La fenêtre d'anticipation couvre [d-7, d-1] : la baisse doit s'y
+        # trouver, pas le jour du déblocage lui-même. Un fixture qui place le
+        # choc en `d` ne teste rien — la fenêtre s'arrête à `d-1`.
+        deblocages = set(range(60, 400, 20))
+        avant = {j for d in deblocages for j in range(d - 7, d)}
+        for i in range(900):
+            px *= 1 + alea.gauss(0, 0.04) + (-0.012 if i in avant else 0.0)
+            bars.append({"t": i * JOUR_MS, "o": px, "h": px * 1.01,
+                         "l": px * 0.99, "c": px, "v": 100, "n": 1})
+        (tmp_path / "data" / f"T{k}_1d_real.json").write_text(json.dumps(bars))
+        # Des déblocages sur TOUTE la série, mais des chocs sur la moitié.
+        toutes = sorted(deblocages) + list(range(500, 860, 20))
+        unlocks[f"T{k}"] = [{"ts_ms": i * JOUR_MS, "part_offre": 0.03,
+                             "debloque": 1.0, "lineaire": 0.0, "categories": []}
+                            for i in toutes]
+    os.chdir(tmp_path)
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        valider.robustesse(unlocks, tirages=400, alpha=0.05)
+    sortie = buf.getvalue()
+
+    coupe = sortie.split("3. Coupe temporelle")[-1]
+    lignes = [x for x in coupe.splitlines() if "avant" in x or "après" in x]
+    assert len(lignes) == 2, sortie
+    assert "OK" in lignes[0], f"la première moitié doit montrer l'effet : {lignes[0]}"
+    assert "absent" in lignes[1], f"la seconde doit être vide : {lignes[1]}"
+
+
+def test_le_jackknife_repere_un_jeton_qui_porte_tout(tmp_path, monkeypatch):
+    """Un effet concentré sur un seul jeton n'est pas un effet de marché,
+    c'est une anecdote."""
+    import contextlib
+    import io
+    import os
+
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "data").mkdir(exist_ok=True)
+    alea = random.Random(5)
+    unlocks = {}
+    for k in range(6):
+        px, bars = 100.0, []
+        deblocages = set(range(60, 400, 10))
+        avant = {j for d in deblocages for j in range(d - 7, d)}
+        # Seul T0 baisse avant ses déblocages ; les cinq autres sont du bruit.
+        amplitude = -0.03 if k == 0 else 0.0
+        for i in range(450):
+            px *= 1 + alea.gauss(0, 0.03) + (amplitude if i in avant else 0.0)
+            bars.append({"t": i * JOUR_MS, "o": px, "h": px * 1.01,
+                         "l": px * 0.99, "c": px, "v": 100, "n": 1})
+        (tmp_path / "data" / f"T{k}_1d_real.json").write_text(json.dumps(bars))
+        unlocks[f"T{k}"] = [{"ts_ms": i * JOUR_MS, "part_offre": 0.03,
+                             "debloque": 1.0, "lineaire": 0.0, "categories": []}
+                            for i in sorted(deblocages)]
+    os.chdir(tmp_path)
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        valider.robustesse(unlocks, tirages=400, alpha=0.05)
+    sortie = buf.getvalue()
+    jack = sortie.split("2. Jackknife")[-1].split("3. Coupe")[0]
+    assert "T0" in jack, f"le jackknife doit nommer le jeton porteur : {jack}"

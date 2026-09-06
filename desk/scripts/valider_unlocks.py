@@ -296,6 +296,146 @@ def poolage(unlocks: dict, tirages: int, min_evts: int, alpha: float) -> None:
           f"**{survivants} survivant(s)** après BH\n")
 
 
+def robustesse(unlocks: dict, tirages: int, alpha: float) -> None:
+    """Trois épreuves qui peuvent tuer un effet apparemment solide.
+
+    Un résultat qui survit à une correction pour tests multiples n'est pas
+    encore un résultat. Il reste trois façons ordinaires de se tromper, et
+    chacune a sa contre-épreuve :
+
+    **Un dénominateur aberrant.** Six jetons affichent une part d'offre
+    supérieure à 100 % — presque toujours l'artefact « deuxième déblocage
+    après un premier minuscule ». Un edge qui disparaît quand on les écarte
+    n'en est pas un.
+
+    **Un ou deux jetons qui portent tout.** 852 événements sur 68 jetons,
+    mais si USUAL et EIGEN font le résultat à eux seuls, ce n'est pas un
+    effet de marché, c'est une anecdote. Le jackknife retire chaque jeton
+    tour à tour et regarde le pire cas.
+
+    **Un effet daté.** Le plus décisif des trois. Si l'effet n'existait que
+    dans la première moitié de la période, il aurait été arbitré depuis — et
+    le trader aujourd'hui perdrait de l'argent. On coupe donc à la médiane
+    des dates et on regarde les deux moitiés SÉPARÉMENT. C'est la seule
+    épreuve qui parle de l'avenir plutôt que du passé.
+    """
+    import random
+    import statistics
+
+    series: dict[str, list] = {}
+    for symbole in unlocks:
+        try:
+            series[symbole] = load_from_file(
+                f"data/{symbole}_1d_real.json", symbole, "1d")
+        except (DataUnavailable, FileNotFoundError):
+            continue
+
+    # La cellule la plus fournie et la plus significative : « toutes », J-7/J-1.
+    DECALAGE, DUREE = -7, 6
+
+    def evenements_de(symbole: str, part_max: float, depuis=None, jusqu=None):
+        bars = series.get(symbole)
+        if not bars:
+            return []
+        par_jour = index_par_date(bars)
+        candidats = []
+        for e in unlocks[symbole]:
+            if e["part_offre"] > part_max or e["part_offre"] < 0.005:
+                continue
+            if depuis is not None and e["ts_ms"] < depuis:
+                continue
+            if jusqu is not None and e["ts_ms"] >= jusqu:
+                continue
+            i = par_jour.get(e["ts_ms"] // 86_400_000 + DECALAGE)
+            if i is not None and i + DUREE < len(bars):
+                candidats.append(Declenchement(i, -1, e["part_offre"], ""))
+        return [(bars, d.index) for d in sans_chevauchement(candidats, DUREE)]
+
+    def mesurer(evts, graine=20260906):
+        if len(evts) < 30:
+            return None
+        def rend(bars, i):
+            depart = float(bars[i].close)
+            if depart <= 0:
+                return None
+            return -1 * (float(bars[i + DUREE].close) - depart) / depart * 10_000
+        obs = [r for bars, i in evts if (r := rend(bars, i)) is not None]
+        if len(obs) < 30:
+            return None
+        moyenne = sum(obs) / len(obs)
+        alea = random.Random(graine)
+        nuls = []
+        for _ in range(tirages):
+            tir = [r for bars, _ in evts
+                   if (r := rend(bars, alea.randrange(0, len(bars) - DUREE - 1)))
+                   is not None]
+            if tir:
+                nuls.append(sum(tir) / len(tir))
+        if not nuls:
+            return None
+        p = (sum(1 for x in nuls if x >= moyenne) + 1) / (len(nuls) + 1)
+        return len(obs), moyenne, sum(nuls) / len(nuls), p
+
+    print("\n  ÉPREUVES DE ROBUSTESSE — fenêtre J-7/J-1, toutes tranches")
+    print("  " + "=" * 74)
+
+    # 1. Le garde-fou sur le dénominateur
+    print("\n  1. Dénominateurs aberrants")
+    for plafond, libelle in ((3.0, "≤ 300 % (défaut)"), (1.0, "≤ 100 %"),
+                             (0.5, "≤ 50 %"), (0.25, "≤ 25 %")):
+        evts = [e for s in unlocks for e in evenements_de(s, plafond)]
+        r = mesurer(evts)
+        if r is None:
+            print(f"     {libelle:<18} échantillon insuffisant")
+            continue
+        n, obs, nul, p = r
+        print(f"     {libelle:<18} n={n:<4} {obs:+8.1f} contre {nul:+7.1f} "
+              f"au hasard   p = {p:.4f}"
+              + ("   OK" if p < alpha else "   <- l'effet disparaît"))
+
+    # 2. Jackknife par jeton
+    print("\n  2. Jackknife — un jeton porte-t-il tout le résultat ?")
+    complet = mesurer([e for s in unlocks for e in evenements_de(s, 3.0)])
+    if complet:
+        ps = []
+        for exclu in unlocks:
+            evts = [e for s in unlocks if s != exclu for e in evenements_de(s, 3.0)]
+            r = mesurer(evts)
+            if r:
+                ps.append((r[3], exclu, r[1]))
+        ps.sort(reverse=True)
+        print(f"     complet          p = {complet[3]:.4f}")
+        print(f"     pire exclusion   p = {ps[0][0]:.4f}  (sans {ps[0][1]}, "
+              f"effet {ps[0][2]:+.1f} bps)")
+        print(f"     médiane          p = {statistics.median(x[0] for x in ps):.4f}")
+        print("     " + ("OK — aucun jeton n'est indispensable"
+                         if ps[0][0] < alpha
+                         else f"<- retirer {ps[0][1]} suffit à tuer l'effet"))
+
+    # 3. La coupe temporelle
+    print("\n  3. Coupe temporelle — l'effet existe-t-il ENCORE ?")
+    toutes_dates = sorted(e["ts_ms"] for s in unlocks for e in unlocks[s]
+                          if e["part_offre"] >= 0.005)
+    if toutes_dates:
+        milieu = toutes_dates[len(toutes_dates) // 2]
+        import datetime as dt
+        coupe = dt.datetime.fromtimestamp(milieu / 1000, dt.UTC).date()
+        for libelle, depuis, jusqu in (("avant " + str(coupe), None, milieu),
+                                       ("après " + str(coupe), milieu, None)):
+            evts = [e for s in unlocks for e in evenements_de(s, 3.0, depuis, jusqu)]
+            r = mesurer(evts)
+            if r is None:
+                print(f"     {libelle:<22} échantillon insuffisant")
+                continue
+            n, obs, nul, p = r
+            print(f"     {libelle:<22} n={n:<4} {obs:+8.1f} contre {nul:+7.1f} "
+                  f"   p = {p:.4f}"
+                  + ("   OK" if p < alpha else "   <- absent sur cette moitié"))
+        print("\n     Un effet présent AVANT et absent APRÈS a été arbitré :")
+        print("     le trader d'aujourd'hui perdrait de l'argent à le suivre.")
+    print()
+
+
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--unlocks", default="data/unlocks.json")
@@ -305,6 +445,10 @@ def main() -> int:
                    help="en dessous, aucune conclusion n'est possible et la "
                         "cellule est écartée plutôt que rapportée bruyante")
     p.add_argument("--out", default=None)
+    p.add_argument("--robustesse", action="store_true",
+                   help="les trois épreuves qui peuvent tuer un effet : "
+                        "dénominateurs aberrants, jackknife par jeton, et "
+                        "coupe temporelle")
     args = p.parse_args()
 
     chemin = Path(args.unlocks)
@@ -320,6 +464,8 @@ def main() -> int:
     res = cellules(unlocks, args.tirages, args.min_evenements)
     rapport(res, args.alpha)
     poolage(unlocks, args.tirages, args.min_evenements * 3, args.alpha)
+    if args.robustesse:
+        robustesse(unlocks, args.tirages, args.alpha)
     if args.out:
         Path(args.out).write_text(json.dumps([r.__dict__ for r in res], indent=1))
         print(f"  Résultats bruts : {args.out}\n")
