@@ -51,9 +51,11 @@ sudo -u desk /opt/desk/.venv/bin/pip install -e /opt/desk/src/desk --no-deps
 
 # 3. Vérification AVANT de lancer le service — 60 s sur un seul actif
 sudo -u desk /opt/desk/.venv/bin/python -m trading_desk.enregistreur \
-    --coins BTC --racine /tmp/essai &
+    --coins BTC --racine /var/lib/desk/essai &
 sleep 60 && kill %1
-find /tmp/essai -name '*.parquet' | head    # doit lister des fichiers
+find /var/lib/desk/essai -name '*.parquet' | head   # doit lister des fichiers
+# Pas /tmp : c'est un tmpfs (< 2 Go, en RAM) sur beaucoup de VPS, et
+# l'enregistreur s'y arrete sur DISQUE PLEIN. Verifier avec `df -h /tmp`.
 
 # 4. Service
 sudo cp /opt/desk/src/desk/deploy/enregistreur.service /etc/systemd/system/

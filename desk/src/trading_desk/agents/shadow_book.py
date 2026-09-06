@@ -134,7 +134,8 @@ class ShadowBook:
             ts_ms=now_ms(), stage=result.stage, reason=result.reason[:300],
             asset=setup.asset, side=setup.side,
             entry_price=setup.entry_price, stop_price=setup.stop_price,
-            target_price=setup.target_price, conviction=setup.conviction,
+            target_price=setup.target_price,
+            conviction=result.note.score if result.note else Decimal("0"),
             horizon_hours=setup.horizon_hours,
             issued=result.stage is Stage.MANDAT,
         )

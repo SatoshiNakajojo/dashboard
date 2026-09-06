@@ -103,8 +103,32 @@ class SetupProposal(AgentOutput):
     stop_price: Decimal | None = Field(default=None, gt=0)
     target_price: Decimal | None = Field(default=None, gt=0)
     horizon_hours: Decimal = Field(default=Decimal("24"), gt=0, le=720)
-    conviction: Decimal = Field(default=Decimal("0"), ge=0, le=1)
     rationale: str = Field(default="", max_length=800)
+
+    # --- l'evaluation qualitative, a la place du chiffre ---
+    #
+    # L'agent ne rend plus de `conviction`. Mesure faite : celle qu'il
+    # rendait ne correlait pas avec l'issue des setups, plafonnait vers 0,55
+    # et bloquait donc toutes les portes. Il rend maintenant des jugements
+    # ordinaux, et `agents/scoring.py` en fabrique le score.
+    #
+    # **Un seul champ, et non cinq.** Le decodage contraint refuse au-dela de
+    # douze champs OPTIONNELS (mesure contre l'API, voir
+    # `test_aucun_schema_ne_depasse_le_seuil_de_l_api`). Cinq champs separes
+    # en demandaient quatorze : chaque appel Strategie aurait recu un 400, et
+    # l'agent se serait abstenu 100 % du temps pour une raison sans rapport
+    # avec le marche. Une liste d'etiquettes tient dans un seul champ.
+    #
+    # Les etiquettes se decrivent elles-memes (`STOP_ARBITRAIRE`, pas
+    # `ARBITRAIRE`) : une dimension omise doit rester lisible dans le
+    # journal, et deux dimensions ne doivent jamais partager une valeur.
+    evaluation: tuple[Literal[
+        "REGIME_AVEC", "REGIME_NEUTRE", "REGIME_CONTRE",
+        "NIVEAU_NET", "NIVEAU_FLOU", "NIVEAU_AUCUN",
+        "STOP_STRUCTUREL", "STOP_PLAUSIBLE", "STOP_ARBITRAIRE",
+        "CONFLUENCE_3P", "CONFLUENCE_2", "CONFLUENCE_1",
+        "OBSTACLE_AUCUN", "OBSTACLE_MINEUR", "OBSTACLE_MAJEUR",
+    ], ...] = ()
 
     @model_validator(mode="after")
     def _complete_if_proposing(self) -> SetupProposal:

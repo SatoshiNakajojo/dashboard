@@ -1031,21 +1031,66 @@ ce test est faible par construction. On ne peut pas conclure « la conviction
 est inutile » ; on peut conclure que **sur la plage que l'agent utilise
 réellement, elle ne sépare rien**.
 
-### Ce que ça change
+### Ce que ça change — la conviction est retirée au modèle
 
-La `DISCRIMINATION` — espérance(émis) − espérance(rejetés), le chiffre qui
-juge la couche décisionnelle — reste **indéterminée par construction** et non
-par manque d'échantillon : il n'existe qu'une population.
+`agents/scoring.py`. L'agent Stratégie n'a **plus de champ pour un chiffre de
+confiance** : c'est structurel, pas une consigne de prompt. Il remplit un
+champ `evaluation` avec une étiquette par dimension, et un calcul
+déterministe en fait le score.
 
-Tant que le desk n'émet aucun mandat, la question « les six agents
-valent-ils leur coût » ne peut pas recevoir de réponse : **une couche de
-délibération qui refuse tout est indiscernable d'une couche qui refuse au
-hasard, et un `return FLAT` obtiendrait le même résultat pour 0 $.** C'est le
-verrou à lever avant le P5, et il se lève par le correctif de prompt, pas par
-un desserrage de seuil.
+| dimension | étiquettes | apport |
+| --- | --- | --- |
+| régime | `REGIME_CONTRE` / `_NEUTRE` / `_AVEC` | 0 → 0,25 |
+| niveau d'entrée | `NIVEAU_AUCUN` / `_FLOU` / `_NET` | 0 → 0,20 |
+| stop | `STOP_ARBITRAIRE` / `_PLAUSIBLE` / `_STRUCTUREL` | 0 → 0,20 |
+| confluence | `CONFLUENCE_1` / `_2` / `_3P` | 0 → 0,20 |
+| confiance du régime | *calculée*, pas jugée | 0 → 0,15 |
+| obstacle | `OBSTACLE_AUCUN` / `_MINEUR` / `_MAJEUR` | 0 → −0,30 |
+| sévérité de l'objection | *calculée*, pas jugée | 0 → −0,40 |
 
+La somme des maxima vaut **1,00 exactement**, et un test le vérifie par le
+haut. Sans ça, une porte relevée un jour à 0,90 fermerait le desk
+définitivement, et l'absence de mandat passerait pour un jugement de marché
+alors qu'elle serait un défaut d'arithmétique.
 
----
+**Ce score n'est pas une probabilité.** 0,75 ne veut pas dire « gagne trois
+fois sur quatre ». Les poids sont un a priori posé à la main, probablement
+faux dans le détail, et le seuil de 0,60 est **hérité de l'ancienne porte,
+pas dérivé**. Ce qui est gagné n'est pas la justesse, c'est trois propriétés
+que le nombre du modèle n'avait pas :
+
+- **reproductible** — le modèle donnait 0,55 puis 0,62 sur la même situation ;
+- **inspectable** — `Note.termes` dit ce que chaque critère a apporté, donc
+  un score peut être contesté ligne par ligne ;
+- **ajustable** — les poids sont un tableau de nombres dans un fichier. Quand
+  le registre fantôme aura assez d'issues résolues, ils se calent sur des
+  données. Des jetons dans un modèle ne se calent sur rien.
+
+#### Le défaut que le budget de schéma a évité de justesse
+
+La première version demandait **cinq champs séparés**. Le décodage contraint
+de l'API refuse au-delà de douze champs optionnels — mesure faite contre
+l'API réelle, 12 passent et 13 non — et le schéma en demandait quatorze.
+Chaque appel Stratégie aurait reçu un 400, l'agent se serait abstenu **100 %
+du temps**, et le symptôme aurait été « le modèle ne propose plus rien » :
+un défaut de format déguisé en jugement de marché.
+
+`test_aucun_schema_ne_depasse_le_seuil_de_l_api` l'a arrêté au premier essai.
+L'évaluation tient maintenant dans **un seul champ** à étiquettes fermées, et
+le schéma redescend à dix.
+
+C'est la même famille de panne que le rejet de la réflexion adaptative par
+Haiku 4.5 : invisible en test unitaire, fatale en production, et attribuée à
+la compétence de l'agent plutôt qu'au câblage.
+
+#### Ce qui n'est pas encore mesuré
+
+Le desk n'a jamais émis de mandat parce que la conviction du modèle
+plafonnait vers 0,55. Le scorer rend l'échelle atteignable — un setup franc
+note 0,84 en test — mais **savoir si le modèle produit des évaluations
+franches sur un vrai marché demande des appels réels.** Rien ici ne le
+prouve, et le chemin de bout en bout n'est vérifié que sur réponses
+scriptées.
 
 ## Étape 2 — les déclencheurs de la Sentinelle, cartographiés
 

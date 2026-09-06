@@ -47,6 +47,7 @@ from .analyst import build_market_context, run_analyst
 from .isolation import ExternalContent
 from .llm import LLMClient
 from .memory import LessonStore, format_for_prompt
+from .scoring import Note, noter
 from .roster import (
     run_chef, run_devil, run_news, run_quant, run_regime, run_risk_advisor,
     run_strategy,
@@ -95,6 +96,7 @@ class GraphResult(Frozen):
     setup: SetupProposal | None = None
     counter: CounterThesis | None = None
     verdict: DeskVerdict | None = None
+    note: Note | None = None
     reason: str = ""
 
     @property
@@ -142,6 +144,7 @@ def run_desk_cycle(
         setup: SetupProposal | None = None,
         counter: CounterThesis | None = None,
         verdict: DeskVerdict | None = None,
+        note: Note | None = None,
     ) -> GraphResult:
         """Sortie FLAT, en transportant ce qui a déjà été formulé.
 
@@ -159,7 +162,7 @@ def run_desk_cycle(
         return GraphResult(
             mandate=Mandate.flat(ttl_ms=config.mandate_ttl_ms, journal_ref=ref),
             stage=stage, runs=tuple(runs), reason=reason,
-            setup=setup, counter=counter, verdict=verdict,
+            setup=setup, counter=counter, verdict=verdict, note=note,
         )
 
     # Porte 0 — le quota. Il ne dépend d'aucun agent, et se vérifie avant
@@ -264,10 +267,16 @@ def run_desk_cycle(
                     + "; ".join(counter.objections[:2]), setup, counter)
 
     # --- portes déterministes sur le setup lui-même ---
-    if setup.conviction < config.min_conviction:
+    #
+    # La note est calculée APRÈS l'avocat du diable pour que la sévérité de
+    # l'objection y entre. L'ordre compte : noter avant reviendrait à ouvrir
+    # la porte sur une lecture que la contradiction a déjà entamée.
+    note = noter(setup, regime=regime, counter=counter)
+    if note.score < config.min_conviction:
         return flat(Stage.CONVICTION,
-                    f"conviction {setup.conviction} < {config.min_conviction}",
-                    setup, counter)
+                    f"score {note.score:.2f} < {config.min_conviction} "
+                    f"({note.explication})",
+                    setup, counter, note=note)
 
     rr = setup.reward_risk
     if rr is not None and rr < config.min_reward_risk:
@@ -296,9 +305,10 @@ def run_desk_cycle(
 
     mandate = build_mandate(
         setup=setup, verdict=verdict, advice=advice, regime=regime,
-        config=config, limits=limits, store=store,
+        note=note, config=config, limits=limits, store=store,
         journal_payload={
             "setup": setup.model_dump(mode="json"),
+            "note": note.model_dump(mode="json"),
             "objection": counter.model_dump(mode="json"),
             "avis_risque": advice.model_dump(mode="json"),
             "verdict": verdict.model_dump(mode="json"),
@@ -308,7 +318,7 @@ def run_desk_cycle(
     log.info("mandat émis : %s %s", mandate.bias.value, mandate.universe)
     return GraphResult(
         mandate=mandate, stage=Stage.MANDAT, runs=tuple(runs),
-        setup=setup, counter=counter, verdict=verdict,
+        setup=setup, counter=counter, verdict=verdict, note=note,
         reason="toutes les portes franchies",
     )
 
@@ -319,6 +329,7 @@ def build_mandate(
     verdict: DeskVerdict,
     advice: RiskAdvice,
     regime: RegimeRead,
+    note: Note,
     config: GraphConfig,
     limits: RiskLimits,
     store=None,
@@ -354,7 +365,7 @@ def build_mandate(
     return Mandate(
         bias=Bias.LONG if setup.side is Side.LONG else Bias.SHORT,
         regime=regime.regime,
-        conviction=min(setup.conviction, Decimal("1")),
+        conviction=note.score,
         universe=(setup.asset,),
         max_notional_usd=notional,
         max_leverage=min(limits.max_effective_leverage, Decimal("2")),

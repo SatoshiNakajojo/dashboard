@@ -382,6 +382,7 @@ def test_le_mandat_emis_ne_depasse_jamais_les_limites():
     from decimal import Decimal
 
     from trading_desk.agents import GraphConfig, build_mandate
+    from trading_desk.agents.scoring import noter
     from trading_desk.contracts import (
         DeskVerdict, Regime, RegimeRead, RiskAdvice, SetupProposal, Side,
     )
@@ -398,13 +399,15 @@ def test_le_mandat_emis_ne_depasse_jamais_les_limites():
     setup = SetupProposal(
         asset="BTC", side=Side.LONG, entry_price=Decimal("60000"),
         stop_price=Decimal("59400"), target_price=Decimal("70000"),
-        conviction=Decimal("1"),
+        evaluation=("REGIME_AVEC", "NIVEAU_NET", "STOP_STRUCTUREL",
+                    "CONFLUENCE_3P", "OBSTACLE_AUCUN"),
     )
     mandat = build_mandate(
         setup=setup,
         verdict=DeskVerdict(decision="APPROVE", size_factor=Decimal("1")),
         advice=RiskAdvice(size_factor=Decimal("1")),
         regime=RegimeRead(regime=Regime.TREND_UP),
+        note=noter(setup),
         config=GraphConfig(base_notional_usd=Decimal("1000000")),
         limits=limits,
     )

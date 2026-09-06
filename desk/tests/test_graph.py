@@ -51,7 +51,12 @@ def _analyst(**o) -> dict:
 def _setup(**o) -> dict:
     return {"asset": "BTC", "side": "LONG", "entry_price": "64000",
             "stop_price": "63000", "target_price": "66500",
-            "conviction": "0.75", "rationale": "Rebond sur support.", **o}
+            "rationale": "Rebond sur support.",
+            # Une evaluation franche : le scorer doit la noter au-dessus de
+            # la porte, sinon aucun test de bout en bout ne franchirait rien
+            # et ils mesureraient tous la meme chose — le blocage.
+            "evaluation": ["REGIME_AVEC", "NIVEAU_NET", "STOP_STRUCTUREL",
+                           "CONFLUENCE_3P", "OBSTACLE_AUCUN"], **o}
 
 
 def _counter(**o) -> dict:
@@ -204,7 +209,10 @@ def test_l_abstention_de_l_avocat_ne_vaut_pas_absence_d_objection():
 
 
 def test_conviction_insuffisante_arrete_le_cycle():
-    res = run_desk_cycle(llm=_script(setup=_setup(conviction="0.4")), bars=BARS,
+    faible = _setup(evaluation=["REGIME_NEUTRE", "NIVEAU_FLOU",
+                               "STOP_ARBITRAIRE", "CONFLUENCE_1",
+                               "OBSTACLE_AUCUN"])
+    res = run_desk_cycle(llm=_script(setup=faible), bars=BARS,
                          config=GraphConfig(min_conviction=Decimal("0.6")))
     assert res.stage is Stage.CONVICTION
 
@@ -487,15 +495,37 @@ def test_la_discrimination_exige_les_deux_populations():
     assert "indéterminée" in book.format_report()
 
 
-def test_le_prompt_de_la_strategie_definit_la_conviction_quil_est_note_dessus():
-    """Le graphe écarte tout setup sous `min_conviction`. Un agent jugé sur
-    un nombre dont personne ne lui a dit l'échelle produit un nombre qui ne
-    veut rien dire — et la porte filtre alors du bruit de notation.
+def test_le_prompt_explique_CHAQUE_categorie_que_le_scorer_pondere():
+    """Le lien entre le prompt et le barème, verrouillé des deux côtés.
+
+    Le scorer attribue un poids à chaque valeur de chaque champ qualitatif.
+    Si le prompt en oublie une, l'agent la choisira sans qu'on lui ait dit ce
+    qu'elle signifie — et le scorer pondèrera très sérieusement une réponse
+    au hasard. Le défaut serait invisible : le cycle tournerait, le score
+    sortirait, il ne voudrait simplement rien dire.
+
+    Ce test parcourt les tables de `scoring.py`, pas une liste recopiée : y
+    ajouter une catégorie sans l'expliquer dans le prompt fait tomber le
+    test le jour même.
     """
+    from trading_desk.agents import scoring
     from trading_desk.agents.roster import STRATEGY_SYSTEM
 
-    assert "conviction" in STRATEGY_SYSTEM
-    assert "probabilité" in STRATEGY_SYSTEM
+    manquantes = [e for e in sorted(scoring.ETIQUETTES)
+                  if e not in STRATEGY_SYSTEM]
+    assert not manquantes, f"catégories pondérées mais non expliquées : {manquantes}"
+
+
+def test_le_prompt_ne_demande_plus_de_chiffre_de_confiance():
+    """La mesure qui a motivé le changement : la conviction annoncée par
+    l'agent ne corrélait pas avec l'issue des setups. Laisser traîner la
+    consigne d'origine ferait réapparaître le nombre par la porte de service,
+    dans `rationale` ou ailleurs."""
+    from trading_desk.agents.roster import STRATEGY_SYSTEM
+    from trading_desk.contracts import SetupProposal
+
+    assert "conviction" not in SetupProposal.model_fields
+    assert "aucun chiffre de confiance" in STRATEGY_SYSTEM
 
 
 def test_le_prompt_ne_revele_pas_le_seuil_de_la_porte():

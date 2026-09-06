@@ -201,8 +201,18 @@ Ne lancez jamais un service que vous n'avez pas vu tourner à la main.
 
 ```bash
 vous@vps$ sudo -u desk /opt/desk/.venv/bin/python -m trading_desk.enregistreur \
-    --coins BTC --racine /tmp/essai
+    --coins BTC --racine /var/lib/desk/essai
 ```
+
+> **Pas `/tmp`, et ce n'est pas un détail de style.** Sur beaucoup de VPS —
+> dont les Hetzner récents — `/tmp` est un `tmpfs`, c'est-à-dire un disque
+> qui vit dans la mémoire vive : moins de 2 Go, et il disparaît à chaque
+> redémarrage. L'enregistreur s'y arrête au bout de quelques minutes sur
+> `DISQUE PLEIN`, ce qui ressemble à une panne du programme alors que c'est
+> le dossier qui est trop petit. `/var/lib/desk` est le vrai disque.
+>
+> Pour vérifier sur votre machine : `df -h /tmp` — si la colonne
+> « Filesystem » affiche `tmpfs`, vous êtes dans ce cas.
 
 Laissez tourner **une minute**, puis `Ctrl+C`.
 
@@ -218,14 +228,14 @@ INFO    enregistreur arrete proprement
 **Vérification — la seule qui compte :**
 
 ```bash
-vous@vps$ find /tmp/essai -name '*.parquet' | head
+vous@vps$ find /var/lib/desk/essai -name '*.parquet' | head
 ```
 
 Des fichiers doivent apparaître. **S'il n'y en a aucun, arrêtez-vous ici** et
 envoyez-moi la sortie complète : le service ne servirait à rien.
 
 ```bash
-vous@vps$ rm -rf /tmp/essai
+vous@vps$ rm -rf /var/lib/desk/essai
 ```
 
 ---
