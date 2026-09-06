@@ -1206,3 +1206,125 @@ L'horizon de travail du desk est **1 à 3 jours**, pas 15 minutes. C'est la
 seule fenêtre où un signal, s'il existait, survivrait aux frais. Et c'est
 exactement l'horizon naturel des **token unlocks** — événements datés,
 publics, dont l'effet se joue sur plusieurs jours.
+
+---
+
+## Token unlocks — le premier edge directionnel mesuré du projet
+
+Toutes les campagnes précédentes ont conclu à l'absence d'edge directionnel :
+zéro survivant sur 56 cellules pour les stratégies classiques, zéro sur 98
+pour la direction des déclencheurs de la Sentinelle, zéro sur 210 pour les
+horizons longs. Celle-ci conclut autrement, et c'est la première.
+
+**Les données.** 2 074 déblocages extraits de `defillama-datasets`, sur 68
+jetons ayant un historique de bougies journalières. Seuls les déblocages
+*cliff* sont retenus — un déblocage linéaire n'a pas de date, le tester
+comme un événement daté reviendrait à mesurer un jour au hasard dans une
+rampe. Le dénominateur exclut le déblocage lui-même : l'y inclure écraserait
+mécaniquement les gros événements.
+
+**L'hypothèse, posée avant la mesure.** Trois fenêtres tirées de la
+littérature — anticipation (J-7 → J-1), impact (J → J+1), digestion
+(J+1 → J+3) — toutes **baissières** (`sens = -1`). Tester « et si c'était
+l'inverse » après avoir vu les résultats serait retourner sa veste.
+
+### Le résultat
+
+La fenêtre qui ressort est l'**anticipation** : le marché vend *avant* la
+date, pas le jour même. Après mise en commun des jetons et correction de
+Benjamini-Hochberg, **4 cellules survivent**, avec une réponse à la dose
+monotone : plus le déblocage est gros en part de l'offre en circulation,
+plus la baisse anticipée est forte.
+
+| tranche  | effet (bps) | p       |
+| -------- | ----------- | ------- |
+| 0,5-2 %  | +133,2      | 0,3378  |
+| 2-5 %    | +290,4      | 0,0095  |
+| > 5 %    | +445,7      | 0,0010  |
+| toutes   | +264,0      | 0,0005  |
+
+> **Positif signifie que le prix a BAISSÉ.** `sens = -1` retourne déjà le
+> signe. Le premier rapport annonçait l'inverse dans sa légende, ce qui
+> aurait fait lire exactement le contraire des données ; c'est corrigé et un
+> test le verrouille.
+
+Les chiffres ci-dessus sont ceux **après neutralisation du marché** — le
+rendement du jeton moins celui de BTC sur exactement la même fenêtre. C'est
+le point le plus notable : l'effet ne survit pas seulement à la
+neutralisation, il en **sort renforcé** (+236 → +264 bps). Les déblocages ne
+mesuraient donc pas un marché baissier commun.
+
+### Les cinq contrôles, et ce que chacun peut tuer
+
+Un effet mesuré n'est pas un effet réel. Chaque contrôle ci-dessous est une
+façon différente de faire disparaître le résultat, et chacun est vérifié par
+un test qui le fait effectivement disparaître sur un cas construit.
+
+| contrôle                | ce qu'il tue                                     | verdict |
+| ----------------------- | ------------------------------------------------ | ------- |
+| Dénominateurs aberrants | un effet porté par quelques parts d'offre absurdes | tient (+223 bps à ≤ 25 %) |
+| Jackknife par jeton     | un effet porté par un seul jeton                  | tient (pire exclusion p = 0,0035) |
+| Coupe temporelle        | un edge mort, déjà arbitré                        | tient des deux côtés (p = 0,012 / 0,011) |
+| Neutralisation du marché | un effet de marché déguisé                       | tient, et se renforce |
+| Décalage calendaire     | des événements comptés en double                  | à mesurer |
+
+Les quatre premiers partagent la même faiblesse, et c'est pour elle
+qu'existe le cinquième.
+
+### Pourquoi le cinquième contrôle existe
+
+Les quatre premiers utilisent tous le même bras aléatoire : **une date tirée
+indépendamment par événement**. Ce bras suppose que 852 événements sont 852
+observations. Ils ne le sont pas. Beaucoup de projets débloquent aux mêmes
+dates ; quand vingt jetons débloquent le même jour, leurs vingt rendements
+partagent la même semaine de marché. Le nombre effectif d'observations est
+inférieur — et un p calculé comme s'ils étaient indépendants est **trop
+petit, c'est-à-dire trop flatteur**.
+
+La neutralisation retire le facteur commun, mais pas toute la corrélation
+résiduelle : deux jetons du même secteur bougent ensemble même à BTC
+constant.
+
+Le remède est de changer de bras aléatoire. Au lieu de tirer une date par
+événement, `decalage_calendaire` **décale tout le calendrier du même nombre
+de jours**. Les groupements, les intervalles, les voisinages sont conservés
+à l'identique ; seul change l'alignement sur les vraies dates de déblocage.
+Les décalages de moins de 14 jours sont exclus — en deçà, la fenêtre décalée
+chevauche encore la vraie et le bras « aléatoire » mesurerait une partie de
+l'effet qu'il sert de référence.
+
+**Le nul est un ensemble clos, pas un échantillon.** Il n'existe que
+`2 × (amplitude − 13)` alignements possibles ; tirer davantage ne l'agrandit
+pas. Ils sont donc tous énumérés — le p est un p de permutation exact, sans
+graine et sans bruit d'échantillonnage — mais il ne peut pas descendre sous
+`1 / (nombre de décalages + 1)`. Ce plancher est affiché dans le rapport :
+un p qui l'atteint signifie « aucun alignement ne fait aussi bien », pas
+« p = 0,001 ».
+
+### Ce que le contrôle vaut, mesuré sur des cas construits
+
+Sur douze jetons quasi identiques dont les six dates de déblocage sont
+communes, le bras par événement **sature** : il annonce p = 0,0010 quel que
+soit le choc, parce qu'il construit son nul sur 72 tirages indépendants dont
+l'écart-type est faussement petit d'un facteur √12. Un test qui rend le même
+verdict pour une preuve mince et pour une preuve épaisse ne mesure plus rien.
+
+Le décalage en bloc, lui, refuse ces mondes dans 4 cas sur 5 — et le
+cinquième est un monde où l'alignement commun est réellement rare, où il a
+donc raison de valider. Sur un effet réparti, chaque jeton ayant ses propres
+dates, il valide au plancher ; le même fixture avec le choc retiré donne
+p = 0,32. Les deux sens sont vérifiés, sans quoi un contrôle qui refuse tout
+passerait pour un contrôle sévère.
+
+### Ce qui reste à faire avant d'en tirer quoi que ce soit
+
+- Lancer `--robustesse` avec le cinquième contrôle sur les vraies données.
+  **Tant que ce chiffre n'est pas là, le résultat n'est pas établi** : les
+  p ci-dessus sont ceux d'un modèle qui surestime le nombre d'observations.
+- Un effet mesuré n'est pas un effet capturable. +264 bps est très au-dessus
+  des 15 bps d'un aller-retour, mais la fenêtre d'anticipation impose
+  d'entrer sept jours avant une date connue de tous, sur des jetons dont
+  certains sont peu liquides. Le coût réel se mesure sur le carnet, pas dans
+  un backtest.
+- L'analogue direct sur actions — les *lockup expiries* des IPO — est le
+  candidat naturel pour tester si l'effet est propre à la crypto ou général.

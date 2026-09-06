@@ -296,6 +296,154 @@ def poolage(unlocks: dict, tirages: int, min_evts: int, alpha: float) -> None:
           f"**{survivants} survivant(s)** après BH\n")
 
 
+def decalage_calendaire(unlocks: dict, alpha: float,
+                        amplitude_j: int = 365) -> None:
+    """Le dernier test, et la dernière faiblesse statistique du précédent.
+
+    **Les événements ne sont pas indépendants entre jetons.** Beaucoup de
+    projets débloquent aux mêmes dates ; quand vingt jetons débloquent le
+    même jour, leurs vingt rendements partagent la même semaine de marché et
+    ne comptent pas pour vingt observations. Le nombre effectif d'événements
+    est donc inférieur à 852, et un p calculé comme s'ils étaient
+    indépendants est **trop petit** — c'est-à-dire trop flatteur.
+
+    La neutralisation du marché retire le facteur commun, mais pas toute la
+    corrélation résiduelle : deux jetons du même secteur bougent ensemble
+    même à BTC constant.
+
+    Le remède est de changer de bras aléatoire. Au lieu de tirer une date
+    indépendante par événement, on décale **TOUS les événements en bloc du
+    même nombre de jours**. Le calendrier garde alors exactement sa
+    structure — mêmes groupements, mêmes intervalles, mêmes voisinages — et
+    seul change son alignement sur les vraies dates de déblocage.
+
+    C'est le test le plus sévère des cinq, et le seul qui respecte la
+    dépendance entre jetons. S'il tient, la corrélation croisée n'explique
+    pas le résultat.
+
+    ## Deux conséquences de ce choix, qu'il faut énoncer
+
+    **Les petits décalages sont exclus.** À ±3 jours la fenêtre décalée
+    chevauche encore la vraie, et le bras « aléatoire » mesurerait en partie
+    l'effet qu'il est censé servir de référence.
+
+    **Le nombre de références est fini, donc le p a un plancher.** Il n'y a
+    que `2 × (amplitude - 13)` décalages possibles ; le nul n'est pas un
+    échantillon qu'on peut agrandir en tirant plus, c'est un ensemble clos.
+    Les énumérer tous donne un p de permutation exact — sans graine, sans
+    bruit d'échantillonnage — mais qui ne peut pas descendre sous
+    `1 / (nombre de décalages + 1)`. Ce plancher est affiché : un p qui
+    l'atteint signifie « aucun décalage ne fait aussi bien », pas
+    « p = 0,001 ».
+    """
+    series: dict[str, list] = {}
+    for symbole in unlocks:
+        try:
+            series[symbole] = load_from_file(
+                f"data/{symbole}_1d_real.json", symbole, "1d")
+        except (DataUnavailable, FileNotFoundError):
+            continue
+
+    DECALAGE, DUREE = -7, 6
+    MIN_DECALAGE = 14        # au-dela du chevauchement de fenetre
+
+    # Rendement de chaque barre, calcule une fois par jeton : le balayage
+    # des decalages relit les memes barres des centaines de fois.
+    par_jour_de = {s: index_par_date(b) for s, b in series.items()}
+    rendements: dict[str, list] = {}
+    for symbole, bars in series.items():
+        col = []
+        for i, b in enumerate(bars):
+            depart = float(b.close)
+            if depart <= 0 or i + DUREE >= len(bars):
+                col.append(None)
+            else:
+                col.append(-1 * (float(bars[i + DUREE].close) - depart)
+                           / depart * 10_000)
+        rendements[symbole] = col
+
+    decalages = [d for d in range(-amplitude_j, amplitude_j + 1)
+                 if abs(d) >= MIN_DECALAGE]
+    plancher = 1 / (len(decalages) + 1)
+
+    print("\n  DÉCALAGE CALENDAIRE — le test qui respecte la dépendance")
+    print("  " + "=" * 74)
+    print("  (Un seul décalage, appliqué à TOUS les événements en bloc. Le")
+    print("   calendrier garde ses groupements ; seul son alignement sur les")
+    print("   vraies dates change. Les")
+    print(f"   {len(decalages)} décalages possibles sont tous énumérés :")
+    print(f"   p exact, plancher {plancher:.4f}.)\n")
+    print(f"  {'tranche':<10} {'n':>5} {'observé':>10} {'hasard':>9} "
+          f"{'p':>9}  BH")
+    print("  " + "-" * 74)
+
+    lignes = []
+    for nom_tranche, bas, haut in TRANCHES:
+        # (jeton, jour UTC de l'entrée) — on garde le JOUR, pas l'indice,
+        # pour pouvoir le décaler dans le calendrier commun.
+        evts: list[tuple[str, int]] = []
+        for symbole, bruts in unlocks.items():
+            bars = series.get(symbole)
+            if not bars:
+                continue
+            par_jour = par_jour_de[symbole]
+            candidats = []
+            for e in bruts:
+                if not bas <= e["part_offre"] < haut:
+                    continue
+                jour = e["ts_ms"] // 86_400_000 + DECALAGE
+                i = par_jour.get(jour)
+                if i is not None and i + DUREE < len(bars):
+                    candidats.append(Declenchement(i, -1, e["part_offre"], ""))
+            gardes = sans_chevauchement(candidats, DUREE)
+            inverse = {i: j for j, i in par_jour.items()}
+            evts += [(symbole, inverse[d.index]) for d in gardes]
+
+        if len(evts) < 30:
+            continue
+        obs = []
+        for symbole, jour in evts:
+            i = par_jour_de[symbole].get(jour)
+            if i is not None and (r := rendements[symbole][i]) is not None:
+                obs.append(r)
+        if len(obs) < 30:
+            continue
+        moyenne = sum(obs) / len(obs)
+
+        nuls = []
+        for d in decalages:
+            tir = []
+            for symbole, jour in evts:
+                i = par_jour_de[symbole].get(jour + d)
+                if i is not None and (r := rendements[symbole][i]) is not None:
+                    tir.append(r)
+            # Un décalage qui sort la moitié des événements de l'historique
+            # ne fournit plus une référence comparable : on l'écarte.
+            if len(tir) >= len(obs) * 0.5:
+                nuls.append(sum(tir) / len(tir))
+        if not nuls:
+            continue
+        pval = (sum(1 for x in nuls if x >= moyenne) + 1) / (len(nuls) + 1)
+        lignes.append((nom_tranche, len(obs), moyenne,
+                       sum(nuls) / len(nuls), pval))
+
+    if not lignes:
+        print("     aucun groupe assez fourni.\n")
+        return
+    garde = benjamini_hochberg([x[4] for x in lignes], alpha)
+    for (t, n, obs, nul, pval), g in zip(lignes, garde, strict=True):
+        print(f"  {t:<10} {n:>5} {obs:>+9.1f} {nul:>+9.1f} {pval:>9.4f}  "
+              f"{'OUI' if g else '—'}")
+    print("  " + "-" * 74)
+    if sum(garde):
+        print(f"  {sum(garde)} tranche(s) survivent au décalage calendaire.")
+        print("  La corrélation entre jetons n'explique pas le résultat.\n")
+    else:
+        print("  AUCUNE tranche ne survit. Les p précédents étaient flattés")
+        print("  par des événements comptés comme indépendants alors qu'ils")
+        print("  partageaient les mêmes semaines de marché.\n")
+
+
 def marche_neutre(unlocks: dict, tirages: int, alpha: float,
                   reference: str = "BTC") -> None:
     """Le même test, sur le rendement RELATIF AU MARCHÉ.
@@ -582,9 +730,11 @@ def main() -> int:
     p.add_argument("--reference", default="BTC",
                    help="actif de référence pour neutraliser le marché")
     p.add_argument("--robustesse", action="store_true",
-                   help="les trois épreuves qui peuvent tuer un effet : "
-                        "dénominateurs aberrants, jackknife par jeton, et "
-                        "coupe temporelle")
+                   help="les cinq épreuves qui peuvent tuer un effet : "
+                        "dénominateurs aberrants, jackknife par jeton, coupe "
+                        "temporelle, neutralisation du marché, et décalage "
+                        "calendaire (le seul qui respecte la dépendance "
+                        "entre jetons)")
     args = p.parse_args()
 
     chemin = Path(args.unlocks)
@@ -603,6 +753,7 @@ def main() -> int:
     if args.robustesse:
         robustesse(unlocks, args.tirages, args.alpha)
         marche_neutre(unlocks, args.tirages, args.alpha, args.reference)
+        decalage_calendaire(unlocks, args.alpha)
     if args.out:
         Path(args.out).write_text(json.dumps([r.__dict__ for r in res], indent=1))
         print(f"  Résultats bruts : {args.out}\n")

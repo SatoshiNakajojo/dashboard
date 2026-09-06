@@ -526,3 +526,235 @@ def test_la_neutralisation_laisse_passer_un_effet_propre(tmp_path, monkeypatch):
     with contextlib.redirect_stdout(net):
         valider.marche_neutre(unlocks, tirages=400, alpha=0.05)
     assert "survivent APRÈS neutralisation" in net.getvalue(), net.getvalue()
+
+
+# --------------------------------------------------------------------------
+#  Le décalage calendaire : la dépendance entre jetons
+# --------------------------------------------------------------------------
+#
+# Les quatre contrôles précédents partagent tous le même bras aléatoire :
+# une date tirée indépendamment PAR ÉVÉNEMENT. Ce bras suppose que les 852
+# événements sont 852 observations. Ils ne le sont pas — beaucoup de jetons
+# débloquent aux mêmes dates, et vingt rendements de la même semaine ne
+# valent pas vingt semaines.
+#
+# Le décalage calendaire remplace ce bras par un décalage unique appliqué à
+# tout le calendrier. Les deux tests ci-dessous vérifient qu'il tranche dans
+# les deux sens, sur des cas dont la vérité est connue par construction.
+
+
+def _serie_json(px_series):
+    return json.dumps([{"t": i * JOUR_MS, "o": p, "h": p * 1.01,
+                        "l": p * 0.99, "c": p, "v": 100, "n": 1}
+                       for i, p in enumerate(px_series)])
+
+
+def _decalage(unlocks, alpha=0.05, amplitude_j=120):
+    import contextlib
+    import io
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        valider.decalage_calendaire(unlocks, alpha=alpha, amplitude_j=amplitude_j)
+    return buf.getvalue()
+
+
+def _monde_correle(tmp_path, choc, graine, n_dates=6, n_jetons=12):
+    """Douze jetons quasi identiques, et six dates de déblocage communes.
+
+    Un unique facteur commun porte tout le mouvement ; le bruit propre à
+    chaque jeton est marginal. Les 72 rendements ne sont donc pas 72
+    observations : ce sont six semaines de marché regardées douze fois.
+    """
+    import os
+
+    (tmp_path / "data").mkdir(parents=True, exist_ok=True)
+    alea = random.Random(graine)
+    deblocages = list(range(60, 60 + 20 * n_dates, 20))
+    avant = {j for d in deblocages for j in range(d - 7, d)}
+
+    px, commun = 100.0, []
+    for i in range(450):
+        px *= 1 + alea.gauss(0, 0.04) + (choc if i in avant else 0.0)
+        commun.append(px)
+
+    unlocks = {}
+    for k in range(n_jetons):
+        px, bars = 100.0, []
+        for i in range(450):
+            r = (commun[i] / commun[i - 1] - 1) if i else 0.0
+            px *= 1 + r + alea.gauss(0, 0.004)
+            bars.append(px)
+        (tmp_path / "data" / f"T{k}_1d_real.json").write_text(_serie_json(bars))
+        unlocks[f"T{k}"] = [{"ts_ms": d * JOUR_MS, "part_offre": 0.03,
+                             "debloque": 1.0, "lineaire": 0.0, "categories": []}
+                            for d in deblocages]
+    os.chdir(tmp_path)
+    return unlocks
+
+
+def _p_anticipation(sortie_poolee):
+    """Le p de la fenêtre que `decalage_calendaire` mesure, et elle seule.
+
+    `poolage` balaie les quatre fenêtres ; `decalage_calendaire`, comme
+    `robustesse` et `marche_neutre`, ne mesure que l'anticipation (-7, 6).
+    Comparer les deux sur des fenêtres différentes ne comparerait rien.
+    """
+    for x in sortie_poolee.splitlines():
+        if "toutes" in x and "anticipation" in x:
+            return float(x.split()[-2])
+    return None
+
+
+def test_le_decalage_tue_un_effet_qui_ne_tient_qu_a_six_dates(tmp_path,
+                                                              monkeypatch):
+    """Le cas exact que les quatre contrôles précédents laissent passer.
+
+    Douze jetons fortement corrélés, mais **six dates seulement**, communes
+    à tous. Le nombre effectif d'observations est six, pas soixante-douze.
+
+    Le bras par événement l'ignore : il tire ses 72 dates indépendamment,
+    obtient un nul dont l'écart-type est faussement petit d'un facteur √12,
+    et sature — il annonce **p = 0,0010 quel que soit le choc**, ce que
+    montre l'assertion ci-dessous. Un test qui rend le même verdict pour une
+    preuve mince et pour une preuve épaisse ne mesure plus rien.
+
+    Le décalage en bloc garde la corrélation dans les deux bras. Six
+    semaines de marché ne suffisent pas à distinguer ce choc de ce que
+    produit un alignement quelconque, et il doit le dire.
+
+    Le verdict est vérifié sur **cinq graines**, pas une : sur une seule, un
+    refus pourrait n'être qu'un tirage heureux. La graine 97 est un cas où
+    l'alignement commun est réellement rare et où le contrôle valide — c'est
+    attendu, et c'est pourquoi le seuil est « au moins quatre sur cinq » et
+    non « cinq sur cinq ».
+
+    Si ce test tombe, le contrôle ne contrôle rien et les p de l'analyse
+    réelle restent flattés par des événements comptés en double.
+    """
+    refus, satures = 0, 0
+    for graine in (23, 41, 59, 67, 83):
+        unlocks = _monde_correle(tmp_path / str(graine), -0.012, graine)
+        monkeypatch.chdir(tmp_path / str(graine))
+
+        # 1. Le fixture doit PIÉGER le bras par événement, sinon il ne teste
+        #    rien : un contrôle qui refuse un effet que personne n'annonçait
+        #    ne prouve pas qu'il sait refuser un artefact.
+        p_naif = _p_anticipation(_pool(unlocks, tirages=1000))
+        assert p_naif is not None and p_naif <= 0.05, (
+            f"graine {graine} : le bras par événement ne mord pas "
+            f"(p={p_naif}), le fixture ne teste rien")
+        satures += p_naif <= 0.0011
+
+        # 2. Le décalage en bloc doit se taire.
+        refus += "AUCUNE tranche ne survit" in _decalage(unlocks)
+
+    assert satures == 5, (
+        "le bras par événement devrait saturer à son plancher sur les cinq "
+        f"graines ; il ne l'a fait que {satures} fois — la démonstration de "
+        "l'artefact repose sur cette saturation")
+    assert refus >= 4, (
+        f"le décalage calendaire n'a refusé que {refus} des 5 mondes où "
+        "l'effet ne repose que sur six semaines de marché")
+
+
+def test_le_decalage_laisse_passer_un_effet_reparti_sur_le_calendrier(
+        tmp_path, monkeypatch):
+    """L'autre sens, sans quoi le test précédent ne vaut rien.
+
+    Ici chaque jeton a ses PROPRES dates et sa propre baisse avant chacune.
+    L'effet ne tient plus à quelques semaines partagées : il est aligné sur
+    les dates de déblocage et sur rien d'autre. Aucun décalage global ne
+    peut le reproduire, puisque décaler le calendrier désaligne chaque jeton
+    de ses propres déblocages.
+
+    Un contrôle qui refuse aussi ce cas serait simplement un contrôle qui
+    refuse tout.
+    """
+    import os
+
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "data").mkdir(exist_ok=True)
+    alea = random.Random(29)
+
+    unlocks = {}
+    for k in range(10):
+        deblocages = sorted(range(60 + k * 3, 400, 20))
+        avant = {j for d in deblocages for j in range(d - 7, d)}
+        px, bars = 100.0, []
+        for i in range(450):
+            px *= 1 + alea.gauss(0, 0.02) + (-0.012 if i in avant else 0.0)
+            bars.append(px)
+        (tmp_path / "data" / f"T{k}_1d_real.json").write_text(_serie_json(bars))
+        unlocks[f"T{k}"] = [{"ts_ms": d * JOUR_MS, "part_offre": 0.03,
+                             "debloque": 1.0, "lineaire": 0.0, "categories": []}
+                            for d in deblocages]
+    os.chdir(tmp_path)
+
+    sortie = _decalage(unlocks)
+    assert "survivent au décalage calendaire" in sortie, (
+        f"un effet franc et réparti a été refusé :\n{sortie}")
+
+
+def test_les_petits_decalages_sont_exclus(tmp_path, monkeypatch):
+    """Un décalage de trois jours laisse la fenêtre décalée chevaucher la
+    vraie : le bras « aléatoire » mesurerait alors une partie de l'effet
+    qu'il sert de référence, et le rapprocherait de l'observé. Le contrôle
+    perdrait sa puissance sans le dire."""
+    import os
+
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "data").mkdir(exist_ok=True)
+    px, bars = 100.0, []
+    alea = random.Random(31)
+    for _ in range(450):
+        px *= 1 + alea.gauss(0, 0.02)
+        bars.append(px)
+    (tmp_path / "data" / "T0_1d_real.json").write_text(_serie_json(bars))
+    unlocks = {"T0": [{"ts_ms": d * JOUR_MS, "part_offre": 0.03, "debloque": 1.0,
+                       "lineaire": 0.0, "categories": []}
+                      for d in range(60, 400, 20)]}
+    os.chdir(tmp_path)
+
+    sortie = _decalage(unlocks, amplitude_j=100)
+    # 2 x (100 - 13) = 174 décalages, et le plancher qui en découle.
+    assert "174 décalages" in sortie, sortie
+    assert "plancher 0.0057" in sortie, sortie
+
+
+def test_le_p_du_decalage_ne_descend_jamais_sous_son_plancher(tmp_path,
+                                                              monkeypatch):
+    """Le nul du décalage est un ensemble CLOS, pas un échantillon.
+
+    Tirer davantage ne l'agrandit pas : il n'existe que `2 x (amplitude-13)`
+    alignements possibles. Un p de 0,0001 affiché ici serait un mensonge
+    arithmétique. Le rapport doit annoncer son plancher, et aucun p ne doit
+    passer dessous — y compris sur un effet écrasant.
+    """
+    import os
+    import re
+
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "data").mkdir(exist_ok=True)
+    alea = random.Random(37)
+    unlocks = {}
+    for k in range(6):
+        deblocages = sorted(range(60 + k * 3, 400, 20))
+        avant = {j for d in deblocages for j in range(d - 7, d)}
+        px, bars = 100.0, []
+        for i in range(450):
+            px *= 1 + alea.gauss(0, 0.01) + (-0.05 if i in avant else 0.0)
+            bars.append(px)
+        (tmp_path / "data" / f"T{k}_1d_real.json").write_text(_serie_json(bars))
+        unlocks[f"T{k}"] = [{"ts_ms": d * JOUR_MS, "part_offre": 0.03,
+                             "debloque": 1.0, "lineaire": 0.0, "categories": []}
+                            for d in deblocages]
+    os.chdir(tmp_path)
+
+    sortie = _decalage(unlocks, amplitude_j=60)
+    plancher = float(re.search(r"plancher (\d+\.\d+)", sortie).group(1))
+    ps = [float(x.split()[-2]) for x in sortie.splitlines()
+          if x.strip().startswith(("toutes", "2-5"))]
+    assert ps, sortie
+    assert min(ps) >= plancher - 1e-9, (
+        f"p={min(ps)} sous le plancher {plancher} — le nul aurait été "
+        f"présenté comme plus fin qu'il ne l'est :\n{sortie}")
