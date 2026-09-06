@@ -39,7 +39,7 @@ ACTIFS = ["BTC", "ETH", "SOL", "BNB", "XRP", "DOGE", "AVAX"]
 # l'intervalle. Sur du 1 h, « H+15 min » n'existe pas : la cellule est
 # simplement absente plutot que fabriquee par interpolation.
 HORIZONS_H = [0.25, 1.0, 4.0, 12.0]
-BARRES_PAR_HEURE = {"15m": 4.0, "1h": 1.0, "4h": 0.25}
+BARRES_PAR_HEURE = {"15m": 4.0, "1h": 1.0, "4h": 0.25, "1d": 1 / 24}
 
 
 def charger_funding(actif: str, bars) -> list[float] | None:
@@ -172,13 +172,21 @@ def main() -> int:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--tirages", type=int, default=2000)
     p.add_argument("--intervalles", nargs="+", default=["15m", "1h", "4h"])
+    p.add_argument("--horizons-h", type=float, nargs="+", default=None,
+                   help="horizons en HEURES. Les changer ouvre une nouvelle "
+                        "famille d'hypotheses : la correction porte sur la "
+                        "campagne lancee, et deux campagnes ne se lisent pas "
+                        "comme une seule.")
     p.add_argument("--alpha", type=float, default=0.05)
     p.add_argument("--out", default=None)
     args = p.parse_args()
 
+    horizons = args.horizons_h or HORIZONS_H
     print(f"\n  Declencheurs sur {len(ACTIFS)} actifs, intervalles "
           f"{', '.join(args.intervalles)}, horizons "
-          f"{', '.join(f'{h:g}h' for h in HORIZONS_H)}\n")
+          f"{', '.join(f'{h:g}h' for h in horizons)}\n")
+    if args.horizons_h:
+        HORIZONS_H[:] = args.horizons_h
     res = cellules(args.intervalles, args.tirages)
     rapport(res, args.alpha)
 

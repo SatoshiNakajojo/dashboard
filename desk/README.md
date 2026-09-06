@@ -1140,3 +1140,69 @@ la norme. Un test le vérifie plutôt que de prétendre le contraire.
 troncature de ce dépôt l'a attrapé. Un déclencheur qui voit le futur
 fabriquerait un edge que la validation mesurerait consciencieusement, avant
 que le desk ne se réveille en retard sur du vide en direct.
+
+
+---
+
+## Horizons longs (1 j à 14 j) : l'hypothèse est réfutée, l'intuition économique non
+
+Deuxième campagne, sur 6 ans de données journalières et 4 h : 112 cellules,
+horizons H+24 h, H+72 h, H+168 h, H+336 h.
+
+### La survie statistique s'effondre aux longs horizons
+
+| campagne | cellules | survivantes BH (amplitude) | taux |
+|---|---:|---:|---:|
+| courts (15 min → 12 h) | 98 | 59 | **60 %** |
+| longs (24 h → 336 h) | 112 | 7 | **6 %** |
+
+Le ratio amplitude/hasard décroît de façon monotone et **passe sous 1** à deux
+semaines :
+
+| | H+15min | H+1h | H+4h | H+12h | H+24h | H+72h | H+168h | H+336h |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| `pic_volume` | 1,78 | 1,50 | 1,49 | 1,31 | 1,23 | 1,18 | 1,02 | **0,94** |
+| `rupture_volatilite` | 1,26 | 1,20 | 1,20 | 1,17 | 1,12 | 1,05 | 1,03 | **0,91** |
+
+**L'anomalie est réellement de courte durée.** Passer en journalier ou en
+hebdomadaire ne l'améliore pas — ça la dilue jusqu'à la faire disparaître.
+Direction : 0 survivante sur 112, comme sur les horizons courts.
+
+### Mais le coût de transaction déplace l'optimum, et c'est décisif
+
+Le modèle de coûts du dépôt facture **15 bps l'aller-retour** (9 de frais
+taker, 6 de slippage). Confronté à l'excès d'amplitude apporté par
+`pic_volume` :
+
+| horizon | amplitude | excès / hasard | **excès net de coûts** | rapport au coût |
+|---|---:|---:|---:|---:|
+| H+15 min | 30 bps | +13 | **−2** | −0,1× |
+| H+1 h | 49 | +16 | **+1** | +0,1× |
+| H+4 h | 123 | +41 | **+26** | +1,7× |
+| H+12 h | 195 | +46 | **+31** | +2,1× |
+| **H+24 h** | 362 | +68 | **+53** | **+3,6×** |
+| **H+72 h** | 612 | +91 | **+76** | **+5,1×** |
+| H+168 h | 847 | +20 | **+5** | +0,3× |
+| H+336 h | 1 193 | −70 | **−85** | −5,6× |
+
+**Le signal le plus significatif est le moins exploitable.** À 15 minutes,
+l'excès d'amplitude (13 bps) est *inférieur* au coût d'un aller-retour
+(15 bps) : statistiquement écrasant, économiquement mort-né. La fenêtre où le
+signal dépasse franchement le coût est **H+24 h à H+72 h**.
+
+> ### La lecture qu'il ne faut surtout pas faire
+>
+> **Cet excès net n'est pas un profit.** C'est de l'AMPLITUDE — la taille du
+> mouvement dans lequel on serait positionné, pas son sens. Sans edge
+> directionnel, et il n'y en a aucun sur 210 cellules testées, l'espérance
+> reste nulle moins les frais.
+>
+> Ce tableau dit **où un edge directionnel serait économiquement capturable
+> si on en trouvait un**. Il ne dit pas qu'il en existe un.
+
+### Ce que ça fixe pour la suite
+
+L'horizon de travail du desk est **1 à 3 jours**, pas 15 minutes. C'est la
+seule fenêtre où un signal, s'il existait, survivrait aux frais. Et c'est
+exactement l'horizon naturel des **token unlocks** — événements datés,
+publics, dont l'effet se joue sur plusieurs jours.
