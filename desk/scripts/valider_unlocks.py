@@ -296,6 +296,140 @@ def poolage(unlocks: dict, tirages: int, min_evts: int, alpha: float) -> None:
           f"**{survivants} survivant(s)** après BH\n")
 
 
+def marche_neutre(unlocks: dict, tirages: int, alpha: float,
+                  reference: str = "BTC") -> None:
+    """Le même test, sur le rendement RELATIF AU MARCHÉ.
+
+    **Le confondant que le modèle nul ne contrôle pas.** Les déblocages ne
+    sont pas répartis au hasard dans le calendrier : beaucoup de projets
+    débloquent mensuellement, souvent autour des mêmes dates. Les 852
+    événements de 68 jetons se concentrent donc sur un petit nombre de
+    semaines communes.
+
+    Or le bras aléatoire tire ses dates DANS CHAQUE JETON, ce qui contrôle la
+    dérive propre au jeton mais **pas le marché**. Si les semaines de gros
+    déblocages sont aussi des semaines où tout le marché crypto baisse, on
+    mesure le marché et on l'appelle « effet de déblocage ».
+
+    Le remède est direct : mesurer le rendement du jeton **moins** celui de
+    la référence sur exactement la même fenêtre. Ce qui reste est propre au
+    jeton. Si l'effet survit, il n'est pas un effet de marché ; s'il
+    disparaît, c'en était un depuis le début.
+
+    Le bras aléatoire subit la même soustraction, aux mêmes dates tirées :
+    ne neutraliser qu'un seul des deux bras fabriquerait un écart qui ne
+    dirait rien.
+    """
+    import random
+
+    try:
+        marche = load_from_file(f"data/{reference}_1d_real.json", reference, "1d")
+    except (DataUnavailable, FileNotFoundError):
+        print(f"\n  Neutralisation impossible : data/{reference}_1d_real.json "
+              "introuvable.\n")
+        return
+    ref_par_jour = {b.ts_ms // 86_400_000: i for i, b in enumerate(marche)}
+
+    series: dict[str, list] = {}
+    for symbole in unlocks:
+        try:
+            series[symbole] = load_from_file(
+                f"data/{symbole}_1d_real.json", symbole, "1d")
+        except (DataUnavailable, FileNotFoundError):
+            continue
+
+    DECALAGE, DUREE = -7, 6
+
+    def exces(bars, i):
+        """Rendement du jeton moins celui de la référence, même fenêtre.
+
+        `None` si la référence ne couvre pas ces dates — écarter plutôt que
+        de neutraliser par zéro, ce qui reviendrait à compter l'événement
+        comme si le marché n'avait pas bougé.
+        """
+        depart = float(bars[i].close)
+        if depart <= 0 or i + DUREE >= len(bars):
+            return None
+        jeton = (float(bars[i + DUREE].close) - depart) / depart
+        j0 = ref_par_jour.get(bars[i].ts_ms // 86_400_000)
+        j1 = ref_par_jour.get(bars[i + DUREE].ts_ms // 86_400_000)
+        if j0 is None or j1 is None:
+            return None
+        d_ref = float(marche[j0].close)
+        if d_ref <= 0:
+            return None
+        ref = (float(marche[j1].close) - d_ref) / d_ref
+        return -1 * (jeton - ref) * 10_000
+
+    print(f"\n  NEUTRALISATION DU MARCHÉ — rendement relatif à {reference}")
+    print("  " + "=" * 74)
+    print("  (Les déblocages se groupent dans le calendrier. Sans cette")
+    print("   correction, quelques mauvaises semaines de marché suffiraient")
+    print("   à produire l'effet observé.)\n")
+    print(f"  {'tranche':<10} {'n':>5} {'brut':>9} {'net du marché':>15} "
+          f"{'hasard net':>12} {'p':>9}  BH")
+    print("  " + "-" * 74)
+
+    lignes = []
+    for nom_tranche, bas, haut in TRANCHES:
+        evts = []
+        for symbole, bruts in unlocks.items():
+            bars = series.get(symbole)
+            if not bars:
+                continue
+            par_jour = index_par_date(bars)
+            candidats = []
+            for e in bruts:
+                if not bas <= e["part_offre"] < haut:
+                    continue
+                i = par_jour.get(e["ts_ms"] // 86_400_000 + DECALAGE)
+                if i is not None and i + DUREE < len(bars):
+                    candidats.append(Declenchement(i, -1, e["part_offre"], ""))
+            evts += [(bars, d.index) for d in sans_chevauchement(candidats, DUREE)]
+
+        obs = [v for bars, i in evts if (v := exces(bars, i)) is not None]
+        bruts_v = []
+        for bars, i in evts:
+            depart = float(bars[i].close)
+            if depart > 0 and i + DUREE < len(bars):
+                bruts_v.append(-1 * (float(bars[i + DUREE].close) - depart)
+                               / depart * 10_000)
+        if len(obs) < 30:
+            continue
+        moyenne = sum(obs) / len(obs)
+        brut = sum(bruts_v) / len(bruts_v) if bruts_v else float("nan")
+
+        alea = random.Random(20260906)
+        nuls = []
+        for _ in range(tirages):
+            tir = [v for bars, _ in evts
+                   if (v := exces(bars, alea.randrange(0, len(bars) - DUREE - 1)))
+                   is not None]
+            if tir:
+                nuls.append(sum(tir) / len(tir))
+        if not nuls:
+            continue
+        pval = (sum(1 for x in nuls if x >= moyenne) + 1) / (len(nuls) + 1)
+        lignes.append((nom_tranche, len(obs), brut, moyenne,
+                       sum(nuls) / len(nuls), pval))
+
+    if not lignes:
+        print("     aucun groupe assez fourni.\n")
+        return
+    garde = benjamini_hochberg([x[5] for x in lignes], alpha)
+    for (t, n, brut, net, nul, pval), g in zip(lignes, garde, strict=True):
+        print(f"  {t:<10} {n:>5} {brut:>+8.1f} {net:>+14.1f} {nul:>+11.1f} "
+              f"{pval:>9.4f}  {'OUI' if g else '—'}")
+    print("  " + "-" * 74)
+    if sum(garde):
+        print(f"  {sum(garde)} tranche(s) survivent APRÈS neutralisation du marché.")
+        print("  L'effet est donc propre aux jetons, pas au marché crypto.\n")
+    else:
+        print("  AUCUNE tranche ne survit après neutralisation.")
+        print("  L'effet mesuré était celui du MARCHÉ, pas celui des")
+        print("  déblocages : ils se groupent sur les mêmes semaines.\n")
+
+
 def robustesse(unlocks: dict, tirages: int, alpha: float) -> None:
     """Trois épreuves qui peuvent tuer un effet apparemment solide.
 
@@ -445,6 +579,8 @@ def main() -> int:
                    help="en dessous, aucune conclusion n'est possible et la "
                         "cellule est écartée plutôt que rapportée bruyante")
     p.add_argument("--out", default=None)
+    p.add_argument("--reference", default="BTC",
+                   help="actif de référence pour neutraliser le marché")
     p.add_argument("--robustesse", action="store_true",
                    help="les trois épreuves qui peuvent tuer un effet : "
                         "dénominateurs aberrants, jackknife par jeton, et "
@@ -466,6 +602,7 @@ def main() -> int:
     poolage(unlocks, args.tirages, args.min_evenements * 3, args.alpha)
     if args.robustesse:
         robustesse(unlocks, args.tirages, args.alpha)
+        marche_neutre(unlocks, args.tirages, args.alpha, args.reference)
     if args.out:
         Path(args.out).write_text(json.dumps([r.__dict__ for r in res], indent=1))
         print(f"  Résultats bruts : {args.out}\n")

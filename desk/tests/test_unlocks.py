@@ -427,3 +427,102 @@ def test_le_jackknife_repere_un_jeton_qui_porte_tout(tmp_path, monkeypatch):
     sortie = buf.getvalue()
     jack = sortie.split("2. Jackknife")[-1].split("3. Coupe")[0]
     assert "T0" in jack, f"le jackknife doit nommer le jeton porteur : {jack}"
+
+
+def test_la_neutralisation_tue_un_effet_qui_nest_que_du_marche(tmp_path, monkeypatch):
+    """L'épreuve décisive, vérifiée sur un cas construit.
+
+    Ici les jetons N'ONT PAS d'effet propre : ils suivent simplement un
+    marché qui baisse pendant les semaines de déblocage, parce que les
+    déblocages sont GROUPÉS dans le calendrier. Sans neutralisation, la
+    mesure crie « effet de déblocage ». Avec, elle doit se taire.
+
+    Si ce test tombe, la neutralisation ne neutralise rien et tout résultat
+    positif qu'elle laisserait passer serait sans valeur.
+    """
+    import contextlib
+    import io
+    import os
+
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "data").mkdir(exist_ok=True)
+    alea = random.Random(11)
+
+    # Dates de déblocage COMMUNES à tous les jetons — le cas qui piège.
+    deblocages = sorted(range(60, 400, 20))
+    avant = {j for d in deblocages for j in range(d - 7, d)}
+
+    # Le marché baisse pendant ces fenêtres, et lui seul.
+    px, marche = 100.0, []
+    for i in range(450):
+        px *= 1 + alea.gauss(0, 0.02) + (-0.012 if i in avant else 0.0)
+        marche.append({"t": i * JOUR_MS, "o": px, "h": px * 1.01,
+                       "l": px * 0.99, "c": px, "v": 100, "n": 1})
+    (tmp_path / "data" / "BTC_1d_real.json").write_text(json.dumps(marche))
+
+    # Les jetons suivent le marché, plus du bruit propre. Aucun effet à eux.
+    unlocks = {}
+    for k in range(10):
+        px, bars = 100.0, []
+        for i in range(450):
+            r_marche = (marche[i]["c"] / marche[i - 1]["c"] - 1) if i else 0.0
+            px *= 1 + r_marche + alea.gauss(0, 0.02)
+            bars.append({"t": i * JOUR_MS, "o": px, "h": px * 1.01,
+                         "l": px * 0.99, "c": px, "v": 100, "n": 1})
+        (tmp_path / "data" / f"T{k}_1d_real.json").write_text(json.dumps(bars))
+        unlocks[f"T{k}"] = [{"ts_ms": d * JOUR_MS, "part_offre": 0.03,
+                             "debloque": 1.0, "lineaire": 0.0, "categories": []}
+                            for d in deblocages]
+    os.chdir(tmp_path)
+
+    brut = io.StringIO()
+    with contextlib.redirect_stdout(brut):
+        valider.poolage(unlocks, tirages=400, min_evts=30, alpha=0.05)
+    assert "OUI" in brut.getvalue(), (
+        "le fixture doit d'abord PIÉGER la mesure brute, sinon il ne teste "
+        f"rien :\n{brut.getvalue()}")
+
+    net = io.StringIO()
+    with contextlib.redirect_stdout(net):
+        valider.marche_neutre(unlocks, tirages=400, alpha=0.05)
+    assert "AUCUNE tranche ne survit" in net.getvalue(), (
+        f"la neutralisation n'a pas neutralisé :\n{net.getvalue()}")
+
+
+def test_la_neutralisation_laisse_passer_un_effet_propre(tmp_path, monkeypatch):
+    """L'autre sens : un effet réellement propre au jeton doit survivre."""
+    import contextlib
+    import io
+    import os
+
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "data").mkdir(exist_ok=True)
+    alea = random.Random(13)
+
+    px, marche = 100.0, []
+    for i in range(450):
+        px *= 1 + alea.gauss(0, 0.02)          # marché sans lien aux dates
+        marche.append({"t": i * JOUR_MS, "o": px, "h": px * 1.01,
+                       "l": px * 0.99, "c": px, "v": 100, "n": 1})
+    (tmp_path / "data" / "BTC_1d_real.json").write_text(json.dumps(marche))
+
+    unlocks = {}
+    for k in range(10):
+        # Dates PROPRES à chaque jeton, et baisse propre avant chacune.
+        deblocages = sorted(range(60 + k * 3, 400, 20))
+        avant = {j for d in deblocages for j in range(d - 7, d)}
+        px, bars = 100.0, []
+        for i in range(450):
+            px *= 1 + alea.gauss(0, 0.02) + (-0.012 if i in avant else 0.0)
+            bars.append({"t": i * JOUR_MS, "o": px, "h": px * 1.01,
+                         "l": px * 0.99, "c": px, "v": 100, "n": 1})
+        (tmp_path / "data" / f"T{k}_1d_real.json").write_text(json.dumps(bars))
+        unlocks[f"T{k}"] = [{"ts_ms": d * JOUR_MS, "part_offre": 0.03,
+                             "debloque": 1.0, "lineaire": 0.0, "categories": []}
+                            for d in deblocages]
+    os.chdir(tmp_path)
+
+    net = io.StringIO()
+    with contextlib.redirect_stdout(net):
+        valider.marche_neutre(unlocks, tirages=400, alpha=0.05)
+    assert "survivent APRÈS neutralisation" in net.getvalue(), net.getvalue()
