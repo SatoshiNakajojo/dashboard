@@ -1,0 +1,55 @@
+# /etc/systemd/system/enregistreur.service
+#
+#   sudo cp deploy/enregistreur.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now enregistreur
+#
+[Unit]
+Description=Enregistreur de microstructure Hyperliquid
+Documentation=https://github.com/SatoshiNakajojo/dashboard
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=desk
+Group=desk
+WorkingDirectory=/opt/desk
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/opt/desk/.venv/bin/python -m trading_desk.enregistreur \
+    --coins BTC ETH SOL BNB XRP DOGE AVAX \
+    --racine /var/lib/desk/enregistrement
+
+# SIGTERM plutôt que SIGKILL, et 60 s pour vider les tampons : sans ça,
+# chaque `systemctl restart` perdrait le contenu de la file et des tampons,
+# soit jusqu'à cinq minutes de collecte.
+KillSignal=SIGTERM
+TimeoutStopSec=60
+
+# Redémarrage inconditionnel. `on-failure` ne suffit pas : un processus qui
+# sort proprement sur une exception non rattrapée renverrait 0 et le service
+# resterait mort, silencieusement — le mode de panne exact qu'on cherche à
+# rendre impossible.
+Restart=always
+RestartSec=10
+StartLimitIntervalSec=0
+
+# Durcissement. L'enregistreur ne fait qu'écrire dans un dossier et lire un
+# socket ; tout le reste peut lui être refusé.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/desk
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryMax=1G
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=enregistreur
+
+[Install]
+WantedBy=multi-user.target
