@@ -1412,5 +1412,49 @@ d'autre**. Trois questions restent, dont deux peuvent tuer le résultat, et
   survit-il ?** Un seuil se compare à un carnet réel ; une hypothèse de coût
   inventée ne se compare à rien.
 
+### L'économie, mesurée — tranche 2-5 %, 318 événements sur 39 jetons
+
+| | brut | financement inclus |
+| --- | --- | --- |
+| moyenne | +276,9 bps | +264,1 bps |
+| **médiane** | **+337,2 bps** | **+323,0 bps** |
+| écart-type | 1 272 bps | 1 245 bps |
+| part gagnante | 59,4 % | 59,7 % |
+| sans les 5 % meilleurs | +146,3 bps | +130,9 bps |
+
+**La médiane dépasse la moyenne.** C'est l'inverse exact d'un billet de
+loterie : un billet de loterie a une médiane nulle et une moyenne tirée par
+la queue haute ; ici c'est la queue *basse* qui tire la moyenne vers le bas.
+Le trade typique est meilleur que la moyenne, et l'effet survit au retrait
+des 5 % meilleurs. La question 1 est tranchée dans le bon sens.
+
+Le **financement** ne pèse presque rien : médiane +4,9 bps reçus par le
+short, moyenne −22,0 bps, soit −13 bps sur l'edge. Il a été lu sur l'API pour
+288 des 318 fenêtres — les 30 manquantes sont des événements antérieurs à la
+cotation du jeton sur Hyperliquid.
+
+Par semaine, qui est l'unité de décision : **+264,9 bps**, 62,5 % de semaines
+gagnantes, Sharpe annualisé **1,81**, et un **seuil de rentabilité à 265 bps
+d'aller-retour**. Un aller-retour réel sur ces jetons se compte en dizaines
+de points de base, pas en centaines : la marge est d'un facteur cinq à dix.
+
+### Les deux chiffres que ce tableau ne donne pas
+
+**136 semaines distinctes sur environ 130 semaines de données.** La stratégie
+est active pratiquement chaque semaine de la période. Elle porte donc une
+**exposition courte permanente aux altcoins**, et une partie du résultat peut
+venir de là plutôt que des déblocages. La neutralisation par BTC avait déjà
+répondu statistiquement — l'effet en sortait renforcé — mais la version
+*implémentable* n'est pas la même stratégie : short nu, ou short adossé à un
+achat de BTC. `economie_unlocks.py` chiffre maintenant les deux.
+
+**Un Sharpe de 1,81 à 76 % de volatilité annualisée est compatible avec la
+perte de la moitié du capital en chemin.** La moyenne ne dit pas dans quel
+ordre les semaines sont arrivées, et c'est l'ordre qui décide si une
+stratégie est tenable. Le script compose maintenant les rendements — un
+compte compose, les additionner sous-estimerait le repli — et rapporte repli
+maximal, pire semaine et plus longue série perdante. Au-delà de 50 % de
+repli il le dit avec le mot **INTENABLE**.
+
 L'analogue direct sur actions — les *lockup expiries* des IPO — reste le
 candidat naturel pour tester si l'effet est propre à la crypto ou général.

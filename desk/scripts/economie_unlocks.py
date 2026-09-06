@@ -271,12 +271,92 @@ def rentabilite(evts: list[dict], champ: str) -> None:
           "significativité.\n")
 
 
+def neutraliser(evts: list[dict], reference: str = "BTC") -> int:
+    """Le rendement d'une position courte sur le jeton, ADOSSÉE à un achat
+    de la référence pour le même notionnel.
+
+    Ce n'est pas un raffinement statistique, c'est **une autre stratégie**.
+    136 semaines distinctes sur environ 130 semaines de données : la version
+    nue est courte sur des altcoins pratiquement chaque semaine de la
+    période. Son résultat contient donc une exposition courte permanente au
+    marché, qui a rapporté ou coûté indépendamment des déblocages.
+
+    La version adossée n'a pas cette exposition. Elle est plus chère — deux
+    jambes, donc deux allers-retours — mais c'est la seule dont le résultat
+    est attribuable aux déblocages.
+
+    Convention identique à `marche_neutre` : `-1 * (jeton - référence)`.
+    """
+    try:
+        marche = load_from_file(f"data/{reference}_1d_real.json", reference, "1d")
+    except (DataUnavailable, FileNotFoundError):
+        return 0
+    par_jour = index_par_date(marche)
+    faits = 0
+    for e in evts:
+        j0 = par_jour.get(e["debut_ms"] // JOUR_MS)
+        j1 = par_jour.get(e["fin_ms"] // JOUR_MS)
+        if j0 is None or j1 is None:
+            e["neutre_bps"] = None
+            continue
+        d = float(marche[j0].close)
+        if d <= 0:
+            e["neutre_bps"] = None
+            continue
+        ref = (float(marche[j1].close) - d) / d
+        e["neutre_bps"] = e["brut_bps"] + ref * 10_000
+        faits += 1
+    return faits
+
+
+def vecu(evts: list[dict], champ: str, titre: str, fraction: float) -> None:
+    """Ce qu'un compte aurait VÉCU, et non ce que la moyenne raconte.
+
+    Un Sharpe de 1,8 à 76 % de volatilité annualisée est un chiffre
+    parfaitement compatible avec une perte de moitié du capital en chemin.
+    La moyenne ne dit pas dans quel ordre les semaines sont arrivées, et
+    c'est l'ordre qui décide si une stratégie est tenable : le repli maximal
+    et la plus longue série perdante sont ce qui fait abandonner, pas
+    l'espérance.
+
+    Les rendements sont COMPOSÉS, parce qu'un compte compose. Les additionner
+    surestimerait le résultat et sous-estimerait le repli.
+    """
+    sem = par_semaine(evts, champ)
+    if len(sem) < 10:
+        print("     trop peu de semaines.\n")
+        return
+    capital, sommet, repli, serie, pire_serie = 1.0, 1.0, 0.0, 0, 0
+    courbe = []
+    for r in sem:
+        capital *= 1 + fraction * r / 10_000
+        courbe.append(capital)
+        sommet = max(sommet, capital)
+        repli = max(repli, 1 - capital / sommet)
+        serie = serie + 1 if r <= 0 else 0
+        pire_serie = max(pire_serie, serie)
+
+    print(f"  {titre}  (notionnel = {fraction:.0%} du capital par semaine)")
+    print(f"  {'capital final':<30} {capital:>10.2f} x")
+    print(f"  {'repli maximal':<30} {repli:>10.1%}")
+    print(f"  {'pire semaine':<30} {min(sem) / 100:>10.1f} %")
+    print(f"  {'plus longue série perdante':<30} {pire_serie:>7} semaines")
+    if repli > 0.5:
+        print("  ----> INTENABLE à ce notionnel : personne ne traverse "
+              f"un repli de {repli:.0%}.")
+    print()
+
+
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--unlocks", default="data/unlocks.json")
     p.add_argument("--cache", default="data/financement_cache.json")
     p.add_argument("--sans-financement", action="store_true",
                    help="sauter les ~850 requêtes API et ne chiffrer que le brut")
+    p.add_argument("--fraction", type=float, default=0.25,
+                   help="part du capital engagée chaque semaine ; 1.0 = tout")
+    p.add_argument("--reference", default="BTC",
+                   help="l'actif de la jambe longue, pour la version adossée")
     p.add_argument("--tranche", default="2-5 %",
                    help="la tranche à chiffrer ; « toutes » mélange les tailles")
     args = p.parse_args()
@@ -338,6 +418,29 @@ def main() -> int:
     print("  3. RENTABILITÉ — la semaine est l'unité de décision")
     print("  " + "-" * 74)
     rentabilite(evts, champ)
+
+    print("  4. CE QU'UN COMPTE AURAIT VÉCU")
+    print("  " + "-" * 74)
+    vecu(evts, champ, "Vente à découvert nue", args.fraction)
+    if neutraliser(evts, args.reference):
+        # La version adossée n'est pas une variante : c'est la seule dont le
+        # résultat est attribuable aux déblocages plutôt qu'à une exposition
+        # courte permanente au marché.
+        print(f"  Adossée à un achat de {args.reference} — sans exposition "
+              "au marché")
+        print("  " + "-" * 74)
+        for e in evts:
+            f = e.get("financement_bps")
+            e["neutre_net_bps"] = (
+                e["neutre_bps"] + f
+                if e.get("neutre_bps") is not None and f is not None else None)
+        colonne = "neutre_net_bps" if champ == "net_bps" else "neutre_bps"
+        distribution(evts, colonne)
+        rentabilite(evts, colonne)
+        vecu(evts, colonne, "Position adossée", args.fraction)
+    else:
+        print(f"  data/{args.reference}_1d_real.json introuvable : "
+              "impossible de séparer l'edge de l'exposition au marché.\n")
     return 0
 
 

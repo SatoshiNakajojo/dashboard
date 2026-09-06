@@ -860,3 +860,50 @@ def test_le_seuil_de_rentabilite_est_le_rendement_hebdomadaire(capsys):
     economie.rentabilite(evts, "x")
     sortie = capsys.readouterr().out
     assert "Seuil de rentabilité : 80 bps" in sortie, sortie
+
+
+def test_le_repli_maximal_est_calcule_en_COMPOSANT(capsys):
+    """Un compte compose. Additionner les rendements surestimerait le
+    résultat final et, plus grave, sous-estimerait le repli — précisément le
+    chiffre qui décide si une stratégie est tenable.
+
+    Trois semaines à -30 % puis remontée : en additif le repli semble de
+    90 %, en composé il est de 65,7 % (0,7³ = 0,343).
+    """
+    evts = [{"semaine": s, "x": -3000.0} for s in range(3)]
+    # Le rapport refuse de chiffrer un repli sur moins de dix semaines, et il
+    # a raison. On complète par des semaines négligeables qui ne recréent
+    # aucun sommet, donc ne touchent pas au repli maximal.
+    evts += [{"semaine": s, "x": +1.0} for s in range(3, 12)]
+    economie.vecu(evts, "x", "test", 1.0)
+    sortie = capsys.readouterr().out
+    assert "65.7%" in sortie, sortie
+    assert "INTENABLE" in sortie, "un repli de 66 % doit être signalé"
+
+
+def test_une_serie_perdante_est_comptee_en_semaines_consecutives(capsys):
+    evts = [{"semaine": s, "x": v} for s, v in
+            enumerate([100.0, -50.0, -50.0, -50.0, -50.0, 100.0, -50.0,
+                       100.0, 100.0, 100.0, 100.0])]
+    economie.vecu(evts, "x", "test", 1.0)
+    assert "4 semaines" in capsys.readouterr().out
+
+
+def test_la_neutralisation_suit_la_MEME_convention_que_la_validation(tmp_path,
+                                                                    monkeypatch):
+    """`marche_neutre` calcule `-1 * (jeton - référence)`. Un signe inversé
+    ici transformerait une couverture en pari doublé, et le rapport
+    afficherait très sérieusement l'inverse du résultat."""
+    import os
+
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "data").mkdir(exist_ok=True)
+    # BTC monte de 10 % sur la fenêtre ; le jeton est plat.
+    btc = [100.0 * (1.1 ** (i / 6)) for i in range(20)]
+    (tmp_path / "data" / "BTC_1d_real.json").write_text(_serie_json(btc))
+    os.chdir(tmp_path)
+
+    # brut = 0 (le jeton n'a pas bougé) ; adossé = 0 + 1000 bps de BTC.
+    evts = [{"brut_bps": 0.0, "debut_ms": 0, "fin_ms": 6 * JOUR_MS}]
+    assert economie.neutraliser(evts) == 1
+    assert abs(evts[0]["neutre_bps"] - 1000.0) < 1.0, evts[0]
