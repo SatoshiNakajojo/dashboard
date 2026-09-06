@@ -92,7 +92,7 @@ def test_le_bbo_separe_bien_les_deux_cotes():
 def test_un_message_malforme_ne_leve_jamais(canal, data):
     """Un canal inconnu ou un message tordu ne doit pas interrompre
     l'enregistrement des autres flux."""
-    flux, rows = lignes(canal, data, recu_ms=1)
+    _flux, rows = lignes(canal, data, recu_ms=1)
     assert rows == []
 
 
