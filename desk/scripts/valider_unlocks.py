@@ -393,9 +393,15 @@ def decalage_calendaire(unlocks: dict, alpha: float,
                     continue
                 jour = e["ts_ms"] // 86_400_000 + DECALAGE
                 i = par_jour.get(jour)
-                if i is not None and i + DUREE < len(bars):
+                if i is not None:
                     candidats.append(Declenchement(i, -1, e["part_offre"], ""))
-            gardes = sans_chevauchement(candidats, DUREE)
+            # Dédupliquer AVANT d'écarter les fenêtres qui débordent, comme
+            # `poolage`. L'ordre inverse promeut un événement que le vrai
+            # calendrier masquait, et les cinq contrôles porteraient alors
+            # sur des ensembles subtilement différents — un écart qui ne se
+            # verrait jamais dans les chiffres publiés.
+            gardes = [d for d in sans_chevauchement(candidats, DUREE)
+                      if d.index + DUREE < len(bars)]
             inverse = {i: j for j, i in par_jour.items()}
             evts += [(symbole, inverse[d.index]) for d in gardes]
 

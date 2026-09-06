@@ -758,3 +758,105 @@ def test_le_p_du_decalage_ne_descend_jamais_sous_son_plancher(tmp_path,
     assert min(ps) >= plancher - 1e-9, (
         f"p={min(ps)} sous le plancher {plancher} — le nul aurait été "
         f"présenté comme plus fin qu'il ne l'est :\n{sortie}")
+
+
+# --------------------------------------------------------------------------
+#  L'économie : un effet réel n'est pas un effet exploitable
+# --------------------------------------------------------------------------
+
+economie = _module("economie_unlocks")
+
+
+def test_les_deux_scripts_voient_EXACTEMENT_les_memes_evenements(tmp_path,
+                                                                 monkeypatch):
+    """Le test qui empêche de chiffrer les coûts d'une autre stratégie.
+
+    `economie_unlocks` reconstruit l'ensemble d'événements plutôt que de
+    l'importer, parce que `valider_unlocks` mêle construction et mesure. Un
+    écart entre les deux ne se verrait nulle part : les deux scripts
+    tourneraient, afficheraient des chiffres plausibles, et le seuil de
+    rentabilité porterait sur des trades que la validation n'a jamais vus.
+
+    Il a d'ailleurs existé. `poolage` déduplique puis écarte les fenêtres qui
+    débordent la série ; la première version de ce script faisait l'inverse,
+    ce qui promeut un événement que le vrai calendrier masquait.
+    """
+    import os
+
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "data").mkdir(exist_ok=True)
+    alea = random.Random(53)
+    unlocks = {}
+    for k in range(6):
+        px, bars = 100.0, []
+        for _ in range(300):
+            px *= 1 + alea.gauss(0, 0.03)
+            bars.append({"t": len(bars) * JOUR_MS, "o": px, "h": px * 1.01,
+                         "l": px * 0.99, "c": px, "v": 100, "n": 1})
+        (tmp_path / "data" / f"T{k}_1d_real.json").write_text(json.dumps(bars))
+        # Des déblocages jusqu'au BORD de la série, et rapprochés : c'est
+        # exactement là que les deux ordres divergent. Un fixture qui les
+        # garde loin du bord ne testerait rien.
+        jours = list(range(20, 300, 4))
+        unlocks[f"T{k}"] = [{"ts_ms": j * JOUR_MS, "part_offre": 0.03,
+                             "debloque": 1.0, "lineaire": 0.0, "categories": []}
+                            for j in jours]
+    os.chdir(tmp_path)
+
+    mien = economie.evenements(unlocks, 0.02, 0.05)
+    # La même construction que `poolage`, recopiée depuis lui.
+    attendu = 0
+    for symbole, bruts in unlocks.items():
+        bars = valider.load_from_file(f"data/{symbole}_1d_real.json", symbole, "1d")
+        par_jour = valider.index_par_date(bars)
+        cands = []
+        for e in bruts:
+            i = par_jour.get(e["ts_ms"] // JOUR_MS - 7)
+            if i is not None:
+                cands.append(Declenchement(i, -1, e["part_offre"], ""))
+        for d in valider.sans_chevauchement(cands, 6):
+            if d.index + 6 < len(bars):
+                attendu += 1
+    assert len(mien) == attendu, (
+        f"{len(mien)} événements ici contre {attendu} dans la validation — "
+        "les coûts porteraient sur une autre stratégie")
+
+
+def test_le_billet_de_loterie_est_denonce(capsys):
+    """Un effet entièrement porté par la queue haute n'est pas un edge.
+
+    Quatre-vingt-dix-neuf pertes de 10 bps et un gain de 5 000 donnent une
+    moyenne flatteuse de +40 bps. Un compte réel vivrait quatre-vingt-dix-neuf
+    pertes avant le gain, et probablement pas jusque-là.
+    """
+    evts = [{"brut_bps": -10.0} for _ in range(99)] + [{"brut_bps": 5000.0}]
+    economie.distribution(evts, "brut_bps")
+    sortie = capsys.readouterr().out
+    assert "BILLET DE LOTERIE" in sortie, sortie
+
+
+def test_un_edge_regulier_nest_PAS_denonce(capsys):
+    """L'autre sens, sans quoi l'alerte se déclencherait sur tout."""
+    alea = random.Random(3)
+    evts = [{"brut_bps": alea.gauss(200, 400)} for _ in range(300)]
+    economie.distribution(evts, "brut_bps")
+    assert "BILLET DE LOTERIE" not in capsys.readouterr().out
+
+
+def test_le_regroupement_par_semaine_ne_compte_pas_les_evenements_deux_fois():
+    """Le décalage calendaire a établi que les événements sont groupés. Ce
+    qui était une objection statistique devient une contrainte d'allocation :
+    vingt jetons débloqués la même semaine ne sont pas vingt paris."""
+    evts = [{"semaine": 1, "x": 100.0}, {"semaine": 1, "x": 300.0},
+            {"semaine": 2, "x": -50.0}]
+    assert economie.par_semaine(evts, "x") == [200.0, -50.0]
+
+
+def test_le_seuil_de_rentabilite_est_le_rendement_hebdomadaire(capsys):
+    """Le seuil annoncé doit être exactement le point où le net s'annule ;
+    l'afficher plus haut ferait passer pour rentable une stratégie qui perd."""
+    evts = [{"semaine": s, "x": 100.0} for s in range(40)]
+    evts += [{"semaine": s, "x": 60.0} for s in range(40, 80)]
+    economie.rentabilite(evts, "x")
+    sortie = capsys.readouterr().out
+    assert "Seuil de rentabilité : 80 bps" in sortie, sortie

@@ -1311,7 +1311,7 @@ un test qui le fait effectivement disparaître sur un cas construit.
 | Jackknife par jeton     | un effet porté par un seul jeton                  | tient (pire exclusion p = 0,0035) |
 | Coupe temporelle        | un edge mort, déjà arbitré                        | tient des deux côtés (p = 0,012 / 0,011) |
 | Neutralisation du marché | un effet de marché déguisé                       | tient, et se renforce |
-| Décalage calendaire     | des événements comptés en double                  | à mesurer |
+| Décalage calendaire     | des événements comptés en double                  | tient (3 tranches sur 4) |
 
 Les quatre premiers partagent la même faiblesse, et c'est pour elle
 qu'existe le cinquième.
@@ -1361,15 +1361,56 @@ dates, il valide au plancher ; le même fixture avec le choc retiré donne
 p = 0,32. Les deux sens sont vérifiés, sans quoi un contrôle qui refuse tout
 passerait pour un contrôle sévère.
 
-### Ce qui reste à faire avant d'en tirer quoi que ce soit
+### Le cinquième contrôle : mesuré, et il tient
 
-- Lancer `--robustesse` avec le cinquième contrôle sur les vraies données.
-  **Tant que ce chiffre n'est pas là, le résultat n'est pas établi** : les
-  p ci-dessus sont ceux d'un modèle qui surestime le nombre d'observations.
-- Un effet mesuré n'est pas un effet capturable. +264 bps est très au-dessus
-  des 15 bps d'un aller-retour, mais la fenêtre d'anticipation impose
-  d'entrer sept jours avant une date connue de tous, sur des jetons dont
-  certains sont peu liquides. Le coût réel se mesure sur le carnet, pas dans
-  un backtest.
-- L'analogue direct sur actions — les *lockup expiries* des IPO — est le
-  candidat naturel pour tester si l'effet est propre à la crypto ou général.
+| tranche | n | observé | hasard | p |
+| --- | --- | --- | --- | --- |
+| 0,5-2 % | 368 | +119,7 | +58,5 | 0,3234 |
+| 2-5 % | 318 | +276,9 | +66,2 | **0,0128** |
+| > 5 % | 217 | +367,8 | +92,5 | **0,0129** |
+| toutes | 852 | +236,0 | +67,7 | **0,0014** |
+
+Trois tranches sur quatre survivent, et la réponse à la dose reste monotone :
+la petite tranche ne ressort pas, les deux grosses oui.
+
+**Le 0,0014 de la dernière ligne est exactement le plancher du test** —
+1/705, pour 704 alignements énumérés. Il ne se lit pas « p = 0,0014 » mais
+« **aucun des 704 décalages possibles ne fait aussi bien** ». C'est la
+déclaration la plus forte que ce test sait produire, et elle est censurée
+par le haut, pas par la force de l'effet.
+
+Deux choses à noter dans ce tableau, parce qu'elles disent que le contrôle
+fait son travail :
+
+- **Le bras aléatoire n'est pas centré sur zéro** : +67,7 bps. Un alignement
+  quelconque montre déjà une baisse, parce que ces jetons dérivent vers le
+  bas. L'observé est 3,5 fois cela, et c'est cet écart qui compte.
+- **Les p des sous-tranches ont monté**, de 0,0095 et 0,0010 à 0,0128 et
+  0,0129. C'est exactement l'effet attendu : le nul par événement avait un
+  écart-type trop petit parce qu'il traitait des jetons corrélés comme
+  indépendants. Les p corrigés sont moins flatteurs, et ce sont les bons.
+
+### Ce que ça ne dit toujours pas
+
+Les cinq contrôles répondent à « l'effet existe-t-il ? » et **à rien
+d'autre**. Trois questions restent, dont deux peuvent tuer le résultat, et
+`scripts/economie_unlocks.py` les pose :
+
+- **La moyenne est-elle portée par une poignée de coups ?** Le tableau par
+  jeton montre USUAL à +1 335 bps et EIGEN à +925. Si l'effet disparaît en
+  retirant les 5 % meilleurs, ce n'est pas un edge, c'est un billet de
+  loterie.
+- **Combien de paris indépendants cela fait-il ?** Le décalage calendaire
+  vient d'établir que les événements sont groupés. Ce qui était une objection
+  statistique devient une contrainte d'allocation : l'unité de décision est
+  la semaine, pas l'événement.
+- **Que reste-t-il après les coûts ?** Le financement est mesurable sur l'API
+  Hyperliquid, et il n'est pas un coût : une position courte le *reçoit*
+  quand il est positif. L'écart et le glissement ne sont pas mesurables — le
+  carnet historique n'existe pas — donc le script les traite en paramètre et
+  répond à la question renversée : **jusqu'à quel coût aller-retour l'edge
+  survit-il ?** Un seuil se compare à un carnet réel ; une hypothèse de coût
+  inventée ne se compare à rien.
+
+L'analogue direct sur actions — les *lockup expiries* des IPO — reste le
+candidat naturel pour tester si l'effet est propre à la crypto ou général.
