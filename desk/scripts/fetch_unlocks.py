@@ -40,12 +40,27 @@ LLAMA = "https://api.llama.fi"
 HYPERLIQUID = "https://api.hyperliquid.xyz/info"
 
 
+# Codes qui peuvent guerir en reessayant. Tous les autres 4xx sont des
+# refus definitifs : 402 « Payment Required », 401, 403, 404 ne changeront
+# pas d'avis dans deux secondes, et les reessayer ne fait que retarder le
+# message d'erreur utile — constate en production, ou trois tentatives ont
+# masque pendant six secondes une reponse parfaitement claire.
+REESSAYABLES = {408, 429, 500, 502, 503, 504}
+
+
 def _get(url: str, essais: int = 3) -> object:
     for tentative in range(1, essais + 1):
         try:
             req = urllib.request.Request(url, headers={"User-Agent": "desk/1.0"})
             with urllib.request.urlopen(req, timeout=60) as r:
                 return json.loads(r.read())
+        except urllib.error.HTTPError as exc:
+            if exc.code not in REESSAYABLES or tentative == essais:
+                raise
+            attente = 2 ** tentative
+            print(f"    {exc.code}, nouvel essai dans {attente} s…",
+                  file=sys.stderr)
+            time.sleep(attente)
         except (urllib.error.URLError, TimeoutError, ValueError) as exc:
             if tentative == essais:
                 raise
