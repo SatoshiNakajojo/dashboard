@@ -164,11 +164,18 @@ afficher un `uid=` et un `gid=`.
 
 ```bash
 vous@vps$ sudo -u desk git clone https://github.com/SatoshiNakajojo/dashboard.git /opt/desk/src
+vous@vps$ sudo -u desk git -C /opt/desk/src checkout claude/trading-desk-p3-launch-e16cdi
 vous@vps$ sudo -u desk python3 -m venv /opt/desk/.venv
 vous@vps$ sudo -u desk /opt/desk/.venv/bin/pip install --upgrade pip
 vous@vps$ sudo -u desk /opt/desk/.venv/bin/pip install -r /opt/desk/src/desk/deploy/requirements-enregistreur.txt
 vous@vps$ sudo -u desk /opt/desk/.venv/bin/pip install -e /opt/desk/src/desk --no-deps
 ```
+
+> **Le `checkout` n'est pas optionnel.** Tout le travail récent —
+> l'enregistreur, la Sentinelle, l'analyse des déblocages — vit sur la branche
+> `claude/trading-desk-p3-launch-e16cdi`, pas sur `main`. Un clone
+> sans cette ligne donne une version qui ne contient rien de tout ça, et
+> l'étape 6 échouera sur `ModuleNotFoundError`.
 
 Un *environnement virtuel* (`venv`) est un dossier Python isolé : ce qu'on y
 installe ne touche pas au Python du système.
@@ -318,7 +325,7 @@ toute façon fusionnés à l'heure suivante.
 ### Mettre à jour le code plus tard
 
 ```bash
-vous@vps$ sudo -u desk git -C /opt/desk/src pull
+vous@vps$ sudo -u desk git -C /opt/desk/src pull origin claude/trading-desk-p3-launch-e16cdi
 vous@vps$ systemctl restart enregistreur
 vous@vps$ systemctl status enregistreur
 ```

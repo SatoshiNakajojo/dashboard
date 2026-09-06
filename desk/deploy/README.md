@@ -42,6 +42,7 @@ sudo chown -R desk:desk /opt/desk /var/lib/desk
 
 # 2. Code
 sudo -u desk git clone https://github.com/SatoshiNakajojo/dashboard.git /opt/desk/src
+sudo -u desk git -C /opt/desk/src checkout claude/trading-desk-p3-launch-e16cdi
 sudo -u desk python3.11 -m venv /opt/desk/.venv
 sudo -u desk /opt/desk/.venv/bin/pip install --upgrade pip
 sudo -u desk /opt/desk/.venv/bin/pip install \
