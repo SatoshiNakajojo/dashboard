@@ -15,6 +15,7 @@ les deux sens.
 from __future__ import annotations
 
 import importlib.util
+import json
 import random
 from decimal import Decimal
 from pathlib import Path
@@ -140,47 +141,124 @@ def test_toutes_les_hypotheses_sont_baissieres():
 #  Extraction des déblocages depuis la forme DefiLlama
 # --------------------------------------------------------------------------
 
-def test_un_deblocage_est_un_SAUT_de_loffre_en_circulation():
-    """DefiLlama ne publie pas de champ « unlock » : il publie des séries
-    d'émission cumulées. Un déblocage est une dérivée, pas une lecture."""
-    proto = {"documentedData": {"data": [
-        {"data": [{"timestamp": 1000, "unlocked": 100.0},
-                  {"timestamp": 2000, "unlocked": 100.0},
-                  {"timestamp": 3000, "unlocked": 130.0}]},
-    ]}}
-    evts = fetch.evenements(proto)
-    assert len(evts) == 1
-    assert evts[0]["ts_ms"] == 3000 * 1000
-    assert evts[0]["debloque"] == 30.0
-    assert abs(evts[0]["part_offre"] - 0.30) < 1e-9
+# --------------------------------------------------------------------------
+#  Lecture de la structure RÉELLE de defillama-datasets
+# --------------------------------------------------------------------------
+#
+# Reconstruite à partir de la sonde du 6 septembre 2026 sur `emissions/sei`,
+# valeurs comprises. Pas inventée : un parseur écrit sur un format supposé
+# produit des dates fausses en silence, et le reste de la chaîne mesurerait
+# alors très consciencieusement des événements qui n'ont pas eu lieu.
+
+SEI_REEL = {
+    "name": "Sei",
+    "gecko_id": "sei-network",
+    "documentedData": {"data": [
+        {"label": "Binance Launchpool",
+         "data": [{"timestamp": 1691971200, "unlocked": 300000000,
+                   "rawEmission": 300000000, "burned": 0},
+                  {"timestamp": 1694649600, "unlocked": 300000000,
+                   "rawEmission": 0, "burned": 0}]},
+        {"label": "Airdrop",
+         "data": [{"timestamp": 1691971200, "unlocked": 700000000,
+                   "rawEmission": 700000000, "burned": 0},
+                  {"timestamp": 1694649600, "unlocked": 900000000,
+                   "rawEmission": 200000000, "burned": 0}]},
+    ]},
+    "metadata": {
+        "token": "coingecko:sei-network",
+        "chain": "sei",
+        "unlockEvents": [
+            {"timestamp": 1691971200,
+             "cliffAllocations": [
+                 {"recipient": "x", "category": "staking",
+                  "unlockType": "cliff", "amount": 25000000}],
+             "linearAllocations": [],
+             "summary": {"totalTokensCliff": 1000000000}},
+            {"timestamp": 1694649600,
+             "cliffAllocations": [
+                 {"recipient": "y", "category": "insiders",
+                  "unlockType": "cliff", "amount": 200000000}],
+             "linearAllocations": [],
+             "summary": {"totalTokensCliff": 200000000}},
+        ],
+    },
+}
 
 
-def test_les_categories_multiples_sont_additionnees():
-    """Un protocole débloque simultanément pour l'équipe, les investisseurs
-    et l'écosystème. Ne lire qu'une catégorie sous-estimerait le choc."""
-    proto = {"documentedData": {"data": [
-        {"data": [{"timestamp": 1000, "unlocked": 50.0},
-                  {"timestamp": 2000, "unlocked": 60.0}]},
-        {"data": [{"timestamp": 1000, "unlocked": 50.0},
-                  {"timestamp": 2000, "unlocked": 90.0}]},
-    ]}}
-    evts = fetch.evenements(proto)
-    assert evts[0]["debloque"] == 50.0        # (60+90) - (50+50)
+def test_les_deblocages_sont_lus_dans_unlockEvents():
+    """DefiLlama a déjà agrégé les déblocages par date. Dériver la série
+    cumulée à la place introduirait des sauts parasites aux frontières de
+    catégories, là où la source a fait le travail proprement."""
+    evts = fetch.evenements(SEI_REEL)
+    # Deux événements en entrée, un seul en sortie : le tout premier n'a
+    # aucune offre antérieure — voir le test dédié juste en dessous.
+    assert [e["debloque"] for e in evts] == [200_000_000.0]
+
+
+def test_lhorodatage_est_converti_de_SECONDES_en_millisecondes():
+    """La source est en secondes. Prendre 1691971200 pour des millisecondes
+    daterait l'événement de janvier 1970 — et il tomberait hors de tout
+    historique, donc serait silencieusement écarté."""
+    import datetime as dt
+    evts = fetch.evenements(SEI_REEL)
+    assert evts[0]["ts_ms"] == 1694649600 * 1000
+    assert dt.datetime.fromtimestamp(evts[0]["ts_ms"] / 1000, dt.UTC).year == 2023
+
+
+def test_le_denominateur_exclut_le_deblocage_lui_meme():
+    """Inclure le déblocage dans son propre dénominateur écraserait
+    mécaniquement les gros événements : celui qui double l'offre afficherait
+    50 % au lieu de 100 %."""
+    evts = fetch.evenements(SEI_REEL)
+    # Le déblocage de 200 M survient alors que 1 000 M sont déjà débloqués
+    # (300 + 700 à la date précédente) : 20 %, et non 200/1200 = 16,7 %.
+    assert abs(evts[0]["part_offre"] - 0.20) < 1e-9
+
+
+def test_le_premier_deblocage_sans_offre_anterieure_est_ecarte():
+    """Un dénominateur nul ne donne pas une part infinie : il ne donne rien.
+
+    Le tout premier déblocage d'un jeton est son TGE — un événement de
+    cotation, pas un choc d'offre sur un marché existant. Il n'a d'ailleurs
+    généralement pas d'historique de prix avant lui.
+    """
+    evts = fetch.evenements(SEI_REEL)
+    assert all(e["ts_ms"] != 1691971200 * 1000 for e in evts)
+
+
+def test_un_deblocage_purement_lineaire_nest_pas_un_evenement():
+    """Un déblocage linéaire libère des jetons en continu : il n'a pas de
+    date. Le tester comme un événement daté reviendrait à mesurer un jour au
+    hasard dans une rampe."""
+    lineaire = json.loads(json.dumps(SEI_REEL))
+    lineaire["metadata"]["unlockEvents"] = [{
+        "timestamp": 1694649600, "cliffAllocations": [], "linearAllocations": [
+            {"recipient": "z", "category": "team", "unlockType": "linear",
+             "amount": 500000000}],
+        "summary": {"totalTokensLinear": 500000000},
+    }]
+    assert fetch.evenements(lineaire) == []
+
+
+def test_les_categories_du_deblocage_sont_conservees():
+    """Un déblocage d'équipe et un déblocage de récompenses de staking n'ont
+    pas le même sens économique. On garde de quoi les distinguer plus tard."""
+    evts = fetch.evenements(SEI_REEL)
+    assert evts[0]["categories"] == ["insiders"]
 
 
 def test_une_forme_inattendue_ne_leve_jamais():
-    """La première exécution réelle sera celle de l'utilisateur. Le script
+    """La première exécution réelle est celle de l'utilisateur. Le script
     doit rapporter, pas planter."""
-    for tordu in ({}, {"documentedData": None}, {"data": {"data": "texte"}},
-                  {"documentedData": {"data": [{"data": None}]}}):
+    for tordu in ({}, {"metadata": None}, {"metadata": {"unlockEvents": "texte"}},
+                  {"metadata": {"unlockEvents": [None, 3, "x"]}},
+                  {"metadata": {"unlockEvents": [{"timestamp": None}]}}):
         assert fetch.evenements(tordu) == []
 
 
-def test_une_offre_qui_decroit_nest_pas_un_deblocage():
-    """Un burn n'est pas un unlock, et le compter comme tel inverserait le
-    signe de la variable qu'on teste."""
-    proto = {"documentedData": {"data": [
-        {"data": [{"timestamp": 1000, "unlocked": 100.0},
-                  {"timestamp": 2000, "unlocked": 80.0}]},
-    ]}}
-    assert fetch.evenements(proto) == []
+def test_un_deblocage_sans_offre_connue_est_ecarte_pas_divise_par_zero():
+    sans_serie = {"metadata": {"unlockEvents": [
+        {"timestamp": 1694649600, "cliffAllocations": [],
+         "summary": {"totalTokensCliff": 100}}]}}
+    assert fetch.evenements(sans_serie) == []
