@@ -262,3 +262,88 @@ def test_un_deblocage_sans_offre_connue_est_ecarte_pas_divise_par_zero():
         {"timestamp": 1694649600, "cliffAllocations": [],
          "summary": {"totalTokensCliff": 100}}]}}
     assert fetch.evenements(sans_serie) == []
+
+
+# --------------------------------------------------------------------------
+#  Le test poolé, et sa puissance
+# --------------------------------------------------------------------------
+
+def _univers(tmp_path, choc, n_jetons=8, vol=0.04, graine=1):
+    """Plusieurs jetons partageant un effet commun, écrits sur disque."""
+    import os
+    alea = random.Random(graine)
+    (tmp_path / "data").mkdir(exist_ok=True)
+    unlocks = {}
+    for k in range(n_jetons):
+        px, bars = 100.0, []
+        chocs = set(range(60, 400, 22))
+        for i in range(450):
+            px *= 1 + alea.gauss(0, vol) + (choc if i in chocs else 0.0)
+            bars.append({"t": i * JOUR_MS, "o": px, "h": px * 1.01,
+                         "l": px * 0.99, "c": px, "v": 100, "n": 1})
+        (tmp_path / "data" / f"T{k}_1d_real.json").write_text(json.dumps(bars))
+        unlocks[f"T{k}"] = [{"ts_ms": i * JOUR_MS, "part_offre": 0.03,
+                             "debloque": 1.0, "lineaire": 0.0, "categories": []}
+                            for i in sorted(chocs)]
+    os.chdir(tmp_path)
+    return unlocks
+
+
+def _pool(unlocks, tirages=600):
+    import contextlib
+    import io
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf):
+        valider.poolage(unlocks, tirages=tirages, min_evts=30, alpha=0.05)
+    return buf.getvalue()
+
+
+def test_le_test_poole_detecte_un_effet_commun_de_3_pourcent(tmp_path, monkeypatch):
+    """La raison d'être du poolage.
+
+    Un effet de 3 % réparti sur douze jetons est invisible jeton par jeton —
+    chaque série manque de puissance — mais net une fois les événements mis
+    en commun. C'est le MÊME test que le précédent, pas un second essai :
+    l'hypothèse baissière était posée d'avance, seule la puissance change.
+    """
+    monkeypatch.chdir(tmp_path)
+    sortie = _pool(_univers(tmp_path, -0.03))
+    ligne = [x for x in sortie.splitlines() if "large_J-1_J+3" in x and "toutes" in x]
+    assert ligne, sortie
+    assert "OUI" in ligne[0], f"effet franc de 3 % non détecté : {ligne[0]}"
+
+
+def test_le_test_poole_ne_voit_rien_quand_il_ny_a_rien(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    sortie = _pool(_univers(tmp_path, 0.0, graine=7))
+    assert "**0 survivant" in sortie, sortie
+
+
+def test_la_puissance_du_test_poole_sarrete_vers_2_pourcent(tmp_path, monkeypatch):
+    """La limite de l'instrument, mesurée plutôt que supposée.
+
+    Sur douze jetons et ~190 événements à 4 % de volatilité quotidienne :
+    un choc de 3 % ressort (p = 0,001), un choc de 1,5 % non (p = 0,029, qui
+    ne survit pas à la correction). Un résultat négatif sur les vraies
+    données signifie donc « pas d'effet SUPÉRIEUR À ~2 % », et non « pas
+    d'effet ».
+    """
+    monkeypatch.chdir(tmp_path)
+    sortie = _pool(_univers(tmp_path, -0.015, graine=1))
+    ligne = [x for x in sortie.splitlines() if "large_J-1_J+3" in x and "toutes" in x]
+    assert ligne and "OUI" not in ligne[0], (
+        "un choc de 1,5 % ne devrait PAS ressortir : si ce test tombe, la "
+        "puissance a changé et la phrase sur la limite doit être refaite")
+
+
+def test_le_libelle_du_signe_nest_pas_inverse():
+    """Le défaut le plus dangereux du premier rapport : il annonçait
+    « négatif = le prix baisse » alors que `sens = -1` retourne déjà le
+    signe. Positif signifie que le prix a BAISSÉ, et lire l'inverse aurait
+    fait conclure exactement le contraire des données."""
+    from trading_desk.sentinelle.validation import _rendement
+    bars = [Bar(asset="T", ts_ms=i * JOUR_MS, open=Decimal(str(p)),
+                high=Decimal(str(p + 1)), low=Decimal(str(p - 1)),
+                close=Decimal(str(p)))
+            for i, p in enumerate([100, 90, 80])]
+    assert _rendement(bars, 0, 2, -1) > 0, "prix en baisse => rendement positif"

@@ -56,7 +56,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from trading_desk.backtest.data import DataUnavailable, load_from_file
 from trading_desk.sentinelle.triggers import Declenchement
-from trading_desk.sentinelle.validation import benjamini_hochberg, evaluer
+from trading_desk.sentinelle.validation import (
+    benjamini_hochberg,
+    evaluer,
+    sans_chevauchement,
+)
 
 # (nom, décalage en jours par rapport à la date de déblocage, durée en jours)
 #
@@ -165,7 +169,9 @@ def rapport(res: list, alpha: float) -> None:
                   f"(p {getattr(r, cle_p):.4f})")
 
     print("\n  RENDEMENT SIGNÉ MOYEN par fenêtre et par tranche")
-    print("  (négatif = le prix baisse, l'hypothèse baissière va dans ce sens)")
+    print("  (POSITIF = le prix a BAISSÉ : l'hypothèse baissière est vérifiée.")
+    print("   Le signe est déjà retourné par `sens = -1`, il ne faut donc PAS")
+    print("   lire ce tableau comme un rendement de marché.)")
     print("  " + "=" * 70)
     fenetres = [f[0] for f in FENETRES]
     print(f"  {'tranche':<11}" + "".join(f"{f.split('_')[0]:>16}" for f in fenetres))
@@ -180,6 +186,114 @@ def rapport(res: list, alpha: float) -> None:
         print(ligne)
     print("\n  Tant qu'aucune cellule ne survit à la correction, ce tableau "
           "montre du bruit.\n")
+
+
+def poolage(unlocks: dict, tirages: int, min_evts: int, alpha: float) -> None:
+    """Le même test, mais sur TOUS les jetons ensemble.
+
+    **Pourquoi ce second test, et pourquoi ce n'est pas du p-hacking.**
+
+    L'hypothèse posée d'avance est « un déblocage fait baisser le prix » —
+    un effet COMMUN à tous les jetons, pas un effet propre à SUI ou à GMT.
+    Or le test précédent l'évalue jeton par jeton, puis corrige sur 269
+    cellules. Si l'effet est réel mais modeste, chaque jeton pris isolément
+    manque de puissance, aucune cellule ne passe le seuil, et la correction
+    conclut « rien » sur une hypothèse qu'elle n'a jamais testée sous sa
+    forme réelle.
+
+    Mettre les événements en commun teste la MÊME hypothèse avec la
+    puissance qui lui correspond : 16 tests (4 fenêtres × 4 tranches) au lieu
+    de 269, et des effectifs de plusieurs centaines d'événements.
+
+    Ce n'est pas un second essai après un échec : c'est le test correctement
+    spécifié, et le premier était sous-dimensionné. Ce qui SERAIT du
+    p-hacking, ce serait de changer l'hypothèse — de tester « et si le prix
+    montait » après avoir vu le signe.
+
+    Le contrôle de la dérive reste intact : chaque tirage nul se fait dans
+    l'historique DU MÊME jeton que l'événement qu'il remplace.
+    """
+    import random
+
+    series: dict[str, list] = {}
+    for symbole in unlocks:
+        try:
+            series[symbole] = load_from_file(
+                f"data/{symbole}_1d_real.json", symbole, "1d")
+        except (DataUnavailable, FileNotFoundError):
+            continue
+
+    lignes = []
+    for nom_tranche, bas, haut in TRANCHES:
+        for nom_fenetre, decalage, duree in FENETRES:
+            # (barres du jeton, indice d'entrée) pour chaque événement retenu
+            evts: list[tuple[list, int]] = []
+            for symbole, bruts in unlocks.items():
+                bars = series.get(symbole)
+                if not bars:
+                    continue
+                par_jour = index_par_date(bars)
+                candidats = []
+                for e in bruts:
+                    if not bas <= e["part_offre"] < haut:
+                        continue
+                    i = par_jour.get(e["ts_ms"] // 86_400_000 + decalage)
+                    if i is not None:
+                        candidats.append(Declenchement(i, -1, e["part_offre"], ""))
+                for d in sans_chevauchement(candidats, duree):
+                    if d.index + duree < len(bars):
+                        evts.append((bars, d.index))
+            if len(evts) < min_evts:
+                continue
+
+            def rend(bars, i, h=duree):
+                depart = float(bars[i].close)
+                if depart <= 0:
+                    return None
+                return -1 * (float(bars[i + h].close) - depart) / depart * 10_000
+
+            observes = [r for bars, i in evts if (r := rend(bars, i)) is not None]
+            if len(observes) < min_evts:
+                continue
+            moyenne = sum(observes) / len(observes)
+
+            alea = random.Random(20260906)
+            nuls = []
+            for _ in range(tirages):
+                tir = []
+                for bars, _i in evts:
+                    j = alea.randrange(0, len(bars) - duree - 1)
+                    r = rend(bars, j)
+                    if r is not None:
+                        tir.append(r)
+                if tir:
+                    nuls.append(sum(tir) / len(tir))
+            if not nuls:
+                continue
+            pval = (sum(1 for x in nuls if x >= moyenne) + 1) / (len(nuls) + 1)
+            lignes.append((nom_tranche, nom_fenetre, len(observes), moyenne,
+                           sum(nuls) / len(nuls), pval))
+
+    if not lignes:
+        print("\n  Poolage : aucun groupe assez fourni.\n")
+        return
+
+    garde = benjamini_hochberg([x[5] for x in lignes], alpha)
+    print("\n  TEST POOLÉ — tous les jetons ensemble, même hypothèse")
+    print("  " + "=" * 74)
+    print("  (POSITIF = le prix a BAISSÉ. Chaque tirage nul est pris dans")
+    print("   l'historique du MÊME jeton, la dérive reste donc contrôlée.)")
+    print(f"\n  {'tranche':<10} {'fenêtre':<22} {'n':>5} {'observé':>10} "
+          f"{'hasard':>9} {'p':>8}  BH")
+    print("  " + "-" * 74)
+    for (tranche, fenetre, n, obs, nul, pval), g in zip(lignes, garde, strict=True):
+        print(f"  {tranche:<10} {fenetre:<22} {n:>5} {obs:>+9.1f} "
+              f"{nul:>+9.1f} {pval:>8.4f}  {'OUI' if g else '—'}")
+    survivants = sum(garde)
+    print("  " + "-" * 74)
+    print(f"  {len(lignes)} tests, {sum(1 for x in lignes if x[5] < alpha)} à "
+          f"p < {alpha}, {len(lignes) * alpha:.1f} attendus par hasard, "
+          f"**{survivants} survivant(s)** après BH\n")
 
 
 def main() -> int:
@@ -205,6 +319,7 @@ def main() -> int:
 
     res = cellules(unlocks, args.tirages, args.min_evenements)
     rapport(res, args.alpha)
+    poolage(unlocks, args.tirages, args.min_evenements * 3, args.alpha)
     if args.out:
         Path(args.out).write_text(json.dumps([r.__dict__ for r in res], indent=1))
         print(f"  Résultats bruts : {args.out}\n")
