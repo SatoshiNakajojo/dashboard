@@ -1043,3 +1043,100 @@ délibération qui refuse tout est indiscernable d'une couche qui refuse au
 hasard, et un `return FLAT` obtiendrait le même résultat pour 0 $.** C'est le
 verrou à lever avant le P5, et il se lève par le correctif de prompt, pas par
 un desserrage de seuil.
+
+
+---
+
+## Étape 2 — les déclencheurs de la Sentinelle, cartographiés
+
+98 cellules : 4 déclencheurs × 7 actifs × 3 intervalles (15 min, 1 h, 4 h) ×
+4 horizons (H+15 min, H+1 h, H+4 h, H+12 h). 15 838 événements. Zéro dollar
+d'API.
+
+Deux questions **distinctes**, mesurées séparément — les confondre est la
+faute qui rendrait ce résultat illisible.
+
+### Direction — le déclencheur prédit-il le SENS ?
+
+```
+  cellules testées                            98
+  p < 0,05 brut                               14
+  attendues par pur hasard                   4,9
+  survivantes après Benjamini-Hochberg         0
+```
+
+**Aucune.** Quatorze cellules à p < 0,05 pour 4,9 attendues par le bruit de
+98 tests : le compte est trop proche du hasard pour qu'une seule survive.
+Aucun déclencheur ne prédit la direction, à aucun horizon, sur aucun actif.
+
+C'est aussi la réponse à « où l'edge est-il maximal » : **nulle part.** La
+carte des rendements signés existe dans les résultats bruts, mais tant
+qu'aucune cellule ne survit à la correction, son maximum est celui d'un
+échantillon bruité, pas celui d'un edge.
+
+### Amplitude — prédit-il qu'il se PASSE quelque chose ?
+
+```
+  cellules testées                            98
+  p < 0,05 brut                               63
+  attendues par pur hasard                   4,9
+  survivantes après Benjamini-Hochberg        59
+```
+
+**Cinquante-neuf.** Dont 24 à p = 0,0005 — le plancher de 2 000 tirages,
+c'est-à-dire *aucun* tirage aléatoire n'a fait aussi bien. **C'est la
+première chose mesurée comme non aléatoire de tout le projet.**
+
+Ratio de l'amplitude observée à celle du hasard :
+
+| déclencheur | H+15 min | H+1 h | H+4 h | H+12 h | n |
+|---|---:|---:|---:|---:|---:|
+| `cascade_liquidations` | **2,72** | **2,18** | 1,04 | 1,12 | 54 |
+| `pic_volume` | **1,78** | 1,50 | 1,49 | 1,31 | 4 433 |
+| `rupture_volatilite` | 1,26 | 1,20 | 1,20 | 1,17 | 10 541 |
+| `funding_extreme` | — | 0,84 | 0,87 | 0,92 | 883 |
+
+### La demi-vie que vous aviez prédite est là, et elle est mesurée
+
+**La cascade de liquidations est violente et très courte** : 2,72× l'amplitude
+normale à 15 minutes, 2,18× à une heure, **absorbée à quatre heures** (1,04,
+soit le hasard). Exactement l'intuition — le déséquilibre se résorbe en moins
+de quatre heures. Réserve : 54 événements seulement, c'est le déclencheur le
+plus rare et le moins solidement mesuré.
+
+**Le pic de volume décroît lentement** : 1,78 → 1,50 → 1,49 → 1,31. Il reste
+informatif à douze heures, sur 4 433 événements.
+
+**Le funding extrême fait l'inverse de ce qu'on attendait** : ratio *inférieur
+à 1* à tous les horizons. Il marque des marchés plus CALMES que la normale —
+un positionnement chargé et immobile, pas une veille de mouvement. C'est un
+résultat, pas une absence de résultat.
+
+### Ce que ça change pour l'architecture
+
+**L'architecture Sentinelle est validée, l'espoir d'edge ne l'est pas.**
+
+Un déclencheur qui multiplie par 1,8 l'amplitude attendue fait exactement son
+travail : réveiller le desk quand il se passe quelque chose. Le desk n'aura
+toujours rien d'exploitable à en dire — le P3 l'a établi — mais l'appel de
+0,06 $ est désormais dépensé sur des moments démontrablement moins ordinaires
+que la moyenne, au lieu d'être dépensé douze fois par heure sur du bruit.
+
+### Deux corrections faites en chemin
+
+**Le seuil de `rupture_volatilite` était inatteignable.** 2,5 issu de la
+littérature, alors que le ratio vol₂₄/vol₁₆₈ a pour maximum 1,96 à 2,38 sur
+les sept actifs. Le déclencheur ne s'est jamais déclenché de la première
+campagne — ce n'était pas un résultat, c'était une erreur de spécification.
+Il lit désormais un centile **glissant** de sa propre distribution, choisi
+sans jamais regarder les rendements.
+
+Contrepartie assumée : un seuil au centile se déclenche par construction sur
+une fraction fixe des barres, et il détecte la **bascule**, pas le régime —
+quand un régime agité persiste, il remplit la fenêtre de référence et devient
+la norme. Un test le vérifie plutôt que de prétendre le contraire.
+
+**Le centile calculé sur toute la série regardait l'avenir**, et le test de
+troncature de ce dépôt l'a attrapé. Un déclencheur qui voit le futur
+fabriquerait un edge que la validation mesurerait consciencieusement, avant
+que le desk ne se réveille en retard sur du vide en direct.
