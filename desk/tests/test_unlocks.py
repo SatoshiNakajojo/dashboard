@@ -881,6 +881,20 @@ def test_le_repli_maximal_est_calcule_en_COMPOSANT(capsys):
     assert "INTENABLE" in sortie, "un repli de 66 % doit être signalé"
 
 
+def test_la_pire_semaine_est_annoncee_en_impact_sur_le_CAPITAL(capsys):
+    """Sous un titre qui annonce « 25 % du capital par semaine », un
+    « -20 % » brut se lit comme la perte d'un cinquième du compte alors
+    qu'elle en coûte un vingtième. C'est l'erreur de lecture la plus
+    coûteuse que ce rapport puisse provoquer, et la première version du
+    script la provoquait."""
+    evts = [{"semaine": 0, "x": -2000.0}]
+    evts += [{"semaine": s, "x": +1.0} for s in range(1, 12)]
+    economie.vecu(evts, "x", "test", 0.25)
+    sortie = capsys.readouterr().out
+    assert "-5.0%" in sortie, f"impact capital attendu -5 % :\n{sortie}"
+    assert "-20.0%" in sortie, f"le brut doit rester lisible :\n{sortie}"
+
+
 def test_une_serie_perdante_est_comptee_en_semaines_consecutives(capsys):
     evts = [{"semaine": s, "x": v} for s, v in
             enumerate([100.0, -50.0, -50.0, -50.0, -50.0, 100.0, -50.0,

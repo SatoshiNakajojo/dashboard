@@ -297,7 +297,8 @@ def poolage(unlocks: dict, tirages: int, min_evts: int, alpha: float) -> None:
 
 
 def decalage_calendaire(unlocks: dict, alpha: float,
-                        amplitude_j: int = 365) -> None:
+                        amplitude_j: int = 365,
+                        reference: str | None = None) -> None:
     """Le dernier test, et la dernière faiblesse statistique du précédent.
 
     **Les événements ne sont pas indépendants entre jetons.** Beaucoup de
@@ -347,6 +348,22 @@ def decalage_calendaire(unlocks: dict, alpha: float,
     DECALAGE, DUREE = -7, 6
     MIN_DECALAGE = 14        # au-dela du chevauchement de fenetre
 
+    # Le rendement de la reference sur une fenetre de meme duree, indexe par
+    # jour. Quand il est fourni, les DEUX bras le retranchent : ne
+    # neutraliser que l'observe fabriquerait un ecart qui ne dirait rien.
+    ref_bps: dict[int, float] = {}
+    if reference:
+        try:
+            marche = load_from_file(
+                f"data/{reference}_1d_real.json", reference, "1d")
+        except (DataUnavailable, FileNotFoundError):
+            print(f"\n  data/{reference}_1d_real.json introuvable.\n")
+            return
+        for j, i in index_par_date(marche).items():
+            d = float(marche[i].close)
+            if d > 0 and i + DUREE < len(marche):
+                ref_bps[j] = (float(marche[i + DUREE].close) - d) / d * 10_000
+
     # Rendement de chaque barre, calcule une fois par jeton : le balayage
     # des decalages relit les memes barres des centaines de fois.
     par_jour_de = {s: index_par_date(b) for s, b in series.items()}
@@ -357,16 +374,21 @@ def decalage_calendaire(unlocks: dict, alpha: float,
             depart = float(b.close)
             if depart <= 0 or i + DUREE >= len(bars):
                 col.append(None)
-            else:
-                col.append(-1 * (float(bars[i + DUREE].close) - depart)
-                           / depart * 10_000)
+                continue
+            r = -1 * (float(bars[i + DUREE].close) - depart) / depart * 10_000
+            if reference:
+                # Convention de `marche_neutre` : -1 * (jeton - reference).
+                m = ref_bps.get(b.ts_ms // 86_400_000)
+                r = None if m is None else r + m
+            col.append(r)
         rendements[symbole] = col
 
     decalages = [d for d in range(-amplitude_j, amplitude_j + 1)
                  if abs(d) >= MIN_DECALAGE]
     plancher = 1 / (len(decalages) + 1)
 
-    print("\n  DÉCALAGE CALENDAIRE — le test qui respecte la dépendance")
+    quoi = (f" — sur le rendement NET de {reference}" if reference else "")
+    print(f"\n  DÉCALAGE CALENDAIRE{quoi}")
     print("  " + "=" * 74)
     print("  (Un seul décalage, appliqué à TOUS les événements en bloc. Le")
     print("   calendrier garde ses groupements ; seul son alignement sur les")
@@ -760,6 +782,8 @@ def main() -> int:
         robustesse(unlocks, args.tirages, args.alpha)
         marche_neutre(unlocks, args.tirages, args.alpha, args.reference)
         decalage_calendaire(unlocks, args.alpha)
+        decalage_calendaire(unlocks, args.alpha,
+                            reference=args.reference)
     if args.out:
         Path(args.out).write_text(json.dumps([r.__dict__ for r in res], indent=1))
         print(f"  Résultats bruts : {args.out}\n")

@@ -1456,5 +1456,47 @@ compte compose, les additionner sous-estimerait le repli — et rapporte repli
 maximal, pire semaine et plus longue série perdante. Au-delà de 50 % de
 repli il le dit avec le mot **INTENABLE**.
 
+### La couverture ne détruit pas l'edge, elle l'améliore
+
+| | nue | adossée à BTC |
+| --- | --- | --- |
+| moyenne / événement | +276,9 bps | +281,4 bps |
+| écart-type | 1 272 bps | **1 051 bps** |
+| part gagnante | 59,4 % | **64,5 %** |
+| rendement / semaine | +262,8 bps | +300,4 bps |
+| Sharpe annualisé | 1,80 | **2,46** |
+| repli maximal (25 % du capital) | 15,3 % | **7,9 %** |
+| capital final sur 135 semaines | 2,33 × | **2,66 ×** |
+
+C'est la réponse à l'inquiétude des 136 semaines sur 130 : **si le résultat
+n'était qu'une exposition courte permanente aux altcoins, la couverture
+l'aurait détruit.** Elle l'améliore sur tous les axes.
+
+Le gain vient surtout de la **variance**, pas du rendement : l'écart-type
+tombe de 17 % et le taux de réussite monte de cinq points. La jambe longue
+n'ajoute que +37,6 bps par semaine, soit 1,14 × de capital composé sur toute
+la période — réel, mais loin d'être l'essentiel.
+
+### Le test qui manquait, et c'est celui de la stratégie proposée
+
+`marche_neutre` faisait le nul **par événement** sur le rendement net.
+`decalage_calendaire` faisait le nul **par bloc** sur le rendement brut.
+Aucun des deux ne testait la combinaison — c'est-à-dire exactement ce qui
+serait tradé : un rendement net de marché, jugé contre un nul qui respecte
+la dépendance entre jetons.
+
+Le décalage calendaire tourne maintenant deux fois, brut puis net, et les
+deux bras subissent la même soustraction : ne neutraliser que l'observé
+fabriquerait un écart qui ne dirait rien.
+
+### Un défaut de lecture corrigé
+
+Le rapport annonçait « pire semaine −20,0 % » sous un titre disant
+« notionnel = 25 % du capital par semaine ». Les deux chiffres sont vrais et
+leur juxtaposition est fausse : cette semaine-là coûte **5 %** du compte, pas
+20 %. C'est l'erreur de lecture la plus coûteuse que ce rapport puisse
+provoquer — celle qui fait renoncer à une stratégie tenable. Les deux
+chiffres sont maintenant affichés séparément et étiquetés.
+
 L'analogue direct sur actions — les *lockup expiries* des IPO — reste le
 candidat naturel pour tester si l'effet est propre à la crypto ou général.

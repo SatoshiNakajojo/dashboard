@@ -336,10 +336,18 @@ def vecu(evts: list[dict], champ: str, titre: str, fraction: float) -> None:
         serie = serie + 1 if r <= 0 else 0
         pire_serie = max(pire_serie, serie)
 
+    # La pire semaine s'affiche EN IMPACT SUR LE CAPITAL, pas en rendement
+    # brut de la stratégie. Sous un titre qui annonce « 25 % du capital »,
+    # un « -20 % » brut se lit comme une perte d'un cinquième du compte
+    # alors qu'elle en coûte un vingtième — l'erreur de lecture la plus
+    # coûteuse que ce rapport puisse provoquer.
     print(f"  {titre}  (notionnel = {fraction:.0%} du capital par semaine)")
     print(f"  {'capital final':<30} {capital:>10.2f} x")
     print(f"  {'repli maximal':<30} {repli:>10.1%}")
-    print(f"  {'pire semaine':<30} {min(sem) / 100:>10.1f} %")
+    print(f"  {'pire semaine, sur le capital':<30} "
+          f"{fraction * min(sem) / 10_000:>10.1%}")
+    print(f"  {'  (rendement brut ce jour-là)':<30} "
+          f"{min(sem) / 10_000:>10.1%}")
     print(f"  {'plus longue série perdante':<30} {pire_serie:>7} semaines")
     if repli > 0.5:
         print("  ----> INTENABLE à ce notionnel : personne ne traverse "
