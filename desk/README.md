@@ -974,8 +974,45 @@ L'amorçage passe **avant** la résolution sur chaque barre : une mèche qui
 touche l'entrée puis le stop donne un trade pris puis stoppé, pas un trade
 ignoré.
 
-Reste **+0,05 R sur 40 setups**, IC 95 % ≈ [−0,36 ; +0,45] : indistinguable
-de zéro. Le desk ne détruit pas d'alpha en rejetant — il n'y en avait pas.
+### Rejouée proprement, l'espérance est négative
+
+Les `pnl_r` stockés venaient tous de la résolution défectueuse. Rejoués en
+exigeant l'exécution, et en balayant l'horizon — que cette campagne ne
+persistait pas encore :
+
+| horizon | non exécutés | cible | stop | réussite | espérance |
+|---:|---:|---:|---:|---:|---:|
+| 24 h | 7 | 5 | 24 | 17 % | **−0,39 R** |
+| 48 h | 6 | 8 | 30 | 21 % | −0,37 R |
+| 72 h | 5 | 10 | 30 | 25 % | −0,28 R |
+| 168 h et au-delà | 3 | 12 | 32 | 27 % | **−0,23 R** |
+
+**Le signe ne dépend d'aucune hypothèse d'horizon.** À 168 h : −0,234 R sur
+44 setups, IC 95 % [−0,59 ; +0,16], P(espérance ≥ 0) = 0,115. Avec la perte
+réelle mesurée au Monte-Carlo (−1,27 R au stop) : **−0,430 R, IC
+[−0,83 ; −0,004]** — l'intervalle exclut zéro, de justesse.
+
+Ce qu'on peut défendre : **ces setups n'ont pas d'espérance positive, et tout
+pointe vers le négatif.**
+
+### L'agent n'est pas calibré, il est surconfiant
+
+Il annonce une conviction moyenne de **50 %**. Le taux de réussite réel des
+trades tranchés est de **17 à 27 %** selon l'horizon. L'écart n'est pas du
+bruit : c'est un biais de 25 à 30 points dans le même sens.
+
+Et ça retourne complètement la lecture du « zéro mandat » :
+
+> **La porte fait son travail.** Elle bloque des setups qui perdent de
+> l'argent. Un desk qui les aurait émis aurait perdu ~0,23 à 0,43 R par
+> trade. Le verrou n'est pas un défaut à lever — c'est la seule partie de la
+> chaîne dont on ait mesuré qu'elle protège le capital.
+
+Le correctif de prompt sur la conviction, lui, **n'a rien changé** : sondé sur
+20 des mêmes fenêtres, l'agent reste entre 0,50 et 0,55, et l'étendue s'est
+même resserrée (0,21 → 0,05). Expliquer l'échelle ne suffit pas à corriger la
+surconfiance. Mon hypothèse — « il ne savait pas ce qu'on lui demandait » —
+est réfutée par la mesure.
 
 Le registre affiche désormais son intervalle bootstrap et la mention
 « compatible avec zéro » à côté de chaque espérance : un nombre nu se lit
