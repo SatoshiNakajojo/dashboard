@@ -65,24 +65,52 @@ JOUR_MS = 86_400_000
 # La règle, figée. Toute modification incrémente la VERSION, et les entrées
 # des versions antérieures restent jugées sur la leur — sinon « ajuster
 # légèrement le seuil » transformerait un échec passé en succès.
-VERSION = 1
+VERSION = 2
 ENTREE_J, SORTIE_J = -7, -1
-TRANCHE_MIN, TRANCHE_MAX = 0.02, 1e9      # 2 % et plus : les deux tranches qui survivent
+DUREE_J = SORTIE_J - ENTREE_J             # 6 jours, comme la validation
+
+# Borne BASSE : 2 %. La tranche 0,5-2 % ne survit à aucun des six contrôles
+# (p = 0,40 au décalage calendaire net). L'inclure diluerait le test hors
+# échantillon avec des positions dont on sait déjà qu'elles ne rapportent
+# rien.
+#
+# Borne HAUTE : 25 %, et ce n'est pas de la prudence de principe. C'est la
+# borne la plus serrée que l'épreuve des dénominateurs ait validée
+# (n = 832, +223,1 bps, p = 0,0025). Vingt des 852 événements historiques
+# la dépassent, et rien dans ces données ne dit ce que fait un déblocage de
+# 65 % de l'offre. Ce n'est pas un gros déblocage, c'est un autre
+# événement — souvent une refonte de tokenomics ou une erreur de source.
+TRANCHE_MIN, TRANCHE_MAX = 0.02, 0.25
 REFERENCE = "BTC"
 
 
-def a_prendre(unlocks: dict, maintenant_ms: int, horizon_j: int) -> list[dict]:
+def a_prendre(unlocks: dict, maintenant_ms: int, horizon_j: int,
+              univers: set[str] | None = None) -> list[dict]:
     """Les déblocages dont la fenêtre d'entrée s'ouvre dans les jours à venir.
 
     On ne retient QUE les événements encore à venir. Un déblocage dont
     l'entrée est déjà passée serait une prédiction faite après coup, ce qui
     est exactement ce que ce journal existe pour rendre impossible.
+
+    **Un seul événement par fenêtre et par jeton.** La validation applique
+    `sans_chevauchement` : deux déblocages à trois jours d'écart produisent
+    des fenêtres qui se recouvrent, donc une position tenue une fois et
+    comptée deux. Sans cette règle ici, le journal inscrirait deux lignes
+    là où la stratégie validée n'en prend qu'une, et le score hors
+    échantillon porterait sur autre chose que ce qui a été mesuré.
     """
     out = []
     for symbole, bruts in sorted(unlocks.items()):
-        for e in bruts:
+        if univers is not None and symbole not in univers:
+            continue
+        retenus: list[int] = []
+        for e in sorted(bruts, key=lambda v: v["ts_ms"]):
             if not TRANCHE_MIN <= e["part_offre"] < TRANCHE_MAX:
                 continue
+            jour = e["ts_ms"] // JOUR_MS
+            if retenus and jour - retenus[-1] < DUREE_J:
+                continue
+            retenus.append(jour)
             entree = e["ts_ms"] + ENTREE_J * JOUR_MS
             if not maintenant_ms < entree <= maintenant_ms + horizon_j * JOUR_MS:
                 continue
@@ -94,6 +122,63 @@ def a_prendre(unlocks: dict, maintenant_ms: int, horizon_j: int) -> list[dict]:
                 "inscrit_ms": maintenant_ms,
             })
     return out
+
+
+def univers_hyperliquid() -> set[str] | None:
+    """Les perpétuels réellement cotés. `None` si l'API est injoignable.
+
+    Un déblocage sur un jeton qu'on ne peut pas vendre à découvert n'est pas
+    une position, c'est une ligne dans un fichier. L'inscrire gonflerait le
+    journal de prédictions que personne n'aurait pu prendre, et le score
+    hors échantillon mesurerait un portefeuille imaginaire.
+
+    En cas d'échec on renvoie `None` plutôt qu'un ensemble vide : un réseau
+    coupé ne doit pas se traduire par « aucun jeton n'est cotable ».
+    """
+    import urllib.request
+    try:
+        req = urllib.request.Request(
+            "https://api.hyperliquid.xyz/info",
+            data=json.dumps({"type": "meta"}).encode(),
+            headers={"Content-Type": "application/json"})
+        meta = json.loads(urllib.request.urlopen(req, timeout=20).read())
+        return {a["name"] for a in meta["universe"]}
+    except Exception:
+        return None
+
+
+def purger_version(journal: Path, version: int) -> tuple[bool, str]:
+    """Retire les entrées d'une version — **et refuse dès qu'une est close**.
+
+    Le principe d'ajout seul existe pour empêcher une chose précise :
+    effacer une prédiction parce qu'elle a perdu. Ce refus doit être
+    structurel, pas une promesse — donc la fonction vérifie elle-même
+    qu'AUCUNE fenêtre de la version visée n'est close. Tant que rien n'est
+    arrivé, il n'y a aucun résultat sur lequel sélectionner, et retirer des
+    lignes écrites sous une règle mal implémentée ne peut pas flatter le
+    score.
+
+    Une seconde après la clôture de la première fenêtre, ce n'est plus vrai
+    et la fonction refuse — définitivement.
+    """
+    if not journal.exists():
+        return False, "journal inexistant"
+    lignes = [json.loads(x) for x in journal.read_text().splitlines() if x.strip()]
+    vises = [x for x in lignes if x["version"] == version]
+    if not vises:
+        return False, f"aucune entrée en v{version}"
+    maintenant = int(time.time() * 1000)
+    closes = [x for x in vises if x["sortie_ms"] < maintenant]
+    if closes:
+        return False, (
+            f"REFUS : {len(closes)} fenêtre(s) de la v{version} sont déjà "
+            "closes.\n  Leur résultat existe, et le retirer serait "
+            "sélectionner sur l'issue.\n  C'est exactement ce que le journal "
+            "interdit.")
+    restant = [x for x in lignes if x["version"] != version]
+    journal.write_text("".join(json.dumps(x, ensure_ascii=False) + "\n"
+                               for x in restant))
+    return True, f"{len(vises)} entrée(s) v{version} retirées, aucune close"
 
 
 def inscrire(nouvelles: list[dict], journal: Path) -> int:
@@ -226,12 +311,19 @@ def main() -> int:
                    help="jours à l'avance pour inscrire les positions")
     p.add_argument("--resoudre", action="store_true",
                    help="relever le résultat des fenêtres closes")
+    p.add_argument("--purger-version", type=int, default=None,
+                   help="retirer les entrées d'une version dont AUCUNE "
+                        "fenêtre n'est close ; refusé sinon")
     args = p.parse_args()
 
     journal = Path(args.journal)
     if args.resoudre:
         resoudre(journal)
         return 0
+    if args.purger_version is not None:
+        ok, message = purger_version(journal, args.purger_version)
+        print(f"\n  {message}\n")
+        return 0 if ok else 1
 
     chemin = Path(args.unlocks)
     if not chemin.exists():
@@ -240,7 +332,13 @@ def main() -> int:
         return 2
     unlocks = json.loads(chemin.read_text())
     maintenant = int(time.time() * 1000)
-    prises = a_prendre(unlocks, maintenant, args.horizon)
+    univers = univers_hyperliquid()
+    if univers is None:
+        print("  API Hyperliquid injoignable : les jetons non cotables ne "
+              "peuvent pas\n  être écartés. Réessayez plutôt que d'inscrire "
+              "des positions imprenables.\n", file=sys.stderr)
+        return 1
+    prises = a_prendre(unlocks, maintenant, args.horizon, univers)
     ajouts = inscrire(prises, journal)
 
     print(f"\n  POSITIONS À VENIR — règle v{VERSION}, "

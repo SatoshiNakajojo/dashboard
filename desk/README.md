@@ -1540,6 +1540,31 @@ confort :
   légèrement le seuil » suffirait à transformer rétroactivement un échec en
   succès.
 
+#### Trois défauts trouvés par la première exécution réelle
+
+Le journal v1 a inscrit seize positions, et trois d'entre elles n'auraient
+pas dû exister. Chacune vient du même manquement : la règle du journal
+n'était pas exactement celle qui a été validée.
+
+- **XPL apparaissait deux fois, même date d'entrée**, à 3,2 % et 65 %. La
+  validation applique `sans_chevauchement` : deux déblocages rapprochés
+  produisent des fenêtres qui se recouvrent, donc une position tenue une
+  fois. Le journal en inscrivait deux.
+- **XPL à 65 % et 2Z à 47,7 %** sortaient de la plage validée. L'épreuve des
+  dénominateurs tient jusqu'à 25 % (n = 832, +223,1 bps, p = 0,0025) ; vingt
+  des 852 événements historiques la dépassent, et rien dans ces données ne
+  dit ce que fait un déblocage de 65 % de l'offre. Ce n'est pas un gros
+  déblocage, c'est un autre événement.
+- **Aucune vérification que le jeton est cotable.** Ici les seize l'étaient,
+  mais un déblocage sur un jeton qu'on ne peut pas vendre à découvert n'est
+  pas une position, c'est une ligne dans un fichier.
+
+Corrigé en **v2**. Les entrées v1 doivent être retirées, et c'est le seul
+cas où l'ajout seul cède — encadré par le code, pas par une promesse :
+`--purger-version` **refuse dès qu'une seule fenêtre de la version visée est
+close**. Tant que rien n'est arrivé, il n'existe aucun résultat sur lequel
+sélectionner. Une seconde après la première clôture, le refus est définitif.
+
 Le relevé **refuse de conclure sous cinquante événements** et le dit à
 chaque fois. Avec un écart-type de 1 050 bps, distinguer +290 de zéro en
 demande cinquante à cent — soit six mois à un an. Dix trades gagnants ne

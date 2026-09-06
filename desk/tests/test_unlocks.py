@@ -1030,3 +1030,79 @@ def test_le_verdict_reste_AUCUN_sous_cinquante_evenements(tmp_path, capsys,
     sortie = capsys.readouterr().out
     assert "VERDICT : AUCUN" in sortie, sortie
     assert "12 événements" in sortie, sortie
+
+
+def test_deux_deblocages_rapproches_ne_font_QU_UNE_position():
+    """Le défaut qu'a révélé la première exécution réelle : XPL apparaissait
+    deux fois avec la même date d'entrée, 3,2 % et 65 %.
+
+    La validation applique `sans_chevauchement` — deux déblocages à trois
+    jours d'écart produisent des fenêtres qui se recouvrent, donc une
+    position tenue une fois. Sans cette règle, le journal inscrit deux
+    lignes là où la stratégie n'en prend qu'une, et le score hors
+    échantillon porte sur autre chose que ce qui a été mesuré.
+    """
+    unlocks = {"T": [
+        {"ts_ms": 1_020 * JOUR_MS, "part_offre": 0.03},
+        {"ts_ms": 1_022 * JOUR_MS, "part_offre": 0.04},   # 2 jours plus tard
+        {"ts_ms": 1_040 * JOUR_MS, "part_offre": 0.03},   # bien après
+    ]}
+    pris = journal_mod.a_prendre(unlocks, 1_000 * JOUR_MS, 60, {"T"})
+    assert len(pris) == 2, [p["deblocage_ms"] // JOUR_MS for p in pris]
+
+
+def test_un_deblocage_hors_de_la_plage_VALIDEE_est_refuse():
+    """XPL à 65 % et 2Z à 47,7 % sortaient du journal en v1.
+
+    L'épreuve des dénominateurs a validé jusqu'à 25 % (n=832, +223,1 bps,
+    p=0,0025) ; vingt des 852 événements historiques dépassent ce seuil et
+    rien dans ces données ne dit ce que fait un déblocage de 65 % de
+    l'offre. Ce n'est pas un gros déblocage, c'est un autre événement.
+    """
+    unlocks = {"T": [{"ts_ms": 1_020 * JOUR_MS, "part_offre": 0.65}]}
+    assert journal_mod.a_prendre(unlocks, 1_000 * JOUR_MS, 30, {"T"}) == []
+    ok = {"T": [{"ts_ms": 1_020 * JOUR_MS, "part_offre": 0.24}]}
+    assert len(journal_mod.a_prendre(ok, 1_000 * JOUR_MS, 30, {"T"})) == 1
+
+
+def test_un_jeton_non_cotable_nest_pas_inscrit():
+    """Un déblocage sur un jeton qu'on ne peut pas vendre à découvert n'est
+    pas une position, c'est une ligne dans un fichier."""
+    unlocks = {"FANTOME": [{"ts_ms": 1_020 * JOUR_MS, "part_offre": 0.03}]}
+    assert journal_mod.a_prendre(unlocks, 1_000 * JOUR_MS, 30, {"BTC"}) == []
+
+
+def test_la_purge_est_REFUSEE_des_quune_fenetre_est_close(tmp_path,
+                                                          monkeypatch):
+    """Le refus doit être structurel, pas une promesse.
+
+    Le principe d'ajout seul existe pour empêcher une chose précise :
+    effacer une prédiction parce qu'elle a perdu. Tant qu'aucune fenêtre
+    n'est close il n'existe aucun résultat sur lequel sélectionner, et
+    retirer des lignes écrites sous une règle mal implémentée est
+    inoffensif. Une seconde après, ça ne l'est plus.
+    """
+    import time as _t
+
+    j = tmp_path / "j.jsonl"
+    base = 1_000 * JOUR_MS
+
+    def ligne(sortie):
+        return json.dumps({"version": 1, "symbole": "T", "deblocage_ms": sortie,
+                           "part_offre": 0.03, "entree_ms": sortie - 6 * JOUR_MS,
+                           "sortie_ms": sortie, "sens": "COURT",
+                           "reference": "BTC", "inscrit_ms": base})
+
+    # Toutes à venir : la purge passe.
+    j.write_text(ligne(base + 10 * JOUR_MS) + "\n")
+    monkeypatch.setattr(_t, "time", lambda: base / 1000)
+    ok, msg = journal_mod.purger_version(j, 1)
+    assert ok, msg
+    assert j.read_text().strip() == ""
+
+    # Une close : la purge refuse, et le fichier reste intact.
+    j.write_text(ligne(base - 10 * JOUR_MS) + "\n")
+    avant = j.read_text()
+    ok, msg = journal_mod.purger_version(j, 1)
+    assert not ok and "REFUS" in msg, msg
+    assert j.read_text() == avant, "le journal a été modifié malgré le refus"
