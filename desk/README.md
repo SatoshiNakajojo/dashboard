@@ -1498,5 +1498,52 @@ leur juxtaposition est fausse : cette semaine-là coûte **5 %** du compte, pas
 provoquer — celle qui fait renoncer à une stratégie tenable. Les deux
 chiffres sont maintenant affichés séparément et étiquetés.
 
+### Le sixième contrôle : le plus sévère, et il tient
+
+Le décalage calendaire **sur le rendement net de BTC** — un nul par bloc,
+sur un rendement neutralisé. C'est exactement ce qui serait tradé, et aucun
+des cinq contrôles précédents ne couvrait cette combinaison.
+
+| tranche | n | observé | hasard | p |
+| --- | --- | --- | --- | --- |
+| 0,5-2 % | 367 | +133,2 | +108,8 | 0,4014 |
+| 2-5 % | 317 | +290,4 | +116,4 | **0,0213** |
+| > 5 % | 217 | +445,7 | +157,6 | **0,0057** |
+| toutes | 850 | +264,0 | +122,0 | **0,0057** |
+
+**Le nul est passé de +67,7 à +122,0 bps.** Un alignement quelconque de
+« short alt / long BTC » rapportait déjà cela, parce qu'être short altcoin
+contre BTC était en soi profitable sur la période. La neutralisation *relève
+la barre* — et l'effet la franchit quand même. C'est le contrôle le plus
+défavorable des six, et le seul dont le p n'est pas censuré par le plancher.
+
+### Ce que six contrôles ne peuvent pas prouver
+
+Ils partagent tous le même défaut, et il ne se corrige pas : **ils ont été
+construits en connaissant les données.** La fenêtre J-7/J-1, les bornes des
+tranches, la durée de six jours — chaque décision de méthode a été prise par
+quelqu'un qui avait déjà vu le résultat. Rien n'indique qu'il y ait eu
+tricherie ; tout indique qu'on ne peut pas le prouver.
+
+Une seule chose le peut : **prédire avant de savoir.**
+
+`scripts/journal_unlocks.py` écrit les positions à prendre avant que la
+fenêtre ne s'ouvre, dans un fichier en **ajout seul**, puis relève le
+résultat des semaines plus tard. Deux propriétés comptent plus que le
+confort :
+
+- **Une prédiction inscrite compte**, gagnante ou perdante. Un journal qu'on
+  peut nettoyer ne mesure plus rien — il documente les trades dont on se
+  souvient avec plaisir.
+- **La règle est recopiée dans chaque ligne.** Si la méthode change, les
+  anciennes prédictions restent jugées sur l'ancienne. Sans ça, « ajuster
+  légèrement le seuil » suffirait à transformer rétroactivement un échec en
+  succès.
+
+Le relevé **refuse de conclure sous cinquante événements** et le dit à
+chaque fois. Avec un écart-type de 1 050 bps, distinguer +290 de zéro en
+demande cinquante à cent — soit six mois à un an. Dix trades gagnants ne
+sont que du bruit, quelle que soit leur allure.
+
 L'analogue direct sur actions — les *lockup expiries* des IPO — reste le
 candidat naturel pour tester si l'effet est propre à la crypto ou général.

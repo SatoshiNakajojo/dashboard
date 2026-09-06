@@ -921,3 +921,112 @@ def test_la_neutralisation_suit_la_MEME_convention_que_la_validation(tmp_path,
     evts = [{"brut_bps": 0.0, "debut_ms": 0, "fin_ms": 6 * JOUR_MS}]
     assert economie.neutraliser(evts) == 1
     assert abs(evts[0]["neutre_bps"] - 1000.0) < 1.0, evts[0]
+
+
+# --------------------------------------------------------------------------
+#  Le journal hors échantillon : prédire AVANT de savoir
+# --------------------------------------------------------------------------
+#
+# Six contrôles ont survécu, et ils partagent tous le même défaut, qui ne se
+# corrige pas : ils ont été construits en connaissant les données. Chaque
+# décision de méthode a été prise par quelqu'un qui avait déjà vu le
+# résultat. Une seule chose peut lever ce doute — prédire avant les faits —
+# et ces tests protègent la seule propriété qui rende ce journal crédible :
+# on ne peut ni effacer une prédiction, ni la retoucher après coup.
+
+journal_mod = _module("journal_unlocks")
+
+
+def test_une_prediction_dont_la_fenetre_est_DEJA_OUVERTE_est_refusee():
+    """Le cœur du dispositif. Inscrire un déblocage dont l'entrée est déjà
+    passée serait une prédiction faite après coup — exactement ce que ce
+    journal existe pour rendre impossible."""
+    maintenant = 1_000 * JOUR_MS
+    unlocks = {"T": [
+        {"ts_ms": (1_000 + 3) * JOUR_MS, "part_offre": 0.03},   # entrée à J-4 : PASSÉE
+        {"ts_ms": (1_000 + 20) * JOUR_MS, "part_offre": 0.03},  # entrée à J+13 : à venir
+    ]}
+    pris = journal_mod.a_prendre(unlocks, maintenant, horizon_j=30)
+    assert len(pris) == 1
+    assert pris[0]["entree_ms"] > maintenant
+
+
+def test_les_petits_deblocages_ne_sont_pas_inscrits():
+    """La tranche 0,5-2 % ne survit à aucun des six contrôles (p = 0,40 au
+    décalage calendaire net). L'inclure diluerait le test hors échantillon
+    avec des positions dont on sait déjà qu'elles ne rapportent rien."""
+    unlocks = {"T": [{"ts_ms": 1_020 * JOUR_MS, "part_offre": 0.01}]}
+    assert journal_mod.a_prendre(unlocks, 1_000 * JOUR_MS, 30) == []
+
+
+def test_le_journal_est_en_AJOUT_SEUL(tmp_path):
+    """Un journal qu'on peut nettoyer ne mesure plus rien : il documente les
+    trades dont on se souvient avec plaisir. Une deuxième exécution ne doit
+    ni dupliquer une position, ni faire disparaître les précédentes — même
+    si l'appelant lui passe une liste vide."""
+    j = tmp_path / "j.jsonl"
+    unlocks = {"T": [{"ts_ms": 1_020 * JOUR_MS, "part_offre": 0.03}]}
+    pris = journal_mod.a_prendre(unlocks, 1_000 * JOUR_MS, 30)
+
+    assert journal_mod.inscrire(pris, j) == 1
+    assert journal_mod.inscrire(pris, j) == 0, "doublon inscrit"
+    assert journal_mod.inscrire([], j) == 0
+    assert len(j.read_text().strip().splitlines()) == 1, "une ligne a disparu"
+
+
+def test_chaque_ligne_fige_la_REGLE_qui_la_produit(tmp_path):
+    """Si la méthode change dans six semaines, les anciennes prédictions
+    doivent rester jugées sur l'ancienne règle. Sans ça, « ajuster
+    légèrement le seuil » suffirait à transformer rétroactivement un échec
+    en succès."""
+    unlocks = {"T": [{"ts_ms": 1_020 * JOUR_MS, "part_offre": 0.03}]}
+    x = journal_mod.a_prendre(unlocks, 1_000 * JOUR_MS, 30)[0]
+    for champ in ("version", "entree_ms", "sortie_ms", "sens", "reference",
+                  "part_offre", "inscrit_ms"):
+        assert champ in x, f"{champ} manquant : la règle n'est pas figée"
+    assert x["sortie_ms"] - x["entree_ms"] == 6 * JOUR_MS, "fenêtre J-7 → J-1"
+
+
+def test_le_releve_refuse_de_conclure_sur_trop_peu_devenements(tmp_path, capsys):
+    """Dix trades gagnants ne confirment rien avec un écart-type de
+    1 050 bps. Le rapport doit le dire lui-même — laisser le lecteur faire
+    le calcul, c'est le laisser ne pas le faire."""
+    j = tmp_path / "j.jsonl"
+    vieux = 1_000 * JOUR_MS
+    j.write_text(json.dumps({
+        "version": 1, "symbole": "T", "deblocage_ms": vieux,
+        "part_offre": 0.03, "entree_ms": vieux, "sortie_ms": vieux,
+        "sens": "COURT", "reference": "BTC", "inscrit_ms": vieux}) + "\n")
+    journal_mod.resoudre(j)
+    sortie = capsys.readouterr().out
+    assert "prix indisponibles" in sortie, sortie
+    assert "Aucune position n'a pu être valorisée" in sortie, sortie
+
+
+def test_un_journal_vide_ne_plante_pas(tmp_path, capsys):
+    journal_mod.resoudre(tmp_path / "absent.jsonl")
+    assert "n'existe pas encore" in capsys.readouterr().out
+
+
+def test_le_verdict_reste_AUCUN_sous_cinquante_evenements(tmp_path, capsys,
+                                                          monkeypatch):
+    """Le rapport doit refuser de conclure lui-même. Laisser le lecteur
+    faire le calcul de puissance, c'est le laisser ne pas le faire — et dix
+    trades gagnants passeraient pour une confirmation."""
+    import time as _t
+
+    vieux = 1_000 * JOUR_MS
+    lignes = [{"version": 1, "symbole": "T", "deblocage_ms": vieux + i,
+               "part_offre": 0.03, "entree_ms": vieux, "sortie_ms": vieux,
+               "sens": "COURT", "reference": "BTC", "inscrit_ms": vieux}
+              for i in range(12)]
+    chemin = tmp_path / "j.jsonl"
+    chemin.write_text("\n".join(json.dumps(x) for x in lignes))
+    # Des prix connus, pour atteindre le bloc de verdict.
+    monkeypatch.setattr(journal_mod, "_cloture",
+                        lambda s, j: 100.0 if s == "T" else 50.0)
+    monkeypatch.setattr(_t, "time", lambda: (vieux + JOUR_MS) / 1000)
+    journal_mod.resoudre(chemin)
+    sortie = capsys.readouterr().out
+    assert "VERDICT : AUCUN" in sortie, sortie
+    assert "12 événements" in sortie, sortie
