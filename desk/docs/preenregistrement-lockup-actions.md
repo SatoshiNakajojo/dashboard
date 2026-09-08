@@ -112,3 +112,93 @@ sera écrit qu'après lecture de sa sortie.
 C'est la leçon de `fetch_unlocks.py`, écrit contre une API supposée devenue
 payante et une structure de données devinée : propre, testé, entièrement
 faux.
+
+---
+
+# Amendement n° 1 — la mesure de taille
+
+**Écrit le 8 septembre 2026, après les trois sondes et avant tout
+collecteur.** Aucun rendement n'a encore été calculé. Le commit qui porte
+cet amendement ne contient aucun chiffre de résultat, et c'est vérifiable
+dans l'historique.
+
+## Ce que les sondes ont établi
+
+**Le flottant n'est publié nulle part directement.** Ni le calendrier
+Nasdaq, ni `meta` chez Yahoo, ni les métadonnées de dépôt de la SEC ne
+donnent le nombre d'actions en circulation.
+
+**Et surtout, les échelles n'ont aucun rapport.** Une introduction vend 8 à
+20 % du capital ; le *lockup* libère donc **4 à 11 fois le flottant**, quand
+un déblocage de jetons libère quelques pourcents de l'offre. Les tranches
+pré-enregistrées — 0,5-2 %, 2-5 %, > 5 % — mettraient la totalité de
+l'échantillon dans la dernière. **La stratification ne stratifierait rien.**
+
+C'est le cas prévu par le pré-enregistrement, et voici la substitution.
+
+## La substitution
+
+### Test principal : poolé, sans mesure de taille
+
+Sur **toutes** les introductions ordinaires — non-SPAC, cotées depuis au
+moins 90 jours à l'expiration, avec des cours disponibles. Ce test ne
+demande aucun flottant, donc il conserve l'échantillon le plus large et le
+moins filtré. C'est lui qui décide de la confirmation ou de la réfutation.
+
+### Test secondaire : réponse à la dose, par TERCILES
+
+    part bloquée = (actions en circulation − actions offertes) / actions offertes
+
+en **terciles**, et non en bornes absolues. Les bornes crypto n'ont aucun
+recouvrement avec l'échelle actions ; les transposer serait arbitraire. Les
+terciles sont calculés **sur le prédicteur seul, jamais sur les
+rendements** — c'est ce qui les distingue d'un ajustement.
+
+Le critère de confirmation devient : le tercile haut dépasse le tercile bas.
+
+### Le nombre d'actions retenu
+
+La déclaration XBRL **la plus proche de l'expiration parmi celles postérieures
+à l'introduction**. Deux exclusions, et la première a été trouvée par la
+sonde :
+
+- **une déclaration antérieure à l'introduction est écartée.** INTJ, introduit
+  le 20 mars 2024, n'a qu'une seule déclaration, datée du 30 novembre 2023.
+  L'utiliser calculerait la part bloquée sur un capital pré-IPO : un nombre
+  faux, plausible, et qui ne déclenche aucune erreur.
+- **une société sans déclaration valide sort du test secondaire**, jamais du
+  test principal.
+
+## Les biais, nommés
+
+**La jointure symbole → CIK utilise la table COURANTE de la SEC.** Une
+société radiée depuis son introduction n'y figure plus : 3 sur 45 dans la
+sonde, soit 7 %. Ces disparues ne sont pas au hasard — ce sont les échecs.
+
+Le sens du biais compte : retirer les échecs retire les baisses les plus
+fortes, donc **rapproche de zéro l'effet baissier mesuré**. Le résultat
+publié sera conservateur, mais sa portée sera limitée aux sociétés encore
+cotées aujourd'hui, et ce sera écrit.
+
+**Le XBRL manque pour environ un tiers des sociétés** (4 sur 6 exploitables
+dans la sonde). Cette perte ne touche que le test secondaire.
+
+**Les SPAC représentent 21 % du calendrier** (12 sur 57). Le filtre retenu
+est `proposedSharePrice == "10.00"` : dans la sonde, les neuf sociétés au
+nom en « Acquisition » y étaient toutes incluses, ce qui en fait le critère
+le plus simple et le plus large des deux.
+
+## Ce qui reste inchangé
+
+Fenêtre J-7 → J-1, six jours de détention, sens baissier, expiration à
+J+180, référence SPY, six contrôles, Benjamini-Hochberg à α = 0,05, et les
+trois verdicts possibles — confirmation, réfutation, non concluant. **Un
+effet plus fort que le crypto reste traité avec méfiance.**
+
+## Une vérification croisée gratuite
+
+`meta.firstTradeDate` chez Yahoo donne la première cotation, indépendamment
+du `pricedDate` de Nasdaq. Les deux doivent coïncider à quelques jours près.
+Un écart systématique signalerait que l'une des deux sources ne dit pas ce
+que je crois — et c'est exactement ce qui rendrait toute la campagne fausse
+sans rien casser.
