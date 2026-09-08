@@ -47,11 +47,18 @@ import json
 import urllib.error
 import urllib.request
 
+# stooq est retiré de la liste, et le motif mérite d'être gardé : il répond
+# HTTP 200 — donc « ça marche » pour tout code qui se fie au statut — mais
+# sert une page anti-robot de 796 octets avec une preuve de travail en
+# JavaScript, jamais le CSV attendu.
+#
+# Un collecteur écrit sans sonder aurait avalé du HTML, trouvé zéro ligne
+# exploitable, et produit un jeu de données vide EN SILENCE. C'est
+# exactement le mode de panne que cette sonde existe pour attraper, et le
+# seul qui ne se voit pas dans un code de retour.
 SOURCES = [
-    ("stooq / cours journaliers",
+    ("stooq / cours journaliers (anti-robot, conservé pour mémoire)",
      "https://stooq.com/q/d/l/?s=aapl.us&i=d", "csv"),
-    ("stooq / ticker récent (IPO 2024)",
-     "https://stooq.com/q/d/l/?s=rddt.us&i=d", "csv"),
     ("SEC / table ticker vers CIK",
      "https://www.sec.gov/files/company_tickers.json", "json"),
     ("SEC / recherche plein texte des prospectus 424B4",
