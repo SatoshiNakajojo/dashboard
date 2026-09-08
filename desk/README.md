@@ -1155,6 +1155,37 @@ une fenêtre volatile, un stop **vraiment** structurel dépasse la limite dure
 de 500 bps. Les deux critères se contredisent, et c'est la limite de risque
 qui gagne.
 
+#### Le plafond du compte, pris pour un défaut du modèle
+
+La troisième exécution a rendu ce verdict :
+
+```
+PORTE P3 : NON FRANCHIE — qualite insuffisante : regime
+```
+
+**L'agent Régime n'avait jamais été sollicité.** L'API répondait
+`400 — you have reached your specified API usage limits`, le runner
+réessayait deux fois, l'agent s'abstenait, et le rapport concluait à un
+défaut de qualité. Huit cycles sur douze sont morts ainsi.
+
+J'ai d'abord soupçonné ma propre modification — l'ajout des quatre extrêmes
+au contexte de marché. Une sonde à six appels a tranché : le contexte
+enrichi et le contexte d'origine échouent **identiquement, 0/3 chacun**.
+Ce n'était pas le contexte.
+
+Deux dégâts, et le second est le pire : on dépense des appels contre une API
+qui refuse, et **on accuse un modèle d'un défaut de facturation** — donc on
+cherche au mauvais endroit. `QuotaEpuise` a maintenant son propre type : le
+runner ne le réessaie pas, ne l'absorbe pas en abstention, et la campagne
+s'arrête net avec un message qui nomme la vraie cause. Un test vérifie aussi
+l'autre sens — une panne réseau ordinaire doit rester réessayée puis
+absorbée, sinon une coupure ferait tomber la campagne entière.
+
+Les trois cycles qui ont abouti avant le plafond montrent `invalidation`
+sortir de zéro pour la première fois (max +0,10) et le score médian passer
+de 0,38 à 0,44. **Trois observations ne concluent rien** — c'est noté ici
+comme une indication à confirmer, pas comme un résultat.
+
 #### Après refonte : trois corrections sur quatre ont pris
 
 Même configuration, 12 cycles, 0,99 $. Comparaison terme à terme :

@@ -310,3 +310,58 @@ def test_le_cout_d_un_cycle_est_annonce(monkeypatch, capsys):
     sortie = capsys.readouterr().out
     assert "Cout d'un cycle complet" in sortie
     assert "$/mois a 12 decisions/h" in sortie
+
+
+# --------------------------------------------------------------------------
+#  Le plafond du COMPTE n'est pas un défaut du modèle
+# --------------------------------------------------------------------------
+
+def test_le_plafond_de_compte_arrete_la_campagne_au_lieu_de_la_fausser():
+    """Le 8 septembre 2026, une campagne a rendu ce verdict :
+
+        PORTE P3 : NON FRANCHIE — qualite insuffisante : regime
+
+    L'agent Régime n'avait jamais été sollicité. L'API répondait 400 « you
+    have reached your specified API usage limits », le runner réessayait
+    deux fois, l'agent s'abstenait, et le rapport concluait à un défaut de
+    qualité. Huit cycles sur douze sont morts ainsi.
+
+    Deux dégâts, et le second est le pire : on dépense des appels contre une
+    API qui refuse, et on accuse un modèle d'un défaut de facturation — donc
+    on cherche au mauvais endroit.
+    """
+    from trading_desk.agents.llm import LLMError, QuotaEpuise
+    from trading_desk.agents.roster import run_regime
+
+    class _Plafonne:
+        model = "claude-haiku-4-5"
+
+        def structured(self, **kw):
+            raise QuotaEpuise(
+                "You have reached your specified API usage limits. "
+                "You will regain access on 2026-10-01 at 00:00 UTC.")
+
+    # Le runner ne doit NI réessayer NI absorber en abstention : il remonte.
+    with pytest.raises(QuotaEpuise):
+        run_regime(llm=_Plafonne(), context={"actif": "BTC"})
+
+    # Et il reste bien une panne de modèle pour le reste du code.
+    assert issubclass(QuotaEpuise, LLMError)
+
+
+def test_une_panne_ordinaire_reste_absorbee_en_abstention():
+    """L'autre sens. Une erreur transitoire doit continuer d'être réessayée
+    puis absorbée : sans ça, une coupure réseau ferait tomber la campagne
+    entière au lieu d'un cycle."""
+    from trading_desk.agents.llm import LLMError
+    from trading_desk.agents.roster import run_regime
+
+    class _Casse:
+        model = "claude-haiku-4-5"
+
+        def structured(self, **kw):
+            raise LLMError("connexion réinitialisée")
+
+    run = run_regime(llm=_Casse(), context={"actif": "BTC"})
+    assert run.abstained
+    assert run.attempts >= 2, "une panne ordinaire doit être réessayée"

@@ -43,6 +43,7 @@ from .llm import (
     LLMError,
     LLMRefusal,
     LLMResponse,
+    QuotaEpuise,
     RoutedLLM,
     api_key_source,
     desk_api_key,
@@ -389,6 +390,20 @@ def main() -> int:
     for i, fenetre in enumerate(fenetres, 1):
         try:
             res = run_desk_cycle(llm=llm, bars=fenetre, memory=memory)
+        except QuotaEpuise as exc:
+            # Le plafond du COMPTE, pas celui du run. Continuer dépenserait
+            # des appels contre une API qui refuse, et le rapport final
+            # accuserait le modèle d'une qualité insuffisante qui n'est pas
+            # la sienne — c'est ce qui s'est produit le 8 septembre 2026.
+            print(f"\n\n  PLAFOND DE COMPTE ATTEINT — campagne interrompue "
+                  f"au cycle {i}.\n", file=sys.stderr)
+            print(f"  {exc}\n", file=sys.stderr)
+            print("  Ce n'est ni un défaut du modèle ni un dépassement de "
+                  "`--budget-usd` :\n  c'est la limite de dépense du compte "
+                  "Anthropic. Elle se relève dans\n  la console, sous "
+                  "Limits.\n", file=sys.stderr)
+            interrompu = "plafond de compte atteint"
+            break
         except BudgetExceeded as exc:
             # Le graphe absorbe normalement le depassement via l'abstention ;
             # s'il remonte jusqu'ici, on arrete la boucle plutot que de la

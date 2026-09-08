@@ -25,7 +25,7 @@ from pydantic import BaseModel, ValidationError, create_model
 
 from ..contracts.common import Frozen, now_ms
 from ..contracts.signals import AgentOutput
-from .llm import LLMClient, LLMError, LLMRefusal, LLMResponse
+from .llm import LLMClient, LLMError, LLMRefusal, LLMResponse, QuotaEpuise
 
 log = logging.getLogger(__name__)
 
@@ -196,6 +196,15 @@ def run_agent(
             # est refusee par le validateur du contrat, et doit compter comme
             # une tentative ratee — pas remonter jusqu'a l'appelant.
             output = schema(**payload.model_dump())
+        except QuotaEpuise:
+            # Le plafond du COMPTE ne se réessaie pas, et ne s'absorbe pas
+            # non plus en abstention : il remonte jusqu'au runner, qui
+            # arrête la campagne.
+            #
+            # L'absorber ici produirait le rapport du 8 septembre 2026 :
+            # huit cycles morts à la lecture, « qualité insuffisante :
+            # regime », et un modèle accusé d'un défaut de facturation.
+            raise
         except LLMRefusal as exc:
             # Un refus ne se réessaie pas : le modèle a tranché, réinsister
             # coûterait un appel pour le même résultat.

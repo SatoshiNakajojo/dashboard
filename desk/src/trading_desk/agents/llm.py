@@ -153,6 +153,26 @@ class LLMError(RuntimeError):
     """Échec d'appel. Distinct d'un refus, qui n'est pas une erreur."""
 
 
+class QuotaEpuise(LLMError):
+    """Le plafond de depense du COMPTE est atteint, pas celui du run.
+
+    Cette panne merite son propre type parce qu'elle ne se distingue
+    autrement d'aucune autre : l'API repond 400, le runner reessaie deux
+    fois, l'agent s'abstient, et le rapport conclut « qualite insuffisante ».
+
+    C'est exactement ce qui est arrive le 8 septembre 2026. L'agent Regime a
+    echoue 58 % de ses appels, huit cycles sur douze sont morts a la lecture,
+    et la porte P3 a ete declaree NON FRANCHIE pour une raison de qualite —
+    alors que le modele n'avait jamais ete sollicite. Un rapport qui accuse
+    un modele d'un defaut de facturation fait chercher au mauvais endroit,
+    et il fait DEPENSER pour rien : les cycles suivants continuent d'appeler
+    une API qui refuse.
+
+    Reessayer est inutile par construction : le plafond ne se leve pas dans
+    la minute, il se leve a une DATE.
+    """
+
+
 class LLMRefusal(LLMError):
     """Le modèle a décliné. Traité comme une abstention en amont."""
 
@@ -280,6 +300,13 @@ class AnthropicLLM:
         try:
             response = client.messages.parse(**kwargs)
         except Exception as exc:  # remonté typé au-dessus
+            # Le plafond du compte se reconnait au texte, faute de code
+            # dedie : l'API rend un 400 generique. Le distinguer ici plutot
+            # qu'au-dessus evite que chaque appelant ait a connaitre ce
+            # message.
+            texte = str(exc)
+            if "usage limits" in texte or "credit balance" in texte:
+                raise QuotaEpuise(texte) from exc
             raise LLMError(f"appel au modèle échoué : {exc}") from exc
 
         latency_ms = int((time.monotonic() - started) * 1000)
