@@ -47,12 +47,12 @@ from .analyst import build_market_context, run_analyst
 from .isolation import ExternalContent
 from .llm import LLMClient
 from .memory import LessonStore, format_for_prompt
-from .scoring import Note, noter
 from .roster import (
     run_chef, run_devil, run_news, run_quant, run_regime, run_risk_advisor,
     run_strategy,
 )
 from .runner import AgentRun
+from .scoring import Note, noter
 
 log = logging.getLogger(__name__)
 
@@ -68,6 +68,7 @@ class Stage(str, Enum):
     OBJECTION = "OBJECTION"            # objection trop sévère
     CONVICTION = "CONVICTION"          # conviction sous le seuil
     ASYMETRIE = "ASYMETRIE"            # rapport gain/risque insuffisant
+    STOP_HORS_LIMITES = "STOP_HORS_LIMITES"   # distance de stop refusée
     REJET_CHEF = "REJET_CHEF"          # le chef de desk a rejeté
     MANDAT = "MANDAT"                  # mandat directionnel émis
 
@@ -271,7 +272,7 @@ def run_desk_cycle(
     # La note est calculée APRÈS l'avocat du diable pour que la sévérité de
     # l'objection y entre. L'ordre compte : noter avant reviendrait à ouvrir
     # la porte sur une lecture que la contradiction a déjà entamée.
-    note = noter(setup, regime=regime, counter=counter)
+    note = noter(setup, bars=bars, regime=regime, counter=counter)
     if note.score < config.min_conviction:
         return flat(Stage.CONVICTION,
                     f"score {note.score:.2f} < {config.min_conviction} "
@@ -282,6 +283,26 @@ def run_desk_cycle(
     if rr is not None and rr < config.min_reward_risk:
         return flat(Stage.ASYMETRIE, f"gain/risque {rr:.2f} < {config.min_reward_risk}",
                     setup, counter)
+
+    # La distance de stop se vérifie ICI, pas dans `build_mandate`.
+    #
+    # `build_mandate` construit une fourchette bornée par les limites dures.
+    # Quand le setup demande un stop plus large que `max_stop_distance_bps`,
+    # cette fourchette sort avec un minimum supérieur à son maximum, et le
+    # schéma lève — ce qui FAIT TOMBER LE CYCLE au lieu de refuser le
+    # mandat. Le commentaire de `build_mandate` affirmait pourtant le
+    # contraire, et l'a affirmé jusqu'à ce qu'un dry-run ancré sur les
+    # barres produise un stop de 719 bps.
+    #
+    # Un setup hors limites est un refus ordinaire, pas une panne.
+    distance = setup.stop_distance_bps
+    if distance is not None and not (
+            limits.min_stop_distance_bps <= distance <= limits.max_stop_distance_bps):
+        return flat(Stage.STOP_HORS_LIMITES,
+                    f"stop à {distance:.0f} bps hors de "
+                    f"[{limits.min_stop_distance_bps:.0f}, "
+                    f"{limits.max_stop_distance_bps:.0f}]",
+                    setup, counter, note=note)
 
     # --- avis de risque, puis décision ---
     advisor_run = run_risk_advisor(llm=llm, setup=setup, counter=counter,

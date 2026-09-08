@@ -28,6 +28,7 @@ import os
 import sys
 from decimal import Decimal
 from pathlib import Path
+from typing import Any
 
 from ..backtest.data import DataUnavailable, load_from_file, load_synthetic
 from ..features.bars import Bar
@@ -41,8 +42,8 @@ from .llm import (
     LLMClient,
     LLMError,
     LLMRefusal,
+    LLMResponse,
     RoutedLLM,
-    ScriptedLLM,
     api_key_source,
     desk_api_key,
 )
@@ -89,25 +90,103 @@ def _windows(bars: list[Bar], count: int) -> list[list[Bar]]:
     return [bars[int(i * step):int(i * step) + WINDOW_BARS] for i in range(count)]
 
 
-def _script() -> list:
-    """Reponses fixes pour `--dry-run`. Le meme chemin de code, sans depense."""
+def _script(fenetre: list[Bar] | None = None) -> list:
+    """Reponses fixes pour `--dry-run`. Le meme chemin de code, sans depense.
+
+    **La geometrie du setup est ancree sur la fenetre**, et ce n'est pas du
+    confort. Depuis que le scorer MESURE l'alignement, le niveau d'entree et
+    la solidite du stop sur les barres, un prix d'entree fixe ne peut pas
+    convenir a trente fenetres de marche differentes : il tomberait hors de
+    l'etendue de la plupart, noterait zero sur les trois mesures, et le
+    dry-run s'arreterait a la porte du score sans jamais exercer le Conseil
+    de risque ni le Chef de desk.
+
+    Un dry-run qui n'atteint pas la moitie des agents ne verifie pas le
+    cablage — c'est precisement ce qu'il existe pour faire.
+    """
+    entree, stop, cible = "64000", "61120", "72640"
+    if fenetre:
+        # La mediane des clotures est, par construction, un prix que la
+        # fenetre traverse souvent : le comptage de touches y trouve
+        # plusieurs grappes, donc `NIVEAU_NET`.
+        milieu = sorted(float(b.close) for b in fenetre)[len(fenetre) // 2]
+        # Le stop se pose a 450 bps, PAS sous le plus bas de la fenetre.
+        #
+        # Ce choix expose une tension reelle du desk, et le dry-run n'a pas
+        # a la masquer : sur une fenetre volatile, un stop veritablement
+        # STRUCTUREL — au-dela du plus bas — depasse la limite dure de
+        # 500 bps que le moteur de risque impose. Les deux criteres se
+        # contredisent, et c'est la limite de risque qui gagne.
+        #
+        # Le setup scripte prend donc un stop defendable plutot que
+        # structurel, ce qui lui coute 0,10 au score et le fait quand meme
+        # passer. Un dry-run qui contournerait la contrainte en elargissant
+        # le stop ne testerait pas le desk qu'on execute.
+        risque = milieu * 0.045
+        entree = f"{milieu:.0f}"
+        stop = f"{milieu - risque:.0f}"
+        cible = f"{milieu + risque * 3:.0f}"
     return [
-        {"regime": "RANGE", "confidence": "0.6"},
+        {"regime": "TREND_UP", "confidence": "0.6"},
         {"inputs_digest": "dry", "momentum": "0.1"},
         {"asset": "BTC", "bias": "LONG", "thesis_summary": "Fenetre de test."},
-        {"asset": "BTC", "side": "LONG", "entry_price": "64000",
-         "stop_price": "63000", "target_price": "66500",
-         "evaluation": ["REGIME_AVEC", "NIVEAU_NET", "STOP_STRUCTUREL",
-                        "CONFLUENCE_3P", "OBSTACLE_AUCUN"]},
+        {"asset": "BTC", "side": "LONG", "entry_price": entree,
+         "stop_price": stop, "target_price": cible,
+         "evaluation": ["CONFLUENCE_3P", "OBSTACLE_AUCUN"]},
         {"targets_setup": "BTC", "severity": "0.3", "veto": False},
         {"size_factor": "0.9"},
         {"decision": "APPROVE", "reasoning": "test", "size_factor": "1"},
     ]
 
 
-def _build_llm(args) -> LLMClient:
+class _DryRunLLM:
+    """Modele scripte pour `--dry-run`, qui repond PAR ROLE et non par rang.
+
+    `ScriptedLLM` sert ses reponses dans l'ordre, et c'est ce qu'il faut aux
+    tests : ils scriptent des sequences exactes, exceptions comprises.
+
+    Le dry-run a besoin de l'inverse. Ses cycles ne meurent pas tous a la
+    meme porte — l'un s'arrete au score, l'autre au stop hors limites — donc
+    ils ne consomment pas le meme nombre de reponses. Une liste positionnelle
+    se decale au premier cycle court, et le cycle suivant sert un
+    `size_factor` a l'agent Regime, qui echoue son schema. Le rapport
+    annonce alors « qualite insuffisante : regime » — un defaut du banc
+    d'essai pris pour un defaut du modele.
+
+    Repondre par role rend l'alignement impossible a perdre, et c'est aussi
+    plus fidele : un vrai modele recoit un schema a chaque appel, jamais un
+    rang.
+    """
+
+    ROLES = ("regime", "quant", "analyste", "strategie",
+             "avocat_du_diable", "risk_advisor", "chef_de_desk")
+
+    def __init__(self, fenetres: list[list[Bar]]) -> None:
+        self.fenetres = fenetres or [[]]
+        self.model = "scripted"
+        self.calls: list[dict[str, str]] = []
+        self._cycle = -1
+
+    def structured(self, *, system: str, user: str, schema, max_tokens: int = 4000,
+                   agent: str = "") -> tuple[Any, LLMResponse]:
+        self.calls.append({"system": system, "user": user, "agent": agent})
+        # Le Regime ouvre chaque cycle : c'est lui qui fait avancer la
+        # fenetre. Un cycle interrompu n'en decale donc aucun autre.
+        if agent == "regime":
+            self._cycle += 1
+        f = self.fenetres[min(max(self._cycle, 0), len(self.fenetres) - 1)]
+        reponses = dict(zip(self.ROLES, _script(f), strict=False))
+        brut = reponses.get(agent, {})
+        valeur = schema.model_validate(brut)
+        meta = LLMResponse(model=self.model, input_tokens=1200, output_tokens=300,
+                           latency_ms=42, stop_reason="end_turn",
+                           raw_text=valeur.model_dump_json())
+        return valeur, meta
+
+
+def _build_llm(args, fenetres: list[list[Bar]] | None = None) -> LLMClient:
     if args.dry_run:
-        return ScriptedLLM(_script() * (args.runs + 2))
+        return _DryRunLLM(fenetres or [])
     if args.politique == "uniforme":
         # Pas de `RoutedLLM` inutile : un seul modele, un seul client, et le
         # journal continue de nommer un modele unique sans indirection.
@@ -285,7 +364,8 @@ def main() -> int:
               "câblage,\n  ils ne disent rien du comportement des agents sur "
               "un vrai marché.")
 
-    llm = BudgetedLLM(_build_llm(args), max_usd=Decimal(str(args.budget_usd)))
+    llm = BudgetedLLM(_build_llm(args, fenetres),
+                      max_usd=Decimal(str(args.budget_usd)))
     memory = SqliteLessonStore(args.memory_db) if args.memory_db else None
 
     # Le bandeau doit dire ce qui a REELLEMENT tourne : afficher `--model`

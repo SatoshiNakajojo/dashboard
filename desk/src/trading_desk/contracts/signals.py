@@ -122,10 +122,23 @@ class SetupProposal(AgentOutput):
     # Les etiquettes se decrivent elles-memes (`STOP_ARBITRAIRE`, pas
     # `ARBITRAIRE`) : une dimension omise doit rester lisible dans le
     # journal, et deux dimensions ne doivent jamais partager une valeur.
+    # **Deux dimensions, et non cinq.** La premiere version en demandait
+    # cinq ; une execution reelle de douze cycles a montre que trois
+    # d'entre elles rendaient une valeur CONSTANTE sur douze fenetres de
+    # marche differentes. Elles demandaient a l'agent de noter son propre
+    # travail — il a choisi le sens, l'entree et le stop — et un agent qui
+    # s'auto-evalue rend le maximum. C'etait le defaut de l'ancien champ
+    # `conviction`, revenu sous un autre costume.
+    #
+    # Ces trois-la sont maintenant calculees par `agents/scoring.mesurer`,
+    # ce qui les rend variables par construction et respecte la regle de ce
+    # module : un agent LLM ne produit jamais un chiffre qu'un calcul
+    # pourrait donner.
+    #
+    # Restent les deux qui ne se calculent pas. Compter des raisons
+    # INDEPENDANTES demande de comprendre ce qu'elles mesurent ; connaitre
+    # un evenement a venir demande de l'avoir lu.
     evaluation: tuple[Literal[
-        "REGIME_AVEC", "REGIME_NEUTRE", "REGIME_CONTRE",
-        "NIVEAU_NET", "NIVEAU_FLOU", "NIVEAU_AUCUN",
-        "STOP_STRUCTUREL", "STOP_PLAUSIBLE", "STOP_ARBITRAIRE",
         "CONFLUENCE_3P", "CONFLUENCE_2", "CONFLUENCE_1",
         "OBSTACLE_AUCUN", "OBSTACLE_MINEUR", "OBSTACLE_MAJEUR",
     ], ...] = ()

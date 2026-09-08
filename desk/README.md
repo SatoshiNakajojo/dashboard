@@ -1083,6 +1083,78 @@ C'est la même famille de panne que le rejet de la réflexion adaptative par
 Haiku 4.5 : invisible en test unitaire, fatale en production, et attribuée à
 la compétence de l'agent plutôt qu'au câblage.
 
+#### Le diagnostic : quatre critères sur cinq ne varient jamais
+
+Une seconde exécution, instrumentée, 12 cycles pour 1,33 $ :
+
+| terme | médiane | min | max | |
+| --- | --- | --- | --- | --- |
+| alignement | +0,25 | +0,25 | +0,25 | **constant** |
+| invalidation | +0,20 | +0,20 | +0,20 | **constant** |
+| confluence | +0,10 | +0,10 | +0,10 | **constant** |
+| obstacle | −0,10 | −0,10 | −0,10 | **constant** |
+| niveau | +0,10 | +0,10 | +0,20 | la seule qui varie |
+| objection | −0,22 | −0,24 | −0,20 | quasi constant |
+
+Le score se réduisait à `0,45 + niveau − objection`, d'où l'étendue observée
+de 0,41 à 0,57. **Baisser le seuil n'aurait rien réparé** : ça aurait laissé
+tout passer indistinctement.
+
+La cause n'était pas le seuil, c'était la question. **Trois des cinq
+demandaient à l'agent de noter son propre travail** — il avait choisi le
+sens, l'entrée et le stop. Un agent qui s'auto-évalue rend le maximum :
+c'est le défaut exact qui avait condamné l'ancien champ `conviction`, revenu
+sous un autre costume.
+
+Elles violaient de surcroît la règle écrite dans `contracts/signals.py` :
+*les agents LLM ne produisent jamais un chiffre qu'un calcul pourrait
+donner.* Un alignement de sens est une comparaison ; un niveau respecté est
+un comptage ; un stop structurel est une inégalité sur un extrême.
+
+#### `scoring.mesurer` — trois dimensions rendues au code
+
+- **alignement** — le sens du setup contre le régime lu. En range, acheter le
+  haut de l'étendue *contredit* le régime, quoi qu'en dise l'agent.
+- **niveau** — les touches du prix d'entrée, comptées **par grappe** : vingt
+  barres consécutives qui traversent le même prix sont une visite, pas
+  vingt. Les compter séparément ferait passer une dérive lente pour un
+  support respecté.
+- **invalidation** — le stop est-il au-delà de l'extrême de la fenêtre ?
+  Au-delà : structurel. Au-delà du seul extrême récent : plausible. Dedans :
+  une distance de dimensionnement.
+
+Le modèle ne garde que **confluence** et **obstacle** — compter des raisons
+indépendantes demande de comprendre ce qu'elles mesurent ; connaître un
+événement à venir demande de l'avoir lu. Le schéma passe de quinze
+étiquettes à six, et **le calcul prime sur le modèle** : un setup relu qui
+porterait encore `REGIME_AVEC` ne peut pas s'auto-absoudre, `_dimension`
+retient la valeur la plus basse.
+
+Le prompt de l'obstacle est corrigé aussi. J'y écrivais que `OBSTACLE_AUCUN`
+vaut « si tu n'en vois pas — et non pas parce que tu n'as pas cherché » : un
+modèle consciencieux ne cochait donc jamais « aucun ». J'avais rendu
+l'option neutre moralement indéfendable.
+
+#### Deux défauts trouvés en ancrant le banc d'essai
+
+**Un stop hors limites faisait tomber le cycle.** `build_mandate` borne la
+fourchette de stop par les limites dures ; au-delà de 500 bps elle sort avec
+un minimum supérieur à son maximum et le schéma lève. Le commentaire du code
+affirmait que le mandat serait « refusé à la construction » — il l'affirmait
+depuis le début, et c'était faux. C'est maintenant une porte
+(`STOP_HORS_LIMITES`), donc un refus ordinaire.
+
+**Le dry-run répondait par rang, pas par rôle.** Ses cycles ne meurent pas
+tous à la même porte, donc ils ne consomment pas le même nombre de réponses :
+au premier cycle court, la liste se décalait et l'agent Régime recevait un
+`size_factor`. Le rapport annonçait alors « qualité insuffisante : régime »
+— un défaut du banc d'essai pris pour un défaut du modèle.
+
+Le dry-run expose enfin une tension réelle qu'il ne doit pas masquer : sur
+une fenêtre volatile, un stop **vraiment** structurel dépasse la limite dure
+de 500 bps. Les deux critères se contredisent, et c'est la limite de risque
+qui gagne.
+
 #### La porte P3 en réel : le desk n'émet toujours rien
 
 31 cycles sur `BTC_1h_real`, politique économique, 139 appels, **2,88 $**.

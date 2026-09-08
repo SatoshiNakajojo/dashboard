@@ -399,8 +399,7 @@ def test_le_mandat_emis_ne_depasse_jamais_les_limites():
     setup = SetupProposal(
         asset="BTC", side=Side.LONG, entry_price=Decimal("60000"),
         stop_price=Decimal("59400"), target_price=Decimal("70000"),
-        evaluation=("REGIME_AVEC", "NIVEAU_NET", "STOP_STRUCTUREL",
-                    "CONFLUENCE_3P", "OBSTACLE_AUCUN"),
+        evaluation=("CONFLUENCE_3P", "OBSTACLE_AUCUN"),
     )
     mandat = build_mandate(
         setup=setup,

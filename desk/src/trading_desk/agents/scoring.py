@@ -58,10 +58,12 @@ registre fantôme accumule et que nous n'avons pas encore.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from decimal import Decimal
 
-from ..contracts.common import Frozen
+from ..contracts.common import Frozen, Regime, Side
 from ..contracts.signals import CounterThesis, RegimeRead, SetupProposal
+from ..features.bars import Bar
 
 # --------------------------------------------------------------------------
 #  Les poids
@@ -101,7 +103,25 @@ DIMENSIONS: tuple[tuple[str, dict[str, str]], ...] = (
 POIDS_REGIME = Decimal("0.15")
 POIDS_SEVERITE = Decimal("-0.40")
 
+# Fenetres des mesures calculees. Elles sont en BARRES, donc leur duree
+# depend de l'intervalle — 120 barres en 1 h font cinq jours, en 1 j font
+# quatre mois. C'est voulu : la structure pertinente est celle que
+# l'intervalle du desk donne a voir.
+_FENETRE_RANGE = 120        # l'etendue qui definit le haut et le bas
+_FENETRE_NIVEAU = 200       # sur quelle profondeur compter les touches
+_FENETRE_STRUCTURE = 120    # au-dela de cet extreme, la these est morte
+_FENETRE_PROCHE = 40        # en deca, le stop reste defendable
+
 ETIQUETTES = frozenset(e for _, table in DIMENSIONS for e in table)
+
+# Qui fournit quoi. La separation n'est pas documentaire : le prompt de la
+# Strategie doit expliquer EXACTEMENT les etiquettes qu'elle rend, ni plus
+# — expliquer une etiquette calculee inviterait le modele a la deviner — ni
+# moins, car une etiquette non expliquee est choisie au hasard.
+DIMENSIONS_CALCULEES = ("alignement", "niveau", "invalidation")
+DIMENSIONS_MODELE = ("confluence", "obstacle")
+ETIQUETTES_MODELE = frozenset(
+    e for nom, table in DIMENSIONS if nom in DIMENSIONS_MODELE for e in table)
 
 
 class Note(Frozen):
@@ -129,6 +149,98 @@ class Note(Frozen):
         return detail
 
 
+def mesurer(setup: SetupProposal, bars: Sequence[Bar],
+            regime: RegimeRead | None) -> tuple[str, ...]:
+    """Les trois dimensions que le CODE etablit, sans rien demander au modele.
+
+    ## Pourquoi elles ont ete retirees au modele
+
+    La premiere version posait cinq questions a l'agent Strategie. Une
+    execution reelle de douze cycles a mesure ce qu'elles rendaient :
+    `alignement` toujours +0,25, `invalidation` toujours +0,20, `confluence`
+    toujours +0,10, `obstacle` toujours -0,10. **Quatre valeurs constantes
+    sur douze fenetres de marche differentes.**
+
+    La cause n'etait pas le seuil, c'etait la question. Trois de ces cinq
+    demandaient a l'agent de noter SON PROPRE TRAVAIL : il a choisi le sens,
+    il a place l'entree, il a place le stop. Un agent qui s'auto-evalue rend
+    le maximum, et c'est exactement le defaut qui avait condamne l'ancien
+    champ `conviction` — revenu sous un autre costume.
+
+    Elles violaient de surcroit la regle ecrite dans `contracts/signals.py` :
+    **les agents LLM ne produisent jamais de chiffre qu'un calcul pourrait
+    donner.** Un alignement de sens est une comparaison ; un niveau respecte
+    est un comptage ; un stop structurel est une inegalite sur un extreme.
+    Aucun des trois n'appelle un jugement.
+
+    Ce qui reste au modele — la confluence et l'obstacle — ne se calcule pas :
+    compter des raisons INDEPENDANTES demande de comprendre ce qu'elles
+    mesurent, et connaitre un evenement a venir demande de l'avoir lu.
+    """
+    out: list[str] = []
+    if setup.side is None or setup.entry_price is None or not bars:
+        return ()
+    entree = float(setup.entry_price)
+
+    # --- alignement : une comparaison, pas un jugement ---
+    hausse = setup.side is Side.LONG
+    reg = regime.regime if regime is not None and not regime.abstained else None
+    if reg is Regime.TREND_UP:
+        out.append("REGIME_AVEC" if hausse else "REGIME_CONTRE")
+    elif reg is Regime.TREND_DOWN:
+        out.append("REGIME_CONTRE" if hausse else "REGIME_AVEC")
+    elif reg is Regime.RANGE:
+        # En range, exploiter le regime c'est acheter le bas et vendre le
+        # haut. Un achat en haut de range le contredit, meme si l'agent
+        # jurait le contraire.
+        recents = bars[-_FENETRE_RANGE:]
+        bas = min(float(b.low) for b in recents)
+        haut = max(float(b.high) for b in recents)
+        etendue = haut - bas
+        if etendue <= 0:
+            out.append("REGIME_NEUTRE")
+        else:
+            place = (entree - bas) / etendue
+            if (hausse and place <= 0.33) or (not hausse and place >= 0.67):
+                out.append("REGIME_AVEC")
+            elif (hausse and place >= 0.67) or (not hausse and place <= 0.33):
+                out.append("REGIME_CONTRE")
+            else:
+                out.append("REGIME_NEUTRE")
+    else:
+        out.append("REGIME_NEUTRE")
+
+    # --- niveau : un comptage de touches, par grappes ---
+    #
+    # Par grappes, et non par barres : vingt barres consecutives qui
+    # traversent le meme prix sont UNE visite du marche a ce niveau, pas
+    # vingt. Les compter separement ferait passer une derive lente pour un
+    # support respecte.
+    touches, dedans = 0, False
+    for b in bars[-_FENETRE_NIVEAU:]:
+        ici = float(b.low) <= entree <= float(b.high)
+        if ici and not dedans:
+            touches += 1
+        dedans = ici
+    out.append("NIVEAU_NET" if touches >= 3
+               else "NIVEAU_FLOU" if touches >= 1 else "NIVEAU_AUCUN")
+
+    # --- invalidation : une inegalite sur un extreme ---
+    if setup.stop_price is not None:
+        stop = float(setup.stop_price)
+        longue = bars[-_FENETRE_STRUCTURE:]
+        courte = bars[-_FENETRE_PROCHE:]
+        if hausse:
+            au_dela = stop <= min(float(b.low) for b in longue)
+            defendable = stop <= min(float(b.low) for b in courte)
+        else:
+            au_dela = stop >= max(float(b.high) for b in longue)
+            defendable = stop >= max(float(b.high) for b in courte)
+        out.append("STOP_STRUCTUREL" if au_dela
+                   else "STOP_PLAUSIBLE" if defendable else "STOP_ARBITRAIRE")
+    return tuple(out)
+
+
 def _dimension(table: dict[str, str], etiquettes: frozenset[str]) -> Decimal | None:
     """Le poids retenu pour une dimension, ou `None` si elle est absente.
 
@@ -144,6 +256,7 @@ def _dimension(table: dict[str, str], etiquettes: frozenset[str]) -> Decimal | N
 def noter(
     setup: SetupProposal,
     *,
+    bars: Sequence[Bar] = (),
     regime: RegimeRead | None = None,
     counter: CounterThesis | None = None,
 ) -> Note:
@@ -160,7 +273,12 @@ def noter(
     depuis le journal, ou une version anterieure a pu ecrire une etiquette
     disparue depuis. Un cycle de decision ne doit pas tomber pour ca.
     """
-    presentes = frozenset(setup.evaluation)
+    # Le calcul PRIME sur le modele. Les etiquettes mesurees sont ajoutees
+    # apres celles qu'il rend, et `_dimension` retient la plus basse d'une
+    # dimension : un modele qui annoncerait encore `REGIME_AVEC` sur un
+    # setup que le code juge contre-tendance ne peut pas s'auto-absoudre.
+    presentes = frozenset(setup.evaluation) | frozenset(
+        mesurer(setup, bars, regime))
     termes: list[tuple[str, Decimal]] = []
     omises: list[str] = []
     for nom, table in DIMENSIONS:

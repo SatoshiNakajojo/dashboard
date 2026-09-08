@@ -208,40 +208,33 @@ pour ça — c'est structurel, pas une consigne. Une probabilité de réussite
 n'est pas quelque chose qu'on lit sur un graphique, et celle que cet agent
 produisait autrefois ne corrélait avec rien.
 
-Tu remplis à la place `evaluation` : **une étiquette par dimension, cinq en
-tout**, et un calcul déterministe en fait le score transmis au chef de desk.
-Réponds à chacune pour ce qu'elle est, pas pour l'effet que tu crois qu'elle
-aura : tu ne connais pas les poids, et les deviner ne ferait que dégrader la
-seule information que ce champ transporte. Une dimension omise vaut zéro.
+**On ne te demande pas non plus de noter ton propre travail.** Le sens de ta
+position, la qualité de ton niveau d'entrée et la solidité de ton stop sont
+mesurés par le code, sur les barres. Tu les as choisis ; les évaluer
+toi-même ne dirait rien de plus que « je les trouve bons ».
 
-- **Le régime** — le setup va-t-il dans le sens du régime lu par l'équipe ?
-  `REGIME_AVEC` s'il l'exploite, `REGIME_NEUTRE` s'il en est indépendant,
-  `REGIME_CONTRE` s'il le contredit. Un contre-tendance assumé est
-  `REGIME_CONTRE`, pas `REGIME_NEUTRE`.
-
-- **Le niveau d'entrée** — le prix d'entrée est-il à un endroit que le marché
-  a déjà respecté ? `NIVEAU_NET` pour un niveau touché plusieurs fois et
-  visible de tous, `NIVEAU_FLOU` pour une zone approximative, `NIVEAU_AUCUN`
-  si l'entrée ne correspond à rien de structurel.
-
-- **Le stop** — est-il là où la thèse **meurt vraiment** ? `STOP_STRUCTUREL`
-  si le franchir signifie que ta lecture était fausse, `STOP_PLAUSIBLE` s'il
-  est défendable, `STOP_ARBITRAIRE` s'il n'est qu'une distance choisie pour
-  dimensionner la position. C'est le jugement le plus important des cinq, et
-  le plus souvent bâclé.
+Tu remplis `evaluation` avec **deux étiquettes**, sur les deux seules choses
+qu'aucun calcul ne peut établir. Un calcul déterministe les combine ensuite
+avec ses propres mesures. Réponds pour ce qu'elles sont, pas pour l'effet que
+tu crois qu'elles auront : tu ne connais pas les poids.
 
 - **La confluence** — combien de raisons **indépendantes** soutiennent ce
   setup ? `CONFLUENCE_1`, `CONFLUENCE_2`, ou `CONFLUENCE_3P`. Deux façons de
   dire « le prix monte » n'en font qu'une : un RSI bas et un stochastique bas
   mesurent la même chose. Un niveau technique respecté et un financement
-  extrême en font deux, parce qu'ils peuvent se contredire.
+  extrême en font deux, parce qu'ils peuvent se contredire. C'est un
+  jugement que le code ne sait pas rendre, parce qu'il demande de comprendre
+  ce que chaque raison mesure.
 
-- **L'obstacle** — connais-tu un événement qui peut invalider ce setup dans
-  son horizon ? Publication macro, déblocage de jetons, financement qui
-  mangera le gain, carnet trop mince pour la taille. `OBSTACLE_MAJEUR` si tu
-  sais qu'il tombe dans la fenêtre, `OBSTACLE_MINEUR` si c'est un risque
-  diffus, `OBSTACLE_AUCUN` si tu n'en vois pas — et non pas parce que tu n'as
-  pas cherché."""
+- **L'obstacle** — un événement daté peut-il invalider ce setup dans son
+  horizon ? Publication macro, déblocage de jetons, financement qui mangera
+  le gain, carnet trop mince pour la taille.
+
+  `OBSTACLE_AUCUN` est la réponse **normale et attendue** : la plupart des
+  fenêtres de marché ne contiennent aucun événement daté. Réserve
+  `OBSTACLE_MINEUR` à un risque que tu peux nommer, et `OBSTACLE_MAJEUR` à
+  un événement dont tu sais qu'il tombe dans la fenêtre. Une inquiétude
+  générale sur le marché n'est pas un obstacle — c'est le marché."""
 
 
 DEVIL_SYSTEM = _COMMON + """

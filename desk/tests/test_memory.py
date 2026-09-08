@@ -216,10 +216,12 @@ def _script_cycle() -> ScriptedLLM:
         {"regime": "RANGE", "confidence": "0.7"},
         {"inputs_digest": "abc", "momentum": "0.2"},
         {"asset": "BTC", "bias": "LONG", "thesis_summary": "Support tenu."},
-        {"asset": "BTC", "side": "LONG", "entry_price": "64000",
-         "stop_price": "63000", "target_price": "66500",
-         "evaluation": ["REGIME_AVEC", "NIVEAU_NET", "STOP_STRUCTUREL",
-                        "CONFLUENCE_3P", "OBSTACLE_AUCUN"]},
+        # Géométrie calée sur BARS : depuis que le scorer mesure sur les
+        # barres, une entrée à 64 000 sur une série qui plafonne à 61 021
+        # note zéro sur les trois mesures et le cycle meurt au score.
+        {"asset": "BTC", "side": "LONG", "entry_price": "58138",
+         "stop_price": "56138", "target_price": "63138",
+         "evaluation": ["CONFLUENCE_3P", "OBSTACLE_AUCUN"]},
         {"targets_setup": "BTC", "severity": "0.2", "veto": False},
         {"size_factor": "0.9"},
         {"decision": "APPROVE", "reasoning": "ok", "size_factor": "1"},

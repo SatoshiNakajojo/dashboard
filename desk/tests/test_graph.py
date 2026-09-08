@@ -49,14 +49,22 @@ def _analyst(**o) -> dict:
 
 
 def _setup(**o) -> dict:
-    return {"asset": "BTC", "side": "LONG", "entry_price": "64000",
-            "stop_price": "63000", "target_price": "66500",
+    # La géométrie est calée sur BARS, pas inventée. Depuis que le scorer
+    # MESURE l'alignement, le niveau et le stop sur les barres, un setup à
+    # 64 000 sur une série qui oscille entre 56 900 et 61 000 note zéro sur
+    # les trois — et le cycle meurt à la porte du score. C'est le bon
+    # comportement ; c'était la fixture qui mentait.
+    #
+    # 58 138 est traversé par treize grappes distinctes de BARS (NIVEAU_NET)
+    # et 56 138 passe sous le plus bas de la série, 56 903 (STOP_STRUCTUREL).
+    # Le risque vaut donc 2 000 points ronds, et la cible 2,5 R.
+    return {"asset": "BTC", "side": "LONG", "entry_price": "58138",
+            "stop_price": "56138", "target_price": "63138",
             "rationale": "Rebond sur support.",
             # Une evaluation franche : le scorer doit la noter au-dessus de
             # la porte, sinon aucun test de bout en bout ne franchirait rien
             # et ils mesureraient tous la meme chose — le blocage.
-            "evaluation": ["REGIME_AVEC", "NIVEAU_NET", "STOP_STRUCTUREL",
-                           "CONFLUENCE_3P", "OBSTACLE_AUCUN"], **o}
+            "evaluation": ["CONFLUENCE_3P", "OBSTACLE_AUCUN"], **o}
 
 
 def _counter(**o) -> dict:
@@ -209,17 +217,24 @@ def test_l_abstention_de_l_avocat_ne_vaut_pas_absence_d_objection():
 
 
 def test_conviction_insuffisante_arrete_le_cycle():
-    faible = _setup(evaluation=["REGIME_NEUTRE", "NIVEAU_FLOU",
-                               "STOP_ARBITRAIRE", "CONFLUENCE_1",
-                               "OBSTACLE_AUCUN"])
+    # Entrée hors de l'étendue de BARS, stop dans le bruit : les trois
+    # mesures tombent au plancher et les deux jugements aussi.
+    faible = _setup(evaluation=["CONFLUENCE_1", "OBSTACLE_MAJEUR"],
+                    entry_price="70000", stop_price="69000",
+                    target_price="75000")
     res = run_desk_cycle(llm=_script(setup=faible), bars=BARS,
                          config=GraphConfig(min_conviction=Decimal("0.6")))
     assert res.stage is Stage.CONVICTION
 
 
 def test_asymetrie_insuffisante_arrete_le_cycle():
-    """Entrée 64000, stop 63000, cible 64500 : gain/risque = 0,5."""
-    res = run_desk_cycle(llm=_script(setup=_setup(target_price="64500")), bars=BARS)
+    """Entrée 58138, stop 56138, cible 59138 : gain/risque = 0,50.
+
+    Le risque est de 2 000 points ; une cible à 1 000 points ne le paie pas.
+    La géométrie suit BARS depuis que le scorer mesure sur les barres — une
+    cible choisie sans regarder l'entrée testerait le mauvais rejet.
+    """
+    res = run_desk_cycle(llm=_script(setup=_setup(target_price="59138")), bars=BARS)
     assert res.stage is Stage.ASYMETRIE
 
 
@@ -344,8 +359,8 @@ def test_le_registre_resout_avec_le_stop_prioritaire():
     book.record(run_desk_cycle(llm=_script(counter=_counter(veto=True)), bars=BARS))
 
     # Une bougie qui contient l'entrée, le stop ET la cible.
-    book.amorcer("BTC", high=Decimal("67000"), low=Decimal("62500"))
-    book.resolve("BTC", high=Decimal("67000"), low=Decimal("62500"))
+    book.amorcer("BTC", high=Decimal("63138"), low=Decimal("56000"))
+    book.resolve("BTC", high=Decimal("63138"), low=Decimal("56000"))
     assert book.entries[0].outcome == "stop"
     assert book.entries[0].pnl_r == Decimal("-1")
 
@@ -353,8 +368,8 @@ def test_le_registre_resout_avec_le_stop_prioritaire():
 def test_le_registre_resout_une_cible():
     book = ShadowBook()
     book.record(run_desk_cycle(llm=_script(counter=_counter(veto=True)), bars=BARS))
-    book.amorcer("BTC", high=Decimal("67000"), low=Decimal("63500"))
-    book.resolve("BTC", high=Decimal("67000"), low=Decimal("63500"))
+    book.amorcer("BTC", high=Decimal("63138"), low=Decimal("57000"))
+    book.resolve("BTC", high=Decimal("63138"), low=Decimal("57000"))
 
     assert book.entries[0].outcome == "cible"
     assert book.entries[0].pnl_r == Decimal("2.5")   # 2500 de gain / 1000 de risque
@@ -364,7 +379,7 @@ def test_l_esperance_exige_un_echantillon():
     """Sur moins de trente setups résolus, elle ne veut rien dire."""
     book = ShadowBook()
     book.record(run_desk_cycle(llm=_script(counter=_counter(veto=True)), bars=BARS))
-    book.resolve("BTC", high=Decimal("67000"), low=Decimal("62500"))
+    book.resolve("BTC", high=Decimal("63138"), low=Decimal("56000"))
     assert book.rejected_expectancy_r() is None
     assert "échantillon insuffisant" in book.format_report()
 
@@ -473,8 +488,8 @@ def test_la_cloture_dhorizon_compte_les_setups_qui_ne_bougent_pas():
 def test_la_cloture_ne_touche_pas_une_entree_deja_resolue():
     book = ShadowBook()
     book.record(run_desk_cycle(llm=_script(counter=_counter(veto=True)), bars=BARS))
-    book.amorcer("BTC", high=Decimal("67000"), low=Decimal("62500"))
-    book.resolve("BTC", high=Decimal("67000"), low=Decimal("62500"))
+    book.amorcer("BTC", high=Decimal("63138"), low=Decimal("56000"))
+    book.resolve("BTC", high=Decimal("63138"), low=Decimal("56000"))
     assert book.entries[0].outcome == "stop"
     assert book.cloturer("BTC", Decimal("66000")) == 0
     assert book.entries[0].pnl_r == Decimal("-1")
@@ -487,8 +502,8 @@ def test_la_discrimination_exige_les_deux_populations():
     for _ in range(35):
         book.record(run_desk_cycle(llm=_script(counter=_counter(veto=True)),
                                    bars=BARS))
-    book.amorcer("BTC", high=Decimal("67000"), low=Decimal("62500"))
-    book.resolve("BTC", high=Decimal("67000"), low=Decimal("62500"))
+    book.amorcer("BTC", high=Decimal("63138"), low=Decimal("56000"))
+    book.resolve("BTC", high=Decimal("63138"), low=Decimal("56000"))
     assert book.rejected_expectancy_r() == Decimal("-1")
     assert book.issued_expectancy_r() is None
     assert book.discrimination_r() is None
@@ -511,8 +526,16 @@ def test_le_prompt_explique_CHAQUE_categorie_que_le_scorer_pondere():
     from trading_desk.agents import scoring
     from trading_desk.agents.roster import STRATEGY_SYSTEM
 
-    manquantes = [e for e in sorted(scoring.ETIQUETTES)
+    # Seules les étiquettes que le MODÈLE rend doivent être expliquées.
+    # Les trois autres sont calculées sur les barres depuis que douze cycles
+    # réels ont montré qu'elles rendaient une valeur constante : l'agent y
+    # notait son propre travail. Les expliquer ici l'inviterait à les
+    # deviner.
+    manquantes = [e for e in sorted(scoring.ETIQUETTES_MODELE)
                   if e not in STRATEGY_SYSTEM]
+    calculees = [e for e in sorted(scoring.ETIQUETTES - scoring.ETIQUETTES_MODELE)
+                 if e in STRATEGY_SYSTEM]
+    assert not calculees, f"étiquettes calculées exposées au modèle : {calculees}"
     assert not manquantes, f"catégories pondérées mais non expliquées : {manquantes}"
 
 
@@ -609,3 +632,36 @@ def test_lintervalle_ne_bouge_pas_dun_affichage_a_lautre():
     book = ShadowBook()
     book.entries = [_entree_r("2")] * 20 + [_entree_r("-1")] * 25
     assert book.intervalle(book.entries) == book.intervalle(book.entries)
+
+
+def test_un_stop_hors_limites_est_REFUSE_pas_une_panne():
+    """Un défaut trouvé en ancrant le dry-run sur ses barres.
+
+    `build_mandate` construit une fourchette de stop bornée par les limites
+    dures. Quand le setup demande un stop plus large que
+    `max_stop_distance_bps`, cette fourchette sort avec un minimum supérieur
+    à son maximum et le schéma lève — ce qui faisait TOMBER LE CYCLE au lieu
+    de refuser le mandat. Le commentaire de `build_mandate` affirmait
+    pourtant que le mandat serait « refusé à la construction », et l'a
+    affirmé jusqu'à ce qu'un stop de 719 bps traverse le graphe.
+
+    Un setup hors limites est un refus ordinaire. Une exception non
+    rattrapée au milieu d'un cycle de décision n'en est pas un.
+    """
+    limits = RiskLimits(max_stop_distance_bps=Decimal("500"))
+    large = _setup(entry_price="58138", stop_price="52000",
+                   target_price="70000")          # ~1 054 bps de stop
+    res = run_desk_cycle(llm=_script(setup=large), bars=BARS, limits=limits)
+
+    assert res.stage is Stage.STOP_HORS_LIMITES, res.reason
+    assert not res.is_directional
+    assert "1054" in res.reason or "bps" in res.reason
+
+
+def test_un_stop_trop_SERRE_est_refuse_aussi():
+    """La borne basse compte autant : un stop à 5 bps se fait balayer par le
+    bruit, et le moteur de risque le refuse pour cette raison."""
+    limits = RiskLimits(min_stop_distance_bps=Decimal("30"))
+    serre = _setup(entry_price="58138", stop_price="58130", target_price="63138")
+    res = run_desk_cycle(llm=_script(setup=serre), bars=BARS, limits=limits)
+    assert res.stage is Stage.STOP_HORS_LIMITES, res.reason
