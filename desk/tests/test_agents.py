@@ -608,3 +608,37 @@ def test_un_schema_sans_borne_najoute_rien_au_prompt():
     from trading_desk.contracts.signals import RegimeRead
 
     assert limites_de_longueur(payload_schema(RegimeRead)) == ""
+
+
+def test_le_contexte_donne_les_horizons_sur_lesquels_le_stop_est_JUGE():
+    """Un agent noté sur une information qu'il n'a pas est noté au hasard.
+
+    Le scorer mesure si le stop dépasse le plus bas de 120 barres
+    (structurel) ou celui de 40 (défendable). Le contexte ne montrait que
+    l'extrême à 20 barres — et une exécution réelle a rendu
+    `STOP_ARBITRAIRE` sur six setups sur six.
+
+    Ce test lie les deux : ajouter un horizon au barème sans l'ajouter au
+    contexte le fait tomber.
+    """
+    from trading_desk.agents.analyst import build_market_context
+    from trading_desk.agents.scoring import _FENETRE_PROCHE, _FENETRE_STRUCTURE
+    from trading_desk.features import synthetic_bars
+
+    prix = build_market_context(synthetic_bars(count=200, seed=5))["prix"]
+    for fenetre in (_FENETRE_PROCHE, _FENETRE_STRUCTURE):
+        assert f"plus_bas_{fenetre}" in prix, (
+            f"le barème juge sur {fenetre} barres, le contexte ne le montre pas")
+        assert f"plus_haut_{fenetre}" in prix
+
+
+def test_les_extremes_du_contexte_sont_coherents_entre_eux():
+    """Un plus bas à 120 barres supérieur à celui de 40 serait une erreur de
+    fenêtrage, et elle passerait inaperçue : les deux nombres sont
+    plausibles isolément."""
+    from trading_desk.agents.analyst import build_market_context
+    from trading_desk.features import synthetic_bars
+
+    prix = build_market_context(synthetic_bars(count=300, seed=9))["prix"]
+    assert prix["plus_bas_120"] <= prix["plus_bas_40"]
+    assert prix["plus_haut_120"] >= prix["plus_haut_40"]

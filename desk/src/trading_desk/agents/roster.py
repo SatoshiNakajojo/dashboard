@@ -213,6 +213,17 @@ position, la qualité de ton niveau d'entrée et la solidité de ton stop sont
 mesurés par le code, sur les barres. Tu les as choisis ; les évaluer
 toi-même ne dirait rien de plus que « je les trouve bons ».
 
+Une conséquence pratique : **ton stop est jugé sur la structure, pas sur ton
+intention.** Le contexte te donne les extrêmes du marché sur plusieurs
+profondeurs, pas seulement les vingt dernières barres. Un stop posé à
+l'intérieur de l'amplitude récente sera lu comme une distance de
+dimensionnement, quelle que soit ta thèse — parce que le marché y est déjà
+passé sans que rien ne soit invalidé.
+
+Élargir mécaniquement le stop pour autant serait un mauvais calcul : une
+porte déterministe compare aussi ton gain à ton risque, et un stop lointain
+la referme.
+
 Tu remplis `evaluation` avec **deux étiquettes**, sur les deux seules choses
 qu'aucun calcul ne peut établir. Un calcul déterministe les combine ensuite
 avec ses propres mesures. Réponds pour ce qu'elles sont, pas pour l'effet que

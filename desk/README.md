@@ -1155,6 +1155,44 @@ une fenêtre volatile, un stop **vraiment** structurel dépasse la limite dure
 de 500 bps. Les deux critères se contredisent, et c'est la limite de risque
 qui gagne.
 
+#### Après refonte : trois corrections sur quatre ont pris
+
+Même configuration, 12 cycles, 0,99 $. Comparaison terme à terme :
+
+| terme | avant | après | |
+| --- | --- | --- | --- |
+| alignement | +0,25 constant | +0,25 méd., **min +0,00** | varie |
+| niveau | +0,10 → +0,20 | +0,20 méd., min +0,10 | varie |
+| obstacle | −0,10 constant | **+0,00** sur 6 | le prompt corrigé a pris |
+| invalidation | +0,20 constant | **+0,00** sur 6 | voir ci-dessous |
+| confluence | +0,10 constant | +0,10 constant | inchangé |
+| **score** | méd. 0,46 (0,41–0,57) | méd. 0,38 (0,17–0,44) | étendue triplée |
+
+L'étendue des scores passe de 0,16 à 0,27 : les mesures **discriminent**, ce
+que l'auto-évaluation ne faisait pas. Le coût descend à 0,0826 $ le cycle.
+
+#### Le résultat le plus instructif de la campagne
+
+L'agent annonçait `STOP_STRUCTUREL` **cent fois sur cent**. Le code mesure
+`STOP_ARBITRAIRE` **six fois sur six**. L'auto-évaluation gonflait le score
+d'exactement une dimension entière — 0,20 sur une échelle de 1,00.
+
+J'ai d'abord soupçonné une impossibilité géométrique : un stop au-delà du
+plus bas de 120 barres dépasserait-il la limite dure de 500 bps ? **Vérifié,
+et non** — distance médiane 327 bps, et la contrainte tient dans 75 % des
+fenêtres. L'agent pouvait poser un stop structurel.
+
+La vraie cause était ailleurs, et elle est de mon fait : **le contexte de
+marché ne lui montrait que l'extrême à 20 barres.** Je le notais sur une
+information qu'il n'avait pas. Le contexte porte désormais les extrêmes à
+40 et 120 barres, et un test lie les deux — ajouter un horizon au barème
+sans l'ajouter au contexte le fait tomber.
+
+Ce n'est pas souffler le barème à l'agent : la porte d'asymétrie l'empêche
+d'en abuser, puisqu'un stop plus large dégrade mécaniquement le gain/risque.
+Les deux portes tirent en sens contraire, et un setup doit satisfaire les
+deux.
+
 #### La porte P3 en réel : le desk n'émet toujours rien
 
 31 cycles sur `BTC_1h_real`, politique économique, 139 appels, **2,88 $**.
