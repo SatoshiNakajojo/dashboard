@@ -1819,13 +1819,44 @@ dédupliquait après avoir écarté les événements sans bougie, ce qui
 promouvait un événement que le vrai calendrier masquait — exactement le
 défaut que `poolage` et `decalage_calendaire` avaient déjà eu entre eux.
 
-### Le chantier actions est bloqué de mon côté
+### Le chantier actions : pré-enregistré avant la moindre donnée
 
-Le test de généralité — les *lockup expiries* d'IPO, l'analogue direct sur
-actions — demande des cours d'actions et des dates d'introduction. La
-politique réseau de l'environnement où ce code est écrit refuse stooq,
-nasdaq, sec.gov et yahoo (403 sur les quatre). Écrire un collecteur que je
-ne peux pas exécuter contre la source réelle est exactement ce qui a produit
-le `fetch_unlocks.py` de la première version, contre une API devenue payante
-et une structure de données supposée. Ce chantier attend une machine qui
-atteint ces sources.
+Le résultat crypto garde un défaut que le temps seul peut corriger — il a été
+construit en connaissant les données. Le journal hors échantillon y répond en
+six mois à un an.
+
+**Une réplication sur une classe d'actifs entièrement différente y répond
+autrement, et tout de suite.** Les *lockup expiries* d'IPO sont l'analogue
+exact : une augmentation d'offre connue des mois à l'avance, à date fixe.
+
+À une condition : que les règles soient écrites *avant* de voir les données.
+C'est `docs/preenregistrement-lockup-actions.md`, daté et versionné — tout
+écart ultérieur sera visible dans l'historique Git. Il fige la fenêtre
+J-7/J-1, la convention des 180 jours post-introduction, les tranches, SPY
+comme référence, et les six mêmes contrôles. Rien n'est ré-exploré.
+
+Il écrit surtout **ce qui compterait comme réfutation**, la partie qui
+engage :
+
+- une réfutation ne détruirait pas le résultat crypto, elle le rendrait
+  *propre à la crypto* — flottant étroit, détenteurs concentrés, pas de
+  teneur de marché obligé ;
+- sous 100 événements exploitables, rien n'est conclu, et il est dit que
+  rien n'est conclu ;
+- **un effet plus fort que le crypto sera traité avec méfiance.** Les
+  actions sont plus liquides et plus arbitrées ; un résultat supérieur
+  appellerait d'abord une recherche d'erreur dans la chaîne de données.
+
+L'univers ne sera pas choisi à la main. Une liste écrite de mémoire ne
+contiendrait que les IPO dont on se souvient — les grosses, les survivantes
+— et ce biais suffirait à fabriquer l'effet.
+
+`scripts/sonder_sources_actions.py` sonde sept sources candidates et ne parse
+rien : il rapporte le code HTTP et la **structure** de ce qui revient, parce
+qu'un parseur se casse sur une forme inattendue, jamais sur une valeur
+inattendue. La politique réseau de l'environnement de développement les
+refuse toutes (403 sur stooq, SEC, Nasdaq, Yahoo) ; la sonde tourne donc
+ailleurs, et le parseur ne sera écrit qu'après lecture de sa sortie.
+
+C'est la leçon de `fetch_unlocks.py`, écrit contre une API supposée devenue
+payante et une structure devinée : propre, testé, entièrement faux.
