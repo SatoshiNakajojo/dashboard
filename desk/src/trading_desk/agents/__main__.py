@@ -32,7 +32,7 @@ from pathlib import Path
 from ..backtest.data import DataUnavailable, load_from_file, load_synthetic
 from ..features.bars import Bar
 from .budget import BudgetedLLM, BudgetExceeded
-from .graph import run_desk_cycle
+from .graph import GraphConfig, run_desk_cycle
 from .llm import (
     API_KEY_VARS,
     DEFAULT_MODEL,
@@ -113,6 +113,56 @@ def _build_llm(args) -> LLMClient:
         # journal continue de nommer un modele unique sans indirection.
         return AnthropicLLM(model=args.model, effort=args.effort)
     return RoutedLLM(POLITIQUES[args.politique], effort=args.effort)
+
+
+def _rapport_notes(notes: list, seuil) -> None:
+    """La distribution des scores, et ce que chaque critere a coute.
+
+    Sans ce bloc, un « CONVICTION 19 » dit QUE la porte se referme et jamais
+    POURQUOI. La premiere execution reelle l'a appris a mes depens : elle a
+    coute 2,88 $ et n'a rien laisse pour diagnostiquer, parce que le detail
+    de la note ne vivait que dans une chaine de rejet jamais affichee.
+
+    Deux chiffres decident de la suite. **L'ecart au seuil** dit si la porte
+    est manquee de peu ou de loin — un desk qui echoue a 0,58 et un desk qui
+    echoue a 0,30 n'ont pas le meme probleme. **Le terme median de chaque
+    dimension** dit lequel des criteres plafonne : si l'un rend zero a
+    chaque cycle, ce n'est pas le marche qui est mediocre, c'est ce critere
+    qui ne se declenche jamais.
+    """
+    if not notes:
+        return
+    import statistics
+
+    scores = sorted(float(n.score) for n in notes)
+    print("\n  SCORES DU SCORER — pourquoi la porte s'ouvre ou non")
+    print("  " + "-" * 58)
+    print(f"  {'notes calculées':<28} {len(scores):>10}")
+    print(f"  {'médiane':<28} {statistics.median(scores):>10.2f}")
+    print(f"  {'minimum / maximum':<28} "
+          f"{scores[0]:>4.2f} / {scores[-1]:.2f}")
+    print(f"  {'seuil de la porte':<28} {float(seuil):>10.2f}")
+    print(f"  {'au-dessus du seuil':<28} "
+          f"{sum(1 for x in scores if x >= float(seuil)):>10}")
+
+    par_terme: dict[str, list[float]] = {}
+    for n in notes:
+        for nom, valeur in n.termes:
+            par_terme.setdefault(nom, []).append(float(valeur))
+        for nom in n.omises:
+            par_terme.setdefault(nom + " (omis)", []).append(0.0)
+    print("  " + "-" * 58)
+    print(f"  {'terme':<20} {'médiane':>9} {'min':>7} {'max':>7} {'n':>6}")
+    for nom, v in sorted(par_terme.items()):
+        print(f"  {nom:<20} {statistics.median(v):>+9.2f} "
+              f"{min(v):>+7.2f} {max(v):>+7.2f} {len(v):>6}")
+    print("  " + "-" * 58)
+    manque = float(seuil) - statistics.median(scores)
+    if manque > 0:
+        print(f"  Il manque {manque:.2f} au cycle médian pour franchir la "
+              "porte.\n")
+    else:
+        print("  Le cycle médian franchit la porte.\n")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -254,6 +304,7 @@ def main() -> int:
 
     tous = []
     stages: dict[str, int] = {}
+    notes: list = []
     interrompu = ""
     for i, fenetre in enumerate(fenetres, 1):
         try:
@@ -266,6 +317,12 @@ def main() -> int:
             break
         tous.extend(res.runs)
         stages[res.stage.value] = stages.get(res.stage.value, 0) + 1
+        # La note de chaque cycle, gardee pour le rapport. Sans elle, un
+        # « CONVICTION 19 » dit QUE la porte se referme et jamais POURQUOI —
+        # et le diagnostic coute alors une seconde execution payante. C'est
+        # exactement ce qui est arrive a la premiere.
+        if res.note is not None:
+            notes.append(res.note)
         print(f"    cycle {i}/{len(fenetres)} — {res.stage.value:<14} "
               f"{float(llm.spent_usd):.4f} $ dépensés", end="\r", flush=True)
 
@@ -308,6 +365,7 @@ def main() -> int:
               "le coût affiché n'est pas fiable.")
     print("  répartition des issues : "
           + ", ".join(f"{k} {v}" for k, v in sorted(stages.items())))
+    _rapport_notes(notes, GraphConfig().min_conviction)
 
     # La porte se joue agent par agent : une moyenne globale masque l'agent
     # qui echoue, et c'est precisement celui qui bloque le passage au P4.

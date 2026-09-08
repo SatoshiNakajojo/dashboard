@@ -1083,14 +1083,73 @@ C'est la même famille de panne que le rejet de la réflexion adaptative par
 Haiku 4.5 : invisible en test unitaire, fatale en production, et attribuée à
 la compétence de l'agent plutôt qu'au câblage.
 
-#### Ce qui n'est pas encore mesuré
+#### La porte P3 en réel : le desk n'émet toujours rien
 
-Le desk n'a jamais émis de mandat parce que la conviction du modèle
-plafonnait vers 0,55. Le scorer rend l'échelle atteignable — un setup franc
-note 0,84 en test — mais **savoir si le modèle produit des évaluations
-franches sur un vrai marché demande des appels réels.** Rien ici ne le
-prouve, et le chemin de bout en bout n'est vérifié que sur réponses
-scriptées.
+31 cycles sur `BTC_1h_real`, politique économique, 139 appels, **2,88 $**.
+
+```
+répartition des issues : CONVICTION 19, LECTURE 2, PAS_DE_SETUP 10
+```
+
+**Zéro mandat.** L'agent Stratégie s'est abstenu 10 fois sur 29 — c'est son
+droit et c'est sain. Mais sur les **19 setups qu'il a proposés, les 19 ont
+été arrêtés par la porte du score.** Pas un seul au-dessus de 0,60.
+
+La qualité de schéma est de 100 % partout, sur les cinq modèles et les sept
+rôles : le routage économique tient, `CAPACITES` fait son travail, et aucun
+appel n'a échoué. Le câblage n'est pas en cause.
+
+| agent | modèle | coût/décision | appels |
+| --- | --- | --- | --- |
+| régime | Haiku 4.5 | 0,0013 $ | 31 |
+| quant | Haiku 4.5 | 0,0020 $ | 31 |
+| stratégie | Opus 5 | 0,0374 $ | 29 |
+| avocat du diable | Opus 5 | **0,0569 $** | 19 |
+
+Un cycle complet coûte 0,0929 $, soit 803 $/mois à 12 décisions/heure.
+L'avocat du diable est le poste le plus lourd — 1 842 jetons de sortie par
+appel, 81 % de sa facture.
+
+#### Mon erreur de calibration, et elle est nette
+
+Les tests du scorer vérifiaient **les extrémités** de l'échelle : un setup
+parfait note 1,00, un setup vide note 0,00. Ils ne vérifiaient rien entre
+les deux — et c'est exactement là que vivent tous les setups réels.
+
+Zéro sur dix-neuf n'est pas une série de décisions serrées, c'est un
+plafond. Pour franchir 0,60 avec une objection de sévérité 0,5 (−0,20) et
+un régime lu à 0,7 de confiance (+0,105), il faut au moins
+`REGIME_AVEC + NIVEAU_NET + STOP_STRUCTUREL + CONFLUENCE_2` — soit 0,75 sur
+un maximum qualitatif de 0,85. **Une seule dimension au palier moyen fait
+échouer.** J'ai fixé des poids dont la somme atteint 1,00 sans jamais
+regarder ce que note un setup simplement correct.
+
+Le seuil de 0,60 est par ailleurs **hérité de l'ancienne échelle** — la
+probabilité auto-déclarée du modèle — et appliqué à une échelle neuve sans
+être re-dérivé. Je l'avais écrit dans la docstring de `scoring.py` et je
+l'ai expédié quand même.
+
+#### Le blocage est circulaire, et c'est le vrai problème
+
+Le registre fantôme existe pour mesurer si les mandats du desk valent
+quelque chose. `discrimination_r()` a besoin des **deux** populations —
+émis et rejetés — pour dire quoi que ce soit. Avec zéro mandat émis, il n'en
+reçoit qu'une.
+
+Donc : la porte ne peut pas être calibrée sans données d'issue, et il n'y a
+pas de données d'issue tant que la porte ne laisse rien passer. **En mode
+fantôme, le coût d'un faux positif est nul** — c'est toute la raison d'être
+du registre. Une porte réglée pour que rien ne passe ne protège de rien et
+empêche d'apprendre.
+
+#### L'outil qui manquait
+
+Cette exécution a coûté 2,88 $ et n'a **rien laissé pour diagnostiquer** :
+le détail de la note ne vivait que dans une chaîne de rejet jamais affichée,
+et aucun journal n'était persisté. Le rapport imprime désormais la
+distribution des scores et la médiane de chaque terme — de quoi voir d'un
+coup d'œil si la porte est manquée de peu ou de loin, et quel critère
+plafonne.
 
 ## Étape 2 — les déclencheurs de la Sentinelle, cartographiés
 
