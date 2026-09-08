@@ -1106,3 +1106,74 @@ def test_la_purge_est_REFUSEE_des_quune_fenetre_est_close(tmp_path,
     ok, msg = journal_mod.purger_version(j, 1)
     assert not ok and "REFUS" in msg, msg
     assert j.read_text() == avant, "le journal a été modifié malgré le refus"
+
+
+def test_le_journal_et_le_DECLENCHEUR_appliquent_la_MEME_regle():
+    """Le test qui rend la fusion vérifiable.
+
+    La règle du déblocage vit dans `sentinelle.triggers` et trois endroits
+    la lisent : ce journal, le déclencheur, et la validation. La duplication
+    n'est pas une crainte théorique — elle a mordu deux fois dans ce projet.
+    `poolage` et `decalage_calendaire` ordonnaient différemment la
+    déduplication et le filtre de débordement ; la v1 de ce journal a
+    inscrit XPL deux fois et un déblocage de 65 % de l'offre.
+
+    Une copie dérive un jour, et la dérive ne se voit pas dans les chiffres :
+    elle se voit des mois plus tard, dans un score hors échantillon qui ne
+    mesure pas la stratégie qu'on croyait.
+
+    On compare donc les deux chemins sur le même calendrier tordu — tailles
+    aux bornes, événements collés, entrée malformée.
+    """
+    from trading_desk.features.bars import Bar
+    from trading_desk.sentinelle.triggers import deblocage_annonce
+
+    calendrier = [
+        {"ts_ms": 50 * JOUR_MS, "part_offre": 0.019},   # sous la borne basse
+        {"ts_ms": 60 * JOUR_MS, "part_offre": 0.03},    # retenu
+        {"ts_ms": 63 * JOUR_MS, "part_offre": 0.30},    # masqué ET trop gros
+        {"ts_ms": 64 * JOUR_MS, "part_offre": 0.04},    # masqué par le 60
+        {"ts_ms": 80 * JOUR_MS, "part_offre": 0.24},    # retenu, borne haute
+        {"ts_ms": 90 * JOUR_MS, "part_offre": 0.25},    # à la borne : exclu
+        {"ts_ms": 100 * JOUR_MS},                       # malformé
+    ]
+    bars = [Bar(asset="T", ts_ms=i * JOUR_MS, open=Decimal("100"),
+                high=Decimal("101"), low=Decimal("99"), close=Decimal("100"))
+            for i in range(200)]
+
+    par_declencheur = [b.ts_ms // JOUR_MS + 7
+                       for b in (bars[d.index]
+                                 for d in deblocage_annonce(
+                                     bars, deblocages=calendrier))]
+    par_journal = [x["deblocage_ms"] // JOUR_MS
+                   for x in journal_mod.a_prendre(
+                       {"T": calendrier}, 0, horizon_j=200, univers={"T"})]
+
+    assert par_declencheur == par_journal == [60, 80], (
+        f"déclencheur {par_declencheur} ≠ journal {par_journal}")
+
+
+def test_un_deblocage_MASQUE_le_suivant_meme_sans_bougie(tmp_path):
+    """Un déblocage sans bougie à J-7 masque quand même son voisin.
+
+    Il a eu lieu : la position aurait été tenue, et le voisin de trois jours
+    reste contaminé. La première version dédupliquait sur les indices de
+    barres APRÈS avoir écarté les événements sans bougie, ce qui promouvait
+    un événement que le vrai calendrier masquait — le même défaut que
+    `poolage` et `decalage_calendaire` avaient déjà eu entre eux.
+    """
+    from trading_desk.features.bars import Bar
+    from trading_desk.sentinelle.triggers import deblocage_annonce
+
+    # Les bougies commencent au jour 100 : le déblocage du jour 104 n'a pas
+    # de barre à J-7 (jour 97), mais il masque celui du jour 107.
+    bars = [Bar(asset="T", ts_ms=i * JOUR_MS, open=Decimal("100"),
+                high=Decimal("101"), low=Decimal("99"), close=Decimal("100"))
+            for i in range(100, 200)]
+    d = deblocage_annonce(bars, deblocages=[
+        {"ts_ms": 104 * JOUR_MS, "part_offre": 0.03},
+        {"ts_ms": 107 * JOUR_MS, "part_offre": 0.03},
+        {"ts_ms": 130 * JOUR_MS, "part_offre": 0.03},
+    ])
+    jours = [bars[x.index].ts_ms // JOUR_MS + 7 for x in d]
+    assert jours == [130], f"le 107 aurait dû rester masqué par le 104 : {jours}"

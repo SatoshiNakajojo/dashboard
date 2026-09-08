@@ -1590,6 +1590,35 @@ Trois choses le distinguent :
 - **Il n'appelle aucun modèle.** Du Python pur sur un calendrier — la forme
   d'agent algorithmique que le pivot demandait.
 
+### La règle du déblocage n'existe qu'à un seul endroit
+
+`sentinelle.triggers` la définit ; le déclencheur, le journal des positions
+et le rapport de validation la lisent. Trois lecteurs, une définition.
+
+Ce n'est pas de l'élégance, c'est une réparation. **La duplication a mordu
+deux fois dans ce projet :**
+
+- `poolage` et `decalage_calendaire` ordonnaient différemment la
+  déduplication et le filtre de débordement. Sur ces données les deux ordres
+  donnaient les mêmes n — ils coïncidaient par chance ;
+- le journal, à sa première exécution réelle, a inscrit XPL deux fois et un
+  déblocage de 65 % de l'offre, parce qu'il redéfinissait la règle au lieu
+  de la lire.
+
+Une copie dérive un jour, et **la dérive ne se voit jamais dans les
+chiffres** : elle se voit des mois plus tard, dans un score hors échantillon
+qui ne mesure pas la stratégie qu'on croyait. Deux tests comparent
+désormais les deux chemins sur un calendrier tordu — tailles aux bornes,
+événements collés, entrée malformée — et exigent qu'ils rendent la même
+liste.
+
+La fusion a d'ailleurs corrigé un défaut au passage : **un déblocage sans
+bougie à J-7 masque quand même son voisin de trois jours.** Il a eu lieu, la
+position aurait été tenue, et le voisin reste contaminé. L'ancienne version
+dédupliquait après avoir écarté les événements sans bougie, ce qui
+promouvait un événement que le vrai calendrier masquait — exactement le
+défaut que `poolage` et `decalage_calendaire` avaient déjà eu entre eux.
+
 ### Le chantier actions est bloqué de mon côté
 
 Le test de généralité — les *lockup expiries* d'IPO, l'analogue direct sur

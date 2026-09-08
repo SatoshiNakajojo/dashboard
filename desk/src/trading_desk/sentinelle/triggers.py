@@ -303,11 +303,70 @@ def rupture_volatilite(bars: list[Bar], *, courte: int = 24, longue: int = 168,
 BAISSIER = "baissier"           # une direction posee d'avance, quel que soit
 #                                 le mouvement de la barre elle-meme
 
+# --------------------------------------------------------------------------
+#  La regle du deblocage, definie UNE FOIS
+# --------------------------------------------------------------------------
+#
+# Ces bornes ne sont pas des reglages, ce sont les LIMITES du domaine valide,
+# et elles vivent ici parce que trois endroits les utilisent : ce
+# declencheur, `scripts/journal_unlocks.py` qui inscrit les positions a
+# venir, et `scripts/valider_unlocks.py` qui a produit la mesure.
+#
+# La duplication n'est pas une hypothese : elle a deja mordu deux fois dans
+# ce projet. `poolage` et `decalage_calendaire` ordonnaient differemment la
+# deduplication et le filtre de debordement ; le journal, a sa premiere
+# execution reelle, a inscrit XPL deux fois et un deblocage de 65 %. Chaque
+# copie derive un jour, et la derive ne se voit pas dans les chiffres.
+
+DEBLOCAGE_PART_MIN = 0.02   # en dessous, aucun des six controles ne survit
+DEBLOCAGE_PART_MAX = 0.25   # borne la plus serree validee par l'epreuve
+#                             des denominateurs (n=832, +223,1 bps, p=0,0025)
+DEBLOCAGE_AVANCE_J = 7      # fenetre d'anticipation J-7 -> J-1
+DEBLOCAGE_DUREE_J = 6       # six jours de detention
+
+
+def deblocages_retenus(
+    deblocages: Sequence[dict], *,
+    part_min: float = DEBLOCAGE_PART_MIN,
+    part_max: float = DEBLOCAGE_PART_MAX,
+    duree_j: int = DEBLOCAGE_DUREE_J,
+) -> list[dict]:
+    """Le filtre de taille et la deduplication, appliques sur des DATES.
+
+    Travailler sur des dates plutot que sur des indices de barres est ce qui
+    permet aux deux appelants de partager cette fonction : le declencheur a
+    des barres, le journal n'en a pas — ses evenements sont dans le futur et
+    aucune bougie n'existe encore.
+
+    **Un seul evenement par fenetre.** Deux deblocages a trois jours d'ecart
+    produisent des fenetres qui se recouvrent, donc une position tenue une
+    fois et comptee deux. La validation applique la meme regle ; s'en ecarter
+    mesurerait une strategie differente de celle qui a ete mesuree.
+
+    Un evenement malforme est ecarte, jamais leve : le calendrier vient d'une
+    source externe et le desk doit l'ignorer, pas tomber au milieu d'un cycle.
+    """
+    gardes: list[dict] = []
+    dernier = -10**9
+    for e in sorted(deblocages, key=lambda v: v.get("ts_ms") or 0):
+        try:
+            part = float(e["part_offre"])
+            jour = int(e["ts_ms"]) // 86_400_000
+        except (KeyError, TypeError, ValueError):
+            continue
+        if not part_min <= part < part_max:
+            continue
+        if jour - dernier < duree_j:
+            continue
+        dernier = jour
+        gardes.append(e)
+    return gardes
+
 
 def deblocage_annonce(
     bars: list[Bar], *, deblocages: Sequence[dict],
-    part_min: float = 0.02, part_max: float = 0.25,
-    avance_j: int = 7, duree_j: int = 6,
+    part_min: float = DEBLOCAGE_PART_MIN, part_max: float = DEBLOCAGE_PART_MAX,
+    avance_j: int = DEBLOCAGE_AVANCE_J, duree_j: int = DEBLOCAGE_DUREE_J,
 ) -> list[Declenchement]:
     """Le seul declencheur dont l'edge directionnel a ete MESURE.
 
@@ -351,26 +410,17 @@ def deblocage_annonce(
     pas nul.
     """
     par_jour = {b.ts_ms // 86_400_000: i for i, b in enumerate(bars)}
-    candidats: list[Declenchement] = []
-    for e in sorted(deblocages, key=lambda v: v["ts_ms"]):
-        part = float(e.get("part_offre", 0.0))
-        if not part_min <= part < part_max:
-            continue
+    out: list[Declenchement] = []
+    # La deduplication porte sur le CALENDRIER, pas sur les barres presentes.
+    # Un deblocage sans bougie a J-7 masque quand meme son voisin de trois
+    # jours : il a eu lieu, et la position aurait ete tenue.
+    for e in deblocages_retenus(deblocages, part_min=part_min,
+                                part_max=part_max, duree_j=duree_j):
         i = par_jour.get(e["ts_ms"] // 86_400_000 - avance_j)
-        if i is None:
-            continue
-        candidats.append(Declenchement(i, -1, part, "deblocage_annonce"))
-    # Un seul reveil par fenetre : deux deblocages rapproches produisent des
-    # fenetres qui se recouvrent, donc une position tenue une fois. La
-    # validation applique la meme regle, et s'en ecarter ici mesurerait une
-    # strategie differente de celle qui a ete mesuree.
-    gardes: list[Declenchement] = []
-    dernier = -10**9
-    for d in candidats:
-        if d.index - dernier >= duree_j:
-            gardes.append(d)
-            dernier = d.index
-    return gardes
+        if i is not None:
+            out.append(Declenchement(i, -1, float(e["part_offre"]),
+                                     "deblocage_annonce"))
+    return out
 
 
 DECLENCHEURS = {

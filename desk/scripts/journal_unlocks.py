@@ -59,6 +59,13 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from trading_desk.backtest.data import fetch_hyperliquid
+from trading_desk.sentinelle.triggers import (
+    DEBLOCAGE_AVANCE_J,
+    DEBLOCAGE_DUREE_J,
+    DEBLOCAGE_PART_MAX,
+    DEBLOCAGE_PART_MIN,
+    deblocages_retenus,
+)
 
 JOUR_MS = 86_400_000
 
@@ -66,22 +73,22 @@ JOUR_MS = 86_400_000
 # des versions antérieures restent jugées sur la leur — sinon « ajuster
 # légèrement le seuil » transformerait un échec passé en succès.
 VERSION = 2
-ENTREE_J, SORTIE_J = -7, -1
-DUREE_J = SORTIE_J - ENTREE_J             # 6 jours, comme la validation
-
-# Borne BASSE : 2 %. La tranche 0,5-2 % ne survit à aucun des six contrôles
-# (p = 0,40 au décalage calendaire net). L'inclure diluerait le test hors
-# échantillon avec des positions dont on sait déjà qu'elles ne rapportent
-# rien.
-#
-# Borne HAUTE : 25 %, et ce n'est pas de la prudence de principe. C'est la
-# borne la plus serrée que l'épreuve des dénominateurs ait validée
-# (n = 832, +223,1 bps, p = 0,0025). Vingt des 852 événements historiques
-# la dépassent, et rien dans ces données ne dit ce que fait un déblocage de
-# 65 % de l'offre. Ce n'est pas un gros déblocage, c'est un autre
-# événement — souvent une refonte de tokenomics ou une erreur de source.
-TRANCHE_MIN, TRANCHE_MAX = 0.02, 0.25
 REFERENCE = "BTC"
+
+# **La règle n'est PAS définie ici.** Elle vient de
+# `sentinelle.triggers`, qui en est la seule source. Ce script inscrit des
+# positions ; le déclencheur en réveille le desk ; `valider_unlocks.py` les
+# a mesurées. Trois lecteurs, une définition.
+#
+# La duplication n'est pas une crainte théorique, elle a mordu deux fois :
+# `poolage` et `decalage_calendaire` ordonnaient différemment la
+# déduplication et le filtre de débordement, et la v1 de ce journal a
+# inscrit XPL deux fois et un déblocage de 65 % de l'offre. Une copie dérive
+# un jour, et la dérive ne se voit jamais dans les chiffres — elle se voit
+# des mois plus tard, dans un score hors échantillon qui ne mesure pas la
+# stratégie qu'on croyait.
+ENTREE_J = -DEBLOCAGE_AVANCE_J
+SORTIE_J = ENTREE_J + DEBLOCAGE_DUREE_J
 
 
 def a_prendre(unlocks: dict, maintenant_ms: int, horizon_j: int,
@@ -103,14 +110,7 @@ def a_prendre(unlocks: dict, maintenant_ms: int, horizon_j: int,
     for symbole, bruts in sorted(unlocks.items()):
         if univers is not None and symbole not in univers:
             continue
-        retenus: list[int] = []
-        for e in sorted(bruts, key=lambda v: v["ts_ms"]):
-            if not TRANCHE_MIN <= e["part_offre"] < TRANCHE_MAX:
-                continue
-            jour = e["ts_ms"] // JOUR_MS
-            if retenus and jour - retenus[-1] < DUREE_J:
-                continue
-            retenus.append(jour)
+        for e in deblocages_retenus(bruts):
             entree = e["ts_ms"] + ENTREE_J * JOUR_MS
             if not maintenant_ms < entree <= maintenant_ms + horizon_j * JOUR_MS:
                 continue
@@ -344,8 +344,14 @@ def main() -> int:
     print(f"\n  POSITIONS À VENIR — règle v{VERSION}, "
           f"{args.horizon} prochains jours")
     print("  " + "=" * 74)
-    print(f"  Vendre à découvert à J-7, racheter à J-1, adossé à "
-          f"{REFERENCE}.\n")
+    # La règle active, imprimée à chaque exécution. Elle est lue depuis
+    # `sentinelle.triggers`, donc ce qui s'affiche est ce qui s'applique —
+    # pas une phrase recopiée qui pourrait mentir après une modification.
+    print(f"  Vendre à découvert à J{ENTREE_J}, racheter à J{SORTIE_J}, "
+          f"adossé à {REFERENCE}.")
+    print(f"  Déblocages retenus : de {DEBLOCAGE_PART_MIN:.0%} à "
+          f"{DEBLOCAGE_PART_MAX:.0%} de l'offre, un seul par "
+          f"{DEBLOCAGE_DUREE_J} jours.\n")
     if not prises:
         print("  Aucun déblocage de plus de 2 % dans la fenêtre.\n")
         return 0
