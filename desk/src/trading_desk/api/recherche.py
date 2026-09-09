@@ -206,9 +206,27 @@ _CAMPAGNES = (
     # n'écrit son artefact que si on le lui demande — d'où le `--out` dans la
     # commande affichée : sans lui, ce panneau reste vide alors que le
     # résultat existe.
-    ("unlocks.json", "Déblocages de jetons — anticipation", "p_direction",
-     "direction",
-     "le marché vend-il AVANT la date de déblocage (J-7 → J-1, sens court)",
+    # Deux entrees pour un seul fichier, et l'ordre compte : le test POOLÉ
+    # d'abord, parce que c'est celui qui repond a l'hypothese sous sa forme
+    # reelle. L'hypothese posee d'avance est « un deblocage fait baisser le
+    # prix » — un effet COMMUN a tous les jetons. Le criblage par jeton
+    # l'evalue 269 fois separement puis corrige sur 269 tests : si l'effet
+    # est reel mais modeste, chaque jeton manque de puissance, aucune cellule
+    # ne passe, et la correction conclut « rien » sur une hypothese qu'elle
+    # n'a jamais testee sous sa forme reelle. Le poolage fait 16 tests sur
+    # des effectifs de plusieurs centaines.
+    #
+    # N'afficher que le second annoncerait la mort du seul edge directionnel
+    # du depot. N'afficher que le premier cacherait que le criblage par jeton
+    # ne trouve rien. Les deux, dans cet ordre.
+    (("unlocks.json", "poolage"), "Déblocages — test poolé", "p", "direction",
+     "tous les jetons ensemble : le marché vend-il AVANT la date "
+     "(J-7 → J-1, sens court)",
+     "python scripts/valider_unlocks.py --unlocks data/unlocks.json "
+     "--tirages 2000 --out baselines/unlocks.json"),
+    (("unlocks.json", "cellules"), "Déblocages — criblage par jeton",
+     "p_direction", "direction",
+     "la même hypothèse jeton par jeton, où chacun manque de puissance",
      "python scripts/valider_unlocks.py --unlocks data/unlocks.json "
      "--tirages 2000 --out baselines/unlocks.json"),
 )
@@ -227,14 +245,31 @@ def campagnes() -> list[dict[str, Any]]:
     """
     out: list[dict[str, Any]] = []
     for nom, titre, champ, question, quoi, commande in _CAMPAGNES:
-        contenu, meta = _lire_json(BASELINES / nom)
+        # Un artefact porte soit une liste de cellules, soit un objet nomme
+        # dont on lit une clé. Le second existe parce qu'un fichier peut
+        # contenir DEUX tests de la meme hypothese a des puissances
+        # differentes.
+        fichier, clef = nom if isinstance(nom, tuple) else (nom, None)
+        contenu, meta = _lire_json(BASELINES / fichier)
         entree = {"titre": titre, "quoi": quoi, "commande": commande,
                   "question": question, "tradable": question in TRADABLES, **meta}
+        if clef and isinstance(contenu, dict):
+            contenu = contenu.get(clef)
+        elif clef and contenu is not None:
+            entree.update({
+                "disponible": False,
+                "raison": f"{meta['fichier']} est au format d'avant le "
+                          f"9 septembre 2026 (liste nue) et ne porte pas "
+                          f"« {clef} ». Relancer la campagne.",
+            })
+            out.append(entree)
+            continue
+
         if isinstance(contenu, list) and contenu:
             entree.update(_criblage(contenu, champ))
         elif contenu is not None:
             entree.update({"disponible": False,
-                           "raison": f"{meta['fichier']} n'est pas une liste de cellules"})
+                           "raison": f"{meta['fichier']} ne contient pas de cellules"})
         out.append(entree)
     return out
 

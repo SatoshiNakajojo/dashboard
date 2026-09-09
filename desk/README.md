@@ -85,6 +85,17 @@ pip install -e ".[dev]"          # ou : uv sync
 python -m trading_desk --demo    # marché simulé, sans réseau
 ```
 
+`No module named trading_desk` signifie que `pip install -e` n'a pas tourné
+dans l'interpréteur courant — typiquement une base conda différente de celle
+où l'installation a eu lieu. Les scripts de `scripts/` marchent quand même :
+ils ajoutent `src/` au chemin eux-mêmes. Pour le desk et l'interface, deux
+issues :
+
+```bash
+PYTHONPATH=src python -m trading_desk    # sans rien installer
+pip install -e ".[dev]"                  # ou l'installer pour de bon
+```
+
 Puis ouvrir <http://127.0.0.1:8787>. L'écran montre l'état des douze
 invariants, le mandat en vigueur, la fraîcheur des flux et un kill switch.
 
@@ -1931,6 +1942,33 @@ déclencheurs — tournée à 2 000 tirages, mais dont aucune cellule n'a satur�
 plancher. Transformer une réfutation solide en « on ne sait pas » est la pire
 des deux erreurs possibles. Les artefacts inscrivent maintenant leurs tirages ;
 quand ils se taisent, l'interface se tait aussi.
+
+### Les déblocages : deux tests, deux conclusions, un seul fichier
+
+`baselines/unlocks.json` porte désormais **les deux** tests de la même
+hypothèse, et ils concluent l'inverse l'un de l'autre :
+
+| test | tests | p < 0,05 | attendus | survivants BH |
+| --- | ---: | ---: | ---: | ---: |
+| criblage par jeton | 269 | 25 | 13,5 | **0** |
+| test poolé | 16 | 4 | 0,8 | **4** |
+
+Ce n'est pas une contradiction, c'est une différence de puissance. L'hypothèse
+posée d'avance est un effet **commun** à tous les jetons. Le criblage
+l'évalue 269 fois séparément sur des effectifs d'une vingtaine d'événements,
+puis corrige sur 269 tests : un effet réel mais modeste ne peut pas y
+survivre. Le poolage teste la même hypothèse sur 852 événements.
+
+Le contrôle de résolution le confirme et c'est ce qui rend la lecture
+tenable : à 2 000 tirages sur 269 cellules, il faudrait **trois cellules
+simultanément au plancher** pour qu'une seule survive — il en faudrait 5 379
+pour isoler un jeton. Le zéro du criblage par jeton est **sous-résolu, pas
+réfutant**. Celui du poolage, à 16 tests, voit une cellule isolée : son
+verdict porte sur la donnée.
+
+**L'interface affiche les deux, dans cet ordre.** Jusqu'au 9 septembre 2026,
+`--out` n'écrivait que le criblage par jeton : un tableau de bord qui l'aurait
+lu aurait annoncé la mort du seul edge directionnel du dépôt.
 
 ### Brancher la collecte
 

@@ -188,7 +188,7 @@ def rapport(res: list, alpha: float) -> None:
           "montre du bruit.\n")
 
 
-def poolage(unlocks: dict, tirages: int, min_evts: int, alpha: float) -> None:
+def poolage(unlocks: dict, tirages: int, min_evts: int, alpha: float) -> list[dict]:
     """Le même test, mais sur TOUS les jetons ensemble.
 
     **Pourquoi ce second test, et pourquoi ce n'est pas du p-hacking.**
@@ -276,7 +276,7 @@ def poolage(unlocks: dict, tirages: int, min_evts: int, alpha: float) -> None:
 
     if not lignes:
         print("\n  Poolage : aucun groupe assez fourni.\n")
-        return
+        return []
 
     garde = benjamini_hochberg([x[5] for x in lignes], alpha)
     print("\n  TEST POOLÉ — tous les jetons ensemble, même hypothèse")
@@ -294,6 +294,18 @@ def poolage(unlocks: dict, tirages: int, min_evts: int, alpha: float) -> None:
     print(f"  {len(lignes)} tests, {sum(1 for x in lignes if x[5] < alpha)} à "
           f"p < {alpha}, {len(lignes) * alpha:.1f} attendus par hasard, "
           f"**{survivants} survivant(s)** après BH\n")
+
+    # Ces lignes SONT le resultat du projet, et jusqu'au 9 septembre 2026
+    # elles n'existaient que sur un terminal. Le fichier `--out` ne portait
+    # que le criblage par jeton — 269 cellules, zero survivant — et une
+    # interface qui l'aurait lu aurait annonce la mort du seul edge
+    # directionnel mesure. Le test poole y entre donc aussi.
+    return [
+        {"tranche": t, "fenetre": f, "evenements": n,
+         "observe_bps": obs, "hasard_bps": nul, "p": pv,
+         "tirages": tirages}
+        for t, f, n, obs, nul, pv in lignes
+    ]
 
 
 def decalage_calendaire(unlocks: dict, alpha: float,
@@ -777,7 +789,7 @@ def main() -> int:
 
     res = cellules(unlocks, args.tirages, args.min_evenements)
     rapport(res, args.alpha)
-    poolage(unlocks, args.tirages, args.min_evenements * 3, args.alpha)
+    poole = poolage(unlocks, args.tirages, args.min_evenements * 3, args.alpha)
     if args.robustesse:
         robustesse(unlocks, args.tirages, args.alpha)
         marche_neutre(unlocks, args.tirages, args.alpha, args.reference)
@@ -785,8 +797,18 @@ def main() -> int:
         decalage_calendaire(unlocks, args.alpha,
                             reference=args.reference)
     if args.out:
-        Path(args.out).write_text(json.dumps([r.__dict__ for r in res], indent=1))
-        print(f"  Résultats bruts : {args.out}\n")
+        # Format NOMME plutot qu'une liste nue : les deux tests repondent a
+        # la meme hypothese avec des puissances differentes, et un lecteur
+        # qui n'en verrait qu'un tirerait la conclusion inverse de l'autre.
+        Path(args.out).write_text(json.dumps({
+            "hypothese": "un deblocage fait baisser le prix (sens = -1)",
+            "tirages": args.tirages,
+            "alpha": args.alpha,
+            "cellules": [r.__dict__ for r in res],
+            "poolage": poole,
+        }, indent=1, ensure_ascii=False), encoding="utf-8")
+        print(f"  Résultats bruts : {args.out} "
+              f"({len(res)} cellules, {len(poole)} groupes poolés)\n")
     return 0
 
 

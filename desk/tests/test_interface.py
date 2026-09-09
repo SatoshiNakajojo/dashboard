@@ -341,3 +341,78 @@ def test_l_inventaire_des_strategies_vient_du_code():
 
     inv = recherche.strategies()
     assert {s["nom"] for s in inv["strategies"]} == set(BASELINES)
+
+
+# --------------------------------------------------------------------------
+#  Un artefact peut porter DEUX tests de la même hypothèse
+# --------------------------------------------------------------------------
+
+def test_le_test_poole_et_le_criblage_par_jeton_sont_lus_separement(tmp_path, monkeypatch):
+    """`baselines/unlocks.json` porte les deux, et ils concluent l'inverse.
+
+    Le criblage par jeton fait 269 tests sur des effectifs d'une vingtaine
+    d'evenements : zero survivant. Le test poole fait 16 tests sur des
+    effectifs de plusieurs centaines : quatre survivants, dont « toutes » a
+    p = 0,0010. C'est la MEME hypothese, testee avec deux puissances.
+
+    N'afficher que le premier annoncerait la mort du seul edge directionnel
+    du depot. Le fichier a d'ailleurs porte le seul criblage par jeton
+    jusqu'au 9 septembre 2026 — l'interface l'aurait annoncee.
+    """
+    faux = tmp_path / "baselines"
+    faux.mkdir()
+    (faux / "unlocks.json").write_text(json.dumps({
+        "hypothese": "un deblocage fait baisser le prix (sens = -1)",
+        "tirages": 2000, "alpha": 0.05,
+        "poolage": [
+            {"tranche": "toutes", "fenetre": "anticipation_J-7_J-1",
+             "evenements": 852, "observe_bps": 236.0, "hasard_bps": 74.6,
+             "p": 0.0010, "tirages": 2000},
+            *[{"tranche": "x", "fenetre": f"f{i}", "evenements": 300,
+               "observe_bps": 0.0, "hasard_bps": 0.0, "p": 0.5,
+               "tirages": 2000} for i in range(15)],
+        ],
+        "cellules": [
+            {"actif": f"J{i}", "p_direction": p, "p_amplitude": 0.5,
+             "tirages": 2000}
+            for i, p in enumerate([0.005] + [0.4] * 268)
+        ],
+    }), encoding="utf-8")
+    monkeypatch.setattr(recherche, "BASELINES", faux)
+    recherche._cache.clear()
+
+    par_titre = {c["titre"]: c for c in recherche.campagnes()}
+    poole = par_titre["Déblocages — test poolé"]
+    jeton = par_titre["Déblocages — criblage par jeton"]
+
+    assert poole["nb_survivants"] == 1 and poole["testees"] == 16
+    assert poole["cellules_minimum"] == 1, "16 tests a 2000 tirages voient une cellule seule"
+    assert jeton["nb_survivants"] == 0 and jeton["testees"] == 269
+    # 269 tests a 2000 tirages ne peuvent PAS isoler une cellule : il en
+    # faudrait trois au plancher. Le zero est donc sous-resolu, pas refutant.
+    assert jeton["cellules_minimum"] > 1
+    assert "invisible" in jeton["resolution"]
+
+    lignes = {x["cle"]: x for x in recherche.prevol(campagnes_=list(par_titre.values()))}
+    assert lignes["edge"]["etat"] == "ok", "le test poolé porte un edge directionnel"
+
+
+def test_un_artefact_au_format_liste_nue_est_signale(tmp_path, monkeypatch):
+    """L'ancien format ne doit pas etre lu comme un fichier vide.
+
+    Avant le 9 septembre 2026, `--out` ecrivait une liste nue de cellules.
+    Un fichier de cette epoque ne porte pas le test poole : il faut le dire
+    et demander une relance, pas afficher « aucune cellule ».
+    """
+    faux = tmp_path / "baselines"
+    faux.mkdir()
+    (faux / "unlocks.json").write_text(
+        json.dumps([{"actif": "A", "p_direction": 0.4}]), encoding="utf-8")
+    monkeypatch.setattr(recherche, "BASELINES", faux)
+    recherche._cache.clear()
+
+    for c in recherche.campagnes():
+        if c["titre"].startswith("Déblocages"):
+            assert c["disponible"] is False
+            assert "format d'avant" in c["raison"]
+            assert c["commande"].startswith("python ")
