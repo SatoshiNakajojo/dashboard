@@ -494,5 +494,14 @@ def test_aucun_lorem_de_la_photo_ne_survit():
     )
     for lorem in ("ALDO PORTOMANICE", "RERERSONT", "ANRLESUHE", "SUPYTANTES",
                   "SQUIPE", "ROLLANT SERIATOR", "QUARCED ON DRAPPED",
-                  "PILGTAGE", "Analog diars"):
+                  "PILGTAGE", "Analog diars", "Thana", "TELEMETRIC",
+                  "orbital_sources"):
         assert lorem not in texte, f"lorem halluciné conservé : {lorem}"
+
+    # La règle vaut aussi pour les COMMENTAIRES. Elle m'a attrapé le
+    # 9 septembre 2026 : j'expliquais dans le CSS pourquoi telle étiquette
+    # peinte est recouverte, en la citant — et le test a échoué. Il avait
+    # raison. Une chaîne écartée qui traîne dans les fichiers d'interface
+    # finit par être recopiée par quelqu'un qui la prend pour une valeur.
+    # `COCKPIT_AUDIT.md` est le seul endroit où on a le droit de les nommer,
+    # parce que c'est le document qui explique ce qu'on écarte et pourquoi.

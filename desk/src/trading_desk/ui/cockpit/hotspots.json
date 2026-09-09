@@ -8,7 +8,7 @@
     "valeurs de depart faisaient deborder l'ecran central sur LIVE FEED.",
     "Calibrage fin : ouvrir le cockpit et appuyer sur D.",
     "Les temoins lumineux vivent DANS le contenu des ecrans qui recouvrent les panneaux ou la photo les peint. Une surcouche les ferait flotter par-dessus le texte qu'ils qualifient.",
-    "La section `chrome` recouvre les etiquettes PEINTES sur la photo, qui sont hallucinees : « ACTIF 1 MIN 49 S » est fige dans le JPEG, « Thana » ne designe personne, « POSTE DE PILGTAGE » est une faute."
+    "La section `chrome` recouvre les etiquettes peintes dans le JPEG, qui sont hallucinees et figees : un chrono qui ne compte pas, un nom d'utilisateur qui ne designe personne, des fautes. Voir COCKPIT_AUDIT.md."
   ],
   "design": {
     "w": 1280,

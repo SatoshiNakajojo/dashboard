@@ -212,9 +212,10 @@
 /* --- etiquettes vivantes par-dessus le texte peint ---------------------- */
 /*
  * Le dernier endroit ou le lorem halluciné survit est DANS le JPEG : aucun
- * test ne peut l'attraper, et il ne disparaitra jamais tout seul.
- * « ACTIF 1 MIN 49 S » y est fige a jamais, « Thana » ne designe personne,
- * « POSTE DE PILGTAGE » est une faute, « TELEMETRIC » n'est pas du francais.
+ * test ne peut l'y attraper, et il n'en partira jamais tout seul. Un chrono
+ * qui ne compte pas, un nom d'utilisateur qui ne designe personne, deux
+ * fautes d'orthographe — l'inventaire est dans COCKPIT_AUDIT.md, seul
+ * endroit du depot ou ces chaines ont le droit d'etre nommees.
  *
  * Chaque etiquette peinte est donc recouverte par une plaque portant la
  * vraie valeur, vivante. Les plaques sont SOMBRES parce que la photo les
