@@ -4,74 +4,379 @@
     "Jamais de pixels : le plateau se met a l'echelle du viewport en letterbox,",
     "et des pixels bruts derailleraient a la premiere resolution differente.",
     "Fichier UNIQUE : ne recopiez pas ces valeurs dans un composant.",
-    "Calibrage : ouvrir le cockpit et appuyer sur D."
+    "Relues sur la photo le 9 septembre 2026, PAS reprises du brief : ses",
+    "valeurs de depart faisaient deborder l'ecran central sur LIVE FEED.",
+    "Calibrage fin : ouvrir le cockpit et appuyer sur D.",
+    "Les temoins lumineux vivent DANS le contenu des ecrans qui recouvrent les panneaux ou la photo les peint. Une surcouche les ferait flotter par-dessus le texte qu'ils qualifient."
   ],
-  "design": { "w": 1280, "h": 800 },
+  "design": {
+    "w": 1280,
+    "h": 800
+  },
   "glass": {
-    "clip": "polygon(23.6% 5.0%, 76.2% 5.0%, 76.0% 39.2%, 68.0% 41.2%, 50.0% 42.0%, 32.0% 41.2%, 23.8% 39.2%)"
+    "clip": "polygon(25.6% 4.0%, 74.8% 4.0%, 74.8% 45.6%, 68.0% 46.6%, 50.0% 47.2%, 32.0% 46.6%, 25.6% 45.6%)"
   },
   "screens": {
-    "left-log":  { "l": 0.8,  "t": 3.8,  "w": 21.2, "h": 16.8, "titre": "État du desk" },
-    "scores":    { "l": 0.8,  "t": 27.0, "w": 21.2, "h": 16.8, "titre": "Distribution des scores" },
-    "minis":     { "l": 77.8, "t": 3.8,  "w": 21.4, "h": 12.4, "titre": "Stratégie contre HODL" },
-    "regime":    { "l": 77.8, "t": 23.6, "w": 21.4, "h": 8.4,  "titre": "Régime" },
-    "triggers":  { "l": 77.8, "t": 32.2, "w": 21.4, "h": 11.6, "titre": "Invariants" },
-    "amplitude": { "l": 0.5,  "t": 47.0, "w": 15.7, "h": 25.5, "titre": "Exposition" },
-    "feed":      { "l": 16.6, "t": 46.6, "w": 15.8, "h": 22.2, "titre": "Journal de décisions" },
-    "main":      { "l": 32.8, "t": 46.4, "w": 34.6, "h": 24.8, "titre": "Desk" },
-    "autopilot": { "l": 67.6, "t": 46.6, "w": 11.2, "h": 21.9, "titre": "Mandat" },
-    "flux":      { "l": 79.0, "t": 47.0, "w": 20.4, "h": 25.8, "titre": "Flux de données" }
+    "left-log": {
+      "l": 1.1,
+      "t": 5.0,
+      "w": 23.6,
+      "h": 12.0,
+      "titre": "État du desk"
+    },
+    "scores": {
+      "l": 1.1,
+      "t": 27.3,
+      "w": 23.6,
+      "h": 20.0,
+      "titre": "Distribution des scores"
+    },
+    "minis": {
+      "l": 75.8,
+      "t": 5.0,
+      "w": 21.6,
+      "h": 12.3,
+      "titre": "Stratégies contre HODL"
+    },
+    "regime": {
+      "l": 75.6,
+      "t": 27.3,
+      "w": 22.0,
+      "h": 8.4,
+      "titre": "Régime"
+    },
+    "triggers": {
+      "l": 75.6,
+      "t": 37.5,
+      "w": 22.0,
+      "h": 9.8,
+      "titre": "Invariants"
+    },
+    "amplitude": {
+      "l": 0.9,
+      "t": 55.6,
+      "w": 23.4,
+      "h": 21.9,
+      "titre": "Exposition et levier"
+    },
+    "feed": {
+      "l": 28.0,
+      "t": 56.3,
+      "w": 9.5,
+      "h": 21.5,
+      "titre": "Journal de décisions"
+    },
+    "main": {
+      "l": 38.8,
+      "t": 51.9,
+      "w": 22.9,
+      "h": 26.6,
+      "titre": "Desk"
+    },
+    "autopilot": {
+      "l": 62.5,
+      "t": 56.0,
+      "w": 11.1,
+      "h": 21.8,
+      "titre": "Mandat"
+    },
+    "flux": {
+      "l": 75.5,
+      "t": 55.0,
+      "w": 23.9,
+      "h": 22.5,
+      "titre": "Flux de données"
+    }
   },
   "hotspots": {
-    "btn-sources":      { "l": 32.0, "t": 0.4,  "w": 36.0, "h": 3.0,  "label": "Sources de recherche" },
-    "btn-desk-left":    { "l": 0.6,  "t": 51.2, "w": 15.5, "h": 3.2,  "label": "Menu desk (gauche)" },
-    "btn-desk-right":   { "l": 75.2, "t": 51.2, "w": 8.0,  "h": 3.2,  "label": "Menu desk (droite)" },
-    "tab-poste":        { "l": 3.4,  "t": 18.0, "w": 6.0,  "h": 2.6,  "label": "Pré-vol" },
-    "tab-telemetrie":   { "l": 9.6,  "t": 18.0, "w": 6.4,  "h": 2.6,  "label": "Télémétrie" },
-    "tab-navigation":   { "l": 16.2, "t": 18.0, "w": 6.4,  "h": 2.6,  "label": "Navigation" },
-    "tab-conso":        { "l": 77.8, "t": 18.0, "w": 6.8,  "h": 2.6,  "label": "Consommation" },
-    "tab-vols":         { "l": 84.8, "t": 18.0, "w": 6.4,  "h": 2.6,  "label": "Vols" },
-    "tab-systemes":     { "l": 91.4, "t": 18.0, "w": 7.0,  "h": 2.6,  "label": "Systèmes" },
-    "icon-1":           { "l": 77.9, "t": 21.4, "w": 3.4,  "h": 3.4,  "label": "Rafraîchir" },
-    "icon-2":           { "l": 81.4, "t": 21.4, "w": 3.4,  "h": 3.4,  "label": "Soufflerie" },
-    "icon-3":           { "l": 84.9, "t": 21.4, "w": 3.4,  "h": 3.4,  "label": "Télémétrie" },
-    "icon-4":           { "l": 88.4, "t": 21.4, "w": 3.4,  "h": 3.4,  "label": "Navigation" },
-    "icon-5":           { "l": 91.9, "t": 21.4, "w": 3.4,  "h": 3.4,  "label": "Thème" },
-    "icon-6":           { "l": 95.4, "t": 21.4, "w": 3.4,  "h": 3.4,  "label": "Aide" },
-    "btn-kill":         { "l": 1.2,  "t": 4.4,  "w": 20.4, "h": 4.2,  "label": "Tout arrêter" },
-    "btn-mandat":       { "l": 67.8, "t": 47.0, "w": 10.8, "h": 3.0,  "label": "Mandat en vigueur" }
+    "btn-sources": {
+      "l": 39.5,
+      "t": 0.5,
+      "w": 21.3,
+      "h": 2.4,
+      "label": "Sources de recherche"
+    },
+    "btn-poste": {
+      "l": 0.6,
+      "t": 0.6,
+      "w": 15.4,
+      "h": 2.5,
+      "label": "Poste de pilotage"
+    },
+    "btn-desk-left": {
+      "l": 0.6,
+      "t": 51.5,
+      "w": 16.4,
+      "h": 2.9,
+      "label": "Pré-vol"
+    },
+    "btn-desk-right": {
+      "l": 75.4,
+      "t": 51.5,
+      "w": 4.0,
+      "h": 2.9,
+      "label": "Systèmes"
+    },
+    "tab-poste": {
+      "l": 1.1,
+      "t": 18.1,
+      "w": 7.7,
+      "h": 2.6,
+      "label": "Pré-vol"
+    },
+    "tab-telemetrie": {
+      "l": 9.1,
+      "t": 18.1,
+      "w": 7.0,
+      "h": 2.6,
+      "label": "Télémétrie"
+    },
+    "tab-navigation": {
+      "l": 16.3,
+      "t": 18.1,
+      "w": 6.7,
+      "h": 2.6,
+      "label": "Navigation"
+    },
+    "tab-conso": {
+      "l": 77.7,
+      "t": 18.25,
+      "w": 7.0,
+      "h": 2.5,
+      "label": "Consommation"
+    },
+    "tab-vols": {
+      "l": 85.2,
+      "t": 18.25,
+      "w": 5.9,
+      "h": 2.5,
+      "label": "Vols"
+    },
+    "tab-systemes": {
+      "l": 91.4,
+      "t": 18.25,
+      "w": 6.1,
+      "h": 2.5,
+      "label": "Systèmes"
+    },
+    "icon-1": {
+      "l": 76.2,
+      "t": 21.75,
+      "w": 3.0,
+      "h": 4.0,
+      "label": "Rafraîchir"
+    },
+    "icon-2": {
+      "l": 79.7,
+      "t": 21.75,
+      "w": 3.0,
+      "h": 4.0,
+      "label": "Soufflerie"
+    },
+    "icon-3": {
+      "l": 83.2,
+      "t": 21.75,
+      "w": 3.0,
+      "h": 4.0,
+      "label": "Télémétrie"
+    },
+    "icon-4": {
+      "l": 86.7,
+      "t": 21.75,
+      "w": 3.0,
+      "h": 4.0,
+      "label": "Navigation"
+    },
+    "icon-5": {
+      "l": 90.2,
+      "t": 21.75,
+      "w": 3.0,
+      "h": 4.0,
+      "label": "Thème"
+    },
+    "icon-6": {
+      "l": 93.75,
+      "t": 21.75,
+      "w": 3.1,
+      "h": 4.0,
+      "label": "Mode HUD"
+    },
+    "btn-kill": {
+      "l": 1.1,
+      "t": 5.0,
+      "w": 23.6,
+      "h": 3.0,
+      "label": "Tout arrêter"
+    },
+    "btn-debit": {
+      "l": 32.7,
+      "t": 52.5,
+      "w": 5.0,
+      "h": 2.0,
+      "label": "Débit du flux"
+    },
+    "btn-mandat": {
+      "l": 62.5,
+      "t": 52.25,
+      "w": 5.5,
+      "h": 2.25,
+      "label": "Mandat en vigueur"
+    },
+    "btn-rail": {
+      "l": 41.4,
+      "t": 46.9,
+      "w": 17.6,
+      "h": 2.1,
+      "label": "Sources de recherche"
+    }
   },
-  "leds": {
-    "led-ws":       { "l": 88.1, "t": 34.4, "w": 1.0, "h": 1.4, "label": "Flux connecté" },
-    "led-halt":     { "l": 88.1, "t": 36.2, "w": 1.0, "h": 1.4, "label": "Desk arrêté" },
-    "led-stops":    { "l": 88.1, "t": 38.0, "w": 1.0, "h": 1.4, "label": "Positions protégées" },
-    "led-recon":    { "l": 88.1, "t": 39.8, "w": 1.0, "h": 1.4, "label": "Compte réconcilié" },
-    "led-amp-1":    { "l": 12.6, "t": 57.8, "w": 1.0, "h": 1.4, "label": "Exposition sous plafond" },
-    "led-amp-2":    { "l": 12.6, "t": 60.0, "w": 1.0, "h": 1.4, "label": "Levier sous plafond" }
-  },
+  "leds": {},
   "pilot": {
-    "stickL":   { "l": 16.5, "t": 58.0, "w": 16.0, "h": 40.0 },
-    "stickR":   { "l": 67.5, "t": 58.0, "w": 16.5, "h": 40.0 },
-    "throttle": { "l": 40.5, "t": 75.5, "w": 12.3, "h": 24.0 }
+    "stickL": {
+      "l": 19.5,
+      "t": 63.0,
+      "w": 12.0,
+      "h": 37.0
+    },
+    "stickR": {
+      "l": 66.0,
+      "t": 63.0,
+      "w": 12.5,
+      "h": 37.0
+    },
+    "throttle": {
+      "l": 44.5,
+      "t": 82.0,
+      "w": 11.0,
+      "h": 18.0
+    }
   },
   "hotas": {
-    "joy-l-trigger":  { "l": 21.5, "t": 60.4, "w": 3.6, "h": 4.0, "label": "Achat — non branché" },
-    "joy-l-hat":      { "l": 20.4, "t": 65.6, "w": 3.0, "h": 3.0, "label": "Intervalle du backtest" },
-    "joy-l-crown-r":  { "l": 18.0, "t": 71.4, "w": 2.2, "h": 2.4, "label": "Tout arrêter" },
-    "joy-l-crown-y":  { "l": 20.6, "t": 71.4, "w": 2.2, "h": 2.4, "label": "Réarmer" },
-    "joy-l-crown-g":  { "l": 23.2, "t": 71.4, "w": 2.2, "h": 2.4, "label": "Rafraîchir la recherche" },
-    "joy-l-crown-b":  { "l": 25.8, "t": 71.4, "w": 2.2, "h": 2.4, "label": "Basculer le thème" },
-    "joy-r-trigger":  { "l": 72.6, "t": 60.4, "w": 3.6, "h": 4.0, "label": "Vente — non branché" },
-    "joy-r-hat":      { "l": 71.6, "t": 65.6, "w": 3.0, "h": 3.0, "label": "Actif du backtest" },
-    "joy-r-crown-r":  { "l": 69.8, "t": 71.4, "w": 2.2, "h": 2.4, "label": "Secteur précédent" },
-    "joy-r-crown-y":  { "l": 72.4, "t": 71.4, "w": 2.2, "h": 2.4, "label": "Secteur suivant" },
-    "joy-r-crown-g":  { "l": 75.0, "t": 71.4, "w": 2.2, "h": 2.4, "label": "Mode HUD" },
-    "joy-r-crown-b":  { "l": 77.6, "t": 71.4, "w": 2.2, "h": 2.4, "label": "Calibrage" },
-    "thr-left":       { "l": 41.2, "t": 79.0, "w": 4.2, "h": 14.0, "label": "Stratégie du backtest" },
-    "thr-right":      { "l": 47.0, "t": 79.0, "w": 4.2, "h": 14.0, "label": "Stratégie du backtest" },
-    "thr-btn-r":      { "l": 40.8, "t": 76.0, "w": 2.4, "h": 2.2, "label": "Pré-vol" },
-    "thr-btn-y":      { "l": 43.6, "t": 76.0, "w": 2.4, "h": 2.2, "label": "Soufflerie" },
-    "thr-btn-g":      { "l": 46.4, "t": 76.0, "w": 2.4, "h": 2.2, "label": "Vols" },
-    "thr-btn-b":      { "l": 49.2, "t": 76.0, "w": 2.4, "h": 2.2, "label": "Systèmes" }
+    "joy-l-trigger": {
+      "l": 24.8,
+      "t": 65.6,
+      "w": 2.6,
+      "h": 3.6,
+      "label": "Achat — non branché"
+    },
+    "joy-l-hat": {
+      "l": 23.0,
+      "t": 70.0,
+      "w": 2.4,
+      "h": 2.6,
+      "label": "Intervalle du backtest"
+    },
+    "joy-l-crown-r": {
+      "l": 27.0,
+      "t": 84.0,
+      "w": 1.9,
+      "h": 2.2,
+      "label": "Tout arrêter"
+    },
+    "joy-l-crown-y": {
+      "l": 29.2,
+      "t": 84.0,
+      "w": 1.9,
+      "h": 2.2,
+      "label": "Réarmer"
+    },
+    "joy-l-crown-g": {
+      "l": 31.4,
+      "t": 84.0,
+      "w": 1.9,
+      "h": 2.2,
+      "label": "Rafraîchir"
+    },
+    "joy-l-crown-b": {
+      "l": 33.6,
+      "t": 84.0,
+      "w": 1.9,
+      "h": 2.2,
+      "label": "Thème"
+    },
+    "joy-r-trigger": {
+      "l": 72.6,
+      "t": 65.6,
+      "w": 2.6,
+      "h": 3.6,
+      "label": "Vente — non branché"
+    },
+    "joy-r-hat": {
+      "l": 74.4,
+      "t": 70.0,
+      "w": 2.4,
+      "h": 2.6,
+      "label": "Actif du backtest"
+    },
+    "joy-r-crown-r": {
+      "l": 67.0,
+      "t": 84.0,
+      "w": 1.9,
+      "h": 2.2,
+      "label": "Secteur précédent"
+    },
+    "joy-r-crown-y": {
+      "l": 69.2,
+      "t": 84.0,
+      "w": 1.9,
+      "h": 2.2,
+      "label": "Secteur suivant"
+    },
+    "joy-r-crown-g": {
+      "l": 71.4,
+      "t": 84.0,
+      "w": 1.9,
+      "h": 2.2,
+      "label": "Mode HUD"
+    },
+    "joy-r-crown-b": {
+      "l": 73.6,
+      "t": 84.0,
+      "w": 1.9,
+      "h": 2.2,
+      "label": "Calibrage"
+    },
+    "thr-left": {
+      "l": 45.5,
+      "t": 86.0,
+      "w": 3.0,
+      "h": 12.0,
+      "label": "Stratégie précédente"
+    },
+    "thr-right": {
+      "l": 50.0,
+      "t": 86.0,
+      "w": 3.0,
+      "h": 12.0,
+      "label": "Stratégie suivante"
+    },
+    "thr-btn-r": {
+      "l": 47.3,
+      "t": 84.0,
+      "w": 1.9,
+      "h": 2.2,
+      "label": "Pré-vol"
+    },
+    "thr-btn-y": {
+      "l": 49.4,
+      "t": 84.0,
+      "w": 1.9,
+      "h": 2.2,
+      "label": "Soufflerie"
+    },
+    "thr-btn-g": {
+      "l": 51.5,
+      "t": 84.0,
+      "w": 1.9,
+      "h": 2.2,
+      "label": "Vols"
+    },
+    "thr-btn-b": {
+      "l": 53.6,
+      "t": 84.0,
+      "w": 1.9,
+      "h": 2.2,
+      "label": "Systèmes"
+    }
   }
 }

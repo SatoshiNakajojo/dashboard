@@ -248,9 +248,13 @@
       `<h4><span>INVARIANTS</span><b class="${s.blocking.length ? "neg" : "pos"}">` +
       `${checks.length - s.blocking.length}/${checks.length}</b></h4>` +
       checks.slice(0, 7).map((x) =>
-        `<div class="rangee" style="font-size:9px">` +
+        `<div class="rangee" style="font-size:9px;align-items:center">` +
+        `<span style="display:flex;gap:4px;align-items:center">` +
+        `<i class="led ${x.passed ? "vert on" : "rouge on"}" ` +
+        `style="position:static;width:5px;height:5px;flex:none"></i>` +
         `<span class="${x.passed ? "mut" : "neg"}">${esc(x.id.slice(0, 3))}</span>` +
-        `<b class="mut" style="max-width:74%;overflow:hidden;text-overflow:ellipsis;` +
+        `</span>` +
+        `<b class="mut" style="max-width:70%;overflow:hidden;text-overflow:ellipsis;` +
         `text-align:right">${esc(x.label)}</b></div>`).join("");
   }
 
@@ -276,11 +280,17 @@
         `<circle cx="50" cy="52" r="3" fill="#22343a"/></svg>`;
     };
 
+    const temoin = (ok) =>
+      `<i class="led ${ok ? "vert on" : "rouge on"}" ` +
+      `style="position:static;width:5px;height:5px;display:inline-block;` +
+      `margin-right:4px;vertical-align:1px"></i>`;
+
     c.innerHTML =
-      `<h4><span>EXPOSITION</span><b class="cy">${usd(expo)}</b></h4>` +
+      `<h4><span>${temoin(expo <= plafond)}EXPOSITION</span>` +
+      `<b class="cy">${usd(expo)}</b></h4>` +
       `<div style="color:var(--cyan)">${aiguille(expo / plafond, "")}</div>` +
       rangee("plafond", usd(plafond)) +
-      `<h4 style="margin-top:6px"><span>LEVIER</span>` +
+      `<h4 style="margin-top:6px"><span>${temoin(lev <= levMax)}LEVIER</span>` +
       `<b class="${lev > levMax ? "neg" : "cy"}">${num(lev)}×</b></h4>` +
       `<div style="color:${lev > levMax ? "var(--red)" : "var(--cyan)"}">` +
       `${aiguille(lev / levMax, "")}</div>` +
@@ -329,6 +339,20 @@
       rech = e.detail;
       ecranScores(); ecranMinis(); ecranPrincipal(snap); ecranLog(snap);
     });
+
+    // Rattrapage : `desk.js` a pu emettre avant que ces ecouteurs existent —
+    // il charge la recherche au chargement du document, alors que le cockpit
+    // attend d'abord sa carte de coordonnees. Sans ce rattrapage, les deux
+    // panneaux de recherche restaient noirs jusqu'a la relecture suivante,
+    // soixante secondes plus tard.
+    if (D().snapshot) {
+      snap = D().snapshot;
+      ecranPrincipal(snap); ecranAutopilot(snap); ecranLog(snap);
+      ecranRegime(snap); ecranTriggers(snap); ecranAmplitude(snap);
+      ecranFlux(snap);
+    }
+    if (D().recherche) { rech = D().recherche; ecranScores(); ecranMinis(); }
+    ecranFeed();
 
     // Le journal se recharge sur son propre rythme (10 s) : on le recopie
     // apres, sans le redemander.

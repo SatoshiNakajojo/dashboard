@@ -23,7 +23,6 @@
 (function () {
   const M = () => window.Cockpit;
   const D = () => window.Desk;
-  const leds = {};
 
   function hotspot(couche, cle, r, options) {
     const { creer, poser } = M();
@@ -72,6 +71,16 @@
       titre: "Sources de recherche — campagnes, artefacts, journaux",
       action: () => D().montrer("soufflerie"),
     });
+    hotspot(couche, "btn-poste", H["btn-poste"], {
+      titre: "Pré-vol — la liste de vérifications",
+      action: () => D().montrer("prevol"),
+    });
+    hotspot(couche, "btn-rail", H["btn-rail"], {
+      titre: "Sources de recherche", action: () => D().montrer("soufflerie"),
+    });
+    hotspot(couche, "btn-debit", H["btn-debit"], {
+      titre: "Débit des flux", action: () => D().montrer("telemetrie"),
+    });
     hotspot(couche, "btn-desk-left", H["btn-desk-left"], {
       titre: "Pré-vol", action: () => D().montrer("prevol"),
     });
@@ -114,16 +123,6 @@
     hotspot(couche, "btn-mandat", H["btn-mandat"], {
       titre: "Mandat en vigueur", action: () => D().montrer("systemes"),
     });
-
-    /* ---- LED ----------------------------------------------------------- */
-
-    for (const [cle, r] of Object.entries(CARTE.leds)) {
-      const el = creer("div", "led", fx);
-      el.id = cle;
-      poser(el, r);
-      el.title = r.label;
-      leds[cle] = { el, dernier: null };
-    }
 
     /* ---- HOTAS --------------------------------------------------------- */
 
@@ -170,32 +169,13 @@
     }
   }
 
-  /* Les LED suivent des booleens reels. Une LED decorative est pire qu'une
-   * LED absente : on apprend a ne plus la regarder, et le jour ou elle dit
-   * quelque chose, personne ne la voit. */
-  function allumer(cle, actif, couleur) {
-    const l = leds[cle]; if (!l) return;
-    l.el.className = "led " + couleur + (actif ? " on" : "");
-    if (l.dernier !== null && l.dernier !== actif) {
-      l.el.classList.add("change");
-      setTimeout(() => l.el.classList.remove("change"), 420);
-    }
-    l.dernier = actif;
-  }
-
+  /* Les temoins lumineux sont rendus par `ecrans.js`, dans le contenu des
+   * ecrans qui recouvrent les panneaux ou la photo les peint. Ils suivent des
+   * booleens reels : une LED decorative est pire qu'une LED absente, on
+   * apprend a ne plus la regarder et le jour ou elle dit quelque chose,
+   * personne ne la voit. */
   function rafraichir(s) {
     if (!s) return;
-    const a = s.account;
-    allumer("led-ws", s.ws_connected, "vert");
-    allumer("led-halt", s.halted, "rouge");
-    allumer("led-stops", !!a && a.positions.every((p) => p.protected), "vert");
-    allumer("led-recon", !s.blocking.includes("I01_RECONCILED"), "vert");
-    allumer("led-amp-1",
-            !!a && Number(a.gross_notional_usd) <= Number(s.limits.max_gross_notional_usd),
-            "ambre");
-    allumer("led-amp-2",
-            !!a && Number(a.effective_leverage) <= Number(s.limits.max_effective_leverage),
-            "ambre");
   }
 
   window.CockpitBoutons = { monter, rafraichir };
