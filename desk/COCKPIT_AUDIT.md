@@ -125,3 +125,58 @@ mêmes onglets qu'aujourd'hui, atteints par les mêmes clics.
 3. **Aucune dépendance nouvelle.** Vanilla + canvas 2D + `<video>`.
 4. **Le kill switch doit rester atteignable quand tout va mal** — donc jamais
    caché derrière un onglet, jamais recouvert par les mains.
+
+---
+
+## Journal de réalisation
+
+### Fait
+
+**Phase 0** — cet audit.
+
+**Extraction préalable.** `ui/index.html` portait 367 lignes de CSS et 903 de
+JS en ligne. Séparés en `ui/desk.css` et `ui/desk.js`, sans une modification
+de comportement. C'est ce qui permet au cockpit de **réutiliser** les widgets
+plutôt que de les recopier : les deux pages chargent le même script, et il
+n'existe donc pas deux implémentations du même écran.
+
+`desk.js` émet désormais `desk:snapshot` et `desk:recherche`. Le cockpit s'y
+abonne au lieu d'interroger l'API de son côté — sinon deux écrans du même
+desk afficheraient deux instants différents.
+
+**Phase 1** — plateau 1280×800 en letterbox, photo en z-0, pare-brise détouré
+au `clip-path`, boucle vidéo (27 Mo, H.264, 20 s) avec repli sur un champ
+d'étoiles en canvas 2D. Le champ est une vraie perspective : chaque étoile a
+une profondeur qui décroît, sa projection s'écarte du point de fuite d'autant
+plus vite qu'elle est proche. Des points, jamais des traînées — c'est ce qui
+distingue une croisière d'un saut en hyperespace.
+
+**Phase 2** — les dix écrans, alimentés par les vraies données.
+
+**Phase 3** — 35 hotspots. 33 branchés sur des handlers existants, **2
+désactivés** : les gâchettes des joysticks.
+
+**Phase 5** — LED sur booléens réels, aiguilles en rotation SVG, radar 4 s/tour,
+chrono de session, mode HUD (touche `` ` ``) persisté, calibrage (touche `D`).
+
+### Ce qui manque, et pourquoi ça bloque
+
+**`assets/cockpit.jpg` n'est pas dans le dépôt.** La photo a été collée dans
+la conversation, pas déposée en fichier. Sans elle, il n'y a ni métal, ni
+biseaux, ni mains : seulement des rectangles sur du noir. L'interface le dit
+franchement plutôt que de faire semblant, et propose de continuer sans.
+
+**`assets/pilot-foreground.png`** (phase 4) se découpe *depuis* ce JPEG. Il
+n'existera donc qu'après lui.
+
+**Le calibrage final** attend la photo. Les coordonnées actuelles sont celles
+du brief ; elles ne peuvent être ajustées au pixel qu'en superposant les
+rectangles à l'image.
+
+### Les deux hotspots morts
+
+`joy-l-trigger` et `joy-r-trigger`. Le brief les voulait sur « acheter » et
+« vendre ». Cette interface ne passe **aucun ordre** — règle du dépôt,
+vérifiée par test. Deux gâchettes sous les pouces sont le pire endroit
+possible pour un ordre cliqué par erreur. Elles restent visibles, avec
+l'animation de pression, désactivées, et l'infobulle qui explique.

@@ -1,0 +1,265 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Desk — Poste de pilotage</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="/ui/desk.css">
+<link rel="stylesheet" href="/ui/cockpit/cockpit.css">
+<style>
+/* Les panneaux d'origine vivent SOUS le cockpit, dans un tiroir. Ils ne sont
+   ni supprimes ni recopies : ce sont les memes noeuds, avec les memes
+   identifiants, que `desk.js` alimente exactement comme sur `/`. Le cockpit
+   lit leurs donnees par evenement ; le tiroir donne acces a tout ce qui ne
+   rentre pas dans un ecran peint — c'est-a-dire la majorite du contenu. */
+#panneaux {
+  position: fixed; inset: 0; z-index: 20; overflow: auto;
+  background: var(--bg); display: none;
+}
+body.tiroir #panneaux { display: block }
+body.tiroir #cockpit { visibility: hidden }
+#retour {
+  position: fixed; z-index: 21; right: 16px; bottom: 16px;
+  font-family: var(--f-mono); font-size: 11px; letter-spacing: .1em;
+  text-transform: uppercase; background: var(--accent); color: #fff;
+  border: 0; padding: 10px 16px; cursor: pointer; border-radius: 3px;
+  box-shadow: 0 4px 14px rgba(0,0,0,.4);
+}
+body:not(.tiroir) #retour { display: none }
+</style>
+</head>
+<body>
+
+<div class="cockpit-stage" id="cockpit"></div>
+
+<div id="panneaux">
+<div class="bar">
+  <h1>Desk · Poste de pilotage</h1>
+  <span class="pill" id="mode">—</span>
+  <span class="pill" id="net"><span class="dot" id="dot"></span>&nbsp;flux</span>
+  <span class="sep"></span>
+  <span class="pill" id="uptime">—</span>
+  <button class="link-btn" id="theme" type="button">Thème</button>
+</div>
+
+<div class="offline" id="offline" hidden>Backend non joignable — dernières valeurs connues, figées.</div>
+
+<div class="wrap">
+
+  <section class="banner" id="banner">
+    <div>
+      <h2 class="state" id="state">Connexion…</h2>
+      <p class="why" id="why">Lecture de l'état du desk.</p>
+    </div>
+    <div>
+      <button class="kill" id="kill" type="button">Tout arrêter</button>
+      <div class="kill-note" id="killNote">arrête le desk et passe en FLAT</div>
+    </div>
+  </section>
+
+  <section class="tiles" id="tiles"></section>
+
+  <nav class="nav" id="nav" role="tablist"></nav>
+
+  <!-- ==================== PRÉ-VOL ==================== -->
+  <section class="secteur" id="sec-prevol" role="tabpanel" hidden>
+    <div class="intro">
+      Un cockpit avant décollage n'est pas un cockpit vide : c'est un cockpit
+      qui affiche une <b>liste de vérifications</b>. Ce panneau remplace
+      « trades en cours » et fait mieux que lui — il dit <b>pourquoi</b> il n'y
+      en a pas. Une <b>attente</b> se résout avec du temps ; un <b>blocage</b>
+      demande une décision.
+    </div>
+    <section class="panel">
+      <h2>Liste de vérifications <span class="badge" id="checkCount">—</span></h2>
+      <div id="verdict"></div>
+      <div class="body" id="check"></div>
+    </section>
+  </section>
+
+  <!-- ==================== TÉLÉMÉTRIE ==================== -->
+  <section class="secteur" id="sec-telemetrie" role="tabpanel" hidden>
+    <div class="intro">
+      L'enregistreur est le <b>seul système du dépôt qui tourne en continu</b>.
+      L'API Hyperliquid ne sert aucun historique de carnet ni de liquidations :
+      cette microstructure ne peut pas être rattrapée après coup, il faut
+      l'enregistrer en avant, et ce délai n'a pas de raccourci.
+    </div>
+    <section class="panel">
+      <h2>Collecte de microstructure <span class="badge" id="telBadge">—</span></h2>
+      <div class="body" id="telemetrie"></div>
+    </section>
+  </section>
+
+  <!-- ==================== NAVIGATION ==================== -->
+  <section class="secteur" id="sec-navigation" role="tabpanel" hidden>
+    <div class="intro">
+      Le journal hors échantillon des déblocages de jetons. C'est ce qui
+      ressemble le plus à des positions ouvertes, et la nuance est
+      essentielle : <b>aucun ordre n'est passé</b>. Ce sont des prédictions
+      datées, inscrites <b>avant</b> les faits dans un fichier en ajout seul —
+      une prédiction qu'on peut réécrire ne prouve rien.
+    </div>
+    <section class="panel">
+      <h2>Journal hors échantillon <span class="badge" id="navBadge">—</span></h2>
+      <div class="body" id="navigation"></div>
+    </section>
+  </section>
+
+  <!-- ==================== SOUFFLERIE ==================== -->
+  <section class="secteur" id="sec-soufflerie" role="tabpanel" hidden>
+    <div class="intro">
+      Les campagnes de validation. Trois chiffres par campagne, et le troisième
+      décide : combien de cellules battent le hasard, <b>combien on en
+      attendait sans aucun signal</b>, et combien survivent à la correction de
+      Benjamini-Hochberg. Un quatrième les encadre : le test pouvait-il voir.
+      L'<b>amplitude</b> et la <b>direction</b> ne s'additionnent jamais —
+      savoir qu'il se passe quelque chose ne dit pas dans quel sens.
+    </div>
+    <section class="panel">
+      <h2>Campagnes <span class="badge" id="campBadge">—</span></h2>
+      <div class="body"><div class="cartes" id="campagnes"></div></div>
+    </section>
+    <section class="panel">
+      <h2>Inventaire des stratégies</h2>
+      <div class="body tscroll" id="inventaire"></div>
+    </section>
+    <section class="panel">
+      <h2>Courbe d'équité contre détenir l'actif</h2>
+      <div class="controles">
+        <label for="cbStrat">Stratégie</label><select id="cbStrat"></select>
+        <label for="cbActif">Actif</label><select id="cbActif"></select>
+        <label for="cbIv">Intervalle</label><select id="cbIv"></select>
+      </div>
+      <div id="courbe"></div>
+    </section>
+  </section>
+
+  <!-- ==================== CONSOMMATION ==================== -->
+  <section class="secteur" id="sec-consommation" role="tabpanel" hidden>
+    <div class="intro">
+      Ce que coûte une décision, et ce qu'on obtient pour ce prix. Les deux
+      axes ne vont pas ensemble par nature : afficher le coût sans le nombre de
+      mandats émis donnerait un compteur de carburant pour un appareil qui n'a
+      pas décollé.
+    </div>
+    <section class="panel">
+      <h2>Distribution des scores <span class="badge" id="scoreBadge">—</span></h2>
+      <div id="scores"></div>
+    </section>
+    <section class="panel">
+      <h2>Coût par politique de modèles</h2>
+      <div class="body tscroll" id="politiques"></div>
+    </section>
+    <section class="panel">
+      <h2>Coût et latence par agent</h2>
+      <div class="body tscroll" id="agents"></div>
+    </section>
+  </section>
+
+  <!-- ==================== VOLS ==================== -->
+  <section class="secteur" id="sec-vols" role="tabpanel" hidden>
+    <div class="intro">
+      Les mandats émis, les ordres passés, et le P&amp;L réalisé. Ce panneau
+      existe pour afficher un vide qui a une cause : une ligne plate à zéro
+      suggérerait qu'on a tradé sans rien gagner, ce qui n'est pas ce qui
+      s'est passé.
+    </div>
+    <section class="panel">
+      <h2>Profits et pertes <span class="badge" id="pnlBadge">—</span></h2>
+      <div id="pnl"></div>
+    </section>
+    <section class="panel">
+      <h2>Historique des transactions</h2>
+      <div class="body tscroll" id="historique"></div>
+    </section>
+  </section>
+
+  <!-- ==================== SYSTÈMES ==================== -->
+  <section class="secteur" id="sec-systemes" role="tabpanel" hidden>
+  <div class="grid">
+    <div style="display:grid;gap:18px;align-content:start">
+
+      <section class="panel">
+        <h2>Invariants <span class="badge" id="invCount">—</span></h2>
+        <div class="body" id="inv"></div>
+      </section>
+
+      <section class="panel">
+        <h2>Positions</h2>
+        <div class="body tscroll" id="pos"></div>
+      </section>
+
+      <section class="panel">
+        <h2>Journal de décisions</h2>
+        <div class="body" id="journal"></div>
+      </section>
+
+    </div>
+    <div style="display:grid;gap:18px;align-content:start">
+
+      <section class="panel">
+        <h2>Mandat en vigueur</h2>
+        <div class="mandate" id="mandate"></div>
+      </section>
+
+      <section class="panel">
+        <h2>Flux de données <span class="badge" id="feedCount">—</span></h2>
+        <div class="body" id="feeds"></div>
+      </section>
+
+      <section class="panel">
+        <h2>Budget de requêtes</h2>
+        <div class="body" id="budget"></div>
+      </section>
+
+      <section class="panel">
+        <h2>Derniers prix</h2>
+        <div class="body tscroll" id="prices"></div>
+      </section>
+
+    </div>
+  </div>
+  </section>
+
+  <div class="foot">
+    Ce tableau de bord ne passe <b>aucun ordre</b>. Il peut arrêter le desk, il ne peut pas le faire trader :
+    un tableau de bord qui ouvre une position est un tableau de bord qu'on peut cliquer par erreur.<br>
+    Le kill switch reste joignable même quand tout le reste est en défaut. Ne jamais exposer ce port hors de la machine — passer par un tunnel SSH.<br>
+    Les panneaux de recherche lisent les artefacts présents sur <b>cette</b> machine. Un panneau vide dit lequel manque et quelle commande le produit.
+  </div>
+</div>
+</div>
+
+<button id="retour" type="button">Retour au poste</button>
+
+<script src="/ui/desk.js"></script>
+<script src="/ui/cockpit/shell.js"></script>
+<script src="/ui/cockpit/ecrans.js"></script>
+<script src="/ui/cockpit/boutons.js"></script>
+<script>
+// Le tiroir. `montrer()` de `desk.js` ouvre un secteur ; ici on l'enrobe pour
+// qu'ouvrir un secteur fasse aussi apparaitre le tiroir. On n'y touche pas
+// autrement : c'est la meme fonction, le meme etat, la meme persistance.
+(function () {
+  const corps = document.body;
+  const original = window.Desk.montrer;
+  window.Desk.montrer = function (id) {
+    original(id);
+    corps.classList.add("tiroir");
+  };
+  document.getElementById("nav").addEventListener("click", (e) => {
+    if (e.target.closest("button[data-sec]")) corps.classList.add("tiroir");
+  });
+  document.getElementById("retour").addEventListener("click",
+    () => corps.classList.remove("tiroir"));
+  addEventListener("keydown", (e) => {
+    if (e.key === "Escape") corps.classList.remove("tiroir");
+  });
+})();
+</script>
+</body>
+</html>

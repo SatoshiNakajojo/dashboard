@@ -17,13 +17,16 @@ from typing import Any
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from ..contracts.common import HaltReason
 from . import recherche
 from .state import DeskState
 
-UI_FILE = Path(__file__).resolve().parent.parent / "ui" / "index.html"
+UI_DIR = Path(__file__).resolve().parent.parent / "ui"
+UI_FILE = UI_DIR / "index.html"
+COCKPIT_FILE = UI_DIR / "cockpit.html"
 
 
 # Une courbe d'equite compte une valeur par barre : six mois en 4 h font
@@ -74,10 +77,33 @@ class HaltRequest(BaseModel):
 def create_app(state: DeskState) -> FastAPI:
     app = FastAPI(title="Trading Desk — supervision", docs_url="/api/docs")
 
+    # Les fichiers de l'interface : feuilles de style, scripts, photo du
+    # cockpit, boucle video. Montes en lecture seule sur un chemin dedie —
+    # jamais a la racine, qui reste reservee aux pages.
+    app.mount("/ui", StaticFiles(directory=str(UI_DIR)), name="ui")
+
     @app.get("/", response_class=HTMLResponse)
     async def index() -> str:
+        """Le poste de pilotage. La page classique reste sur `/panneaux`.
+
+        L'inversion est deliberee : le cockpit EST l'interface, et les
+        panneaux sont son tiroir. Les deux pages chargent le meme `desk.js`
+        et portent les memes identifiants — il n'y a pas deux applications,
+        il y a deux habillages du meme etat.
+        """
+        if COCKPIT_FILE.exists():
+            return COCKPIT_FILE.read_text(encoding="utf-8")
         if not UI_FILE.exists():
             return "<h1>Interface absente</h1><p>ui/index.html introuvable.</p>"
+        return UI_FILE.read_text(encoding="utf-8")
+
+    @app.get("/panneaux", response_class=HTMLResponse)
+    async def panneaux() -> str:
+        """L'interface sans le cockpit. Elle n'est pas un vestige : c'est la
+        vue qui reste lisible sur un ecran qui n'a pas le ratio de la photo,
+        et celle qu'on ouvre quand on veut lire plutot que piloter."""
+        if not UI_FILE.exists():
+            raise HTTPException(status_code=404, detail="ui/index.html introuvable")
         return UI_FILE.read_text(encoding="utf-8")
 
     @app.get("/api/snapshot")

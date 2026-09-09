@@ -416,3 +416,83 @@ def test_un_artefact_au_format_liste_nue_est_signale(tmp_path, monkeypatch):
             assert c["disponible"] is False
             assert "format d'avant" in c["raison"]
             assert c["commande"].startswith("python ")
+
+
+# --------------------------------------------------------------------------
+#  Le poste de pilotage : habillage, pas seconde application
+# --------------------------------------------------------------------------
+
+def test_la_racine_sert_le_cockpit_et_garde_tous_les_secteurs(client):
+    """Le cockpit habille l'app ; il ne la remplace pas.
+
+    La page porte les MÊMES identifiants que `/panneaux` — mêmes secteurs,
+    même coupe-circuit — parce que `desk.js` les alimente sans savoir dans
+    quel habillage il tourne. Deux implémentations du même écran finiraient
+    par diverger, et c'est celle qu'on regarde le moins qui mentirait.
+    """
+    page = client.get("/").text
+    assert 'id="cockpit"' in page
+    for secteur in ("prevol", "telemetrie", "navigation", "soufflerie",
+                    "consommation", "vols", "systemes"):
+        assert f'id="sec-{secteur}"' in page, f"secteur {secteur} perdu"
+    assert 'id="kill"' in page, "le coupe-circuit doit rester dans la page"
+    assert "/ui/desk.js" in page and "/ui/cockpit/shell.js" in page
+
+
+def test_la_page_classique_reste_servie(client):
+    """`/panneaux` n'est pas un vestige : c'est la vue lisible sur un écran
+    qui n'a pas le ratio de la photo."""
+    page = client.get("/panneaux").text
+    assert 'id="sec-prevol"' in page and 'id="cockpit"' not in page
+
+
+def test_le_cockpit_ne_passe_toujours_aucun_ordre(client):
+    """La règle du dépôt vaut aussi sous la photo.
+
+    Le brief du cockpit voulait les gâchettes des joysticks sur « acheter »
+    et « vendre ». Cette interface ne le peut pas : deux gâchettes sous les
+    pouces sont le pire endroit possible pour un ordre cliqué par erreur.
+    """
+    page = client.get("/").text
+    assert "/api/order" not in page and "/api/trade" not in page
+
+
+def test_la_carte_des_coordonnees_est_unique_et_en_pourcentages():
+    """Un seul fichier porte la géométrie, et jamais en pixels.
+
+    Le plateau se met à l'échelle du viewport en letterbox : des pixels
+    bruts dérailleraient à la première résolution différente, et des
+    coordonnées recopiées dans plusieurs composants dérailleraient à la
+    première recalibration.
+    """
+    carte = json.loads(
+        (recherche.RACINE / "src/trading_desk/ui/cockpit/hotspots.json")
+        .read_text(encoding="utf-8"))
+    assert carte["design"] == {"w": 1280, "h": 800}
+    assert len(carte["screens"]) == 10
+
+    for groupe in ("screens", "hotspots", "leds", "hotas", "pilot"):
+        for nom, r in carte[groupe].items():
+            for axe in ("l", "t", "w", "h"):
+                assert 0 <= r[axe] <= 100, f"{groupe}.{nom}.{axe} hors du plateau"
+            assert r["l"] + r["w"] <= 100.5, f"{groupe}.{nom} déborde à droite"
+            assert r["t"] + r["h"] <= 100.5, f"{groupe}.{nom} déborde en bas"
+
+
+def test_aucun_lorem_de_la_photo_ne_survit():
+    """La photo est générée : son texte est halluciné de bout en bout.
+
+    Le brief demandait de garder « les noms métier déjà dans le code
+    (HOOL, Thana, PAL…) ». Vérification faite, aucun n'y est. Les recopier
+    produirait une interface qui ment sur ce qu'elle affiche.
+    """
+    ui = recherche.RACINE / "src/trading_desk/ui"
+    texte = "\n".join(
+        f.read_text(encoding="utf-8", errors="ignore")
+        for f in (*ui.glob("*.html"), *ui.glob("*.js"), *ui.glob("cockpit/*.js"),
+                  *ui.glob("cockpit/*.json"))
+    )
+    for lorem in ("ALDO PORTOMANICE", "RERERSONT", "ANRLESUHE", "SUPYTANTES",
+                  "SQUIPE", "ROLLANT SERIATOR", "QUARCED ON DRAPPED",
+                  "PILGTAGE", "Analog diars"):
+        assert lorem not in texte, f"lorem halluciné conservé : {lorem}"
