@@ -87,13 +87,22 @@ python -m trading_desk --demo    # marché simulé, sans réseau
 
 `No module named trading_desk` signifie que `pip install -e` n'a pas tourné
 dans l'interpréteur courant — typiquement une base conda différente de celle
-où l'installation a eu lieu. Les scripts de `scripts/` marchent quand même :
-ils ajoutent `src/` au chemin eux-mêmes. Pour le desk et l'interface, deux
-issues :
+où l'installation a eu lieu.
+
+`PYTHONPATH=src` ne suffit PAS à réparer ça. Il résout le paquet, pas ses
+dépendances : l'erreur suivante est `No module named 'uvicorn'`. Les scripts
+de `scripts/` donnent le change parce qu'ils n'ont besoin que de `pydantic`,
+souvent déjà présent — le desk et l'interface ont besoin de tout.
 
 ```bash
-PYTHONPATH=src python -m trading_desk    # sans rien installer
-pip install -e ".[dev]"                  # ou l'installer pour de bon
+pip install -e ".[dev]"          # la bonne réponse, une fois pour toutes
+python -m trading_desk           # plus besoin de PYTHONPATH ensuite
+```
+
+Vérifier dans quel interpréteur l'installation a atterri :
+
+```bash
+which python && python -c "import trading_desk, uvicorn; print('OK')"
 ```
 
 Puis ouvrir <http://127.0.0.1:8787>. L'écran montre l'état des douze
