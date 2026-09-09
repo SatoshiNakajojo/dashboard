@@ -249,3 +249,22 @@ def test_le_decalage_calendaire_enumere_et_annonce_son_plancher():
     _, _, pv, n_al = valider.decalage_calendaire(evts, amplitude=60)
     assert n_al > 0
     assert pv >= 1 / (n_al + 1) - 1e-9
+
+
+def test_les_trous_de_WEEK_END_peuvent_etre_silencieux():
+    """Le marché actions ferme : chaque série porte deux cents
+    discontinuités parfaitement normales.
+
+    Les annoncer noyait le rapport sous quatre cents lignes
+    d'avertissement — c'est arrivé le 9 septembre 2026 — et un
+    avertissement qu'on apprend à ignorer ne protège plus de rien.
+
+    Le défaut reste bruyant : sur des bougies crypto, un trou est une vraie
+    anomalie.
+    """
+    import inspect
+
+    from trading_desk.backtest.data import load_from_file
+    sig = inspect.signature(load_from_file)
+    assert sig.parameters["silencieux"].default is False, (
+        "le silence doit se demander, jamais s'imposer")

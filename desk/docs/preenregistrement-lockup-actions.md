@@ -278,3 +278,81 @@ Cinquante-huit sociétés sont introuvables chez Yahoo. Ce sont les radiées,
 donc les échecs, et leur retrait rapproche de zéro l'effet baissier mesuré :
 la portée du résultat sera limitée aux sociétés encore cotées, et ce sera
 écrit dans le rapport.
+
+---
+
+# Résultat — 9 septembre 2026
+
+**RÉFUTATION.** Le verdict était écrit avant la mesure ; il s'applique tel
+quel.
+
+## Les chiffres
+
+447 sociétés, détention médiane de 4 séances.
+
+| test | n | observé | hasard | p | BH |
+| --- | --- | --- | --- | --- | --- |
+| poolé — brut | 447 | −47,2 | −38,1 | 0,6352 | — |
+| net de SPY | 447 | −57,1 | −29,8 | 0,6697 | — |
+| décalage calendaire, brut | 447 | −47,2 | −35,1 | 0,6189 | — |
+| décalage calendaire, net | 447 | −57,1 | −35,1 | 0,6390 | — |
+
+Rappel de convention : **positif = le prix a baissé.** Le signe observé est
+négatif, donc le prix *monte* légèrement dans la semaine qui précède
+l'expiration — et cette hausse est indiscernable de celle d'une fenêtre
+quelconque.
+
+Les deux conditions de réfutation posées d'avance sont réunies : le test
+poolé ne ressort pas, **et** l'effet est de signe opposé.
+
+## Ce que ça veut dire, et ce que ça ne veut pas dire
+
+Le pré-enregistrement l'écrivait avant de savoir :
+
+> Dans ce cas le résultat crypto n'est pas invalidé — mais il devient
+> **propre à la crypto**, et l'explication par la microstructure des marchés
+> de jetons (flottant étroit, détenteurs concentrés, absence de teneurs de
+> marché obligés) prend le pas sur l'explication par un mécanisme général
+> d'offre.
+
+C'est la lecture qui s'impose, et il n'y a rien à y ajouter. Les +290 bps
+sur les déblocages tiennent toujours leurs six contrôles ; ils ne
+bénéficient simplement d'aucune réplication externe, et leur portée se
+restreint aux marchés de jetons.
+
+Les échelles rappelées par l'amendement n° 1 rendent d'ailleurs ce résultat
+moins surprenant qu'il n'y paraît : un *lockup* libère 4 à 11 fois le
+flottant, un déblocage de jetons quelques pourcents de l'offre. Un choc
+d'offre cent fois plus gros, absorbé sans trace visible, dit surtout que ces
+deux événements ne se ressemblent que par leur nom.
+
+## La limite de portée, écrite plutôt que tue
+
+L'échantillon est celui des introductions 2023-2025 accessibles chez Yahoo :
+majoritairement des petites capitalisations du Nasdaq. Cinquante-neuf
+sociétés radiées en sont absentes.
+
+Cette absence retire les baisses les plus fortes, donc **elle jouait en
+faveur de l'hypothèse** — et l'hypothèse a quand même été réfutée. Le
+résultat est donc robuste dans le sens qui compte ici.
+
+## Ce qui n'a pas été fait, et ne le sera pas
+
+Aucun re-découpage, aucune fenêtre alternative, aucune tranche de taille
+essayée après coup. Le protocole prévoyait un test ; il a été fait une fois,
+et il a répondu.
+
+## Deux défauts de mes propres scripts, trouvés dans cette exécution
+
+**La vérification croisée mentait sur une reprise.** Les fichiers déjà
+écrits sont sautés ; `ecarts` ne contenait donc que le reliquat, c'est-à-dire
+les sociétés précédemment rejetées pour désaccord de date. Médiane 0,6 jour
+au premier passage, **155,6 au second, sur les mêmes données**. L'alerte
+qui en découlait aurait fait abandonner un jeu de données parfaitement sain.
+Elle est remplacée par « non calculable sur cette exécution ».
+
+**Quatre cents lignes d'avertissement noyaient le rapport.** Le marché
+actions ferme le week-end : chaque série porte deux cents discontinuités
+normales. `load_from_file` accepte désormais `silencieux=True`, que seules
+les actions demandent — un avertissement qu'on apprend à ignorer ne protège
+plus de rien.

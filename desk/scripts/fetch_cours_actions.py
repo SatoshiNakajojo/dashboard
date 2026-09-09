@@ -123,13 +123,14 @@ def main() -> int:
                   file=sys.stderr)
 
     print(f"\n  {len(evts)} sociétés à récupérer\n")
-    ok, absents, courts, decales = 0, [], [], []
+    ok, deja, absents, courts, decales = 0, 0, [], [], []
     ecarts = []
     for n, e in enumerate(evts, 1):
         t = e["ticker"]
         cible = dossier / f"{t}_1d_real.json"
         if cible.exists():
             ok += 1
+            deja += 1
             continue
         try:
             brut = _get(f"https://query1.finance.yahoo.com/v8/finance/chart/"
@@ -171,7 +172,21 @@ def main() -> int:
               "Nasdaq et Yahoo :")
         for t, j in decales[:12]:
             print(f"    {t:<6} {j} jours d'écart")
-    if ecarts:
+    if ecarts and deja:
+        # SUR UNE REPRISE, cette médiane ne veut rien dire.
+        #
+        # Les fichiers déjà écrits sont sautés, donc `ecarts` ne contient
+        # QUE le reliquat — c'est-à-dire les sociétés précédemment rejetées
+        # pour désaccord de date. Leur médiane est énorme par construction,
+        # et l'alerte qui en découlerait ferait abandonner un jeu de données
+        # parfaitement sain. C'est arrivé le 9 septembre 2026 : 0,6 jour au
+        # premier passage, 155,6 au second, sur les mêmes données.
+        print(f"\n  Vérification croisée : NON CALCULABLE sur cette "
+              f"exécution.\n  {deja} séries déjà présentes ont été sautées ; "
+              "la médiane ne porterait\n  que sur le reliquat, "
+              "c'est-à-dire sur les rejets précédents.")
+        print(f"  Pour la recalculer : videz {dossier}/ et relancez.")
+    elif ecarts:
         ecarts.sort()
         median = ecarts[len(ecarts) // 2]
         print(f"\n  Vérification croisée des dates : écart médian "

@@ -76,8 +76,12 @@ def charger(lockups: list[dict], dossier: str) -> list[dict]:
     for e in lockups:
         t = e["ticker"]
         try:
+            # Les week-ends sont des trous NORMAUX sur actions : le marche
+            # ferme. Sans `silencieux`, chaque societe imprimerait une ligne
+            # d'avertissement et le rapport disparaitrait sous quatre cents
+            # lignes de bruit.
             bars = load_from_file(f"{dossier}/{t}_1d_real.json", t, "1d",
-                                  max_gap_ratio=1.0)
+                                  max_gap_ratio=1.0, silencieux=True)
         except (DataUnavailable, FileNotFoundError, Exception):
             continue
         par_jour = _index(bars)
@@ -170,7 +174,8 @@ def neutraliser(evts: list[dict], reference: str, dossier: str) -> int:
     """
     try:
         marche = load_from_file(f"{dossier}/{reference}_1d_real.json",
-                                reference, "1d", max_gap_ratio=1.0)
+                                reference, "1d", max_gap_ratio=1.0,
+                                silencieux=True)
     except Exception:
         return 0
     par_jour = _index(marche)
