@@ -217,10 +217,23 @@ def test_arret_passe_le_mandat_en_flat(tmp_path):
 
 
 def test_interface_servie(tmp_path):
+    """L'interface est servie, avec ses sept secteurs et son coupe-circuit.
+
+    On verifie la presence des secteurs plutot qu'un mot du titre : un test
+    qui ne tient qu'a un mot casse au premier renommage sans rien avoir
+    protege. Ce qui doit etre garanti, c'est qu'aucun panneau ne disparaisse
+    silencieusement — et que le bouton d'arret soit dans la page servie,
+    puisqu'il doit rester atteignable quand tout le reste est en defaut.
+    """
     client, _ = _client(tmp_path)
     r = client.get("/")
     assert r.status_code == 200
-    assert "Supervision" in r.text
+    for secteur in ("prevol", "telemetrie", "navigation", "soufflerie",
+                    "consommation", "vols", "systemes"):
+        assert f'id="sec-{secteur}"' in r.text, f"secteur {secteur} absent"
+    assert 'id="kill"' in r.text
+    # L'interface ne doit exposer aucun chemin d'envoi d'ordre.
+    assert "/api/order" not in r.text and "/api/trade" not in r.text
 
 
 def test_mode_live_refuse_sans_agent_wallet():

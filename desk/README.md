@@ -1860,3 +1860,84 @@ ailleurs, et le parseur ne sera écrit qu'après lecture de sa sortie.
 
 C'est la leçon de `fetch_unlocks.py`, écrit contre une API supposée devenue
 payante et une structure devinée : propre, testé, entièrement faux.
+
+---
+
+## Le poste de pilotage — sept secteurs, et la règle qui les gouverne
+
+`python -m trading_desk` sert l'interface sur `127.0.0.1:8787`. Elle ne passe
+**aucun ordre** : elle peut arrêter le desk, elle ne peut pas le faire trader.
+Un tableau de bord qui ouvre une position est un tableau de bord qu'on peut
+cliquer par erreur.
+
+Une règle unique la gouverne : **un artefact absent est une information, pas
+une panne.** Chaque panneau vide nomme le fichier qu'il attend et donne la
+commande qui le produit. Un vide qui ne s'explique pas finit par être lu comme
+« tout va bien ».
+
+| secteur | ce qu'il montre |
+| --- | --- |
+| **PRÉ-VOL** | la liste de vérifications, et ce qui bloque le décollage |
+| **TÉLÉMÉTRIE** | la collecte Parquet : fichiers, flux, dernier battement |
+| **NAVIGATION** | le journal hors échantillon des déblocages |
+| **SOUFFLERIE** | les campagnes de validation, et les courbes contre HODL |
+| **CONSOMMATION** | coût par décision, qualité de schéma, distribution des scores |
+| **VOLS** | mandats, exécutions, P&L réalisé |
+| **SYSTÈMES** | invariants, mandat, flux, budget, positions, journal |
+
+**PRÉ-VOL remplace « trades en cours » et fait mieux que lui** : il dit
+pourquoi il n'y en a pas. Chaque ligne est verte, orange ou rouge, et la
+différence entre les deux dernières est celle qui compte — une attente se
+résout avec du temps, un blocage demande une décision.
+
+### Trois choses que cette interface refuse de faire
+
+**Elle ne trace pas une ligne plate à zéro pour un P&L jamais commencé.** Le
+panneau VOLS affiche « aucun vol effectué » et la cause mesurée : 19 setups
+proposés, 19 arrêtés au portier du score, 0 mandat. Une ligne plate
+suggérerait qu'on a tradé sans rien gagner, ce qui n'est pas ce qui s'est
+passé.
+
+**Elle n'additionne pas l'amplitude et la direction.** Les 59 cellules qui
+survivent en amplitude ne disent pas dans quel sens. Les compter comme un edge
+afficherait « 66 cellules survivent » sur un projet dont toutes les campagnes
+directionnelles concluent à zéro.
+
+**Elle ne trace pas une courbe issue de zéro trade.** Avec le plafond de stop
+de production (500 bps), `tsmom BTC 1d` fait zéro trade et 2 158 rejets. La
+courbe plate qui en résulterait, tracée à côté de « détenir BTC », se lirait
+« la stratégie a perdu » alors qu'elle n'a jamais pris de position. Les
+courbes utilisent le plafond des campagnes (5 000 bps), et l'endpoint expose
+`sans_trade`.
+
+### Le criblage annonce s'il pouvait voir
+
+Nouveau, et ça mord sur les résultats déjà publiés. Un test de randomisation à
+D tirages a un plancher de p à `1/(D+1)`. Benjamini-Hochberg exige `α/m` au
+rang 1. Quand le plancher dépasse ce seuil, **aucune cellule ne peut survivre
+quelle que soit la donnée**.
+
+`baselines/grille.json` a été produit à 200 tirages : plancher 0,005, seuil de
+rang 1 à 0,0009 sur 56 cellules. Il faudrait **huit cellules simultanément au
+plancher** pour qu'une seule survive. Le « zéro survivant » qu'on lit dans ce
+fichier ne réfute rien — il faudrait le relancer à 1 400 tirages au moins. Le
+résultat publié plus haut (un survivant sur 56) vient d'une exécution à 2 000
+tirages dont l'artefact n'est pas dans le dépôt.
+
+La tentation était de **déduire** le nombre de tirages du plus petit p
+observé. C'est faux : ce minimum majore le plancher sans le déterminer. Le
+premier essai déclarait ainsi aveugle la campagne « direction » des
+déclencheurs — tournée à 2 000 tirages, mais dont aucune cellule n'a saturé le
+plancher. Transformer une réfutation solide en « on ne sait pas » est la pire
+des deux erreurs possibles. Les artefacts inscrivent maintenant leurs tirages ;
+quand ils se taisent, l'interface se tait aussi.
+
+### Brancher la collecte
+
+Le panneau TÉLÉMÉTRIE dit « ailleurs » tant que `DESK_ENREGISTREUR_RACINE`
+n'est pas posé. C'est exact sur une machine de développement : l'enregistreur
+tourne sous systemd sur le VPS. Sur le VPS lui-même :
+
+```bash
+DESK_ENREGISTREUR_RACINE=/var/lib/desk python -m trading_desk
+```

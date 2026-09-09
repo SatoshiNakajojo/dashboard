@@ -91,3 +91,51 @@ arrêtée sur un plafond atteint sans que personne ne le voie venir.
 Elle ne passera **aucun ordre**. Le serveur écoute sur `127.0.0.1`, il peut
 arrêter le desk mais pas le faire trader. Un tableau de bord qui peut ouvrir
 une position est un tableau de bord qu'on peut cliquer par erreur.
+
+---
+
+## Ce qui a été construit — écrit après, le 9 septembre
+
+Sept secteurs, pas cinq. Les cinq annoncés, plus deux que je dois signaler
+parce qu'ils changent le périmètre :
+
+**VOLS** existe bel et bien, avec le graphique P&L et l'historique des
+transactions promis. Les deux affichent « aucun vol effectué » et la cause
+mesurée, plutôt qu'une ligne plate à zéro. Le code est là ; il se remplira au
+premier mandat.
+
+**SYSTÈMES** garde l'intégralité de l'ancienne interface de supervision —
+invariants, mandat, flux, budget de requêtes, positions, prix, journal de
+décisions. **Rien n'a été retiré.** Ces panneaux ont simplement cessé d'être
+la page entière pour devenir un secteur parmi sept.
+
+### Ce que j'ai ajouté sans que ce soit demandé
+
+**Le second graphique de la courbe d'équité.** Sur BTC, détenir l'actif rend
+5 640 $ quand `ema_cross` rend 25,81 $. Sur un axe partagé, la stratégie est
+une ligne plate collée au bas du cadre — c'est la vérité de la comparaison, et
+il faut la garder telle quelle. Mais elle efface la forme propre de la
+stratégie : ses paliers, ses creux, le moment où elle a tradé. D'où un second
+tracé à sa propre échelle, annoncé comme ne se comparant pas au premier. Un
+axe secondaire sur le même graphique aurait produit la même lisibilité en
+laissant croire que les deux courbes se superposent.
+
+**Le contrôle de résolution du criblage.** Chaque campagne annonce désormais
+si son test *pouvait* rejeter quelque chose. Avec 200 tirages, le plancher de
+p vaut 0,005 alors que Benjamini-Hochberg exige 0,0009 au rang 1 sur
+56 cellules : il faudrait huit cellules simultanément au plancher pour qu'une
+seule survive. Un « zéro survivant » produit dans ces conditions ne réfute
+rien. Trois campagnes du dossier `baselines/` sont dans ce cas.
+
+### Ce qui reste à faire, et pourquoi
+
+**L'éditeur de stratégie dans le navigateur** n'existe pas. Le lancement d'un
+backtest depuis l'interface, si : changer stratégie, actif ou intervalle
+rejoue le moteur et retrace les deux courbes. Écrire une stratégie reste un
+fichier Python — plus rapide qu'un formulaire, et surtout versionné.
+
+**Trois artefacts manquent sur la machine de développement** : le journal des
+déblocages, la collecte Parquet, et le résultat de `valider_unlocks.py`. Les
+panneaux le disent, nomment le fichier attendu et donnent la commande. Le
+dernier mérite d'être lancé : c'est le seul edge directionnel du projet, et il
+n'a jamais été écrit dans un fichier.
