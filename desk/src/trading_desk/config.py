@@ -13,9 +13,10 @@ Deux precautions valent d'etre soulignees :
 from __future__ import annotations
 
 from decimal import Decimal
+from typing import Annotated
 
-from pydantic import Field, field_validator, model_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import field_validator, model_validator
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 from .contracts.common import DeskMode
 from .risk.limits import RiskLimits
@@ -32,7 +33,16 @@ class Settings(BaseSettings):
     # --- posture ---
     mode: DeskMode = DeskMode.SHADOW
     testnet: bool = True
-    assets: tuple[str, ...] = ("BTC", "ETH")
+    # `NoDecode` n'est pas une precaution de style : sans lui,
+    # pydantic-settings tente de decoder `DESK_ASSETS` en JSON AVANT que le
+    # validateur ci-dessous ne le voie, et `BTC,ETH` — la valeur que
+    # `.env.example` documente — fait echouer le demarrage sur un
+    # `SettingsError` qui ne nomme meme pas la cause.
+    #
+    # Le bug etait la depuis l'origine et ne se declenchait que pour qui
+    # copiait `.env.example` en `.env`, c'est-a-dire tout le monde au premier
+    # demarrage. Trouve le 9 septembre 2026 en lancant le mode PAPER.
+    assets: Annotated[tuple[str, ...], NoDecode] = ("BTC", "ETH")
 
     # --- persistance ---
     db_path: str = "desk.db"
@@ -47,6 +57,15 @@ class Settings(BaseSettings):
     # etait en panne.
     enregistreur_racine: str | None = None
 
+    # --- mode PAPER ---
+    # L'equite de depart du simulateur. Volontairement petite : une equite
+    # papier genereuse produit des tailles qu'aucun carnet d'alt n'absorbe, et
+    # le moteur les tronque — on mesure alors la troncature, pas la strategie.
+    paper_equity_usd: Decimal = Decimal("1000")
+    # Le fichier que le pilote de deblocages lit. Ses positions ont ete
+    # inscrites AVANT les faits ; le desk ne trade que celles-la.
+    paper_journal: str = "data/journal_unlocks.jsonl"
+
     # --- signer (adresses publiques uniquement) ---
     agent_wallet_address: str | None = None
     master_wallet_address: str | None = None
@@ -59,6 +78,22 @@ class Settings(BaseSettings):
     max_position_notional_usd: Decimal = Decimal("500")
     risk_per_trade_pct: Decimal = Decimal("0.5")
     max_effective_leverage: Decimal = Decimal("3")
+
+    # La bande de distance de stop, en points de base. Le defaut [30, 500] a
+    # ete calibre pour du BTC intraday, ou 5 % est deja tres large.
+    #
+    # Il ne convient PAS a tout : la regle des deblocages tient des alts six
+    # jours, et un stop a 5 % sur un jeton dont la volatilite quotidienne
+    # depasse 5 % se fait balayer par le bruit avant la fin de la fenetre.
+    # Le desserrer globalement affaiblirait le garde-fou pour tout le monde ;
+    # le rendre configurable laisse chaque deploiement declarer l'horizon
+    # qu'il trade, et la fourchette du mandat reste le controle FIN,
+    # decision par decision.
+    #
+    # Le plafond absolu reste 5000 bps : c'est le maximum que `StopBand`
+    # autorise, et il n'est pas negociable ici.
+    min_stop_distance_bps: Decimal = Decimal("30")
+    max_stop_distance_bps: Decimal = Decimal("500")
 
     @field_validator("assets", mode="before")
     @classmethod
@@ -99,6 +134,8 @@ class Settings(BaseSettings):
             max_position_notional_usd=self.max_position_notional_usd,
             risk_per_trade_pct=self.risk_per_trade_pct,
             max_effective_leverage=self.max_effective_leverage,
+            min_stop_distance_bps=self.min_stop_distance_bps,
+            max_stop_distance_bps=self.max_stop_distance_bps,
         )
 
 

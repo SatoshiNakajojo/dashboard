@@ -40,11 +40,25 @@ log = logging.getLogger("desk")
 # Le carnet arrive plusieurs fois par seconde : tout persister sature le disque
 # pour une valeur analytique nulle. Un echantillon par seconde et par actif
 # suffit a reconstruire spread, profondeur et desequilibre.
+# Delai laisse au desk pour se connecter et lire son compte avant que le
+# watchdog ne latche un arret definitif. Une minute : au-dela, ce n'est
+# plus un demarrage, c'est une panne.
+AMORCAGE_MS = 60_000
+
 BOOK_SAMPLE_INTERVAL_MS = 1_000
 
 
-async def run_ingestion(state: DeskState, settings: Settings) -> None:
-    """Boucle d'ingestion. Ne rend la main que sur annulation."""
+async def run_ingestion(state: DeskState, settings: Settings,
+                        pupitre: object | None = None) -> None:
+    """Boucle d'ingestion. Ne rend la main que sur annulation.
+
+    Un `pupitre` optionnel recoit les memes evenements de marche et decide.
+    Il est optionnel plutot qu'obligatoire pour une raison de fond : en
+    SHADOW, le desk doit tourner exactement comme en PAPER — memes flux,
+    memes invariants, meme supervision — sans qu'aucun ordre ne parte. Deux
+    boucles distinctes auraient fini par diverger, et c'est le chemin qui
+    trade qui aurait ete le moins teste.
+    """
     feed = HyperliquidFeed(testnet=settings.testnet)
     for asset in settings.assets:
         feed.subscribe(Subscription.trades(asset))
@@ -57,8 +71,15 @@ async def run_ingestion(state: DeskState, settings: Settings) -> None:
     async def on_trade(t: Trade) -> None:
         state.store.write_trade(t)
         state.last_prices[t.asset] = format(t.price, "f")
+        if pupitre is not None:
+            pupitre.on_trade(t)
 
     async def on_book(b: BookSnapshot) -> None:
+        # Le pupitre voit TOUS les carnets, meme ceux qu'on n'echantillonne
+        # pas en base : un fill se calcule sur le carnet du moment, pas sur
+        # celui qu'on a bien voulu enregistrer.
+        if pupitre is not None:
+            pupitre.on_book(b)
         prev = last_book_write.get(b.asset, 0)
         if b.ts_ms - prev >= BOOK_SAMPLE_INTERVAL_MS:
             last_book_write[b.asset] = b.ts_ms
@@ -70,20 +91,53 @@ async def run_ingestion(state: DeskState, settings: Settings) -> None:
             # donnee douteuse bien avant qu'elle ne produise un mauvais trade.
             state.price_divergence_bps = abs(m.mark - m.oracle) / m.oracle * Decimal("10000")
         state.store.write_mark(m)
+        if pupitre is not None:
+            pupitre.on_mark(m)
 
     feed.on_trade, feed.on_book, feed.on_mark = on_trade, on_book, on_mark
 
     async def health_loop() -> None:
-        """Watchdog. Il ne trade pas : il constate, et il peut arreter."""
+        """Watchdog. Il ne trade pas : il constate, et il peut arreter.
+
+        **La periode d'amorcage.** Le watchdog tourne a 1 Hz des la premiere
+        seconde, quand aucun flux n'est encore connecte et qu'aucun compte n'a
+        ete lu. Le verdict est alors legitimement en echec — I01 « aucun etat
+        de compte connu », I09 « jamais recu » — et l'arret qui en decoulait
+        etait un arret LATCHE, qui exige un rearmement manuel.
+
+        Autrement dit : le desk s'arretait definitivement une seconde apres
+        chaque demarrage, avant meme d'avoir eu la possibilite d'aller bien.
+        Constate le 9 septembre 2026 en lancant le mode PAPER pour la premiere
+        fois ; le meme defaut valait pour SHADOW, ou il se voyait moins parce
+        qu'un desk arrete y ressemble a un desk qui ne trade pas.
+
+        Pendant l'amorcage, on ne LATCHE donc pas. Rien de dangereux n'est
+        autorise pour autant : `evaluate()` continue de refuser chaque ordre
+        tant qu'un invariant echoue, et l'interface montre lesquels. La seule
+        chose suspendue est le verrou permanent, jusqu'a ce que le desk ait
+        ete sain une fois — apres quoi le moindre defaut arrete pour de bon.
+
+        Si l'amorcage ne converge pas dans le delai, on latche : un desk qui
+        n'arrive pas a se connecter en une minute a un vrai probleme.
+        """
+        amorce = False
+        depuis = now_ms()
         while True:
             state.set_feeds(feed.feeds, feed.connected)
             state.budget.spend(0)  # rafraichit la fenetre glissante
             state.store.commit()
 
             v = state.verdict()
+            if v.approved:
+                amorce = True
             if v.halt_reason is not None and not state.halted:
-                log.error("arret automatique : %s — %s", v.halt_reason.value, v.reason)
-                state.halt(v.halt_reason, v.reason[:500])
+                expire = now_ms() - depuis > AMORCAGE_MS
+                if amorce or expire:
+                    log.error("arret automatique : %s — %s",
+                              v.halt_reason.value, v.reason)
+                    state.halt(v.halt_reason, v.reason[:500])
+                else:
+                    log.info("amorcage : %s", v.reason[:200])
             await asyncio.sleep(1.0)
 
     async def clock_loop() -> None:
@@ -98,11 +152,32 @@ async def run_ingestion(state: DeskState, settings: Settings) -> None:
             expected = base_wall + (time.monotonic() - base_mono)
             state.clock_drift_ms = int((time.time() - expected) * 1000)
 
+    async def pupitre_loop() -> None:
+        """Le cycle de decision. Lent exprès.
+
+        Cinq secondes, pas cinquante millisecondes : le signal des deblocages
+        est CALENDAIRE — il se declenche a une date, pas sur un tick. Cycler
+        vite ne le rendrait pas plus reactif, seulement plus susceptible de
+        reagir a un carnet transitoire. Un signal intraday exigerait une autre
+        cadence, et ce serait alors une decision a prendre explicitement.
+        """
+        while True:
+            await asyncio.sleep(5.0)
+            try:
+                await asyncio.to_thread(pupitre.cycle)
+            except Exception:
+                # Un pupitre qui tombe ne doit pas emporter l'ingestion : la
+                # supervision et le kill switch doivent survivre a une panne
+                # de la partie qui trade, pas l'inverse.
+                log.exception("cycle du pupitre en echec")
+
     tasks = [
         asyncio.create_task(feed.run()),
         asyncio.create_task(health_loop()),
         asyncio.create_task(clock_loop()),
     ]
+    if pupitre is not None:
+        tasks.append(asyncio.create_task(pupitre_loop()))
     try:
         await asyncio.gather(*tasks)
     finally:
@@ -229,6 +304,28 @@ def _install_asyncio_noise_filter() -> None:
     loop.set_exception_handler(handler)
 
 
+class _PrixVus:
+    """Vue Decimal sur la table de prix de la supervision.
+
+    `DeskState.last_prices` stocke des chaines, parce que c'est ce que
+    l'interface serialise. Le pilote a besoin de `Decimal`. Convertir a la
+    lecture plutot que maintenir une seconde table evite la seule chose qui
+    compte ici : que le desk trade sur un prix que l'ecran ne montre pas.
+    """
+
+    def __init__(self, source: dict[str, str]) -> None:
+        self._source = source
+
+    def get(self, asset: str, defaut=None):
+        brut = self._source.get(asset)
+        if brut is None:
+            return defaut
+        try:
+            return Decimal(brut)
+        except (ArithmeticError, ValueError):
+            return defaut
+
+
 async def main_async(demo: bool) -> None:
     _install_asyncio_noise_filter()
     settings = get_settings()
@@ -250,11 +347,36 @@ async def main_async(demo: bool) -> None:
             "Utiliser SHADOW ou PAPER."
         )
 
+    # Le pupitre n'existe qu'en PAPER. En SHADOW la meme boucle tourne sans
+    # lui : memes flux, memes invariants, aucun ordre.
+    pupitre = None
+    if settings.mode is DeskMode.PAPER and not demo:
+        from .execution.pupitre import Pupitre, exchange_pour
+        from .sentinelle.pilote_deblocages import PiloteDeblocages
+
+        pilote = PiloteDeblocages(settings.paper_journal)
+        if pilote.absent:
+            raise SystemExit(
+                f"mode PAPER refuse : {settings.paper_journal} est absent. "
+                "Le desk ne trade que des positions inscrites AVANT les faits ; "
+                "sans journal, il n'y a rien a trader et une entree calculee "
+                "a la volee ne serait pas hors echantillon. "
+                "Produire le journal : python scripts/journal_unlocks.py"
+            )
+        pupitre = Pupitre(state, exchange_pour(state), pilote,
+                          univers=tuple(settings.assets))
+        # Le pilote a besoin des derniers prix pour poser un niveau d'entree.
+        # On lui donne la MEME table que la supervision, par reference : deux
+        # tables finiraient par diverger, et le desk traderait sur des prix
+        # que l'ecran ne montre pas.
+        pilote.prix = _PrixVus(state.last_prices)
+
     store.journal("boot", {
         "mode": settings.mode.value,
         "testnet": settings.testnet,
         "assets": list(settings.assets),
         "demo": demo,
+        "signal": pupitre.signal.nom if pupitre else None,
     })
 
     app = create_app(state)
@@ -263,7 +385,8 @@ async def main_async(demo: bool) -> None:
                        log_level="warning", access_log=False)
     )
 
-    worker = run_demo(state, settings) if demo else run_ingestion(state, settings)
+    worker = (run_demo(state, settings) if demo
+              else run_ingestion(state, settings, pupitre))
     tasks = [asyncio.create_task(server.serve()), asyncio.create_task(worker)]
 
     print(f"\n  Desk en mode {settings.mode.value}"

@@ -322,6 +322,19 @@ def _i11(ctx: RiskContext) -> Check:
 
 
 def _i12(ctx: RiskContext) -> Check:
+    # Dans un mode qui n'envoie rien, il n'y a PAS de signer : ni cle en
+    # ligne, ni droit de retrait, donc rien a isoler. Exiger un agent wallet
+    # pour faire tourner une simulation apprendrait a l'operateur a configurer
+    # des cles dont il n'a pas besoin — et une cle configuree sans usage est
+    # une cle qu'on finit par reutiliser ailleurs.
+    #
+    # Le garde reste ENTIER pour TESTNET et LIVE, les deux seuls modes ou une
+    # cle existe. C'est `sends_orders` qui trace la frontiere, pas une liste
+    # de modes recopiee ici : ajouter un mode ne doit pas pouvoir creer un
+    # trou dans cet invariant par oubli.
+    if not ctx.mode.sends_orders:
+        return Check(invariant=Invariant.I12_SIGNER_ISOLATION, passed=True,
+                     detail=f"mode {ctx.mode.value} : aucun signer, rien à isoler")
     if not ctx.signer_is_agent_wallet:
         return Check(invariant=Invariant.I12_SIGNER_ISOLATION, passed=False,
                      detail="le signer n'utilise pas un agent wallet")
@@ -383,10 +396,13 @@ def evaluate(
     if intent is None:
         return RiskVerdict(approved=True, checks=checks, reason="desk sain")
 
-    if not ctx.mode.sends_orders:
+    if not ctx.mode.produces_orders:
+        # SHADOW : les mandats sont journalises, aucun ordre n'est construit.
+        # PAPER en construit, contre un simulateur — c'est `produces_orders`
+        # et non `sends_orders` qui trace cette frontiere. Voir `DeskMode`.
         return RiskVerdict(
             approved=False, checks=checks, approved_size=Decimal("0"),
-            reason=f"mode {ctx.mode.value} : aucun ordre réel n'est émis",
+            reason=f"mode {ctx.mode.value} : aucun ordre n'est émis",
         )
 
     return RiskVerdict(

@@ -1988,3 +1988,95 @@ tourne sous systemd sur le VPS. Sur le VPS lui-même :
 ```bash
 DESK_ENREGISTREUR_RACINE=/var/lib/desk python -m trading_desk
 ```
+
+---
+
+## Le mode PAPER — exécution simulée contre le carnet réel
+
+Le desk passe des ordres. Pas de vrais : contre un simulateur qui remplit sur
+le carnet L2 **du marché réel**, sans signer ni envoyer quoi que ce soit.
+
+```bash
+DESK_MODE=PAPER DESK_TESTNET=false DESK_MAX_STOP_DISTANCE_BPS=1600 python -m trading_desk
+```
+
+`DESK_TESTNET=false` n'est pas une imprudence : PAPER ne signe rien et
+n'envoie rien, mais l'intérêt du moteur est de remplir sur un **vrai** carnet.
+Les carnets testnet sont minces et figés — ils produiraient des fills qui ne
+ressemblent à rien.
+
+### Ce que ce moteur refuse de faire
+
+Un moteur papier est facile à rendre menteur, et le mensonge ne se voit pas :
+il produit une courbe plausible qui ne survit pas au premier ordre réel.
+Quatre raccourcis, quatre refus :
+
+| raccourci tentant | ce que fait ce moteur |
+| --- | --- |
+| remplir au mid | **traverse le carnet** — le prix est la moyenne pondérée de ce qu'on a mangé |
+| remplir n'importe quelle taille | **tronque au-delà de 10 %** de la profondeur visible |
+| servir un passif quand le prix touche la limite | exige une **impression**, au plus à concurrence du volume imprimé |
+| ignorer le portage | **facture le funding** à l'heure, même modèle que les backtests |
+
+Chacun est défendu par un test qui échoue si on prend le raccourci. Ce que le
+moteur ne simule pas et qu'il faut garder en tête : l'impact permanent de
+l'ordre sur le prix, la réaction des autres participants, et le fait qu'un
+carnet peut disparaître pendant une cascade. **Le papier reste optimiste.**
+
+### Le signal : les déblocages, et rien d'autre
+
+Le desk d'agents n'émet aucun mandat et son quota revient le 1er octobre. Il
+n'est pas sur le chemin. Le signal branché est la règle des déblocages —
+mécanique, sans LLM, et le seul edge directionnel mesuré du dépôt.
+
+**Il ne trade que ce que le journal contient déjà.** Un déblocage découvert et
+tradé le même jour ne serait pas hors échantillon. Sans
+`data/journal_unlocks.jsonl`, le mode PAPER **refuse de démarrer** plutôt que
+de calculer des entrées à la volée.
+
+### Deux écarts avec la règle validée, à connaître
+
+**Le stop.** La règle mesurée n'en a pas : elle entre à J-7, sort à J-1. Mais
+une position sans stop est refusée par les invariants, et `size_position` a
+besoin d'une distance pour donner une taille. Le stop est donc posé à **15 %**
+du prix d'entrée. **Son effet sur l'edge n'est pas mesuré** — c'est un
+garde-fou opérationnel, pas une composante validée, et il rend le résultat
+live légèrement différent du backtest.
+
+**La bande de stop du déploiement.** Le défaut `[30, 500]` bps vise du BTC
+intraday. À 5 %, un stop sur un alt tenu six jours se fait balayer par le
+bruit. D'où `DESK_MAX_STOP_DISTANCE_BPS=1600`, qui est un choix explicite.
+
+### Ce que le paper trading valide, et ce qu'il ne valide pas
+
+Il valide **la machine** : construction d'ordre, dimensionnement, stops,
+réconciliation, comptabilité. C'est ce qu'il faut valider avant d'engager quoi
+que ce soit.
+
+Il ne valide **pas l'edge**. À ~15 positions par mois, un mois de papier donne
+15 observations — du bruit. La validation de l'edge reste le journal hors
+échantillon, et lui est calendaire : 50 fenêtres closes vers janvier 2027.
+
+### Six bugs trouvés en le construisant
+
+Aucun n'aurait planté. Tous auraient produit des chiffres faux ou des trades
+manqués, en silence :
+
+1. **Une occasion consommée par un refus.** Le pilote rayait l'entrée dès la
+   lecture ; le desk en amorçage la demandait, le risque refusait, et la
+   fenêtre était perdue pour de bon. Vu sur le premier desk lancé : la
+   position ETH n'a jamais été prise. Corrigé — on ne raye qu'à la
+   confirmation d'ouverture.
+2. **Le desk s'arrêtait définitivement une seconde après chaque démarrage**,
+   sur des invariants qui échouaient légitimement avant la première
+   connexion. L'arrêt était *latché* et exigeait un réarmement manuel. Le
+   défaut valait aussi pour SHADOW, où il se voyait moins.
+3. **`DESK_ASSETS=BTC,ETH` faisait planter le démarrage** — la valeur que
+   `.env.example` documente. pydantic-settings décodait en JSON avant le
+   validateur. Le bug était là depuis l'origine.
+4. **Un ordre passif partiellement rempli cessait de se remplir.**
+5. **Les fills n'arrivaient pas en base** : le desk tradait, le panneau VOLS
+   restait vide.
+6. **Un mandat de sept jours refusé par son propre contrat** — et le contrat
+   avait raison : un mandat autorise les *entrées d'un cycle*, pas l'existence
+   d'une position pendant six jours.

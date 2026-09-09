@@ -80,7 +80,31 @@ class DeskMode(str, Enum):
 
     @property
     def sends_orders(self) -> bool:
+        """Ce mode parle-t-il a un vrai exchange, avec une cle qui signe ?
+
+        C'est la question de SECURITE : elle gouverne la porte P1, l'isolation
+        du signer, et le refus de demarrer sans preuve d'isolation.
+        """
         return self in (DeskMode.TESTNET, DeskMode.LIVE)
+
+    @property
+    def produces_orders(self) -> bool:
+        """Ce mode fabrique-t-il des ordres, fut-ce contre un simulateur ?
+
+        Distincte de `sends_orders`, et la distinction a compte : le moteur de
+        risque refusait tout ordre des que le mode n'envoyait pas pour de vrai,
+        ce qui etait juste tant que PAPER n'avait aucune implementation. Une
+        fois PAPER cable sur un carnet reel, ce meme test bloquait la
+        simulation entiere — pour une raison de securite qui ne s'y applique
+        pas, puisqu'il n'y a ni cle ni exchange.
+
+        SHADOW reste le seul mode ou aucun ordre n'est construit : il
+        journalise des mandats, rien de plus. La garantie qu'un desk PAPER ne
+        touche jamais un vrai exchange n'est pas assuree ici mais dans
+        `execution.pupitre.exchange_pour`, qui est le seul endroit du depot
+        qui choisit un exchange, et qui refuse tout ce qui n'est pas PAPER.
+        """
+        return self is not DeskMode.SHADOW
 
     @property
     def is_real_money(self) -> bool:
