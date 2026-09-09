@@ -202,3 +202,79 @@ du `pricedDate` de Nasdaq. Les deux doivent coïncider à quelques jours près.
 Un écart systématique signalerait que l'une des deux sources ne dit pas ce
 que je crois — et c'est exactement ce qui rendrait toute la campagne fausse
 sans rien casser.
+
+---
+
+# Amendement n° 2 — jours calendaires ou séances ?
+
+**Écrit le 9 septembre 2026, après la collecte et avant tout calcul de
+rendement.** Le commit qui le porte ne contient aucun résultat.
+
+## L'incohérence est dans mon propre document
+
+Le pré-enregistrement dit deux choses qui ne coïncident pas sur actions :
+
+- « fenêtre **J-7 → J-1** » — six jours **calendaires** ;
+- « durée de détention : **6 jours de bourse** » — six **séances**.
+
+En crypto les deux étaient la même chose : le marché ne ferme jamais, une
+journée est une bougie. Sur actions, six jours calendaires font **cinq
+séances**, et parfois quatre avec un jour férié. Il faut trancher, et le
+faire maintenant plutôt qu'après avoir vu les deux résultats.
+
+## La résolution : le calendrier gagne
+
+**La fenêtre est calendaire.** Entrée à la dernière séance à ou avant
+J-7, sortie à la dernière séance à ou avant J-1.
+
+L'argument n'est pas de commodité. L'expiration d'un *lockup* est un
+événement **daté au calendrier** : elle tombe 180 jours après
+l'introduction, week-end ou non, et les détenteurs qui anticipent comptent
+en jours, pas en séances. Le contenu économique de l'hypothèse est « la
+semaine qui précède », et une semaine est une semaine.
+
+Compter en séances ferait glisser la fenêtre d'un ou deux jours selon la
+position du week-end — c'est-à-dire selon rien.
+
+La détention est donc de **quatre à cinq séances**, ce que le rendement
+mesuré reflétera. La mention « 6 jours de bourse » du document initial est
+une erreur de transposition, et elle est ici corrigée dans le sens le moins
+avantageux : une fenêtre plus courte laisse moins de place à l'effet.
+
+## Un contrôle qui pèse plus lourd ici qu'en crypto
+
+Les introductions ont une dérive post-introduction bien documentée : les
+premiers mois ne ressemblent pas aux suivants. Le nul par événement, qui
+tire des dates au hasard dans l'historique du **même titre**, est donc
+confondu — il compare la fenêtre du 180ᵉ jour à des dates majoritairement
+postérieures.
+
+**Le décalage calendaire n'a pas ce défaut.** Il décale tous les événements
+du même nombre de jours, donc il compare « le 180ᵉ jour » à « le 180ᵉ + d
+jour » dans la vie de chaque société. C'est exactement le contrôle qu'il
+faut contre la dérive post-introduction, et il devient ici le test décisif —
+plus encore qu'en crypto, où ce confondant n'existait pas.
+
+Si le test poolé ressort mais que le décalage calendaire ne suit pas, la
+conclusion sera : **effet de dérive post-introduction, pas effet de
+*lockup***.
+
+## Ce que la collecte a déjà appris
+
+526 introductions retenues sur 36 mois, 246 SPAC exclues, **447 séries de
+cours écrites**. Le seuil pré-enregistré était de 100 événements.
+
+Douze sociétés ont été écartées pour désaccord de date entre Nasdaq et
+Yahoo, et cinq d'entre elles avec des écarts de 1 494 à 11 724 jours. Ce ne
+sont pas des erreurs de date : ce sont des **tickers recyclés**, où Yahoo
+sert l'historique de la société qui portait le symbole avant. Sans la
+vérification croisée, l'expiration d'un *lockup* de 2024 aurait été mesurée
+contre les cours d'une entreprise cotée en 1994 — des prix parfaitement
+valides, aucune erreur levée.
+
+Écart médian sur les 435 autres : **0,6 jour**. Les deux sources s'accordent.
+
+Cinquante-huit sociétés sont introuvables chez Yahoo. Ce sont les radiées,
+donc les échecs, et leur retrait rapproche de zéro l'effet baissier mesuré :
+la portée du résultat sera limitée aux sociétés encore cotées, et ce sera
+écrit dans le rapport.
