@@ -186,3 +186,66 @@ def test_le_format_ecrit_se_relit_par_load_from_file(tmp_path, monkeypatch):
     relues = load_from_file("data/TEST_1d_real.json", "TEST", "1d")
     assert len(relues) == 40
     assert float(relues[0].close) == 10.5
+
+
+# --------------------------------------------------------------------------
+#  Le validateur : la fenêtre calendaire sur un marché qui ferme
+# --------------------------------------------------------------------------
+
+valider = _module("valider_lockups")
+
+
+def test_la_fenetre_est_CALENDAIRE_pas_en_seances():
+    """Amendement n° 2, et il va dans le sens le moins avantageux.
+
+    L'expiration tombe 180 jours après l'introduction, week-end ou non. Le
+    contenu de l'hypothèse est « la semaine qui précède », et une semaine
+    est une semaine. Compter en séances ferait glisser la fenêtre selon la
+    position du week-end — c'est-à-dire selon rien.
+    """
+    assert (valider.ENTREE_J, valider.SORTIE_J) == (-7, -1)
+
+
+def test_une_date_de_week_end_recule_sur_la_derniere_seance():
+    """Une date calendaire ne correspond pas toujours à une bougie. Prendre
+    la séance SUIVANTE regarderait après l'événement ; il faut la
+    précédente."""
+    # Séances aux jours 100 et 104 : le jour 102 doit trouver la 100.
+    par_jour = {100: 0, 104: 1, 105: 2}
+    assert valider._seance_avant(par_jour, 102) == 0
+    assert valider._seance_avant(par_jour, 104) == 1
+
+
+def test_une_date_trop_loin_de_toute_seance_est_ECARTEE():
+    """Au-delà d'une semaine, rattacher l'événement à une séance lointaine
+    décalerait la mesure de ce qu'elle prétend mesurer."""
+    assert valider._seance_avant({100: 0}, 120) is None
+
+
+def test_le_rendement_est_positif_quand_le_prix_BAISSE():
+    """`sens = -1` retourne déjà le signe. Le défaut le plus dangereux de la
+    campagne crypto était une légende inversée, qui aurait fait conclure
+    exactement le contraire des données."""
+    from decimal import Decimal
+
+    from trading_desk.features.bars import Bar
+    bars = [Bar(asset="T", ts_ms=i * JOUR_MS, open=Decimal(str(p)),
+                high=Decimal(str(p)), low=Decimal(str(p)), close=Decimal(str(p)))
+            for i, p in enumerate([100.0, 95.0, 90.0])]
+    assert valider._rendement(bars, 0, 2) > 0
+
+
+def test_le_decalage_calendaire_enumere_et_annonce_son_plancher():
+    """Le nul est un ensemble CLOS : il n'existe que 2 × (amplitude − 13)
+    alignements. Un p sous ce plancher serait un mensonge arithmétique."""
+    from decimal import Decimal
+
+    from trading_desk.features.bars import Bar
+    bars = [Bar(asset="T", ts_ms=i * JOUR_MS, open=Decimal("100"),
+                high=Decimal("100"), low=Decimal("100"), close=Decimal("100"))
+            for i in range(400)]
+    evts = [{"ticker": "T", "bars": bars, "i0": 200, "duree": 4,
+             "jour_entree": 200, "brut": 0.0}]
+    _, _, pv, n_al = valider.decalage_calendaire(evts, amplitude=60)
+    assert n_al > 0
+    assert pv >= 1 / (n_al + 1) - 1e-9

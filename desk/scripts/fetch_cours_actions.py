@@ -92,6 +92,8 @@ def main() -> int:
     p.add_argument("--ecart-max", type=int, default=5,
                    help="jours d'écart tolérés entre la date Nasdaq et la "
                         "première cotation Yahoo")
+    p.add_argument("--reference", default="SPY",
+                   help="l'actif de neutralisation, récupéré d'office")
     p.add_argument("--min-bougies", type=int, default=90,
                    help="pré-enregistré : moins de 90 séances, pas de mesure")
     args = p.parse_args()
@@ -104,6 +106,21 @@ def main() -> int:
     evts = json.loads(chemin.read_text())
     dossier = Path(args.dossier)
     dossier.mkdir(parents=True, exist_ok=True)
+
+    # La référence de neutralisation, récupérée d'office. L'oublier ferait
+    # échouer la neutralisation en silence, et le rapport dirait « pas de
+    # référence » sans que personne ne sache qu'il manque un fichier.
+    ref = dossier / f"{args.reference}_1d_real.json"
+    if not ref.exists():
+        try:
+            brut = _get(f"https://query1.finance.yahoo.com/v8/finance/chart/"
+                        f"{args.reference}?range=5y&interval=1d")
+            barres, _ = bougies(brut, args.reference)
+            ref.write_text(json.dumps(barres))
+            print(f"  référence {args.reference} : {len(barres)} séances\n")
+        except Exception as exc:
+            print(f"  référence {args.reference} INDISPONIBLE — {exc}",
+                  file=sys.stderr)
 
     print(f"\n  {len(evts)} sociétés à récupérer\n")
     ok, absents, courts, decales = 0, [], [], []
