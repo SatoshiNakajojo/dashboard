@@ -208,3 +208,31 @@
   .led.change { animation: none }
   .screen { transition: none }
 }
+
+/* --- etiquettes vivantes par-dessus le texte peint ---------------------- */
+/*
+ * Le dernier endroit ou le lorem halluciné survit est DANS le JPEG : aucun
+ * test ne peut l'attraper, et il ne disparaitra jamais tout seul.
+ * « ACTIF 1 MIN 49 S » y est fige a jamais, « Thana » ne designe personne,
+ * « POSTE DE PILGTAGE » est une faute, « TELEMETRIC » n'est pas du francais.
+ *
+ * Chaque etiquette peinte est donc recouverte par une plaque portant la
+ * vraie valeur, vivante. Les plaques sont SOMBRES parce que la photo les
+ * peint sombres : une plaque claire se verrait comme un pansement.
+ */
+.chrome-layer { position: absolute; inset: 0; z-index: 4; pointer-events: none }
+.plaque {
+  position: absolute; display: grid; place-items: center;
+  background: #0b1216; color: #c3d3d7;
+  font-size: 9px; letter-spacing: .14em; text-transform: uppercase;
+  font-weight: 700; overflow: hidden; white-space: nowrap;
+  border-radius: 2px;
+  /* Le lisere sombre evite la decoupe nette : sur la photo, ces plaques sont
+   * encastrees, pas posees. */
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .55),
+              0 0 0 1px rgba(255, 255, 255, .04);
+}
+.plaque.amb { color: var(--amber) }
+.plaque.gauche { place-items: center start; padding-left: 6px }
+.plaque i { font-style: normal; font-variant-numeric: tabular-nums }
+.plaque.actif { color: var(--amber) }

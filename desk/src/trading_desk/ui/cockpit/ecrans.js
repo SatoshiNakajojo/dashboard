@@ -323,16 +323,81 @@
       barre(b.ip_pct, b.ip_pct > 85 ? "red" : b.ip_pct > 60 ? "amb" : "ok");
   }
 
+  /* ------------------------------------------------ etiquettes du chassis */
+
+  const plaques = {};
+
+  function batiChrome() {
+    const { CARTE, fit, creer, poser } = M();
+    const couche = creer("div", "chrome-layer", fit);
+    for (const [cle, r] of Object.entries(CARTE.chrome || {})) {
+      const el = creer("div", "plaque" + (r.ton === "amb" ? " amb" : ""), couche);
+      el.id = "plaque-" + cle;
+      poser(el, r);
+      plaques[cle] = { el, src: r.src };
+    }
+  }
+
+  /* Les valeurs vivantes. Aucune n'est figee : c'est precisement ce que la
+   * photo fait, et pourquoi il faut la recouvrir. */
+  function valeurs(s) {
+    const secteur = document.querySelector('#nav button[aria-selected="true"]');
+    const nom = (id) => {
+      const b = document.querySelector(`#nav button[data-sec="${id}"]`);
+      return b ? b.childNodes[0].textContent.trim() : id;
+    };
+    const compte = (id) => {
+      const n = document.getElementById("n-" + id);
+      return n && !n.hidden ? ` ${n.textContent}` : "";
+    };
+    return {
+      titre: "Poste de pilotage",
+      titre2: "Desk · " + (s ? s.mode : "—"),
+      desk: "Desk",
+      mode: s ? s.mode : "—",
+      actif: s ? "actif " + D().dur(s.uptime_s * 1000) : "—",
+      sources: "sources de recherche",
+      rail: "docs/ · baselines/ · scripts/",
+      debit: s ? (s.storage ? s.storage.trades + " trades" : "—") : "—",
+      pied: "Aucun ordre",
+      "t-prevol": nom("prevol") + compte("prevol"),
+      "t-telemetrie": nom("telemetrie") + compte("telemetrie"),
+      "t-navigation": nom("navigation") + compte("navigation"),
+      "t-conso": nom("consommation") + compte("consommation"),
+      "t-vols": nom("vols") + compte("vols"),
+      "t-systemes": nom("systemes") + compte("systemes"),
+      _actif: secteur ? secteur.dataset.sec : null,
+    };
+  }
+
+  function rendreChrome(s) {
+    const v = valeurs(s);
+    for (const [cle, p] of Object.entries(plaques)) {
+      const texte = v[p.src];
+      if (texte === undefined) continue;
+      if (p.el.textContent !== texte) p.el.textContent = texte;
+      // L'onglet ouvert s'allume, comme sur un vrai panneau : c'est la seule
+      // facon de savoir ou l'on est quand le tiroir est ferme.
+      if (p.src.startsWith("t-")) {
+        const id = { "t-prevol": "prevol", "t-telemetrie": "telemetrie",
+                     "t-navigation": "navigation", "t-conso": "consommation",
+                     "t-vols": "vols", "t-systemes": "systemes" }[p.src];
+        p.el.classList.toggle("amb", id === v._actif);
+      }
+    }
+  }
+
   /* ------------------------------------------------------------ orchestration */
 
   function monter() {
     for (const cle of Object.keys(M().CARTE.screens)) bati(cle);
+    batiChrome();
 
     document.addEventListener("desk:snapshot", (e) => {
       snap = e.detail;
       ecranPrincipal(snap); ecranAutopilot(snap); ecranLog(snap);
       ecranRegime(snap); ecranTriggers(snap); ecranAmplitude(snap);
-      ecranFlux(snap); ecranFeed();
+      ecranFlux(snap); ecranFeed(); rendreChrome(snap);
       if (window.CockpitBoutons) window.CockpitBoutons.rafraichir(snap);
     });
     document.addEventListener("desk:recherche", (e) => {
@@ -352,7 +417,11 @@
       ecranFlux(snap);
     }
     if (D().recherche) { rech = D().recherche; ecranScores(); ecranMinis(); }
-    ecranFeed();
+    ecranFeed(); rendreChrome(snap);
+
+    // Le secteur ouvert change par clic, pas par trame : on suit le tiroir.
+    document.getElementById("nav").addEventListener("click",
+      () => setTimeout(() => rendreChrome(snap), 0));
 
     // Le journal se recharge sur son propre rythme (10 s) : on le recopie
     // apres, sans le redemander.

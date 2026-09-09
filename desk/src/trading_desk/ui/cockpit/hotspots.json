@@ -7,7 +7,8 @@
     "Relues sur la photo le 9 septembre 2026, PAS reprises du brief : ses",
     "valeurs de depart faisaient deborder l'ecran central sur LIVE FEED.",
     "Calibrage fin : ouvrir le cockpit et appuyer sur D.",
-    "Les temoins lumineux vivent DANS le contenu des ecrans qui recouvrent les panneaux ou la photo les peint. Une surcouche les ferait flotter par-dessus le texte qu'ils qualifient."
+    "Les temoins lumineux vivent DANS le contenu des ecrans qui recouvrent les panneaux ou la photo les peint. Une surcouche les ferait flotter par-dessus le texte qu'ils qualifient.",
+    "La section `chrome` recouvre les etiquettes PEINTES sur la photo, qui sont hallucinees : « ACTIF 1 MIN 49 S » est fige dans le JPEG, « Thana » ne designe personne, « POSTE DE PILGTAGE » est une faute."
   ],
   "design": {
     "w": 1280,
@@ -377,6 +378,168 @@
       "w": 1.9,
       "h": 2.2,
       "label": "Systèmes"
+    }
+  },
+  "chrome": {
+    "haut-gauche": {
+      "l": 0.6,
+      "t": 0.6,
+      "w": 15.4,
+      "h": 2.5,
+      "src": "titre",
+      "align": "center"
+    },
+    "haut-centre": {
+      "l": 39.5,
+      "t": 0.5,
+      "w": 21.3,
+      "h": 2.4,
+      "src": "sources",
+      "align": "center",
+      "ton": "amb"
+    },
+    "haut-actif": {
+      "l": 80.5,
+      "t": 0.6,
+      "w": 14.1,
+      "h": 2.5,
+      "src": "actif",
+      "align": "center"
+    },
+    "haut-mode": {
+      "l": 95.0,
+      "t": 0.6,
+      "w": 4.4,
+      "h": 2.5,
+      "src": "mode",
+      "align": "center",
+      "ton": "amb"
+    },
+    "tab-1": {
+      "l": 1.1,
+      "t": 18.1,
+      "w": 7.7,
+      "h": 2.6,
+      "src": "t-prevol",
+      "align": "center"
+    },
+    "tab-2": {
+      "l": 9.1,
+      "t": 18.1,
+      "w": 7.0,
+      "h": 2.6,
+      "src": "t-telemetrie",
+      "align": "center"
+    },
+    "tab-3": {
+      "l": 16.3,
+      "t": 18.1,
+      "w": 6.7,
+      "h": 2.6,
+      "src": "t-navigation",
+      "align": "center"
+    },
+    "tab-4": {
+      "l": 77.7,
+      "t": 18.25,
+      "w": 7.0,
+      "h": 2.5,
+      "src": "t-conso",
+      "align": "center"
+    },
+    "tab-5": {
+      "l": 85.2,
+      "t": 18.25,
+      "w": 5.9,
+      "h": 2.5,
+      "src": "t-vols",
+      "align": "center"
+    },
+    "tab-6": {
+      "l": 91.4,
+      "t": 18.25,
+      "w": 6.1,
+      "h": 2.5,
+      "src": "t-systemes",
+      "align": "center"
+    },
+    "rail": {
+      "l": 41.4,
+      "t": 46.9,
+      "w": 17.6,
+      "h": 2.1,
+      "src": "rail",
+      "align": "center",
+      "ton": "amb"
+    },
+    "bas-gauche": {
+      "l": 0.6,
+      "t": 51.5,
+      "w": 16.4,
+      "h": 2.75,
+      "src": "titre2",
+      "align": "center"
+    },
+    "bas-mode-g": {
+      "l": 17.3,
+      "t": 51.5,
+      "w": 7.3,
+      "h": 2.75,
+      "src": "mode",
+      "align": "center",
+      "ton": "amb"
+    },
+    "bas-debit": {
+      "l": 32.7,
+      "t": 52.5,
+      "w": 5.0,
+      "h": 2.0,
+      "src": "debit",
+      "align": "center",
+      "ton": "amb"
+    },
+    "bas-vols": {
+      "l": 62.5,
+      "t": 52.25,
+      "w": 5.5,
+      "h": 2.25,
+      "src": "t-vols",
+      "align": "center"
+    },
+    "bas-desk": {
+      "l": 75.4,
+      "t": 51.5,
+      "w": 3.7,
+      "h": 2.75,
+      "src": "desk",
+      "align": "center"
+    },
+    "bas-actif": {
+      "l": 84.0,
+      "t": 51.5,
+      "w": 11.7,
+      "h": 2.75,
+      "src": "actif",
+      "align": "center",
+      "ton": "amb"
+    },
+    "bas-mode-d": {
+      "l": 96.1,
+      "t": 51.5,
+      "w": 3.3,
+      "h": 2.75,
+      "src": "mode",
+      "align": "center",
+      "ton": "amb"
+    },
+    "bas-droite": {
+      "l": 91.5,
+      "t": 74.2,
+      "w": 7.2,
+      "h": 2.4,
+      "src": "pied",
+      "align": "center",
+      "ton": "amb"
     }
   }
 }
