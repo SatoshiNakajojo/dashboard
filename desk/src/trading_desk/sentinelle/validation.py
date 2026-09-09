@@ -66,6 +66,13 @@ class Resultat:
     p_amplitude: float | None
     nul_direction_bps: float
     nul_amplitude_bps: float
+    # Le nombre de tirages du modele nul fixe le PLANCHER de p a 1/(D+1).
+    # Sans lui dans l'artefact, un lecteur ne peut pas savoir si un « zero
+    # survivant » vient de la donnee ou de la resolution du test. Le deduire
+    # apres coup ne marche pas : le plus petit p observe majore le plancher
+    # sans le determiner, et l'essai du 9 septembre 2026 a fait passer pour
+    # aveugles deux campagnes qui concluaient pour de bon.
+    tirages: int | None = None
 
 
 def sans_chevauchement(declenchements: Sequence[Declenchement],
@@ -147,14 +154,31 @@ def evaluer(bars: list[Bar], declenchements: Sequence[Declenchement], *,
         amplitude_moyenne_bps=amplitude, p_amplitude=p_amp,
         nul_direction_bps=sum(nuls_dir) / len(nuls_dir),
         nul_amplitude_bps=sum(nuls_amp) / len(nuls_amp),
+        tirages=len(nuls_amp),
     )
 
 
 def benjamini_hochberg(pvalues: Sequence[float], alpha: float = 0.05) -> list[bool]:
     """Quelles hypotheses survivent au controle du taux de fausses decouvertes.
 
-    Identique a celle de `scripts/robustness_grid.py`, reproduite ici pour que
-    le paquet `sentinelle` ne depende pas d'un script.
+    **Exemplaire unique du depot.** Une correction pour tests multiples
+    recopiee dans plusieurs fichiers finit par diverger, et la divergence est
+    invisible : deux campagnes annoncent des nombres de survivants qui ne se
+    comparent plus. `scripts/robustness_grid.py` en portait une copie
+    identique ; elle a ete supprimee le 9 septembre 2026 au profit de
+    celle-ci.
+
+    On trie les p, et on retient les k plus petites telles que
+    `p_(i) <= alpha * i / m`. Le seuil s'assouplit a mesure qu'on descend :
+    c'est ce qui distingue BH de Bonferroni, qui exigerait `p <= alpha / m`
+    partout.
+
+    Consequence directe, et elle mord : au rang 1 le seuil vaut `alpha / m`.
+    Un test de randomisation a D tirages a un plancher de p a `1/(D+1)`. Si
+    ce plancher depasse `alpha / m`, **aucune cellule ne peut survivre, quelle
+    que soit la donnee** — le criblage est aveugle, et son « zero survivant »
+    ne dit rien du marche. `api/recherche.py` verifie cela pour chaque
+    campagne affichee.
     """
     m = len(pvalues)
     if m == 0:

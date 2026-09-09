@@ -560,6 +560,60 @@ class RegimeSwitch:
         return sig
 
 
+# Le plafond de distance de stop des CAMPAGNES, en points de base.
+#
+# Volontairement large et identique partout. Le defaut de `RiskLimits`
+# (500 bps) est un garde-fou de production : il refuse une position dont le
+# stop est loin, ce qui est sain quand on engage de l'argent. Applique a un
+# backtest de comparaison, il ne compare plus les strategies — il compare les
+# volatilites, en rejetant plus souvent les actifs agites que BTC.
+#
+# Le piege est pire que ca, et il a ete vu le 9 septembre 2026 en branchant
+# l'interface : avec 500 bps, `tsmom BTC 1d` produit **zero trade et 2 158
+# rejets**, donc une courbe d'equite parfaitement plate. Affichee a cote de
+# celle de « detenir BTC », elle se lit « la strategie a perdu contre le
+# marche » alors qu'elle n'a jamais pris une position. Toute lecture qui
+# affiche cette courbe doit donc utiliser ce plafond-ci, et montrer le compte
+# de rejets a cote.
+PLAFOND_STOP_CAMPAGNE_BPS = 5000
+
+# Combien de barres font un jour, par intervalle. Sert a convertir en barres
+# des regles ecrites en jours.
+BARRES_PAR_JOUR = {"1d": 1, "4h": 6, "1h": 24, "15m": 96}
+
+
+def parametres(nom: str, interval: str) -> dict:
+    """Les parametres qui donnent a chaque strategie SON horizon documente.
+
+    Les strategies comptent en barres ; leurs regles d'origine comptent en
+    jours ou en semaines. Instancier `TurtleBreakout()` tel quel sur du 4 h
+    donne un canal de 55 barres, soit neuf jours — ce n'est plus la regle des
+    Turtles, c'est une strategie de cassure a court terme dont rien ne dit
+    qu'elle marche. Le meme piege dans l'autre sens vaut pour `tsmom`, dont
+    le defaut de 168 barres fait 168 JOURS en daily quand la litterature
+    mesure l'effet sur une a quatre semaines.
+
+    Sans cette conversion, la grille compare des horizons differents d'une
+    cellule a l'autre et son verdict ne veut rien dire.
+    """
+    n = BARRES_PAR_JOUR[interval]
+    if nom == "turtle_breakout":
+        # Systeme 2 : cassure 55 jours, sortie 20 jours, ATR sur 20 jours.
+        return {"entry_period": 55 * n, "exit_period": 20 * n,
+                "atr_period": 20 * n}
+    if nom == "tsmom":
+        # Quatre semaines, le haut de la fourchette ou l'effet est mesure.
+        return {"lookback": 28 * n, "atr_period": 20 * n}
+    # EmaCross, RsiReversion et TrendFollowerATR utilisent des periodes
+    # conventionnelles en BARRES (20/50, 14, 21/50/200), appliquees telles
+    # quelles a toute echelle : c'est ainsi qu'elles sont employees et
+    # documentees. Le « EMA 200 » du Pine Script en particulier est un filtre
+    # de regime que ses utilisateurs posent sur l'unite de temps affichee,
+    # quelle qu'elle soit — le convertir en 200 jours serait ma regle, pas la
+    # sienne.
+    return {}
+
+
 # Les strategies actives. `buy_and_hold` n'y figure pas : ce n'est pas une
 # strategie mais une reference, calculee par `engine.benchmark_buy_and_hold`
 # qui ne lui impose ni stop ni dimensionnement par le risque.

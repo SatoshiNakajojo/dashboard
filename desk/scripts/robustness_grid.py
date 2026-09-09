@@ -39,70 +39,16 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from trading_desk.backtest.data import DataUnavailable, load_from_file
 from trading_desk.backtest.engine import run_backtest
 from trading_desk.backtest.null_model import randomization_test
-from trading_desk.backtest.strategies import BASELINES
+from trading_desk.backtest.strategies import (
+    BASELINES,
+    PLAFOND_STOP_CAMPAGNE_BPS,
+    parametres,
+)
 from trading_desk.risk import RiskLimits
+from trading_desk.sentinelle.validation import benjamini_hochberg
 
 ASSETS = ["BTC", "ETH", "SOL", "BNB", "XRP", "DOGE", "AVAX"]
 INTERVALS = ["1d", "4h"]
-
-BARRES_PAR_JOUR = {"1d": 1, "4h": 6, "1h": 24}
-
-
-def parametres(nom: str, interval: str) -> dict:
-    """Les parametres qui donnent a chaque strategie SON horizon documente.
-
-    Les strategies comptent en barres ; leurs regles d'origine comptent en
-    jours ou en semaines. Instancier `TurtleBreakout()` tel quel sur du 4 h
-    donne un canal de 55 barres, soit neuf jours — ce n'est plus la regle des
-    Turtles, c'est une strategie de cassure a court terme dont rien ne dit
-    qu'elle marche. Le meme piege dans l'autre sens vaut pour `tsmom`, dont
-    le defaut de 168 barres fait 168 JOURS en daily quand la litterature
-    mesure l'effet sur une a quatre semaines.
-
-    Sans cette conversion, la grille compare des horizons differents d'une
-    cellule a l'autre et son verdict ne veut rien dire.
-    """
-    n = BARRES_PAR_JOUR[interval]
-    if nom == "turtle_breakout":
-        # Systeme 2 : cassure 55 jours, sortie 20 jours, ATR sur 20 jours.
-        return {"entry_period": 55 * n, "exit_period": 20 * n,
-                "atr_period": 20 * n}
-    if nom == "tsmom":
-        # Quatre semaines, le haut de la fourchette ou l'effet est mesure.
-        return {"lookback": 28 * n, "atr_period": 20 * n}
-    # EmaCross, RsiReversion et TrendFollowerATR utilisent des periodes
-    # conventionnelles en BARRES (20/50, 14, 21/50/200), appliquees telles
-    # quelles a toute echelle : c'est ainsi qu'elles sont employees et
-    # documentees. Le « EMA 200 » du Pine Script en particulier est un filtre
-    # de regime que ses utilisateurs posent sur l'unite de temps affichee,
-    # quelle qu'elle soit — le convertir en 200 jours serait ma regle, pas la
-    # sienne.
-    return {}
-
-
-def benjamini_hochberg(pvalues: list[float], alpha: float = 0.05) -> list[bool]:
-    """Quelles hypotheses survivent au controle du taux de fausses decouvertes.
-
-    On trie les p, et on retient les k plus petites telles que
-    `p_(i) <= alpha * i / m`. Le seuil s'assouplit a mesure qu'on descend :
-    c'est ce qui distingue BH de Bonferroni, qui exigerait `p <= alpha / m`
-    pour toutes.
-    """
-    m = len(pvalues)
-    if m == 0:
-        return []
-    ordre = sorted(range(m), key=lambda i: pvalues[i])
-    seuil_max = -1
-    for rang, i in enumerate(ordre, start=1):
-        if pvalues[i] <= alpha * rang / m:
-            seuil_max = rang
-    garde = [False] * m
-    for rang, i in enumerate(ordre, start=1):
-        if rang <= seuil_max:
-            garde[i] = True
-    return garde
-
-
 
 def rendre_verdict(cellules: list[dict], alpha: float = 0.05) -> str:
     """La grille, lue comme un criblage — pas comme 56 resultats separes.
@@ -164,7 +110,8 @@ def main() -> int:
     p.add_argument("--draws", type=int, default=200,
                    help="tirages du modele nul par cellule")
     p.add_argument("--equity", type=float, default=1000.0)
-    p.add_argument("--max-stop-bps", type=float, default=5000.0,
+    p.add_argument("--max-stop-bps", type=float,
+                   default=float(PLAFOND_STOP_CAMPAGNE_BPS),
                    help="identique partout. 5000 est le maximum autorise par "
                         "le contrat StopBand ; au-dela d'un stop a 50 %% le "
                         "dimensionnement par le risque n'a plus de sens.")
@@ -226,6 +173,14 @@ def main() -> int:
                     "trades": len(obs.trades),
                     "rejets": obs.rejected_by_risk,
                     "p": None, "percentile": None, "hasard_moyen": None,
+                    # Le nombre de tirages fixe le PLANCHER de p a 1/(D+1).
+                    # Sans lui dans le fichier, un lecteur ne peut pas savoir
+                    # si un « zero survivant » vient de la donnee ou de la
+                    # resolution du test : avec 200 tirages, le plancher vaut
+                    # 0,005 quand Benjamini-Hochberg exige 0,0009 au rang 1
+                    # sur 56 cellules. Le criblage etait alors aveugle, et
+                    # rien dans le fichier ne le disait.
+                    "tirages": args.draws,
                 }
                 if obs.trades and args.draws > 0:
                     nul = randomization_test(

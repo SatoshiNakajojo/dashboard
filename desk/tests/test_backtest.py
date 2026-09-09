@@ -563,10 +563,10 @@ def test_les_horizons_sont_convertis_a_l_echelle_de_temps():
     jours. Une grille qui compare des horizons differents d'une cellule a
     l'autre ne mesure pas ce qu'elle annonce.
     """
-    import sys
-    from pathlib import Path
-    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
-    from robustness_grid import BARRES_PAR_JOUR, parametres
+    # La conversion vit dans la BIBLIOTHEQUE, pas dans le script : l'interface
+    # rejoue les memes backtests pour tracer ses courbes, et une deuxieme copie
+    # des horizons ferait diverger la courbe affichee de la grille validee.
+    from trading_desk.backtest.strategies import BARRES_PAR_JOUR, parametres
 
     # 55 jours de canal, quelle que soit l'echelle.
     for iv, n in BARRES_PAR_JOUR.items():

@@ -41,6 +41,11 @@ class Settings(BaseSettings):
     # --- supervision ---
     api_host: str = "127.0.0.1"
     api_port: int = 8787
+    # Ou l'enregistreur ecrit ses Parquet. Vide sur une machine de
+    # developpement : la collecte tourne sur le VPS, et l'interface doit dire
+    # « ailleurs » plutot que d'afficher zero fichier comme si le collecteur
+    # etait en panne.
+    enregistreur_racine: str | None = None
 
     # --- signer (adresses publiques uniquement) ---
     agent_wallet_address: str | None = None
