@@ -815,6 +815,30 @@ def test_les_variantes_declarees_sont_celles_qui_existent():
         assert "on" in etats, f"{tige} : sans image allumée, la pièce n'a pas d'état"
 
 
+def test_l_habillage_photo_vient_apres_le_dessin_de_la_piece():
+    """`innerHTML` remplace tous les enfants : habiller avant, c'est effacer.
+
+    Les interrupteurs photographiés n'étaient jamais apparus dans le cockpit
+    et rien ne le signalait. `habiller()` posait bien les deux images, puis
+    la ligne suivante écrivait le levier vectoriel dans `innerHTML` et les
+    supprimait. La pièce gardait quand même la classe « photo » — un
+    `load` se déclenche sur une image même détachée du document — donc la
+    feuille de style masquait aussi le levier : il ne restait rien à voir.
+
+    Le test porte sur l'ORDRE parce que c'est exactement ce qui était faux.
+    Vérifier que les deux appels existent, comme le faisait le test voisin,
+    ne pouvait pas l'attraper : les deux existaient.
+    """
+    module = (recherche.RACINE / "src/trading_desk/ui/cockpit/boutons.js") \
+        .read_text(encoding="utf-8")
+    dessin = module.find("b.innerHTML =")
+    habillage = module.find("habiller(b, r.image)")
+    assert dessin != -1 and habillage != -1, "la pièce ne se construit plus ainsi"
+    assert habillage > dessin, (
+        "habiller() est appelé avant l'écriture de innerHTML : les images "
+        "seront effacées et aucun interrupteur photographié n'apparaîtra")
+
+
 def test_une_commande_photographiee_retombe_sur_son_dessin():
     """Une image absente ne doit jamais faire un trou dans le tableau de bord.
 

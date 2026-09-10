@@ -255,15 +255,22 @@
     const nom = creer("div", "loupe-nom", stage);
     nom.hidden = true;
 
-    function poserVue(cle) {
-      courant = cle;
-      if (!cle) {
+    /* `cible` est soit la cle d'un bloc, soit un rectangle {l,t,w,h,nom}
+     * fourni par l'appelant. Le second cas sert a s'approcher d'une piece
+     * qui n'est pas un bloc — un cadran, une dalle — sans avoir a inventer
+     * un bloc pour chacune. Le cadrage reste le meme : c'est le plateau
+     * entier qui grossit, donc rien ne se decale. */
+    function poserVue(cible, etiquette) {
+      if (!cible) {
+        courant = null;
         fit.style.transform = "none";
         nom.hidden = true;
         stage.classList.remove("loupe");
         return;
       }
-      const b = blocs[cle];
+      const b = typeof cible === "string" ? blocs[cible] : cible;
+      if (!b) return;
+      courant = typeof cible === "string" ? cible : (etiquette || b.nom || "rect");
       // On garde le bloc entier a l'ecran : le plus contraignant des deux
       // rapports decide, sinon un bloc large deborderait en hauteur.
       const k = Math.min(100 / b.w, 100 / b.h);
@@ -276,7 +283,7 @@
       fit.style.transformOrigin = "0 0";
       fit.style.transform = `translate(${tx.toFixed(3)}%, ${ty.toFixed(3)}%) `
                           + `scale(${k.toFixed(4)})`;
-      nom.textContent = b.nom + "  ·  Échap pour revenir";
+      nom.textContent = (b.nom || "") + "  ·  Échap pour revenir";
       nom.hidden = false;
       stage.classList.add("loupe");
     }
@@ -309,6 +316,10 @@
       }
     });
     window.cockpitLoupe = poserVue;
+    // Qui regarde-t-on ? Les modules s'en servent pour ne zoomer qu'au
+    // PREMIER clic : une fois approche, la piece redevient utilisable
+    // normalement, sinon on ne pourrait plus rien faire dessus.
+    window.cockpitLoupe.vue = () => courant;
   }
 
   /* Echantillonner le metal de la photo.

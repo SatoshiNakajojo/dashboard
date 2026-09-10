@@ -1319,24 +1319,14 @@
  },
  "voyants": {
   "vy-auto": {
-   "l": 68.8,
-   "t": 56.6,
-   "w": 2.1,
-   "h": 3.73,
+   "l": 69.25,
+   "t": 57.05,
+   "w": 1.35,
+   "h": 2.4,
    "image": "auto-pilot",
    "etat": "mandat",
    "action": "secteur:navigation",
    "label": "Auto-pilote — mandat en vigueur"
-  },
-  "vy-feed": {
-   "l": 27.9,
-   "t": 56.1,
-   "w": 2.5,
-   "h": 4.44,
-   "image": "live-feed",
-   "etat": "ws",
-   "action": "secteur:systemes",
-   "label": "Flux temps réel"
   },
   "vy-rouge": {
    "l": 19.1,

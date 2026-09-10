@@ -100,7 +100,6 @@
     const b = creer("button", "inverseur", couche);
     b.id = cle; b.type = "button";
     poser(b, r);
-    if (r.image) habiller(b, r.image);
     b.dataset.p = "0"; b.dataset.on = "0"; b.dataset.n = String(n);
     b.title = r.label || cle;
     b.setAttribute("aria-label", (r.label || cle) + " — position 1 sur " + n);
@@ -120,6 +119,13 @@
       'fill="#6e7d85"/><circle cx="30" cy="27" r="7.5" fill="#98a8af"/>' +
       '<circle cx="30" cy="27" r="3" fill="#cbd9dd"/></g>' +
       '<ellipse cx="30" cy="70" rx="9.5" ry="7" fill="#141b1f"/></svg>';
+    // APRES le dessin, jamais avant : `innerHTML` remplace tous les enfants,
+    // donc habiller en premier revenait a poser les images puis a les
+    // effacer aussitot. La piece gardait la classe « photo » — l'evenement
+    // `load` se declenche sur une image meme detachee — et gardait donc
+    // aussi son levier vectoriel masque : on ne voyait plus rien du tout.
+    // C'est pour ca qu'aucun interrupteur photographie n'apparaissait.
+    if (r.image) habiller(b, r.image);
     b.addEventListener("click", () => {
       const p = (+b.dataset.p + 1) % n;
       b.dataset.p = String(p);
