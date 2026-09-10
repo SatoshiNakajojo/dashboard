@@ -738,10 +738,13 @@ def test_chaque_etiquette_declare_le_plan_de_son_instrument():
     """Une étiquette posée d'aplomb sur une console qui fuit se lit comme un
     autocollant.
 
-    Les plans ont été mesurés sur l'axe des grands titres peints — la ligne
-    de délimitation la plus franche qu'un panneau offre. Ils sont tous entre
-    -2 et +2,6 degrés : les consoles sont presque d'aplomb, et une pente
-    inventée « pour faire perspective » serait pire que pas de pente.
+    Chaque pente est le biais du texte PEINT du décor, relevé par profil de
+    projection : on fait tourner la vignette et on retient l'angle où l'encre
+    se range le mieux en lignes. Les arêtes du dessin au trait, relevées
+    séparément par Theil-Sen, confirment chaque valeur à moins d'un demi
+    degré. Deux méthodes indépendantes, aucune valeur devinée — c'est la
+    seule raison pour laquelle des pentes de huit degrés sont écrites ici
+    alors que les précédentes, devinées, tenaient dans deux.
     """
     carte = json.loads(
         (recherche.RACINE / "src/trading_desk/ui/cockpit/hotspots.json")
@@ -761,7 +764,20 @@ def test_chaque_etiquette_declare_le_plan_de_son_instrument():
             assert max(xs) - min(xs) > 3 and max(ys) - min(ys) > 2, \
                 f"plan {nom} : quadrilatère dégénéré"
         else:
-            assert abs(p["pente"]) <= 4, f"plan {nom} : pente invraisemblable"
+            assert abs(p["pente"]) <= 12, f"plan {nom} : pente invraisemblable"
+
+    # Le cockpit est symétrique : deux panneaux qui se font face penchent du
+    # même angle en sens CONTRAIRE. C'est le seul garde-fou qui attrape une
+    # faute de signe, et c'est exactement la faute qui s'était produite —
+    # « campagnes » était à -2 degrés quand la photo en demandait +7,7, donc
+    # penché à l'envers. Aucun test de rectangle ne pouvait le voir : la
+    # boîte est au bon endroit, c'est son contenu qui bascule du mauvais côté.
+    for gauche, droite in (("secteurs", "campagnes"), ("expo", "flux"),
+                           ("barre-g", "barre-d")):
+        pg, pd = plans[gauche]["pente"], plans[droite]["pente"]
+        assert abs(pg + pd) <= 1.0, (
+            f"{gauche} ({pg}) et {droite} ({pd}) se font face : leurs pentes "
+            "doivent être opposées, or leur somme ne s'annule pas")
 
     porteurs = list(carte["graves"].items()) + list(carte["chrome"].items()) \
         + list(carte["instruments"]["afficheurs"].items())
@@ -770,6 +786,33 @@ def test_chaque_etiquette_declare_le_plan_de_son_instrument():
             assert r["plan"] in plans, f"{nom} : plan « {r['plan']} » inconnu"
         # une pente écrite en dur à côté du système de plans dériverait
         assert "pente" not in r, f"{nom} : pente en dur, elle doit venir du plan"
+
+
+def test_les_variantes_declarees_sont_celles_qui_existent():
+    """La carte annonce, pour chaque commande, les fichiers réellement livrés.
+
+    Sans cette déclaration, le cockpit demandait les trois variantes de
+    chaque pièce et rattrapait les 404 : quatre requêtes perdues à chaque
+    chargement, et quatre erreurs serveur sur la page publiée pour des
+    fichiers dont on savait depuis toujours qu'ils n'existaient pas. La
+    liste doit donc coller au répertoire — un fichier ajouté sans être
+    déclaré resterait invisible, un fichier déclaré sans être livré
+    ramènerait le 404 qu'on vient d'enlever.
+    """
+    racine = recherche.RACINE / "src/trading_desk/ui/cockpit"
+    carte = json.loads((racine / "hotspots.json").read_text(encoding="utf-8"))
+    sur_disque: dict[str, set[str]] = {}
+    for f in sorted((racine / "assets/commandes").glob("*.png")):
+        tige, _, etat = f.stem.rpartition("-")
+        if etat in ("on", "off", "alerte") and tige:
+            sur_disque.setdefault(tige, set()).add(etat)
+    declare = {k: set(v) for k, v in carte["commandes"].items()}
+    assert declare == sur_disque, (
+        "hotspots.json et assets/commandes/ ont divergé : "
+        f"déclaré sans fichier {sorted(set(declare) - set(sur_disque))}, "
+        f"livré sans déclaration {sorted(set(sur_disque) - set(declare))}")
+    for tige, etats in declare.items():
+        assert "on" in etats, f"{tige} : sans image allumée, la pièce n'a pas d'état"
 
 
 def test_une_commande_photographiee_retombe_sur_son_dessin():

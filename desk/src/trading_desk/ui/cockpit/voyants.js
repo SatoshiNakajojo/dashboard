@@ -38,18 +38,36 @@
       poser(b, r);
 
       const base = M().CHEMIN + "assets/commandes/" + r.image + "-";
+      // Les variantes reellement livrees sont declarees dans la carte. On
+      // les lisait autrefois en demandant les trois fichiers et en rattrapant
+      // les 404 : ca marchait, mais ca faisait quatre requetes perdues a
+      // chaque chargement et, sur la page publiee, quatre erreurs serveur
+      // pour des fichiers qu'on savait absents depuis le debut.
+      const dispo = (CARTE.commandes || {})[r.image] || ["on", "off", "alerte"];
       const on = creer("img", "cmd on", b);
       on.alt = ""; on.src = base + "on.png";
       const off = creer("img", "cmd off", b);
-      off.alt = ""; off.src = base + "off.png";
-      // Pas d'image eteinte ? On derive : meme cadrage, garanti.
+      off.alt = "";
+      if (dispo.indexOf("off") >= 0) {
+        off.src = base + "off.png";
+      } else {
+        // Pas d'image eteinte : on derive de l'allumee. Meme cadrage, garanti.
+        off.src = on.src;
+        off.classList.add("derive");
+      }
+      // Le filet reste : un fichier declare mais illisible ne doit pas
+      // laisser un trou noir a la place du voyant.
       off.addEventListener("error", () => {
         off.src = on.src;
         off.classList.add("derive");
       });
-      const alerte = creer("img", "cmd alerte", b);
-      alerte.alt = ""; alerte.src = base + "alerte.png";
-      alerte.addEventListener("error", () => alerte.remove());
+      if (dispo.indexOf("alerte") >= 0) {
+        const alerte = creer("img", "cmd alerte", b);
+        alerte.alt = ""; alerte.src = base + "alerte.png";
+        alerte.addEventListener("error", () => alerte.remove());
+      }
+      // Sans piece d'alerte, la feuille de style fait clignoter l'allumee :
+      // l'etat reste lisible, il n'est pas perdu.
       // Si meme l'image allumee manque, la piece disparait plutot que de
       // laisser un cadre vide sur le tableau de bord.
       on.addEventListener("error", () => b.remove());

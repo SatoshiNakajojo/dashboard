@@ -1,0 +1,14 @@
+[
+ {
+  "actif": "BTC",
+  "intervalle": "1d",
+  "strategie": "tsmom",
+  "net_usd": 244.89439118346655,
+  "trades": 142,
+  "rejets": 0,
+  "p": 0.0010499475026248687,
+  "percentile": 99.9,
+  "hasard_moyen": 29.59,
+  "tirages": 20000
+ }
+]

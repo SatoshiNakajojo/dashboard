@@ -80,6 +80,8 @@
    */
   function habiller(b, nom) {
     const base = M().CHEMIN + "assets/commandes/" + nom + "-";
+    const dispo = (M().CARTE.commandes || {})[nom];
+    if (dispo && dispo.indexOf("on") < 0) return;   // rien de livre : le dessin
     const off = M().creer("img", "cmd off", b);
     const on = M().creer("img", "cmd on", b);
     off.alt = ""; on.alt = "";
@@ -88,7 +90,7 @@
     off.addEventListener("error", rate);
     on.addEventListener("error", rate);
     off.addEventListener("load", () => b.classList.add("photo"));
-    off.src = base + "off.png";
+    off.src = base + (dispo && dispo.indexOf("off") < 0 ? "on" : "off") + ".png";
     on.src = base + "on.png";
   }
 

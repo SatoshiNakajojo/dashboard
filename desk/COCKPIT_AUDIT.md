@@ -630,3 +630,64 @@ La valeur s'inscrit maintenant en phosphore sous le moyeu, dans son unité,
 et l'aiguille passe à l'ambre quand elle est **en butée** : une aiguille
 collée au maximum sans le signaler laisse croire qu'elle mesure encore. Les
 six cadrans sont cliquables vers le secteur qui porte la mesure.
+
+## Phase 10 — la perspective, enfin mesurée au lieu d'être devinée
+
+Quatre fois de suite l'utilisateur a dit que les écritures posées sur
+l'image n'étaient pas dans la bonne perspective. Quatre fois j'ai corrigé
+sans jamais mesurer la seule chose qui tranche : **l'angle du texte déjà
+peint dans le décor**. Il a fini par fournir un dessin au trait du cockpit,
+au même cadrage que la photo — et c'est ce dessin qui a permis de fermer
+la question.
+
+Deux méthodes indépendantes, montées exprès pour ne pas se croire l'une
+l'autre (`scripts/perspective/`) :
+
+- **le biais du texte peint**, par profil de projection : on fait tourner
+  une vignette de la photo et on retient l'angle où l'encre se range le
+  mieux en lignes ;
+- **les arêtes du dessin au trait**, par remplissage des faces closes puis
+  Theil-Sen sur les quatre bords.
+
+Elles concordent partout à moins d'un demi-degré. Le verdict :
+
+| plan | texte peint | dessin | valeur qui était en place |
+|---|---|---|---|
+| secteurs | −8,03 | −7,50 | **0,0** |
+| campagnes | **+7,70** | +7,50 | **−2,0** |
+| barre-g / barre-d | −0,08 / +0,05 | — | 1,8 / −0,4 |
+| scores | 0,01 | 0,00 | 1,5 |
+| expo / flux | −1,48 / +1,75 | −1,51 / +1,36 | −1,4 / 1,5 |
+
+« Campagnes » était penché **à l'envers**, et quatre fois trop peu.
+« Secteurs » n'était pas penché du tout alors que sa plaque monte de huit
+degrés. Les deux bandeaux du milieu, eux, sont parfaitement d'aplomb et je
+les avais inclinés. Autrement dit : les seuls panneaux que j'avais réglés
+juste étaient ceux que je n'avais presque pas touchés.
+
+Deux enseignements, et le second compte plus que le premier :
+
+1. **Le décor porte sa propre réponse.** La photo contient onze titres
+   peints. Leur angle est la spécification ; tout le reste est de
+   l'interprétation.
+2. **Aucun test ne pouvait voir la faute.** Les tests vérifiaient que la
+   boîte était au bon endroit — elle l'était. C'est son contenu qui
+   basculait du mauvais côté. D'où le garde-fou ajouté : le cockpit est
+   symétrique, deux panneaux qui se font face doivent porter des pentes
+   **opposées**. Une faute de signe ne repasse plus.
+
+Le cisaillement, lui, reste écarté. Au zoom, les jambages des lettres
+peintes tournent **avec** leur ligne de base : le décor applique une
+rotation, pas un cisaillement. Une base de plan complète serait plus
+« exacte » en théorie et plus fausse à l'œil.
+
+## Phase 10 bis — quatre requêtes perdues à chaque chargement
+
+Le cockpit demandait les trois variantes de chaque commande photographiée et
+rattrapait les 404. Ça marchait — la feuille de style fait clignoter
+l'image allumée quand la variante d'alerte manque, donc l'état restait
+lisible — mais la page publiée réclamait quatre fichiers dont on savait
+depuis toujours qu'ils n'existaient pas. Les variantes livrées sont
+maintenant **déclarées** dans la carte, et un test les compare au
+répertoire : un fichier ajouté sans déclaration resterait invisible, un
+fichier déclaré sans être livré ramènerait le 404 qu'on vient d'enlever.
