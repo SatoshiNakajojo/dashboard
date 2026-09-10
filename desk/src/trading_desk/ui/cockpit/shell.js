@@ -196,7 +196,7 @@
     // Les modules d'ecrans et de boutons vivent dans leurs fichiers. Le shell
     // ne fait que leur donner leur couche et la carte.
     window.Cockpit = { CARTE, CHEMIN, fit, ecrans, hotspots, fx, hotas,
-                       poser, creer, metal, plaquer, $$ };
+                       poser, creer, metal, plaquer, incliner, $$ };
     if (window.CockpitEcrans) window.CockpitEcrans.monter();
     if (window.CockpitInstruments) window.CockpitInstruments.monter();
     if (window.CockpitBoutons) window.CockpitBoutons.monter();
@@ -216,8 +216,9 @@
     }
     // Les termes projectifs ont la dimension d'un inverse de longueur : la
     // matrice depend de la taille en pixels du plateau.
-    if (window.ResizeObserver) new ResizeObserver(calerPlaques).observe(fit);
-    else addEventListener("resize", calerPlaques);
+    const caler = () => { calerPlaques(); calerInclines(); };
+    if (window.ResizeObserver) new ResizeObserver(caler).observe(fit);
+    else addEventListener("resize", caler);
 
     loupe(stage, fit);
 
@@ -391,6 +392,54 @@
     const dd = y1 - y0 + g * y1, e = y3 - y0 + hh * y3, f = y0;
     // le carre unite devient le rectangle (w, h) de l'element
     return [a / w, dd / w, g / w, b / h, e / h, hh / h, c, f, 1];
+  }
+
+  /* Incliner une piece dans le plan de son panneau.
+   *
+   * Une etiquette gravee est petite : lui calculer sa propre homographie
+   * serait exact et illisible. Le panneau, lui, a quatre coins releves ; on
+   * en tire la BASE moyenne de son plan — le vecteur que devient « un pixel
+   * vers la droite » et celui que devient « un pixel vers le bas » — et on
+   * la donne telle quelle a la piece. Elle prend alors la rotation, le
+   * cisaillement et l'echelle du panneau d'un seul coup.
+   *
+   * C'est ce qui manquait : je posais une rotation devinee, puis une
+   * rotation mesuree, mais toujours une ROTATION — alors que les montants
+   * d'un panneau penchent en sens contraire et qu'aucune rotation ne rend
+   * ca. La base, si.
+   */
+  const inclines = [];
+  function incliner(el, nomPlan) {
+    const plan = (CARTE.plans || {})[nomPlan];
+    if (!plan) return;
+    if (!plan.quad) {                       // panneau d'aplomb : simple pente
+      if (plan.pente) {
+        el.style.transformOrigin = "center";
+        el.style.transform = "rotate(" + plan.pente + "deg)";
+      }
+      return;
+    }
+    inclines.push({ el, quad: plan.quad });
+    calerInclines();
+  }
+  function calerInclines() {
+    const r = fitCourant && fitCourant.getBoundingClientRect();
+    if (!r || !r.width) return;
+    for (const p of inclines) {
+      const q = p.quad.map(([x, y]) => [x * r.width / 100, y * r.height / 100]);
+      const [tl, tr, br, bl] = q;
+      const lx = Math.max(...q.map((v) => v[0])) - Math.min(...q.map((v) => v[0]));
+      const ly = Math.max(...q.map((v) => v[1])) - Math.min(...q.map((v) => v[1]));
+      if (!lx || !ly) continue;
+      const ex = [((tr[0]-tl[0]) + (br[0]-bl[0])) / 2 / lx,
+                  ((tr[1]-tl[1]) + (br[1]-bl[1])) / 2 / lx];
+      const ey = [((bl[0]-tl[0]) + (br[0]-tr[0])) / 2 / ly,
+                  ((bl[1]-tl[1]) + (br[1]-tr[1])) / 2 / ly];
+      p.el.style.transformOrigin = "center";
+      p.el.style.transform =
+        `matrix(${ex[0].toFixed(5)},${ex[1].toFixed(5)},` +
+        `${ey[0].toFixed(5)},${ey[1].toFixed(5)},0,0)`;
+    }
   }
 
   const plaques = [];

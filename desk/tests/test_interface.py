@@ -748,7 +748,20 @@ def test_chaque_etiquette_declare_le_plan_de_son_instrument():
         .read_text(encoding="utf-8"))
     plans = carte["plans"]
     for nom, p in plans.items():
-        assert abs(p["pente"]) <= 4, f"plan {nom} : pente invraisemblable"
+        # Un plan est décrit soit par ses quatre coins relevés — c'est le cas
+        # général, parce que les montants d'un panneau penchent en sens
+        # contraire et qu'aucune rotation ne rend ça — soit, pour les
+        # panneaux vraiment d'aplomb, par une simple pente.
+        if "quad" in p:
+            assert len(p["quad"]) == 4, f"plan {nom} : il faut quatre coins"
+            for x, y in p["quad"]:
+                assert 0 <= x <= 100 and 0 <= y <= 100, f"plan {nom} : coin hors plateau"
+            xs = [c[0] for c in p["quad"]]
+            ys = [c[1] for c in p["quad"]]
+            assert max(xs) - min(xs) > 3 and max(ys) - min(ys) > 2, \
+                f"plan {nom} : quadrilatère dégénéré"
+        else:
+            assert abs(p["pente"]) <= 4, f"plan {nom} : pente invraisemblable"
 
     porteurs = list(carte["graves"].items()) + list(carte["chrome"].items()) \
         + list(carte["instruments"]["afficheurs"].items())

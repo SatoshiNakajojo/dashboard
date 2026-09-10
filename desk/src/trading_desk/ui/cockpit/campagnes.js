@@ -94,7 +94,7 @@
       parametres[i.dataset.nom] = Number(i.value);
     }
     const r = await D().post("/api/campagnes/lancer", { cle, parametres });
-    if (r && !r.lance) alert(r.raison);
+    if (r && !r.lance) expliquer(r.raison);
     lire();
   }
 
@@ -117,6 +117,36 @@
     ouvert = false;
     clearInterval(timer);
     timer = null;
+  }
+
+  /* Pourquoi ca n'a pas demarre.
+   *
+   * La copie publiee du poste n'a pas de desk derriere elle : elle repondait
+   * « Apercu fige : aucun desk derriere cette page » dans une boite d'alerte,
+   * ce qui est vrai et parfaitement inutile — on ne sait pas quoi faire de
+   * cette phrase. Une campagne se lance depuis le desk reel ; la page le dit
+   * maintenant, avec la commande.
+   */
+  function expliquer(raison) {
+    const zone = panneau && panneau.querySelector(".sortie pre");
+    const fige = /aucun desk/i.test(String(raison));
+    const texte = fige
+      ? ["Cette page est une copie figée du poste : elle montre l'état du desk",
+         "à l'instant de la capture, et ne peut rien lancer.",
+         "",
+         "Une campagne tourne sur la machine qui porte le desk :",
+         "",
+         "    cd ~/dashboard/desk && git pull",
+         "    python -m trading_desk --demo",
+         "",
+         "puis http://127.0.0.1:8787 — le bouton Campagnes y lance pour de bon.",
+         "",
+         "Sans passer par le poste :",
+         "    python scripts/robustness_grid.py --draws 2000",
+        ].join("\n")
+      : String(raison);
+    if (zone) { zone.textContent = texte; zone.scrollTop = 0; }
+    else alert(texte);
   }
 
   addEventListener("keydown", (e) => {

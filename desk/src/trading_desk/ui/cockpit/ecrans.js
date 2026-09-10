@@ -81,10 +81,8 @@
    * haut, qui le sont vraiment. */
   function poserPlan(el, r) {
     if (!r.plan) return;
-    const plan = (M().CARTE.plans || {})[r.plan];
-    if (!plan || !plan.pente) return;
     el.dataset.plan = r.plan;
-    el.style.setProperty("--pente", plan.pente + "deg");
+    M().incliner(el, r.plan);
   }
 
   function libre(cle) {

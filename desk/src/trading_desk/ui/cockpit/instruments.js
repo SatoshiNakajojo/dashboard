@@ -80,11 +80,7 @@
                        + (cle.startsWith("flu") ? " flux" : ""), couche);
       M().poser(el, r);
       // Le logement suit le plan de son panneau, comme les etiquettes.
-      const plan = r.plan && (CARTE.plans || {})[r.plan];
-      if (plan && plan.pente) {
-        el.dataset.plan = r.plan;
-        el.style.setProperty("--pente", plan.pente + "deg");
-      }
+      if (r.plan) { el.dataset.plan = r.plan; M().incliner(el, r.plan); }
       afficheurs[cle] = { el, span: creer("span", null, el), src: r.src };
     }
 

@@ -464,10 +464,10 @@
   text-align: left; font-size: .76cqw;
 }
 
-/* Le plan de l'instrument. Une seule rotation, mesuree sur l'axe du titre
-   peint du panneau : c'est la ligne que l'etiquette doit suivre. Pas de
-   cisaillement — aucun des plans n'en montre. */
-.plaque[data-plan], .afficheur[data-plan] { transform: rotate(var(--pente, 0deg)) }
+/* Le plan de l'instrument est pose par le shell : il calcule la BASE du
+   panneau a partir de ses quatre coins releves, et la donne a la piece.
+   Une rotation ne suffisait pas — les montants d'un panneau penchent en
+   sens contraire, et aucune rotation ne rend ca. */
 
 .plaque.amb { color: var(--amber) }
 .plaque.gauche { place-items: center start; padding-left: 6px }
