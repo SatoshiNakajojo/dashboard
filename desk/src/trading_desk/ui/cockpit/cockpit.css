@@ -114,7 +114,17 @@
 .barre i.ok { background: #6fd39c }
 
 /* --- z-3 : les hotspots ------------------------------------------------- */
-.hotspots-layer, .hotspots-pilot { position: absolute; inset: 0; }
+/* `pointer-events: none` sur les COUCHES, `auto` sur les boutons.
+ *
+ * Sans ca, ces deux div pleine page avalent tous les clics de ce qui est
+ * dessous : la couche HOTAS est en z-6, donc au-dessus des ecrans (z-2) et
+ * des autres hotspots (z-3), et un div transparent recoit les evenements
+ * aussi bien qu'un div peint. Le cockpit paraissait donc complet et
+ * n'acceptait AUCUN clic — trouve en essayant d'en faire un pour de vrai.
+ */
+.hotspots-layer, .hotspots-pilot { position: absolute; inset: 0;
+  pointer-events: none; }
+.hotspots-layer .hotspot, .hotspots-pilot .hotspot { pointer-events: auto; }
 .hotspots-layer { z-index: 3 } .hotspots-pilot { z-index: 6 }
 .hotspot {
   position: absolute; background: transparent; border: 0; padding: 0;
