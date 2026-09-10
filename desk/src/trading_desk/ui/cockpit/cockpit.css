@@ -32,11 +32,25 @@
 }
 .cockpit-fit {
   position: relative;
+  transition: transform 420ms cubic-bezier(.32, .72, .24, 1);
   width: min(100vw, calc(100vh * 1280 / 800));
   height: min(100vh, calc(100vw * 800 / 1280));
+  container-type: size; container-name: fit;
   /* Toutes les couches se superposent exactement sur cette boite, et toutes
    * les coordonnees des enfants sont en % d'elle. */
 }
+
+/* La loupe : le plateau entier grossit et se recadre sur un bloc. Le nom du
+   bloc s'affiche en bas — sans lui on ne sait plus ou l'on est. */
+.loupe-nom {
+  position: fixed; left: 50%; bottom: 14px; transform: translateX(-50%);
+  z-index: 20; pointer-events: none;
+  background: rgba(6, 12, 15, .88); color: var(--ink);
+  border: 1px solid rgba(120, 160, 175, .22); border-radius: 3px;
+  padding: 5px 12px; font-size: 11px; letter-spacing: .1em;
+  text-transform: uppercase;
+}
+@media (prefers-reduced-motion: reduce) { .cockpit-fit { transition: none } }
 
 /* --- z-0 : la photo ---------------------------------------------------- */
 .cockpit-photo {
@@ -65,13 +79,36 @@
 
 /* --- z-2 : les ecrans --------------------------------------------------- */
 .screens-layer { position: absolute; inset: 0; z-index: 2; }
+/* Une dalle allumee, pas un autocollant.
+ *
+ * Le fond n'est pas opaque : il laisse passer douze pour cent de la photo,
+ * donc le reflet du verre, la courbure du bord et le grain du biseau restent
+ * visibles A TRAVERS le contenu. C'est ce detail qui fait la difference entre
+ * un ecran encastre et un rectangle noir colle par-dessus — et il ne coute
+ * qu'une valeur d'alpha.
+ *
+ * Le texte porte un halo de la couleur qu'il a : un phosphore diffuse dans le
+ * verre, il ne s'arrete pas au bord du glyphe.
+ */
 .screen {
-  position: absolute; background: var(--oled);
+  position: absolute; background: rgb(4, 7, 10);
+  border-radius: 4px;
   overflow: hidden; contain: layout paint;
   font-size: 10px; line-height: 1.35;
-  box-shadow: inset 0 0 22px rgba(0, 0, 0, .85);
+  box-shadow: inset 0 0 26px rgba(0, 0, 0, .8),
+              inset 0 1px 0 rgba(180, 215, 230, .07);
   transition: filter 140ms ease;
 }
+/* Le reflet du verre : une bande diagonale, la meme que la photo peint sur
+   ses dalles eteintes. Au-dessus du contenu, sinon elle ne reflete rien. */
+.screen::before {
+  content: ""; position: absolute; inset: 0; z-index: 3; pointer-events: none;
+  border-radius: inherit;
+  background: linear-gradient(152deg,
+    rgba(196, 224, 238, .085) 0%, rgba(196, 224, 238, .028) 21%,
+    transparent 44%, transparent 100%);
+}
+.screen .corps { text-shadow: 0 0 7px currentColor; }
 /* Le balayage. Une seule ligne de degrade repetee : pas d'animation, sinon
  * chaque ecran repeint 60 fois par seconde pour un effet decoratif. */
 .screen::after {
@@ -131,6 +168,27 @@
   cursor: pointer; border-radius: 3px; color: inherit;
   -webkit-tap-highlight-color: transparent;
 }
+/* Un bouton invisible au repos est un bouton disparu : on ne peut pas
+ * deviner que la photo est cliquable. Mais un rectangle dessine par-dessus
+ * serait un calque pose sur du materiel. On met donc une halo ronde, tres
+ * faible — le bouton peint parait retro-eclaire, pas recouvert. Au chargement
+ * elle monte puis retombe une fois : la carte des commandes se montre seule,
+ * sans qu'on ait rien a lire. */
+.hotspot::before {
+  content: ""; position: absolute; inset: -14%; border-radius: 50%;
+  pointer-events: none; opacity: .5;
+  background: radial-gradient(circle, rgba(126, 214, 168, .38), transparent 64%);
+  box-shadow: inset 0 0 0 1px rgba(126, 214, 168, .22);
+  transition: opacity 150ms linear;
+  animation: eveil 2600ms ease-out 1;
+}
+.hotspot:hover::before { opacity: 1 }
+.hotspot[disabled]::before {
+  background: radial-gradient(circle, rgba(224, 90, 73, .16), transparent 62%);
+}
+@keyframes eveil { 0%, 10% { opacity: 0 } 34%, 52% { opacity: 1 } 100% { opacity: .5 } }
+@media (prefers-reduced-motion: reduce) { .hotspot::before { animation: none } }
+
 .hotspot::after {
   content: ""; position: absolute; inset: 0; border-radius: inherit;
   background: radial-gradient(circle at 50% 30%, transparent 40%, rgba(0, 0, 0, .45));
@@ -164,15 +222,15 @@
 .led.change { animation: clignote 400ms steps(2, end) 1 }
 
 /* --- z-5 : les mains ---------------------------------------------------- */
-.pilot-fg {
-  position: absolute; inset: 0; width: 100%; height: 100%;
-  object-fit: fill; z-index: 5; pointer-events: none; user-select: none;
-  transition: transform 220ms ease, opacity 220ms ease;
-}
+.pilot-fg { display: none }
 /* Mode HUD : les mains descendent et s'effacent, les ecrans du bas
  * respirent. Pour travailler, pas pour la photo. */
-.hud .pilot-fg { transform: translateY(40%); opacity: .15 }
-.hud .hotspots-pilot { transform: translateY(40%); opacity: .15 }
+/* Mode HUD : les dalles reprennent toute leur surface et couvrent les mains.
+ * On retire le masque plutot que de deplacer une image — meme resultat, une
+ * couche de moins, et aucun bord a rater. */
+.hud .screen[data-perce] { -webkit-mask-image: none !important;
+                           mask-image: none !important }
+.hud .hotspots-pilot { opacity: .15; pointer-events: none }
 .hud .screen { font-size: 11px }
 
 /* --- barre haute et rail ------------------------------------------------ */
@@ -234,15 +292,35 @@
 .chrome-layer { position: absolute; inset: 0; z-index: 4; pointer-events: none }
 .plaque {
   position: absolute; display: grid; place-items: center;
-  background: #0b1216; color: #c3d3d7;
-  font-size: 9px; letter-spacing: .14em; text-transform: uppercase;
+  background: linear-gradient(#131d23, #070d11); color: #c3d3d7;
+  font-size: .72cqw; letter-spacing: .14em; text-transform: uppercase;
   font-weight: 700; overflow: hidden; white-space: nowrap;
   border-radius: 2px;
   /* Le lisere sombre evite la decoupe nette : sur la photo, ces plaques sont
    * encastrees, pas posees. */
-  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .55),
-              0 0 0 1px rgba(255, 255, 255, .04);
+  box-shadow: inset 0 .07cqw 0 rgba(190, 215, 225, .11),
+              inset 0 -.07cqw .2cqw rgba(0, 0, 0, .7),
+              inset 0 0 0 1px rgba(0, 0, 0, .5),
+              0 .05cqw .14cqw rgba(0, 0, 0, .55);
 }
+/* Une plaque gravee : metal clair releve sur la photo, texte sombre en creux.
+   L'inverse d'un ecran — elle ne s'allume pas, elle est vissee. */
+.plaque.grave {
+  background: linear-gradient(var(--metal, #b9bcbd),
+                              color-mix(in srgb, var(--metal, #b9bcbd) 88%, #000));
+  color: #1b2226; text-transform: none; letter-spacing: .01em;
+  font-family: var(--f-sans, system-ui, sans-serif); font-weight: 600;
+  font-size: .78cqw; line-height: 1.35; text-shadow: 0 1px 0 rgba(255,255,255,.35);
+  box-shadow: inset 0 .06cqw 0 rgba(255, 255, 255, .35),
+              inset 0 -.06cqw .12cqw rgba(0, 0, 0, .3),
+              0 .03cqw .1cqw rgba(0, 0, 0, .28);
+  border-radius: 1.5px;
+}
+.plaque.grave.gauche {
+  place-items: center start; padding: .5cqh .6cqw; white-space: normal;
+  text-align: left; font-size: .82cqw;
+}
+
 .plaque.amb { color: var(--amber) }
 .plaque.gauche { place-items: center start; padding-left: 6px }
 .plaque i { font-style: normal; font-variant-numeric: tabular-nums }
@@ -268,3 +346,218 @@
 #screen-autopilot .corps { padding-right: 11% }
 .hud #screen-feed .corps, .hud #screen-flux .corps { padding-left: 6px }
 .hud #screen-amplitude .corps, .hud #screen-autopilot .corps { padding-right: 6px }
+
+
+/* ================= instruments peints ==================================== */
+/*
+ * Cinq panneaux de la photo ne sont pas des ecrans : ce sont des instruments.
+ * Deux cadrans a aiguille dans « Amplitude », deux dans « Declencheurs »,
+ * deux dans « Flux », des bargraphes verticaux dans « Distribution des
+ * scores », des logements numeriques dans « Regime commute ».
+ *
+ * Les recouvrir d'un rectangle noir tuait ce qui fait la photo. On garde le
+ * decor entier et on n'ajoute QUE la lumiere : une aiguille qui tourne, une
+ * LED qui s'allume, un chiffre dans son logement. Le cadran, la graduation,
+ * le verre bombe et la vis de fixation restent ceux de l'image.
+ */
+.instruments { position: absolute; inset: 0; z-index: 2; pointer-events: none }
+
+.aiguille { position: absolute; overflow: visible }
+.aiguille svg { width: 100%; height: 100%; overflow: visible; display: block }
+.aiguille .brin {
+  stroke: #e8523f; stroke-width: 2.4; stroke-linecap: round;
+  transform-origin: 50px 50px;
+  transition: transform 420ms cubic-bezier(.3, .9, .35, 1);
+  filter: drop-shadow(0 0 3px rgba(232, 82, 63, .8));
+}
+.aiguille .moyeu { fill: #d9e3e6 }
+
+/* Les temoins sont poses sur les carres peints. Eteints, ils laissent voir
+   le carre de la photo ; allumes, ils l'eclairent. */
+.temoin {
+  position: absolute; border-radius: 1px;
+  transition: background 140ms linear, box-shadow 140ms linear;
+}
+.temoin.on { box-shadow: 0 0 7px currentColor, 0 0 2px currentColor }
+.temoin.vert { color: #6fd39c } .temoin.vert.on { background: #6fd39c }
+.temoin.rouge { color: #e05a49 } .temoin.rouge.on { background: #e05a49 }
+.temoin.ambre { color: #e2a54a } .temoin.ambre.on { background: #e2a54a }
+
+/* Un logement numerique de la photo, rallume.
+ *
+ * Le fond n'est pas noir : c'est la teinte relevee au pixel sur le JPEG,
+ * celle du verre eteint que le rectangle recouvre. Avec le meme creux et le
+ * meme filet de lumiere en haut que les logements voisins, la piece cesse
+ * d'etre une piece rapportee. Un noir arbitraire, lui, se voit toujours :
+ * c'est ce qui donnait au rendu precedent son air d'autocollant.
+ */
+.afficheur {
+  position: absolute; display: grid; place-items: center;
+  font-family: var(--f-mono); font-variant-numeric: tabular-nums;
+  font-weight: 700; color: #8de3b4;
+  background: var(--verre-fenetre, #2e2f33);
+  border-radius: 2px; overflow: hidden; white-space: nowrap;
+  text-shadow: 0 0 .5cqw rgba(141, 227, 180, .85);
+  font-size: 1.05cqw; letter-spacing: .02em;
+  box-shadow: inset 0 .12cqw .34cqw rgba(0, 0, 0, .78),
+              inset 0 -.08cqw .22cqw rgba(0, 0, 0, .5),
+              inset 0 .04cqw 0 rgba(190, 215, 225, .11);
+}
+.afficheur.flux { background: var(--verre-flux, #1f2122) }
+.afficheur.gros { font-size: 1.6cqw }
+.afficheur.amb { color: var(--amber); text-shadow: 0 0 .5cqw rgba(226,165,74,.8) }
+/* Le chiffre est dans un span : quand il deborde de son logement on le
+   reduit plutot que de le couper. Un nombre tronque ment. */
+.afficheur > span { display: block; transform-origin: center }
+
+/* Les bargraphes verticaux. Le tube peint est un stade arrondi, pas un
+   rectangle, et il est segmente : la colonne lumineuse reprend l'un et
+   l'autre, sinon on pose une dalle de couleur sur une belle piece. */
+.bargraphe {
+  position: absolute; display: flex; align-items: flex-end;
+  border-radius: 999px; overflow: hidden;
+  background: var(--verre-tube, #1d232a);
+  box-shadow: inset 0 0 .55cqw rgba(0, 0, 0, .8),
+              inset .12cqw 0 .25cqw rgba(0, 0, 0, .6),
+              inset -.06cqw 0 0 rgba(190, 215, 225, .08);
+}
+/* Les refends du tube restent visibles meme eteints : un tube a zero doit se
+   lire comme un instrument a zero, pas comme un trou. */
+.bargraphe::before {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: repeating-linear-gradient(to top,
+    rgba(150, 180, 200, .075) 0 .42cqh, transparent .42cqh .62cqh);
+}
+.bargraphe i {
+  display: block; width: 100%;
+  transition: height 420ms cubic-bezier(.3, .9, .35, 1);
+  background: linear-gradient(to top, #c07c1e, #f0b451);
+  box-shadow: 0 0 .8cqw rgba(240, 180, 81, .6);
+  -webkit-mask-image: repeating-linear-gradient(to top,
+    #000 0 .42cqh, transparent .42cqh .62cqh);
+          mask-image: repeating-linear-gradient(to top,
+    #000 0 .42cqh, transparent .42cqh .62cqh);
+}
+.bargraphe.ok i { background: linear-gradient(to top, #2f8a5b, #7ce0a8);
+                  box-shadow: 0 0 .8cqw rgba(124, 224, 168, .6) }
+
+/* La distribution des scores. La photo ne dessine pas une colonne mais sept
+   logements separes par du metal : on pose sept rectangles a leurs hauteurs
+   relevees et le metal reste visible entre eux. Un bloc unique effacait ces
+   sept refends — c'est a ce detail qu'un calque se trahit. */
+.logement {
+  position: absolute; display: flex; gap: 1px; align-items: center;
+  background: var(--verre-led, #2d2b2b); border-radius: 1px;
+  overflow: hidden; padding: 0 .14cqw;
+  box-shadow: inset 0 .1cqw .24cqw rgba(0, 0, 0, .7),
+              inset 0 .03cqw 0 rgba(190, 215, 225, .09);
+}
+.logement u { flex: 1; height: 58%; background: #2a2013; border-radius: 1px }
+.logement u.on { background: #f0b451; box-shadow: 0 0 .32cqw rgba(240,180,81,.9) }
+.logement.num {
+  background: var(--verre-num, #282625); justify-content: flex-end;
+  padding-right: .4cqw; font-family: var(--f-mono); font-weight: 700;
+  color: #8de3b4; text-shadow: 0 0 .4cqw rgba(141, 227, 180, .8);
+  font-size: 1.1cqw; font-variant-numeric: tabular-nums;
+}
+
+/* Un inverseur a deux ou trois positions. Le levier est un dessin vectoriel :
+   aucune image generee, donc net a n'importe quel zoom — et une animation
+   matricielle deviendrait floue precisement quand on zoome. */
+/* Un inverseur ne se dessine pas par-dessus celui de la photo : il le
+   REMPLACE. Le cache reprend le metal releve autour de lui, avec le meme
+   creux que les logements voisins ; seul le levier est neuf. */
+.inverseur { position: absolute; border: 0; padding: 0; cursor: pointer;
+             z-index: 6; border-radius: 2px; overflow: visible;
+             background: linear-gradient(var(--metal, #9aa0a2),
+               color-mix(in srgb, var(--metal, #9aa0a2) 86%, #000));
+             box-shadow: inset 0 1px 0 rgba(255, 255, 255, .3),
+                         inset 0 -1px 2px rgba(0, 0, 0, .35),
+                         0 1px 2px rgba(0, 0, 0, .3) }
+.inverseur svg { width: 100%; height: 100%; display: block; overflow: visible }
+.inverseur .lev { transition: transform 190ms cubic-bezier(.34, 1.45, .64, 1);
+                  transform-origin: 50% 74% }
+.inverseur[data-p="0"] .lev { transform: rotate(-24deg) }
+.inverseur[data-p="1"] .lev { transform: rotate(0deg) }
+.inverseur[data-p="2"] .lev { transform: rotate(24deg) }
+.inverseur .halo { fill: none; opacity: 0; transition: opacity 190ms }
+.inverseur[data-on="1"] .halo { opacity: 1; fill: rgba(226, 165, 74, .28) }
+.inverseur:focus-visible { outline: 1px solid var(--amber); outline-offset: 2px }
+
+@media (prefers-reduced-motion: reduce) {
+  .aiguille .brin, .bargraphe i, .inverseur .lev { transition: none }
+}
+
+/* ================= panneau des campagnes ================================= */
+/* Plein ecran, pas dans une dalle : choisir une campagne, regler ses tirages
+ * et lire sa sortie ne tient pas dans 280 px de large. Le cockpit reste
+ * dessous et le panneau se ferme. */
+#campagnes {
+  position: fixed; inset: 0; z-index: 30; display: grid; place-items: center;
+  background: rgba(2, 5, 7, .82); padding: 3vmin;
+}
+#campagnes[hidden] { display: none }
+#campagnes .cadre {
+  width: min(1000px, 96vw); max-height: 92vh; display: flex; flex-direction: column;
+  background: #0a1115; border: 1px solid #22343a; border-radius: 4px;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, .7);
+}
+#campagnes h2 {
+  margin: 0; padding: 14px 18px; border-bottom: 1px solid #16232a;
+  font-family: var(--f-mono); font-size: 11px; letter-spacing: .16em;
+  text-transform: uppercase; color: var(--amber); font-weight: 700;
+  display: flex; justify-content: space-between; align-items: center; gap: 12px;
+}
+#campagnes .fermer {
+  background: none; border: 0; color: var(--dim); cursor: pointer;
+  font-size: 15px; line-height: 1; padding: 4px 6px;
+}
+#campagnes .fermer:hover { color: var(--ink) }
+#campagnes .corps { display: grid; gap: 1px; background: #16232a; overflow: hidden;
+                    grid-template-columns: 1fr }
+@media (min-width: 900px) { #campagnes .corps { grid-template-columns: 1.15fr .85fr } }
+#campagnes .liste { background: #0a1115; overflow: auto; padding: 4px 0 }
+#campagnes .camp { padding: 13px 18px; border-bottom: 1px solid #16232a }
+#campagnes .camp:last-child { border-bottom: 0 }
+#campagnes .camp.active { background: #10201d }
+#campagnes .camp h3 {
+  margin: 0 0 4px; font-size: 14px; font-weight: 700; letter-spacing: -.01em;
+  display: flex; align-items: center; gap: 8px; color: var(--ink);
+}
+#campagnes .tag {
+  font-family: var(--f-mono); font-size: 9px; letter-spacing: .1em;
+  text-transform: uppercase; background: var(--ok-soft); color: var(--ok);
+  padding: 2px 7px; border-radius: 2px;
+}
+#campagnes .camp p { margin: 0 0 9px; font-size: 12.5px; color: var(--muted);
+                     line-height: 1.5; max-width: 62ch }
+#campagnes .pied { display: flex; gap: 10px; align-items: center; flex-wrap: wrap }
+#campagnes .duree { font-family: var(--f-mono); font-size: 10px; color: var(--dim);
+                    letter-spacing: .08em }
+#campagnes label { font-family: var(--f-mono); font-size: 10px; color: var(--dim);
+                   display: flex; align-items: center; gap: 5px }
+#campagnes input {
+  width: 74px; background: #101a1f; border: 1px solid #22343a; color: var(--ink);
+  font-family: var(--f-mono); font-size: 11px; padding: 5px 7px; border-radius: 3px;
+  font-variant-numeric: tabular-nums;
+}
+#campagnes input:disabled { opacity: .45 }
+#campagnes button.go, #campagnes button.stop {
+  margin-left: auto; font-family: var(--f-mono); font-size: 10.5px;
+  letter-spacing: .1em; text-transform: uppercase; padding: 7px 15px;
+  border-radius: 3px; cursor: pointer; border: 1px solid transparent;
+}
+#campagnes button.go { background: var(--accent); color: #fff }
+#campagnes button.go:disabled { background: #16232a; color: var(--dim);
+                                cursor: not-allowed }
+#campagnes button.stop { background: var(--crit); color: #fff }
+#campagnes .refus {
+  margin: 0; padding: 12px 18px; background: var(--warn-soft); color: var(--warn);
+  font-size: 12.5px; line-height: 1.55; border-bottom: 1px solid #16232a;
+}
+#campagnes .sortie { background: #060b0e; overflow: hidden; display: flex }
+#campagnes pre {
+  margin: 0; padding: 12px 14px; overflow: auto; flex: 1;
+  font-family: var(--f-mono); font-size: 10.5px; line-height: 1.55;
+  color: var(--phos); white-space: pre-wrap; word-break: break-word;
+}

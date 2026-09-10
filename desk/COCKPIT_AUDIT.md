@@ -219,3 +219,117 @@ Le contenu est décalé vers la zone visible, mais **les écrans gardent la
 taille de la dalle peinte** — c'est elle qui vaut dès que les mains
 s'écartent. En mode HUD (touche `` ` ``), les mains descendent et la marge
 disparaît : c'est exactement à ça que ce mode sert.
+
+---
+
+## Phase 5 — l'intégration, 10 septembre 2026
+
+Quatre demandes : construire le lanceur de campagne, intégrer écrans,
+boutons et aiguilles **dans** l'image, refaire la découpe des mains, donner
+le lien. Ce qui suit ne raconte que ce que le rendu a démenti.
+
+### Le calque d'avant-plan était l'erreur, pas son réglage
+
+Le PNG détouré de la phase 4 reprend des pixels de la photo et les repose
+**sur eux-mêmes**. Partout où le détourage n'est pas franc — et un détourage
+à la main ne l'est jamais tout à fait — le décor se dédouble. À la loupe, un
+halo bleuâtre suivait le contour du manche droit : ce n'était pas un défaut
+de tracé, c'était le principe même du calque.
+
+La photo contient déjà les mains, nettes, à leur place. Il suffit de
+**percer** les deux dalles qu'elles traversent, avec un masque SVG en
+`fill-rule: evenodd`. Plus rien n'est recomposé : sous le trou, c'est le
+JPEG. Le bord des gants est celui de la photo, au pixel, et il ne peut plus
+être raté. Le PNG ne sert plus qu'au mode HUD.
+
+Le trou est rentré de 0,15 point vers l'intérieur du bras. Trop large, il
+laissait reparaître un croissant de dalle **peinte** autour du manche —
+visible à la loupe sur le mandat. Trop étroit, il ne laisse qu'un cheveu de
+dalle noire sur un gant noir, que personne ne voit. L'asymétrie du coût
+décide du sens de l'erreur.
+
+Une correction supplémentaire entre 64 et 72 % de hauteur : le manche y est
+plus étroit que ne le disait le tracé de la phase 4.
+
+### Un rectangle noir n'est pas un instrument
+
+Les cinq dalles qui recouvraient des instruments peints — cadrans,
+bargraphes, colonnes, logements numériques — ont été supprimées. À leur
+place, on **rallume** ce que la photo dessine déjà.
+
+La règle qui rend la chose invisible : **le fond de chaque pièce est la
+teinte relevée au pixel sur le JPEG**, celle du verre éteint ou du métal nu
+qu'elle recouvre — jamais un noir choisi à l'œil. Un noir choisi se voit
+toujours ; c'est ce qui donnait au rendu de la veille son air d'autocollant.
+
+- logements numériques : `rgb(46,47,51)`, relevé dans « Régime commuté » ;
+- logements du bloc « Flux » : `rgb(31,33,34)` ;
+- tubes des bargraphes : `rgb(29,35,42)` ;
+- colonnes LED et chiffres : `rgb(45,43,43)` et `rgb(40,38,37)`.
+
+Les plaques gravées et les caches d'inverseur, eux, échantillonnent le métal
+**au montage**, dans trois bandes autour de la pièce — à gauche, à droite,
+en dessous. Jamais au-dessus : il y a presque toujours un bandeau sombre, et
+la première version en est sortie noire. Le 70ᵉ centile écarte les ombres et
+les vis. Le résultat est désaturé d'un tiers : un seul pixel de légende
+peinte, chaude, suffisait à teinter une pièce en rose sur un tableau gris.
+
+### La colonne n'était pas une colonne
+
+La photo découpe la distribution des scores en **sept logements séparés par
+du métal**. Un bloc unique effaçait ces sept refends — c'est exactement à ce
+détail qu'un calque se trahit. Sept rectangles aux hauteurs relevées
+(32,13 / 34,25 / 36,25 / 38,25 / 40,38 / 42,38 / 44,50 %) laissent le métal
+visible entre eux.
+
+Même correction pour le bloc « Flux » : quatre logements à gauche, trois à
+droite dont un haut — pas six alignés comme le supposait la première carte.
+
+### Une étiquette fausse au-dessus d'un chiffre vrai
+
+Le rendu affichait « ATTENOUES 0 $ » : un mot halluciné étiquetant une
+exposition réelle. C'est pire qu'un décor entièrement faux, parce qu'on le
+croit. Sept plaques gravées portent désormais le nom réel de la mesure
+(Équité, Exposition, Positions, Mandats, Seaux, Compte, Latence, Budget,
+Secteurs), et le placard de gauche porte ce qui bloque réellement le
+décollage au lieu d'un paragraphe de faux latin.
+
+Quatre plaques du châssis répétaient le même mot. Chacune porte maintenant
+un fait que sa voisine ne dit pas.
+
+### Les boutons avaient disparu
+
+Ils étaient parfaitement transparents au repos : rien ne disait que la photo
+était cliquable. Un rectangle dessiné par-dessus aurait été un calque posé
+sur du matériel. Chaque hotspot porte donc une **halo ronde très faible** —
+le bouton peint paraît rétro-éclairé, pas recouvert — qui monte puis
+retombe une fois au chargement : la carte des commandes se montre seule.
+
+Les inverseurs ne se dessinent plus **par-dessus** celui de la photo, ils le
+**remplacent** : cache au métal échantillonné, seul le levier est neuf. Ils
+étaient de surcroît posés sur la légende peinte et non sur la bascule — le
+corps de l'interrupteur commence à 73,4 %, pas à 70,9 %.
+
+### La loupe
+
+Demandée à la phase précédente, construite ici. Le plateau **entier**
+s'agrandit et se recadre sur un bloc : photo, dalles, aiguilles et boutons
+montent ensemble, donc rien ne se décale et les boutons restent cliquables à
+leur place. C'est aussi pourquoi cadrans et inverseurs sont des SVG — eux
+restent nets à n'importe quel grossissement.
+
+Double-clic pour entrer, encore pour sortir ; touches 1 à 8 ; Échap.
+
+**Limite mesurée, et elle est dans la photo :** `cockpit.jpg` fait
+1305 × 816. Au-delà d'environ 2×, c'est le JPEG qui décide de la netteté,
+pas le code. Pour que la loupe vaille vraiment, il faut réexporter la photo
+en 2560 ou 3840 de large — les surcouches, elles, sont déjà nettes.
+
+### Le pare-brise
+
+Une profondeur tirée uniformément laissait presque tout le champ au fond,
+donc invisible : le pare-brise se lisait comme un trou noir. La racine
+ramène les étoiles vers l'avant, le fond passe d'un noir plat à une nappe
+autour du point de fuite. La vidéo reste la source de vérité quand elle
+charge ; le canvas couvre le premier dixième de seconde, l'absence de
+fichier, et `prefers-reduced-motion`.

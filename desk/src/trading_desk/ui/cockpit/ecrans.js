@@ -28,9 +28,43 @@
     el.setAttribute("role", "group");
     el.setAttribute("aria-label", r.titre);
     poser(el, r);
+    percer(el, r);
     const corps = creer("div", "corps", el);
     ecrans[cle] = corps;
     return corps;
+  }
+
+  /* Percer une dalle aux silhouettes des avant-bras.
+   *
+   * Le masque est un SVG en une ligne : un rectangle plein, puis la
+   * silhouette en sous-chemin. La regle « evenodd » fait du second un trou.
+   * Rien n'est recompose — sous le trou, c'est la photo, donc le gant est
+   * exactement celui du JPEG.
+   *
+   * Le contour est volontairement 0,4 point plus large que le gant : s'il
+   * etait plus etroit, un liseré de dalle allumee depasserait autour de la
+   * main et se verrait de loin. Plus large, il laisse au pire un cheveu du
+   * biseau peint, sombre, qu'on ne distingue pas.
+   */
+  function percer(el, r) {
+    const mains = M().CARTE.mains;
+    if (!mains) return;
+    const local = (pts) => pts.map(([x, y]) =>
+      [((x - r.l) / r.w * 100).toFixed(2), ((y - r.t) / r.h * 100).toFixed(2)]);
+    const touche = (pts) => pts.some(([x, y]) =>
+      x > r.l - 2 && x < r.l + r.w + 2 && y > r.t - 2 && y < r.t + r.h + 2);
+
+    const trous = Object.values(mains).filter(touche).map(
+      (pts) => "M" + local(pts).map((p) => p.join(" ")).join("L") + "Z");
+    if (!trous.length) return;
+
+    const svg = "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' "
+      + "preserveAspectRatio='none'><path fill='#fff' fill-rule='evenodd' "
+      + "d='M0 0H100V100H0Z" + trous.join("") + "'/></svg>";
+    const url = 'url("data:image/svg+xml,' + encodeURIComponent(svg) + '")';
+    el.style.webkitMaskImage = url; el.style.maskImage = url;
+    el.style.webkitMaskSize = "100% 100%"; el.style.maskSize = "100% 100%";
+    el.dataset.perce = "1";
   }
 
   const esc = (s) => D().esc(s);
@@ -172,31 +206,6 @@
         : "");
   }
 
-  /* ---------------------------------------------------------- 2.5 scores */
-
-  function ecranScores() {
-    const c = ecrans.scores; if (!c) return;
-    const q = rech && rech.consommation && rech.consommation.qualite;
-    if (!q || !q.scores || !q.scores.length) {
-      c.innerHTML = `<h4><span>DISTRIBUTION DES SCORES</span></h4>` +
-        `<div class="mut" style="font-size:9px">Aucune campagne de qualité ` +
-        `sur cette machine.</div>`;
-      return;
-    }
-    const seuil = rech.consommation.seuil_conviction;
-    const hmax = Math.max(...q.scores.map((b) => b.n));
-    c.innerHTML =
-      `<h4><span>DISTRIBUTION DES SCORES</span><b class="amb">seuil ${num(seuil)}</b></h4>` +
-      q.scores.slice().reverse().map((b) => {
-        const franchi = b.borne >= seuil;
-        return `<div style="display:flex;gap:5px;align-items:center;font-size:9px">` +
-          `<span class="mut" style="width:22px">${num(b.borne)}</span>` +
-          `<span style="flex:1">${barre(100 * b.n / hmax, franchi ? "ok" : "amb")}</span>` +
-          `<b style="width:16px;text-align:right">${b.n}</b></div>`;
-      }).join("") +
-      `<div class="rangee" style="margin-top:3px"><span class="mut">émis</span>` +
-      `<b class="${q.emis ? "pos" : "neg"}">${q.emis} / ${q.rejetes + q.emis}</b></div>`;
-  }
 
   /* --------------------------------------------------------- 2.6 mini-charts */
 
@@ -219,110 +228,9 @@
         : `<div class="mut" style="font-size:9px">Aucune campagne lisible.</div>`);
   }
 
-  /* --------------------------------------------------------- 2.7 régime */
 
-  function ecranRegime(s) {
-    const c = ecrans.regime; if (!c || !s) return;
-    const a = s.account;
-    const cell = (k, v, cls) =>
-      `<div style="flex:1;min-width:0"><span class="mut" style="font-size:7px;` +
-      `letter-spacing:.1em;display:block">${esc(k)}</span>` +
-      `<span class="gros ${cls || ""}" style="font-size:13px">${v}</span></div>`;
-    c.innerHTML =
-      `<h4><span>RÉGIME</span><b class="${s.is_real_money ? "neg" : "cy"}">` +
-      `${esc(s.mode)}</b></h4>` +
-      `<div style="display:flex;gap:6px">` +
-        cell("équité", a ? usd(a.equity_usd) : "—") +
-        cell("levier", a ? a.effective_leverage + "×" : "—") +
-        cell("positions", a ? String(a.positions.length) : "—") +
-        cell("mandats", String(s.limits.mandates_today),
-             s.limits.mandates_today ? "pos" : "mut") +
-      `</div>`;
-  }
 
-  /* ------------------------------------------------------- 2.8 déclencheurs */
 
-  function ecranTriggers(s) {
-    const c = ecrans.triggers; if (!c || !s) return;
-    const checks = s.checks || [];
-    c.innerHTML =
-      `<h4><span>INVARIANTS</span><b class="${s.blocking.length ? "neg" : "pos"}">` +
-      `${checks.length - s.blocking.length}/${checks.length}</b></h4>` +
-      checks.slice(0, 7).map((x) =>
-        `<div class="rangee" style="font-size:9px;align-items:center">` +
-        `<span style="display:flex;gap:4px;align-items:center">` +
-        `<i class="led ${x.passed ? "vert on" : "rouge on"}" ` +
-        `style="position:static;width:5px;height:5px;flex:none"></i>` +
-        `<span class="${x.passed ? "mut" : "neg"}">${esc(x.id.slice(0, 3))}</span>` +
-        `</span>` +
-        `<b class="mut" style="max-width:70%;overflow:hidden;text-overflow:ellipsis;` +
-        `text-align:right">${esc(x.label)}</b></div>`).join("");
-  }
-
-  /* ---------------------------------------------------------- 2.9 amplitude */
-
-  function ecranAmplitude(s) {
-    const c = ecrans.amplitude; if (!c || !s) return;
-    const a = s.account, lim = s.limits;
-    const expo = a ? Number(a.gross_notional_usd) : 0;
-    const plafond = Number(lim.max_gross_notional_usd) || 1;
-    const lev = a ? Number(a.effective_leverage) : 0;
-    const levMax = Number(lim.max_effective_leverage) || 1;
-
-    // Aiguille : demi-cercle de 180°, l'angle suit la part du plafond. La
-    // base peinte reste visible sous la dalle, seule l'aiguille bouge.
-    const aiguille = (part, cls) => {
-      const ang = -90 + Math.max(0, Math.min(1, part)) * 180;
-      return `<svg viewBox="0 0 100 56" style="width:100%;max-height:44px" aria-hidden="true">` +
-        `<path d="M6 52 A44 44 0 0 1 94 52" fill="none" stroke="#1b2c31" stroke-width="2"/>` +
-        `<line x1="50" y1="52" x2="50" y2="12" stroke="currentColor" stroke-width="2"` +
-        ` class="${cls}" style="transform:rotate(${ang.toFixed(1)}deg);` +
-        `transform-origin:50px 52px;transition:transform 200ms linear"/>` +
-        `<circle cx="50" cy="52" r="3" fill="#22343a"/></svg>`;
-    };
-
-    const temoin = (ok) =>
-      `<i class="led ${ok ? "vert on" : "rouge on"}" ` +
-      `style="position:static;width:5px;height:5px;display:inline-block;` +
-      `margin-right:4px;vertical-align:1px"></i>`;
-
-    c.innerHTML =
-      `<h4><span>${temoin(expo <= plafond)}EXPOSITION</span>` +
-      `<b class="cy">${usd(expo)}</b></h4>` +
-      `<div style="color:var(--cyan)">${aiguille(expo / plafond, "")}</div>` +
-      rangee("plafond", usd(plafond)) +
-      `<h4 style="margin-top:6px"><span>${temoin(lev <= levMax)}LEVIER</span>` +
-      `<b class="${lev > levMax ? "neg" : "cy"}">${num(lev)}×</b></h4>` +
-      `<div style="color:${lev > levMax ? "var(--red)" : "var(--cyan)"}">` +
-      `${aiguille(lev / levMax, "")}</div>` +
-      rangee("plafond", levMax + "×");
-  }
-
-  /* ------------------------------------------------------------- 2.10 flux */
-
-  function ecranFlux(s) {
-    const c = ecrans.flux; if (!c || !s) return;
-    const b = s.budget;
-    c.innerHTML =
-      `<h4><span>FLUX DE DONNÉES</span>` +
-      `<b class="${s.ws_connected ? "pos" : "neg"}">` +
-      `${s.ws_connected ? "CONNECTÉ" : "COUPÉ"}</b></h4>` +
-      (s.feeds || []).slice(0, 6).map((f) => {
-        const age = f.age_ms == null ? null : f.age_ms;
-        const part = age == null ? 100 : Math.min(100, 100 * age / f.max_age_ms);
-        const cls = f.status !== "LIVE" ? "red" : part > 60 ? "amb" : "ok";
-        return `<div style="margin-bottom:2px"><div class="rangee" ` +
-          `style="border:0;font-size:9px;padding:0">` +
-          `<span class="mut" style="max-width:56%;overflow:hidden;` +
-          `text-overflow:ellipsis">${esc(f.name)}</span>` +
-          `<b class="${cls === "red" ? "neg" : "mut"}">` +
-          `${age == null ? esc(f.status) : age + " ms"}</b></div>` +
-          barre(100 - part, cls) + `</div>`;
-      }).join("") +
-      `<h4 style="margin-top:5px"><span>BUDGET DE REQUÊTES</span>` +
-      `<b class="${b.critical ? "neg" : "mut"}">${b.ip_used}/${b.ip_limit}</b></h4>` +
-      barre(b.ip_pct, b.ip_pct > 85 ? "red" : b.ip_pct > 60 ? "amb" : "ok");
-  }
 
   /* ------------------------------------------------ etiquettes du chassis */
 
@@ -335,8 +243,52 @@
       const el = creer("div", "plaque" + (r.ton === "amb" ? " amb" : ""), couche);
       el.id = "plaque-" + cle;
       poser(el, r);
-      plaques[cle] = { el, src: r.src };
+      plaques[cle] = { el, span: creer("span", null, el), src: r.src };
     }
+    batiGraves(couche);
+  }
+
+  /* Une etiquette coupee ne nomme plus rien : « Expositio » sous un chiffre
+   * juste vaut moins que pas d'etiquette. Quand le mot deborde de sa plaque,
+   * on le reduit. */
+  function ajuster(boite, span) {
+    span.style.transform = "none";
+    if (boite.classList.contains("gauche")) return;   // celle-la passe a la ligne
+    const dispo = boite.clientWidth - 4, large = span.scrollWidth;
+    if (large > dispo && large > 0) {
+      span.style.transform = "scale(" + Math.max(.5, dispo / large).toFixed(3) + ")";
+    }
+  }
+
+  /* Les etiquettes gravees.
+   *
+   * Sous « CELLULES » la photo affichait un mot invente ; le logement, lui,
+   * porte maintenant l'equite reelle. Un nom faux au-dessus d'un chiffre vrai
+   * est pire qu'un decor entierement faux : on le croit.
+   *
+   * Une plaque sombre ferait un autocollant sur du metal clair. Chacune
+   * prend donc la couleur exacte du metal qu'elle recouvre, relevee sur le
+   * JPEG au montage — pas une teinte choisie a l'oeil. */
+  function batiGraves(couche) {
+    const { CARTE, creer, poser } = M();
+    const graves = CARTE.graves || {};
+    const cles = Object.keys(graves);
+    if (!cles.length) return;
+
+    const els = {};
+    for (const cle of cles) {
+      const r = graves[cle];
+      const el = creer("div", "plaque grave" + (r.aligne === "gauche" ? " gauche" : ""),
+                       couche);
+      el.id = "grave-" + cle;
+      poser(el, r);
+      const sp = creer("span", null, el);
+      if (r.texte) { sp.textContent = r.texte; ajuster(el, sp); }
+      els[cle] = el;
+      if (r.src) plaques[cle] = { el, span: sp, src: r.src };
+    }
+
+    for (const cle of cles) M().metal(els[cle], graves[cle]);
   }
 
   /* Les valeurs vivantes. Aucune n'est figee : c'est precisement ce que la
@@ -363,6 +315,29 @@
         ? Math.min(...s.feeds.map((f) => f.age_ms == null ? 9e9 : f.age_ms)) + " ms"
         : "—",
       pied: "Aucun ordre",
+      mandat: s && s.mandate ? "vivant" : "aucun",
+      // Le placard de gauche portait un paragraphe de faux latin. Il porte
+      // maintenant ce qui bloque reellement le decollage.
+      prevol: s
+        ? (s.blocking && s.blocking.length
+            ? "Décollage bloqué — " + s.blocking.length + " invariant"
+              + (s.blocking.length > 1 ? "s" : "") + " : " + s.blocking.join(", ")
+            : "Les douze invariants sont satisfaits. Le portier du score n'a "
+              + "laissé passer aucun setup : aucun mandat n'a été émis.")
+        : "—",
+      // Quatre plaques affichaient le meme mot. Chacune porte maintenant un
+      // fait que sa voisine ne dit pas.
+      invariants: s ? (s.checks || []).filter((c) => c.passed).length
+                      + "/" + ((s.checks || []).length || 0) + " inv" : "—",
+      journal: (() => {
+        const n = document.querySelectorAll("#journal .jr").length;
+        return n ? n + " décisions" : "journal vide";
+      })(),
+      lien: s ? (s.ws_connected ? "lien" : "coupé") : "—",
+      strategies: (() => {
+        const n = document.querySelectorAll("#cbStrat option").length;
+        return n ? n + " strat" : "strat";
+      })(),
       "t-prevol": nom("prevol") + compte("prevol"),
       "t-telemetrie": nom("telemetrie") + compte("telemetrie"),
       "t-navigation": nom("navigation") + compte("navigation"),
@@ -378,7 +353,10 @@
     for (const [cle, p] of Object.entries(plaques)) {
       const texte = v[p.src];
       if (texte === undefined) continue;
-      if (p.el.textContent !== texte) p.el.textContent = texte;
+      if (p.span.textContent !== texte) {
+        p.span.textContent = texte;
+        ajuster(p.el, p.span);
+      }
       // L'onglet ouvert s'allume, comme sur un vrai panneau : c'est la seule
       // facon de savoir ou l'on est quand le tiroir est ferme.
       if (p.src.startsWith("t-")) {
@@ -399,13 +377,16 @@
     document.addEventListener("desk:snapshot", (e) => {
       snap = e.detail;
       ecranPrincipal(snap); ecranAutopilot(snap); ecranLog(snap);
-      ecranRegime(snap); ecranTriggers(snap); ecranAmplitude(snap);
-      ecranFlux(snap); ecranFeed(); rendreChrome(snap);
+      ecranFeed(); rendreChrome(snap);
+      if (window.CockpitInstruments)
+        window.CockpitInstruments.rafraichir(snap, rech);
       if (window.CockpitBoutons) window.CockpitBoutons.rafraichir(snap);
     });
     document.addEventListener("desk:recherche", (e) => {
       rech = e.detail;
-      ecranScores(); ecranMinis(); ecranPrincipal(snap); ecranLog(snap);
+      ecranMinis(); ecranPrincipal(snap); ecranLog(snap);
+      if (window.CockpitInstruments)
+        window.CockpitInstruments.rafraichir(snap, rech);
     });
 
     // Rattrapage : `desk.js` a pu emettre avant que ces ecouteurs existent —
@@ -416,10 +397,10 @@
     if (D().snapshot) {
       snap = D().snapshot;
       ecranPrincipal(snap); ecranAutopilot(snap); ecranLog(snap);
-      ecranRegime(snap); ecranTriggers(snap); ecranAmplitude(snap);
-      ecranFlux(snap);
     }
-    if (D().recherche) { rech = D().recherche; ecranScores(); ecranMinis(); }
+    if (D().recherche) { rech = D().recherche; ecranMinis(); }
+    if (window.CockpitInstruments)
+      window.CockpitInstruments.rafraichir(snap, rech);
     ecranFeed(); rendreChrome(snap);
 
     // Le secteur ouvert change par clic, pas par trame : on suit le tiroir.

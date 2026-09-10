@@ -22,6 +22,7 @@ from pydantic import BaseModel
 
 from ..contracts.common import HaltReason
 from . import recherche
+from .campagnes import Lanceur
 from .state import DeskState
 
 UI_DIR = Path(__file__).resolve().parent.parent / "ui"
@@ -69,6 +70,20 @@ def _echantillonner(courbe, bars) -> list[dict[str, Any]]:
     return points
 
 
+class CampagneRequest(BaseModel):
+    """Ce que le navigateur a le droit de demander.
+
+    `cle` doit exister dans le catalogue et `parametres` sont ecretes a leur
+    plage : le navigateur ne compose jamais une ligne de commande. Sur un
+    serveur qui n'ecoute que `127.0.0.1`, la tentation serait de faire
+    confiance — mais ce port est atteignable par tout ce qui tourne sur la
+    machine, y compris une page ouverte dans un autre onglet.
+    """
+
+    cle: str
+    parametres: dict[str, int] = {}
+
+
 class HaltRequest(BaseModel):
     reason: str = HaltReason.MANUAL.value
     detail: str = ""
@@ -76,6 +91,7 @@ class HaltRequest(BaseModel):
 
 def create_app(state: DeskState) -> FastAPI:
     app = FastAPI(title="Trading Desk — supervision", docs_url="/api/docs")
+    lanceur = Lanceur(state)
 
     # Les fichiers de l'interface : feuilles de style, scripts, photo du
     # cockpit, boucle video. Montes en lecture seule sur un chemin dedie —
@@ -254,6 +270,19 @@ def create_app(state: DeskState) -> FastAPI:
             "courbe": _echantillonner(obs.equity_curve, bars),
             "hodl": _echantillonner(ref.equity_curve, bars),
         }
+
+    @app.get("/api/campagnes")
+    def campagnes_etat() -> dict[str, Any]:
+        """Le catalogue, l'état du lanceur, et les dernières lignes de sortie."""
+        return lanceur.snapshot()
+
+    @app.post("/api/campagnes/lancer")
+    def campagnes_lancer(req: CampagneRequest) -> dict[str, Any]:
+        return lanceur.lancer(req.cle, req.parametres)
+
+    @app.post("/api/campagnes/arreter")
+    def campagnes_arreter() -> dict[str, Any]:
+        return lanceur.arreter()
 
     @app.get("/api/health")
     async def health() -> dict[str, Any]:

@@ -25,6 +25,7 @@ from trading_desk.api import recherche
 from trading_desk.api.server import create_app
 from trading_desk.api.state import DeskState
 from trading_desk.config import Settings
+from trading_desk.contracts.common import DeskMode
 from trading_desk.storage import SqliteStore
 
 
@@ -469,14 +470,31 @@ def test_la_carte_des_coordonnees_est_unique_et_en_pourcentages():
         (recherche.RACINE / "src/trading_desk/ui/cockpit/hotspots.json")
         .read_text(encoding="utf-8"))
     assert carte["design"] == {"w": 1280, "h": 800}
-    assert len(carte["screens"]) == 10
+    # Cinq dalles, pas dix : les cinq autres recouvraient des INSTRUMENTS
+    # peints — cadrans, bargraphes, logements — qu'on rallume désormais au
+    # lieu de les cacher sous un rectangle noir.
+    assert len(carte["screens"]) == 5
 
-    for groupe in ("screens", "hotspots", "leds", "hotas", "pilot"):
-        for nom, r in carte[groupe].items():
+    plats = ("screens", "hotspots", "leds", "hotas", "pilot", "chrome",
+             "graves", "blocs", "instruments.temoins", "instruments.afficheurs",
+             "instruments.bargraphes")
+    for chemin in plats:
+        groupe = carte
+        for part in chemin.split("."):
+            groupe = groupe[part]
+        for nom, r in groupe.items():
             for axe in ("l", "t", "w", "h"):
-                assert 0 <= r[axe] <= 100, f"{groupe}.{nom}.{axe} hors du plateau"
-            assert r["l"] + r["w"] <= 100.5, f"{groupe}.{nom} déborde à droite"
-            assert r["t"] + r["h"] <= 100.5, f"{groupe}.{nom} déborde en bas"
+                assert 0 <= r[axe] <= 100, f"{chemin}.{nom}.{axe} hors du plateau"
+            assert r["l"] + r["w"] <= 100.5, f"{chemin}.{nom} déborde à droite"
+            assert r["t"] + r["h"] <= 100.5, f"{chemin}.{nom} déborde en bas"
+
+    # Les silhouettes des mains et les centres de cadran suivent la même
+    # règle : tout est en % du plateau, rien en pixels.
+    for nom, pts in carte["mains"].items():
+        for x, y in pts:
+            assert 0 <= x <= 100 and 0 <= y <= 100, f"mains.{nom} hors du plateau"
+    for nom, a in carte["instruments"]["aiguilles"].items():
+        assert 0 <= a["cx"] <= 100 and 0 <= a["cy"] <= 100, f"aiguille {nom}"
 
 
 def test_aucun_lorem_de_la_photo_ne_survit():
@@ -505,3 +523,104 @@ def test_aucun_lorem_de_la_photo_ne_survit():
     # finit par être recopiée par quelqu'un qui la prend pour une valeur.
     # `COCKPIT_AUDIT.md` est le seul endroit où on a le droit de les nommer,
     # parce que c'est le document qui explique ce qu'on écarte et pourquoi.
+
+
+# --------------------------------------------------------------------------
+#  Le lanceur de campagnes
+# --------------------------------------------------------------------------
+#
+#  Ce module est le seul du dépôt qui crée un processus à partir d'une
+#  requête HTTP. Tout ce qui suit vérifie la même chose sous quatre angles :
+#  le navigateur choisit une CLÉ dans un catalogue fermé, jamais une commande.
+
+def _lanceur():
+    from trading_desk.api.campagnes import Lanceur
+    return Lanceur(DeskState(Settings(), SqliteStore(":memory:")))
+
+
+def _lanceur_en_mode(mode):
+    """Un lanceur dont on ne fixe QUE le mode.
+
+    Construire un `Settings` en LIVE exige une adresse de portefeuille agent
+    et interdit `testnet` — le contrat a raison de l'exiger, mais `refus()`
+    ne lit que `mode.produces_orders`. Fabriquer une fausse clé pour un test
+    qui n'en a pas besoin serait mettre dans le dépôt exactement le genre de
+    valeur qu'on finit par recopier ailleurs.
+    """
+    from types import SimpleNamespace
+    from trading_desk.api.campagnes import Lanceur
+    return Lanceur(SimpleNamespace(settings=SimpleNamespace(mode=mode)))
+
+
+def test_le_catalogue_des_campagnes_est_ferme(client):
+    """Une clé inconnue ne lance rien — et surtout ne compose pas de commande.
+
+    Le paramètre vient du navigateur. S'il servait à construire une ligne de
+    commande, atteindre le port suffirait à obtenir un shell : `127.0.0.1` et
+    le tunnel SSH protègent l'accès, pas ce qu'on peut faire une fois dedans.
+    """
+    r = client.post("/api/campagnes/lancer",
+                    json={"cle": "; rm -rf /", "parametres": {}})
+    assert r.status_code == 200
+    assert r.json() == {"lance": False,
+                        "raison": "campagne inconnue : ; rm -rf /"}
+
+
+def test_les_parametres_sont_bornes_pas_interpretes():
+    """Le nombre de tirages est ramené dans sa plage, quoi qu'on envoie.
+
+    2 000 tirages plancher p à 0,0005 ; 100 le plancheraient à 0,01, au-dessus
+    de ce que Benjamini-Hochberg exige au rang 1. La borne basse n'est pas de
+    la prudence : en dessous, la campagne ne peut plus rien réfuter.
+    """
+    from trading_desk.api.campagnes import CATALOGUE
+    grille = CATALOGUE["grille"]
+    assert grille.ligne({"draws": 99_999})[-1] == "5000"
+    assert grille.ligne({"draws": -1})[-1] == "100"
+    assert grille.ligne({"draws": "; whoami"})[-1] == "2000"   # défaut
+    assert grille.ligne({})[-1] == "2000"
+
+
+def test_aucune_campagne_pendant_que_le_desk_fabrique_des_ordres():
+    """En PAPER le pupitre décide sur le carnet de l'instant.
+
+    Une campagne sature les deux cœurs du VPS ; le cycle décale ; le fill
+    simulé se calcule alors sur un carnet périmé. Le résultat est faux et
+    rien ne le signale — c'est le pire des deux mondes, donc on refuse.
+    """
+    for mode in (DeskMode.PAPER, DeskMode.TESTNET, DeskMode.LIVE):
+        assert mode.produces_orders, f"{mode} devrait fabriquer des ordres"
+        motif = _lanceur_en_mode(mode).refus()
+        assert motif and mode.value in motif, f"{mode} devrait refuser"
+    assert not DeskMode.SHADOW.produces_orders
+    assert _lanceur_en_mode(DeskMode.SHADOW).refus() is None
+    assert _lanceur().refus() is None            # le desk réel, en SHADOW
+
+
+def test_arreter_sans_campagne_ne_tue_rien():
+    """`arreter` sur un lanceur au repos ne doit surtout pas tuer un PID
+    hérité d'une campagne précédente."""
+    assert _lanceur().arreter() == {"arrete": False,
+                                    "raison": "aucune campagne en cours"}
+
+
+def test_le_snapshot_annonce_le_catalogue_et_le_refus(client):
+    """L'interface doit pouvoir griser le bouton AVANT qu'on clique, et dire
+    pourquoi. Un refus découvert après coup ressemble à une panne."""
+    d = client.get("/api/campagnes").json()
+    assert {c["cle"] for c in d["catalogue"]} == {
+        "grille", "declencheurs", "deblocages", "journal"}
+    for c in d["catalogue"]:
+        assert c["quoi"] and c["duree"], f"{c['cle']} n'annonce pas sa question"
+    assert d["en_cours"] is False and d["refus"] is None
+
+
+def test_la_sortie_est_bornee():
+    """Un script bavard ne doit pas faire tomber le serveur : c'est par lui
+    que passe le coupe-circuit."""
+    from trading_desk.api.campagnes import LIGNES_MAX
+    lan = _lanceur()
+    for i in range(LIGNES_MAX * 3):
+        lan.lignes.append(f"ligne {i}")
+    assert len(lan.lignes) == LIGNES_MAX
+    assert lan.lignes[-1] == f"ligne {LIGNES_MAX * 3 - 1}"
