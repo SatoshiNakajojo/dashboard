@@ -180,3 +180,42 @@ rectangles à l'image.
 vérifiée par test. Deux gâchettes sous les pouces sont le pire endroit
 possible pour un ordre cliqué par erreur. Elles restent visibles, avec
 l'animation de pression, désactivées, et l'infobulle qui explique.
+
+---
+
+## Calibrage final — 10 septembre
+
+La photo est arrivée : 1305 × 816, ratio 1,5993 contre 1,6000 attendu, soit
+0,04 % d'écart. Invisible.
+
+**Elle n'est pas celle qui s'affichait dans la conversation.** Hublot ouvert
+sur la Terre plutôt que sur un champ d'étoiles, panneaux décalés de plusieurs
+pourcents. Les coordonnées lues sur l'image collée étaient donc fausses elles
+aussi — moins que celles du brief, mais fausses. Tout a été remesuré sur un
+rendu 1280 × 800 avec le JPEG dessous, ce qui est la seule façon de caler au
+pixel.
+
+### Phase 4 — le calque d'avant-plan
+
+Ni Pillow ni numpy sur cette machine, et le dépôt refuse toute dépendance
+nouvelle. Le navigateur sait déjà tout faire : charger le JPEG, le peindre
+dans un canvas, y appliquer un masque en `source-in`, exporter un PNG avec
+alpha. Trois polygones suivent les avant-bras gantés, les deux manches et le
+quadrant des gaz.
+
+Deux passes ont été nécessaires. La première emportait deux pour cent de
+console de part et d'autre du fût — on lisait un éclat de dalle peinte
+par-dessus le journal, et le radar halluciné par-dessus le mandat. La
+seconde a abaissé le sommet des polygones de trois pour cent : ils montaient
+au-dessus de la tête des manches, là où il n'y a plus de main.
+
+### Ce que les mains cachent, et ce qu'on en fait
+
+Les avant-bras passent devant quatre panneaux : la gauche du journal et du
+flux, la droite de l'exposition et du mandat. C'est la réalité de l'image, et
+c'est ce qui donne la profondeur.
+
+Le contenu est décalé vers la zone visible, mais **les écrans gardent la
+taille de la dalle peinte** — c'est elle qui vaut dès que les mains
+s'écartent. En mode HUD (touche `` ` ``), les mains descendent et la marge
+disparaît : c'est exactement à ça que ce mode sert.

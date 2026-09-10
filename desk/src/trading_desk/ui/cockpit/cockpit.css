@@ -237,3 +237,24 @@
 .plaque.gauche { place-items: center start; padding-left: 6px }
 .plaque i { font-style: normal; font-variant-numeric: tabular-nums }
 .plaque.actif { color: var(--amber) }
+
+/* --- ce que les mains cachent ------------------------------------------- */
+/*
+ * Sur cette photo, les avant-bras passent DEVANT quatre panneaux : ils
+ * mangent la gauche du journal et du flux, la droite de l'exposition et du
+ * mandat. C'est la realite de l'image, et c'est ce qui donne la profondeur —
+ * on ne va pas effacer les mains pour gagner de la place.
+ *
+ * On decale donc le contenu vers la zone qui reste visible. Les ecrans
+ * gardent leur taille reelle, celle de la dalle peinte : c'est elle qui vaut
+ * des que les mains s'ecartent.
+ *
+ * En mode HUD (touche `), les mains descendent et la marge disparait : c'est
+ * precisement a ca que ce mode sert, et pourquoi le brief le demandait.
+ */
+#screen-feed .corps      { padding-left: 26% }
+#screen-flux .corps      { padding-left: 40% }
+#screen-amplitude .corps { padding-right: 15% }
+#screen-autopilot .corps { padding-right: 11% }
+.hud #screen-feed .corps, .hud #screen-flux .corps { padding-left: 6px }
+.hud #screen-amplitude .corps, .hud #screen-autopilot .corps { padding-right: 6px }

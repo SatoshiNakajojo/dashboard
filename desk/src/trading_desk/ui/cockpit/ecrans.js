@@ -66,11 +66,12 @@
         prix.map(([k, v]) => `<span><span class="mut">${esc(k)}</span> ` +
           `<b class="cy">${usd(v)}</b></span>`).join("") +
       `</div>` +
-      (a ? `<div style="display:flex;gap:12px;font-size:9px;margin-bottom:4px">` +
-        `<span class="mut">équité <b class="cy">${usd(a.equity_usd)}</b></span>` +
-        `<span class="mut">expo <b>${usd(a.gross_notional_usd)}</b></span>` +
-        `<span class="mut">levier <b>${esc(a.effective_leverage)}×</b></span>` +
-        `<span class="mut">positions <b>${a.positions.length}</b></span></div>` : "") +
+      (a ? `<div style="display:flex;gap:9px;font-size:8.5px;margin-bottom:4px;` +
+        `white-space:nowrap;overflow:hidden">` +
+        `<span class="mut">éq <b class="cy">${usd(a.equity_usd)}</b></span>` +
+        `<span class="mut">exp <b>${usd(a.gross_notional_usd)}</b></span>` +
+        `<span class="mut">lev <b>${esc(a.effective_leverage)}×</b></span>` +
+        `<span class="mut">pos <b>${a.positions.length}</b></span></div>` : "") +
       (serie.length > 1
         ? `<div style="height:52px;overflow:hidden">${
             D().courbeSVG([{ pts: serie, cls: "serie" }],
@@ -94,7 +95,7 @@
     const src = document.getElementById("journal");
     const lignes = src ? Array.from(src.querySelectorAll(".jr")).slice(0, 14) : [];
     c.innerHTML =
-      `<h4><span>JOURNAL DE DÉCISIONS</span><b>${lignes.length}</b></h4>` +
+      `<h4><span>JOURNAL</span><b>${lignes.length}</b></h4>` +
       (lignes.length
         ? lignes.map((l) => {
             const kind = l.querySelector(".kind");
@@ -116,7 +117,7 @@
 
     c.innerHTML =
       `<h4><span>MANDAT</span><b class="${vivant ? "pos" : "mut"}">` +
-      `${vivant ? "EN VIGUEUR" : "AUCUN"}</b></h4>` +
+      `${vivant ? "VIVANT" : "AUCUN"}</b></h4>` +
       `<div class="gros ${m.bias === "SHORT" ? "neg" : m.bias === "LONG" ? "pos" : "mut"}">` +
       `${esc(m.bias)}</div>` +
       `<div class="mut" style="font-size:9px;margin-bottom:4px">${esc(m.regime)}</div>` +
@@ -358,7 +359,9 @@
       actif: s ? "actif " + D().dur(s.uptime_s * 1000) : "—",
       sources: "sources de recherche",
       rail: "docs/ · baselines/ · scripts/",
-      debit: s ? (s.storage ? s.storage.trades + " trades" : "—") : "—",
+      debit: s && s.feeds && s.feeds.length
+        ? Math.min(...s.feeds.map((f) => f.age_ms == null ? 9e9 : f.age_ms)) + " ms"
+        : "—",
       pied: "Aucun ordre",
       "t-prevol": nom("prevol") + compte("prevol"),
       "t-telemetrie": nom("telemetrie") + compte("telemetrie"),

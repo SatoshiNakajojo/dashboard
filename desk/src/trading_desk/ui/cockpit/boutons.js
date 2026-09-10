@@ -78,9 +78,6 @@
     hotspot(couche, "btn-rail", H["btn-rail"], {
       titre: "Sources de recherche", action: () => D().montrer("soufflerie"),
     });
-    hotspot(couche, "btn-debit", H["btn-debit"], {
-      titre: "Débit des flux", action: () => D().montrer("telemetrie"),
-    });
     hotspot(couche, "btn-desk-left", H["btn-desk-left"], {
       titre: "Pré-vol", action: () => D().montrer("prevol"),
     });
