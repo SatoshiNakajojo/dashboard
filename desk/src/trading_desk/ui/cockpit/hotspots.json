@@ -1120,7 +1120,9 @@
    "type": "inverseur",
    "n": 2,
    "secteur": "prevol",
-   "image": "inter-g"
+   "image": "inter-g",
+   "plan": "secteurs",
+   "etendue": 1.45
   },
   "inv-g-2": {
    "l": 8.76,
@@ -1131,7 +1133,9 @@
    "type": "inverseur",
    "n": 2,
    "secteur": "telemetrie",
-   "image": "inter-g"
+   "image": "inter-g",
+   "plan": "secteurs",
+   "etendue": 1.45
   },
   "inv-d-1": {
    "l": 80.33,
@@ -1326,27 +1330,33 @@
    "image": "auto-pilot",
    "etat": "mandat",
    "action": "secteur:navigation",
-   "label": "Auto-pilote — mandat en vigueur"
+   "label": "Auto-pilote — mandat en vigueur",
+   "plan": "barre-d",
+   "etendue": 1.35
   },
   "vy-rouge": {
-   "l": 19.1,
-   "t": 65.3,
-   "w": 2.2,
-   "h": 3.91,
+   "l": 19.33,
+   "t": 65.7,
+   "w": 1.75,
+   "h": 3.11,
    "image": "rouge",
    "etat": "halt",
    "action": "kill",
-   "label": "Tout arrêter"
+   "label": "Tout arrêter",
+   "plan": "expo",
+   "etendue": 1.6
   },
   "vy-vert": {
-   "l": 22.0,
-   "t": 65.3,
-   "w": 2.1,
-   "h": 3.73,
+   "l": 22.2,
+   "t": 65.65,
+   "w": 1.7,
+   "h": 3.02,
    "image": "vert",
    "etat": "sain",
    "action": "secteur:systemes",
-   "label": "Desk sain"
+   "label": "Desk sain",
+   "plan": "expo",
+   "etendue": 1.6
   },
   "vy-ambre": {
    "l": 85.3,
@@ -1356,7 +1366,9 @@
    "image": "ambre",
    "etat": "budget-bas",
    "action": "secteur:consommation",
-   "label": "Budget de requêtes"
+   "label": "Budget de requêtes",
+   "plan": "campagnes",
+   "etendue": 1.35
   },
   "vy-actif": {
    "l": 79.3,
@@ -1366,7 +1378,9 @@
    "image": "actif",
    "etat": "actif",
    "action": "loupe:pare-brise",
-   "label": "Desk en marche"
+   "label": "Desk en marche",
+   "plan": "barre-d",
+   "etendue": 1.3
   },
   "vy-hodl": {
    "l": 76.28,
@@ -1376,17 +1390,21 @@
    "image": "hodl",
    "etat": "recherche",
    "action": "secteur:soufflerie",
-   "label": "Stratégies contre HODL"
+   "label": "Stratégies contre HODL",
+   "plan": "regime",
+   "etendue": 0.86
   },
   "vy-nav": {
-   "l": 83.81,
-   "t": 23.61,
-   "w": 2.23,
-   "h": 4.37,
+   "l": 94.07,
+   "t": 80.3,
+   "w": 1.45,
+   "h": 2.6,
    "image": "nav",
    "etat": "journal",
    "action": "secteur:navigation",
-   "label": "Journal hors échantillon"
+   "label": "Journal hors échantillon",
+   "plan": "campagnes",
+   "etendue": 1.5
   }
  },
  "commandes": {

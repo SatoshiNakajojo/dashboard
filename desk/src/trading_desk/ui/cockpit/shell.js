@@ -196,7 +196,7 @@
     // Les modules d'ecrans et de boutons vivent dans leurs fichiers. Le shell
     // ne fait que leur donner leur couche et la carte.
     window.Cockpit = { CARTE, CHEMIN, fit, ecrans, hotspots, fx, hotas,
-                       poser, creer, metal, plaquer, incliner, $$ };
+                       poser, creer, metal, cacher, plaquer, incliner, $$ };
     if (window.CockpitEcrans) window.CockpitEcrans.monter();
     if (window.CockpitInstruments) window.CockpitInstruments.monter();
     if (window.CockpitBoutons) window.CockpitBoutons.monter();
@@ -373,6 +373,140 @@
       el.style.setProperty("--metal", `rgb(${g[0]},${g[1]},${g[2]})`);
     });
   }
+  /* Effacer ce que la photo peint sous une piece rapportee.
+   *
+   * Une commande photographiee posee telle quelle laisse voir l'original en
+   * dessous : la molette peinte deborde autour de l'interrupteur, et l'oeil
+   * lit aussitot « vignette collee » plutot que « bouton du cockpit ». Il
+   * faut donc effacer d'abord, poser ensuite.
+   *
+   * Un aplat de couleur ne suffit pas — un panneau n'est jamais uni, il a un
+   * degrade, un grain et une lumiere. On RECONSTITUE donc le panneau a
+   * partir de son pourtour : pour chaque pixel du cache, on interpole les
+   * quatre bords en ponderant par l'inverse de la distance. Sur une plaque
+   * lisse c'est indiscernable, et surtout ca suit tout seul le degrade et
+   * l'inclinaison de la plaque, ce qu'aucune couleur choisie a la main ne
+   * fait.
+   *
+   * Le grain est reinjecte a la fin, deterministe : sans lui la zone
+   * reconstituee est trop propre a cote du bruit du JPEG, et c'est
+   * exactement ce qui trahit une retouche.
+   */
+  function cacher(el, piece, r) {
+    // La geometrie d'abord : le cache doit couvrir EXACTEMENT l'empreinte
+    // qu'on reconstitue, sinon l'image rendue est etiree et ne raccorde plus
+    // avec le panneau autour. On l'exprime en pourcentage de la piece, qui
+    // est le referentiel du cache dans le DOM.
+    el.style.setProperty("--cache-w", (r.w / piece.w * 100).toFixed(2) + "%");
+    el.style.setProperty("--cache-h", (r.h / piece.h * 100).toFixed(2) + "%");
+    el.style.setProperty("--cache-x",
+      ((r.l + r.w / 2 - piece.l) / piece.w * 100).toFixed(2) + "%");
+    el.style.setProperty("--cache-y",
+      ((r.t + r.h / 2 - piece.t) / piece.h * 100).toFixed(2) + "%");
+    toilePrete.then((x) => {
+      if (!x) return;
+      const DW = CARTE.design.w / 100, DH = CARTE.design.h / 100;
+      const px = Math.round(r.l * DW), py = Math.round(r.t * DH);
+      const w = Math.max(4, Math.round(r.w * DW));
+      const h = Math.max(4, Math.round(r.h * DH));
+      const M = 3;                       // epaisseur de la couronne lue
+      if (px - M < 0 || py - M < 0
+          || px + w + M > CARTE.design.w || py + h + M > CARTE.design.h) return;
+
+      /* On lit la couronne autour de l'empreinte, puis on AJUSTE UN PLAN
+       * dessus, par canal, aux moindres carres.
+       *
+       * La premiere version interpolait bord a bord, chaque pixel entre son
+       * bord gauche et son bord droit. Resultat : tout ce qui touchait la
+       * couronne — une lettre peinte, l'arete de la plaque — etait etire en
+       * trainee verticale a travers tout le cache. Un plan, lui, ne peut pas
+       * porter de detail : il ne retient que le degrade et l'orientation de
+       * la lumiere sur le panneau, ce qu'on veut, et il ignore le reste.
+       *
+       * L'ajustement est ecrete : on ajuste, on jette le quart des points les
+       * plus eloignes — une vis, un caractere, un reflet — et on recommence.
+       * Sans ca une seule vis sur la couronne fait basculer le plan.
+       */
+      const pts = [];
+      const lire = (a, b, lw, lh) => {
+        const d = x.getImageData(a, b, lw, lh).data;
+        for (let j = 0; j < lh; j++)
+          for (let i = 0; i < lw; i++) {
+            const q = (j * lw + i) * 4;
+            pts.push([a + i - px, b + j - py, d[q], d[q + 1], d[q + 2]]);
+          }
+      };
+      lire(px - M, py - M, w + 2 * M, M);            // haut
+      lire(px - M, py + h, w + 2 * M, M);            // bas
+      lire(px - M, py, M, h);                        // gauche
+      lire(px + w, py, M, h);                        // droite
+      if (pts.length < 12) return;
+
+      // z = a.x + b.y + c, resolu par les equations normales 3x3.
+      const ajuster = (canal, garde) => {
+        let sxx = 0, sxy = 0, sxz = 0, syy = 0, syz = 0, sz = 0, sx = 0, sy = 0, n = 0;
+        for (let k = 0; k < pts.length; k++) {
+          if (garde && !garde[k]) continue;
+          const [u, v] = pts[k], z = pts[k][2 + canal];
+          sxx += u * u; sxy += u * v; sxz += u * z;
+          syy += v * v; syz += v * z; sz += z; sx += u; sy += v; n++;
+        }
+        if (n < 8) return null;
+        const A = [[sxx, sxy, sx], [sxy, syy, sy], [sx, sy, n]];
+        const B = [sxz, syz, sz];
+        for (let i = 0; i < 3; i++) {                // Gauss avec pivot
+          let piv = i;
+          for (let r = i + 1; r < 3; r++)
+            if (Math.abs(A[r][i]) > Math.abs(A[piv][i])) piv = r;
+          if (Math.abs(A[piv][i]) < 1e-9) return null;
+          [A[i], A[piv]] = [A[piv], A[i]]; [B[i], B[piv]] = [B[piv], B[i]];
+          for (let r = 0; r < 3; r++) {
+            if (r === i) continue;
+            const f = A[r][i] / A[i][i];
+            for (let c = i; c < 3; c++) A[r][c] -= f * A[i][c];
+            B[r] -= f * B[i];
+          }
+        }
+        return [B[0] / A[0][0], B[1] / A[1][1], B[2] / A[2][2]];
+      };
+
+      const plans = [];
+      for (let canal = 0; canal < 3; canal++) {
+        let pl = ajuster(canal, null);
+        if (!pl) return;
+        // une passe d'ecretage : on garde les trois quarts les mieux ajustes
+        const res = pts.map((q) =>
+          Math.abs(pl[0] * q[0] + pl[1] * q[1] + pl[2] - q[2 + canal]));
+        const seuil = [...res].sort((a, b) => a - b)[Math.floor(res.length * 0.75)];
+        pl = ajuster(canal, res.map((v) => v <= seuil)) || pl;
+        plans.push(pl);
+      }
+
+      const c = document.createElement("canvas");
+      c.width = w; c.height = h;
+      const g = c.getContext("2d");
+      const img = g.createImageData(w, h);
+      for (let j = 0; j < h; j++) {
+        for (let i = 0; i < w; i++) {
+          const q = (j * w + i) * 4;
+          // Le grain, deterministe : un aplat parfaitement lisse a cote du
+          // bruit du JPEG se repere immediatement, et c'est precisement ce
+          // qui fait « retouche ».
+          const bruit = (((i * 73856093) ^ (j * 19349663)) % 5 - 2) * 1.15;
+          for (let ch = 0; ch < 3; ch++) {
+            const p = plans[ch];
+            img.data[q + ch] = Math.max(0, Math.min(255,
+              p[0] * i + p[1] * j + p[2] + bruit));
+          }
+          img.data[q + 3] = 255;
+        }
+      }
+      g.putImageData(img, 0, 0);
+      el.style.setProperty("--cache", 'url("' + c.toDataURL("image/png") + '")');
+      el.dataset.cache = "1";
+    });
+  }
+
   void toile;
 
   /* Plaquer un element sur un quadrilatere de la photo.

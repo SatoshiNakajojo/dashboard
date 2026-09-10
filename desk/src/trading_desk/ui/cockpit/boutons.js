@@ -78,7 +78,19 @@
    * Si les fichiers manquent, la piece retombe sur son dessin vectoriel :
    * une image absente ne doit jamais faire un trou dans le tableau de bord.
    */
-  function habiller(b, nom) {
+  function habiller(b, nom, r) {
+    // Effacer d'abord ce que la photo peint dessous — la molette de la
+    // plaque « Secteurs » debordait tout autour de l'interrupteur — puis
+    // poser la piece par-dessus. Le cache reconstitue le panneau depuis son
+    // pourtour, donc il suit le degrade et l'inclinaison de la plaque.
+    if (r) {
+      const k = typeof r.etendue === "number" ? r.etendue : 1.6;
+      const cache = M().creer("i", "cache", b);
+      M().cacher(cache, r, (r.etendue && typeof r.etendue === "object")
+        ? r.etendue
+        : { l: r.l - r.w * (k - 1) / 2, t: r.t - r.h * (k - 1) / 2,
+            w: r.w * k, h: r.h * k });
+    }
     const base = M().CHEMIN + "assets/commandes/" + nom + "-";
     const dispo = (M().CARTE.commandes || {})[nom];
     if (dispo && dispo.indexOf("on") < 0) return;   // rien de livre : le dessin
@@ -125,7 +137,8 @@
     // `load` se declenche sur une image meme detachee — et gardait donc
     // aussi son levier vectoriel masque : on ne voyait plus rien du tout.
     // C'est pour ca qu'aucun interrupteur photographie n'apparaissait.
-    if (r.image) habiller(b, r.image);
+    if (r.image) habiller(b, r.image, r);
+    if (r.plan) { b.dataset.plan = r.plan; M().incliner(b, r.plan); }
     b.addEventListener("click", () => {
       const p = (+b.dataset.p + 1) % n;
       b.dataset.p = String(p);
