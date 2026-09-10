@@ -206,9 +206,14 @@
 
     // Calibrage : D bascule l'overlay. Reste dans le code, exprès — c'est
     // avec lui qu'on recale les rectangles quand la photo change.
+    // Une lecture de `localStorage` LEVE dans une fenetre privee ou quand le
+    // navigateur bloque les donnees de site. Non gardee, elle tuait le script
+    // entier — donc le cockpit — pour une preference d'affichage.
+    const garde = (cle) => {
+      try { return localStorage.getItem(cle); } catch (_) { return null; }
+    };
     const parametres = new URLSearchParams(location.search);
-    if (parametres.get("debug") === "1" ||
-        localStorage.getItem("cockpit-debug") === "1") {
+    if (parametres.get("debug") === "1" || garde("cockpit-debug") === "1") {
       stage.classList.add("debug");
     }
     loupe(stage, fit);
@@ -222,7 +227,7 @@
       if (e.key === "`") basculerHud();
     });
 
-    if (localStorage.getItem("cockpit-hud") === "1") stage.classList.add("hud");
+    if (garde("cockpit-hud") === "1") stage.classList.add("hud");
   }
 
   /* La loupe.
