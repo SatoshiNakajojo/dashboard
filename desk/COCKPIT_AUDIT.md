@@ -479,3 +479,215 @@ copie hors ligne l'inline, et le test qui interdit toute route d'ordre dans
 la page a sauté. Il avait raison — c'est la même leçon que les chaînes
 hallucinées : une valeur écartée qui traîne dans un fichier d'interface finit
 recopiée par quelqu'un qui la prend pour une consigne.
+
+---
+
+## Phase 8 — la perspective, et ce qui la trahissait vraiment
+
+Reproche : « les perspectives de tes écritures sur les instruments sont
+souvent fausses ; aide-toi des lignes de délimitation ».
+
+### Ce que la mesure a répondu
+
+Deux méthodes, sur les lignes de délimitation des panneaux :
+
+1. **Suivi d'arête** sur les liserés — pour chaque colonne, la ligne de
+   gradient vertical maximal. Écart type résiduel de 5 à 11 pixels : le
+   maximum saute d'un détail à l'autre. Inexploitable.
+2. **Axe des grands titres peints** — le barycentre vertical par colonne,
+   puis **médiane des pentes deux à deux** (Theil-Sen). Les moindres carrés
+   suivaient les hampes et les jambages ; un accent déplaçait le barycentre
+   d'une colonne de plusieurs pixels et tirait la droite.
+
+| panneau | pente mesurée |
+| --- | --- |
+| Analog diairs (Exposition) | −1,4° |
+| GUARDED UN QUARRED | 0,0° |
+| Flux de données | +1,5° |
+| REMÉRCIEMENTS | −2,0° |
+| Régime commuté | 0,0° |
+| Déclencheurs | +0,7° |
+| Distribution des scores | +1,5° |
+
+**Tout est entre −2 et +2,6 degrés.** Les consoles sont presque d'aplomb. Et
+les deux pentes que j'avais posées à l'œil en phase 7 étaient de −3° et
+−2,5° — l'une des deux avec le **mauvais signe**.
+
+### Ce qui trahissait vraiment
+
+Pas l'angle : le **relief**. Mes étiquettes étaient des plaquettes
+saillantes — liseré clair en haut, ombre en bas, fond en dégradé — alors que
+la photo, à ces endroits-là, n'a aucune plaque : le mot est imprimé à même
+la tôle. Poser un relief sur une surface plate se voit quel que soit
+l'angle.
+
+Elles sont maintenant **gravées** : pas de bord, pas d'ombre portée, le
+métal exact relevé autour, et le liseré clair d'un creux sous le trait.
+Seules deux d'entre elles recouvrent une vraie plaquette peinte et gardent
+le relief.
+
+Un dernier détail les trahissait encore : la teinte relevée est celle du
+métal *autour*, mais le panneau porte un dégradé. Une couleur unique laissait
+un rectangle **à peine** visible — et « à peine visible » suffit. Un fondu de
+quelques pour cent sur les quatre bords le fait disparaître.
+
+### Deux étiquettes de trop
+
+« Expo » et « Levier » gravés sous les cadrans redisaient ce que les deux
+témoins juste à côté disent déjà, et le liseré bas du panneau les coupait.
+Supprimées.
+
+### Les commandes photographiées
+
+Les interrupteurs et voyants peuvent désormais être des **images** plutôt que
+des dessins : une paire de PNG cadrés à l'identique, `<nom>-off.png` et
+`<nom>-on.png`, superposés, dont on change l'opacité. Rien ne bouge d'un
+pixel entre les deux états.
+
+Le clignotement n'a pas besoin d'un troisième fichier : on alterne les deux.
+Un cadre de plus serait un fichier de plus à garder aligné avec les autres,
+pour rien.
+
+Si les fichiers manquent, la pièce retombe sur son dessin vectoriel. Une
+image absente ne doit jamais faire un trou dans le tableau de bord — et un
+test vérifie ce repli, plus le fait qu'un nom d'image a bien ses **deux**
+états.
+
+### Typographie des dalles
+
+Tout le corps des écrans passe en unités du plateau (`cqw`) et se resserre
+d'environ un cinquième : à la loupe on veut lire **plus de choses**, pas des
+caractères plus gros. Les deux dalles latérales ont été recadrées sur la
+plage sombre peinte ; celle de gauche est le miroir exact de celle de droite
+autour de l'axe du poste, la mesure directe butant sur le graphisme peint
+qui la remplit.
+
+La dalle centrale porte maintenant, sous les douze invariants, les canaux de
+collecte avec leur latence et le mandat en cours.
+
+---
+
+## Phase 9 — les commandes photographiées, et la vraie perspective
+
+### La perspective : ce n'était toujours pas ça
+
+Phase 8 concluait « pas de cisaillement, les consoles sont d'aplomb ». Faux,
+et pour une raison que seule une mesure des **deux** familles de lignes
+pouvait révéler : je n'avais mesuré que les horizontales.
+
+Les montants gauche et droit d'un logement penchent **en sens contraire** :
+
+| dalle | montant gauche | montant droit |
+| --- | --- | --- |
+| auto-pilote | +1,97° | −3,50° |
+| desk (centre) | −1,47° | +1,36° |
+| journal | −3,45° | −1,47° |
+| alarme | −0,65° | +3,58° |
+
+Ce n'est pas un cisaillement, c'est une **convergence** — de la perspective
+pour de vrai. Aucune combinaison rotation + cisaillement ne la rend : un
+rectangle d'aplomb dans un logement qui converge se voit du premier coup
+d'œil, et c'est exactement ce que le reproche disait.
+
+Les quatre coins de chaque dalle sont donc relevés par intersection de ses
+quatre arêtes, et le shell en tire l'**homographie** qui envoie le rectangle
+de mise en page sur ce quadrilatère, donnée à CSS en `matrix3d`. Les termes
+projectifs ont la dimension d'un inverse de longueur : la matrice se
+recalcule à chaque redimensionnement du plateau.
+
+La dalle auto-pilote était par ailleurs cadrée 1,3 point trop bas.
+
+### Les commandes photographiées
+
+Trente images livrées, en JPG avec leur fond cuit dans les pixels. Détourage
+en deux régimes, parce qu'un seul ne pouvait pas marcher :
+
+- **fond clair ou damier** : remplissage depuis les bords en n'acceptant que
+  les couleurs du bord. Un critère *local* (« avance tant que la luminance
+  varie peu ») avait été essayé d'abord : il fuyait à travers les pièces —
+  sur du métal poli, deux pixels voisins diffèrent de moins de seize
+  niveaux, et le remplissage traversait la pièce de part en part. Puis trois
+  passes de nettoyage du halo laissé par l'ombre portée.
+- **fond noir** : pas de détourage du tout — la **luminance devient
+  l'alpha**. Détourer une lueur lui coupe son halo, et le halo est ce qui la
+  rend crédible.
+
+J'ai d'abord compté sur `mix-blend-mode: screen` pour effacer le noir à
+l'affichage. La couche des boutons porte un `z-index`, donc son propre
+contexte d'empilement : le mélange n'y voit plus la photo derrière, et le
+carré noir restait. L'alpha cuit ne dépend d'aucun contexte.
+
+L'état éteint est **dérivé** de l'allumé par filtre quand le fichier manque —
+deux fichiers à garder alignés, c'est deux occasions de les désaligner.
+
+Neuf pièces sont câblées, chacune sur un booléen réel du desk.
+
+### Les cadrans disent enfin quelque chose
+
+Une aiguille sans chiffre ne dit rien : on lit qu'elle a bougé, pas de
+combien — et la graduation peinte du cadran est inventée, donc inutilisable.
+La valeur s'inscrit maintenant en phosphore sous le moyeu, dans son unité,
+et l'aiguille passe à l'ambre quand elle est **en butée** : une aiguille
+collée au maximum sans le signaler laisse croire qu'elle mesure encore. Les
+six cadrans sont cliquables vers le secteur qui porte la mesure.
+
+## Phase 10 — la perspective, enfin mesurée au lieu d'être devinée
+
+Quatre fois de suite l'utilisateur a dit que les écritures posées sur
+l'image n'étaient pas dans la bonne perspective. Quatre fois j'ai corrigé
+sans jamais mesurer la seule chose qui tranche : **l'angle du texte déjà
+peint dans le décor**. Il a fini par fournir un dessin au trait du cockpit,
+au même cadrage que la photo — et c'est ce dessin qui a permis de fermer
+la question.
+
+Deux méthodes indépendantes, montées exprès pour ne pas se croire l'une
+l'autre (`scripts/perspective/`) :
+
+- **le biais du texte peint**, par profil de projection : on fait tourner
+  une vignette de la photo et on retient l'angle où l'encre se range le
+  mieux en lignes ;
+- **les arêtes du dessin au trait**, par remplissage des faces closes puis
+  Theil-Sen sur les quatre bords.
+
+Elles concordent partout à moins d'un demi-degré. Le verdict :
+
+| plan | texte peint | dessin | valeur qui était en place |
+|---|---|---|---|
+| secteurs | −8,03 | −7,50 | **0,0** |
+| campagnes | **+7,70** | +7,50 | **−2,0** |
+| barre-g / barre-d | −0,08 / +0,05 | — | 1,8 / −0,4 |
+| scores | 0,01 | 0,00 | 1,5 |
+| expo / flux | −1,48 / +1,75 | −1,51 / +1,36 | −1,4 / 1,5 |
+
+« Campagnes » était penché **à l'envers**, et quatre fois trop peu.
+« Secteurs » n'était pas penché du tout alors que sa plaque monte de huit
+degrés. Les deux bandeaux du milieu, eux, sont parfaitement d'aplomb et je
+les avais inclinés. Autrement dit : les seuls panneaux que j'avais réglés
+juste étaient ceux que je n'avais presque pas touchés.
+
+Deux enseignements, et le second compte plus que le premier :
+
+1. **Le décor porte sa propre réponse.** La photo contient onze titres
+   peints. Leur angle est la spécification ; tout le reste est de
+   l'interprétation.
+2. **Aucun test ne pouvait voir la faute.** Les tests vérifiaient que la
+   boîte était au bon endroit — elle l'était. C'est son contenu qui
+   basculait du mauvais côté. D'où le garde-fou ajouté : le cockpit est
+   symétrique, deux panneaux qui se font face doivent porter des pentes
+   **opposées**. Une faute de signe ne repasse plus.
+
+Le cisaillement, lui, reste écarté. Au zoom, les jambages des lettres
+peintes tournent **avec** leur ligne de base : le décor applique une
+rotation, pas un cisaillement. Une base de plan complète serait plus
+« exacte » en théorie et plus fausse à l'œil.
+
+## Phase 10 bis — quatre requêtes perdues à chaque chargement
+
+Le cockpit demandait les trois variantes de chaque commande photographiée et
+rattrapait les 404. Ça marchait — la feuille de style fait clignoter
+l'image allumée quand la variante d'alerte manque, donc l'état restait
+lisible — mais la page publiée réclamait quatre fichiers dont on savait
+depuis toujours qu'ils n'existaient pas. Les variantes livrées sont
+maintenant **déclarées** dans la carte, et un test les compare au
+répertoire : un fichier ajouté sans déclaration resterait invisible, un
+fichier déclaré sans être livré ramènerait le 404 qu'on vient d'enlever.

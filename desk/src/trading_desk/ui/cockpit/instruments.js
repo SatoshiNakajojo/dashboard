@@ -61,7 +61,12 @@
         '<svg viewBox="0 0 100 100" aria-hidden="true">' +
         '<line class="brin" x1="50" y1="50" x2="50" y2="14"/>' +
         '<circle class="moyeu" cx="50" cy="50" r="4.5"/></svg>';
-      aiguilles[cle] = { el: el.querySelector(".brin"), src: r.src };
+      // Une aiguille sans chiffre ne dit rien : on lit qu'elle a bouge, pas
+      // de combien. Le cadran peint porte une graduation inventee, donc
+      // inutilisable — la valeur s'inscrit en clair sous le moyeu.
+      const lecture = creer("b", "lecture", el);
+      aiguilles[cle] = { el: el.querySelector(".brin"), src: r.src,
+                         lecture, unite: r.unite || "", boite: el, nom: r.nom };
     }
 
     for (const [cle, r] of Object.entries(inst.temoins)) {
@@ -74,6 +79,8 @@
       const el = creer("div", "afficheur" + (r.gros ? " gros" : "")
                        + (cle.startsWith("flu") ? " flux" : ""), couche);
       M().poser(el, r);
+      // Le logement suit le plan de son panneau, comme les etiquettes.
+      if (r.plan) { el.dataset.plan = r.plan; M().incliner(el, r.plan); }
       afficheurs[cle] = { el, span: creer("span", null, el), src: r.src };
     }
 
@@ -124,9 +131,25 @@
       latence: 1 - borne(latence, maxAge),
       budget: borne(s.budget.ip_pct, 100),
     };
+    // La valeur brute derriere chaque aiguille, dans son unite. C'est elle
+    // qu'on inscrit : la fraction sert a placer l'aiguille, pas a informer.
+    const brut = {
+      expo: a ? D().usd(a.gross_notional_usd) : "—",
+      levier: a ? Number(a.effective_leverage).toFixed(2) + "×" : "—",
+      invariants: passes + "/" + total,
+      mandat: m && m.remaining_ms ? D().dur(m.remaining_ms) : "aucun",
+      latence: latence == null ? "—" : latence + " ms",
+      budget: s.budget.reserve_pct + " %",
+    };
     for (const [, g] of Object.entries(aiguilles)) {
       const p = part[g.src] || 0;
       g.el.style.transform = "rotate(" + (-COURSE + p * COURSE * 2).toFixed(1) + "deg)";
+      const v = brut[g.src] || "—";
+      if (g.lecture.textContent !== v) g.lecture.textContent = v;
+      g.boite.title = g.nom + " — " + v;
+      // Au-dela de la butee l'instrument le dit : une aiguille collee au
+      // maximum sans le signaler laisse croire qu'elle mesure encore.
+      g.boite.dataset.butee = p >= 0.999 ? "1" : "0";
     }
 
     const etats = {

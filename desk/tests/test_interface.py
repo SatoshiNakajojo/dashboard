@@ -732,3 +732,155 @@ def test_la_page_hors_ligne_est_un_document_complet():
     # Elle ne doit pas prétendre pouvoir agir sur le desk.
     assert "aucun desk" in texte
     assert "/api/order" not in texte
+
+
+def test_chaque_etiquette_declare_le_plan_de_son_instrument():
+    """Une étiquette posée d'aplomb sur une console qui fuit se lit comme un
+    autocollant.
+
+    Chaque pente est le biais du texte PEINT du décor, relevé par profil de
+    projection : on fait tourner la vignette et on retient l'angle où l'encre
+    se range le mieux en lignes. Les arêtes du dessin au trait, relevées
+    séparément par Theil-Sen, confirment chaque valeur à moins d'un demi
+    degré. Deux méthodes indépendantes, aucune valeur devinée — c'est la
+    seule raison pour laquelle des pentes de huit degrés sont écrites ici
+    alors que les précédentes, devinées, tenaient dans deux.
+    """
+    carte = json.loads(
+        (recherche.RACINE / "src/trading_desk/ui/cockpit/hotspots.json")
+        .read_text(encoding="utf-8"))
+    plans = carte["plans"]
+    for nom, p in plans.items():
+        # Un plan est décrit soit par ses quatre coins relevés — c'est le cas
+        # général, parce que les montants d'un panneau penchent en sens
+        # contraire et qu'aucune rotation ne rend ça — soit, pour les
+        # panneaux vraiment d'aplomb, par une simple pente.
+        if "quad" in p:
+            assert len(p["quad"]) == 4, f"plan {nom} : il faut quatre coins"
+            for x, y in p["quad"]:
+                assert 0 <= x <= 100 and 0 <= y <= 100, f"plan {nom} : coin hors plateau"
+            xs = [c[0] for c in p["quad"]]
+            ys = [c[1] for c in p["quad"]]
+            assert max(xs) - min(xs) > 3 and max(ys) - min(ys) > 2, \
+                f"plan {nom} : quadrilatère dégénéré"
+        else:
+            assert abs(p["pente"]) <= 12, f"plan {nom} : pente invraisemblable"
+
+    # Le cockpit est symétrique : deux panneaux qui se font face penchent du
+    # même angle en sens CONTRAIRE. C'est le seul garde-fou qui attrape une
+    # faute de signe, et c'est exactement la faute qui s'était produite —
+    # « campagnes » était à -2 degrés quand la photo en demandait +7,7, donc
+    # penché à l'envers. Aucun test de rectangle ne pouvait le voir : la
+    # boîte est au bon endroit, c'est son contenu qui bascule du mauvais côté.
+    for gauche, droite in (("secteurs", "campagnes"), ("expo", "flux"),
+                           ("barre-g", "barre-d")):
+        pg, pd = plans[gauche]["pente"], plans[droite]["pente"]
+        assert abs(pg + pd) <= 1.0, (
+            f"{gauche} ({pg}) et {droite} ({pd}) se font face : leurs pentes "
+            "doivent être opposées, or leur somme ne s'annule pas")
+
+    porteurs = list(carte["graves"].items()) + list(carte["chrome"].items()) \
+        + list(carte["instruments"]["afficheurs"].items())
+    for nom, r in porteurs:
+        if "plan" in r:
+            assert r["plan"] in plans, f"{nom} : plan « {r['plan']} » inconnu"
+        # une pente écrite en dur à côté du système de plans dériverait
+        assert "pente" not in r, f"{nom} : pente en dur, elle doit venir du plan"
+
+
+def test_les_variantes_declarees_sont_celles_qui_existent():
+    """La carte annonce, pour chaque commande, les fichiers réellement livrés.
+
+    Sans cette déclaration, le cockpit demandait les trois variantes de
+    chaque pièce et rattrapait les 404 : quatre requêtes perdues à chaque
+    chargement, et quatre erreurs serveur sur la page publiée pour des
+    fichiers dont on savait depuis toujours qu'ils n'existaient pas. La
+    liste doit donc coller au répertoire — un fichier ajouté sans être
+    déclaré resterait invisible, un fichier déclaré sans être livré
+    ramènerait le 404 qu'on vient d'enlever.
+    """
+    racine = recherche.RACINE / "src/trading_desk/ui/cockpit"
+    carte = json.loads((racine / "hotspots.json").read_text(encoding="utf-8"))
+    sur_disque: dict[str, set[str]] = {}
+    for f in sorted((racine / "assets/commandes").glob("*.png")):
+        tige, _, etat = f.stem.rpartition("-")
+        if etat in ("on", "off", "alerte") and tige:
+            sur_disque.setdefault(tige, set()).add(etat)
+    declare = {k: set(v) for k, v in carte["commandes"].items()}
+    assert declare == sur_disque, (
+        "hotspots.json et assets/commandes/ ont divergé : "
+        f"déclaré sans fichier {sorted(set(declare) - set(sur_disque))}, "
+        f"livré sans déclaration {sorted(set(sur_disque) - set(declare))}")
+    for tige, etats in declare.items():
+        assert "on" in etats, f"{tige} : sans image allumée, la pièce n'a pas d'état"
+
+
+def test_une_commande_photographiee_retombe_sur_son_dessin():
+    """Une image absente ne doit jamais faire un trou dans le tableau de bord.
+
+    Les interrupteurs peuvent être des photos plutôt que des dessins. Tant
+    que la paire de PNG n'est pas déposée, la pièce garde son levier
+    vectoriel — sinon le cockpit se viderait au premier fichier oublié.
+    """
+    racine = recherche.RACINE / "src/trading_desk/ui/cockpit"
+    module = (racine / "boutons.js").read_text(encoding="utf-8")
+    assert 'addEventListener("error"' in module, "aucun repli si l'image manque"
+    assert 'classList.remove("photo")' in module
+
+    carte = json.loads((racine / "hotspots.json").read_text(encoding="utf-8"))
+    dossier = racine / "assets/commandes"
+    assert (dossier / "LISEZ-MOI.md").exists(), "le contrat des images manque"
+    for nom, r in carte["hotas"].items():
+        if "image" not in r:
+            continue
+        # Si les fichiers SONT là, ils vont par paire : un seul des deux états
+        # donnerait une commande qui change d'aspect en changeant de taille.
+        on = dossier / f"{r['image']}-on.png"
+        off = dossier / f"{r['image']}-off.png"
+        assert on.exists() == off.exists(), \
+            f"{nom} : « {r['image']} » n'a qu'un seul de ses deux états"
+
+
+def test_chaque_voyant_photographie_a_son_image_et_son_etat():
+    """Un voyant qui ne suit rien est pire qu'un voyant absent.
+
+    On apprend à ne plus le regarder, et le jour où il dit quelque chose,
+    personne ne le voit. Chacun doit donc nommer un état que le module sait
+    lire, et son image allumée doit exister — l'état éteint, lui, peut être
+    dérivé de l'allumé par filtre, ce qui garantit le même cadrage.
+    """
+    racine = recherche.RACINE / "src/trading_desk/ui/cockpit"
+    carte = json.loads((racine / "hotspots.json").read_text(encoding="utf-8"))
+    module = (racine / "voyants.js").read_text(encoding="utf-8")
+    etats = set(re.findall(r'^\s+"?([a-z-]+)"?:\s', module, re.M))
+    dossier = racine / "assets/commandes"
+
+    assert carte["voyants"], "aucun voyant photographié"
+    for nom, r in carte["voyants"].items():
+        assert r["etat"] in etats, f"{nom} : état « {r['etat']} » que le module ne lit pas"
+        assert (dossier / f"{r['image']}-on.png").exists(), \
+            f"{nom} : image allumée « {r['image']}-on.png » absente"
+        # une action, sinon le voyant est un décor cliquable qui ne fait rien
+        assert r.get("action"), f"{nom} : aucune action"
+
+
+def test_les_dalles_sont_plaquees_sur_le_quadrilatere_peint():
+    """Les montants d'un logement penchent en sens contraire : ils fuient.
+
+    C'est de la perspective, pas du cisaillement, et aucune combinaison
+    rotation/cisaillement ne la rend — un rectangle d'aplomb dans un logement
+    qui converge se voit du premier coup d'œil. Chaque dalle porte donc les
+    quatre coins relevés, et le shell en tire une homographie.
+    """
+    racine = recherche.RACINE / "src/trading_desk/ui/cockpit"
+    carte = json.loads((racine / "hotspots.json").read_text(encoding="utf-8"))
+    shell = (racine / "shell.js").read_text(encoding="utf-8")
+    assert "matrix3d" in shell and "homographie" in shell
+
+    for nom, r in carte["screens"].items():
+        q = r.get("quad")
+        assert q and len(q) == 4, f"{nom} : pas de quadrilatère relevé"
+        for x, y in q:
+            assert 0 <= x <= 100 and 0 <= y <= 100, f"{nom} : coin hors du plateau"
+        # les coins tournent dans le sens horaire : haut-gauche d'abord
+        assert q[0][0] < q[1][0] and q[0][1] < q[2][1], f"{nom} : coins désordonnés"

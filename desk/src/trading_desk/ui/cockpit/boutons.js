@@ -70,12 +70,37 @@
   /* Un inverseur a deux ou trois positions. Le levier est un dessin
    * vectoriel : net a n'importe quel zoom, alors qu'une animation matricielle
    * deviendrait floue precisement quand on zoome pour regarder de pres. */
+  /* Une commande photographiee : deux PNG cadres a l'identique, l'un pose
+   * sur l'autre, et on change l'opacite. Rien ne bouge d'un pixel entre les
+   * deux etats — c'est tout l'interet d'une paire par rapport a une image
+   * unique qu'on deplacerait.
+   *
+   * Si les fichiers manquent, la piece retombe sur son dessin vectoriel :
+   * une image absente ne doit jamais faire un trou dans le tableau de bord.
+   */
+  function habiller(b, nom) {
+    const base = M().CHEMIN + "assets/commandes/" + nom + "-";
+    const dispo = (M().CARTE.commandes || {})[nom];
+    if (dispo && dispo.indexOf("on") < 0) return;   // rien de livre : le dessin
+    const off = M().creer("img", "cmd off", b);
+    const on = M().creer("img", "cmd on", b);
+    off.alt = ""; on.alt = "";
+    let manquant = 0;
+    const rate = () => { if (++manquant === 1) b.classList.remove("photo"); };
+    off.addEventListener("error", rate);
+    on.addEventListener("error", rate);
+    off.addEventListener("load", () => b.classList.add("photo"));
+    off.src = base + (dispo && dispo.indexOf("off") < 0 ? "on" : "off") + ".png";
+    on.src = base + "on.png";
+  }
+
   function inverseur(couche, cle, r, action) {
     const { creer, poser } = M();
     const n = r.n || 2;
     const b = creer("button", "inverseur", couche);
     b.id = cle; b.type = "button";
     poser(b, r);
+    if (r.image) habiller(b, r.image);
     b.dataset.p = "0"; b.dataset.on = "0"; b.dataset.n = String(n);
     b.title = r.label || cle;
     b.setAttribute("aria-label", (r.label || cle) + " — position 1 sur " + n);
@@ -190,5 +215,5 @@
     if (!s) return;
   }
 
-  window.CockpitBoutons = { monter, rafraichir };
+  window.CockpitBoutons = { monter, rafraichir, agir };
 })();

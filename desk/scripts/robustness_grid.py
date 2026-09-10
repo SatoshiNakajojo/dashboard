@@ -50,6 +50,18 @@ from trading_desk.sentinelle.validation import benjamini_hochberg
 ASSETS = ["BTC", "ETH", "SOL", "BNB", "XRP", "DOGE", "AVAX"]
 INTERVALS = ["1d", "4h"]
 
+def ecrire(chemin: Path, cellules: list[dict]) -> None:
+    """Ecrire apres CHAQUE cellule, jamais seulement a la fin.
+
+    Une campagne a 20 000 tirages tient des heures. Avec une unique
+    ecriture finale, une machine qui se recycle en cours de route ne laisse
+    rien : ni les cellules deja payees, ni la trace de ou ca s'est arrete.
+    Le fichier partiel, lui, se relit tel quel via --from-json.
+    """
+    chemin.parent.mkdir(parents=True, exist_ok=True)
+    chemin.write_text(json.dumps(cellules, indent=1), encoding="utf-8")
+
+
 def rendre_verdict(cellules: list[dict], alpha: float = 0.05) -> str:
     """La grille, lue comme un criblage — pas comme 56 resultats separes.
 
@@ -68,6 +80,16 @@ def rendre_verdict(cellules: list[dict], alpha: float = 0.05) -> str:
     bruts = [c for c in testees if c["p"] < alpha]
     pires = [c for c in testees if c["p"] > 1 - alpha]
 
+    # Le plancher de p vaut 1/(tirages+1) : aucun test ne peut descendre
+    # sous cette valeur, quelle que soit la force du signal. Si le plancher
+    # est AU-DESSUS du seuil de Benjamini-Hochberg au rang 1, le criblage
+    # ne peut rejeter aucune hypothese et son « zero survivant » ne dit
+    # rien sur les strategies. S'il est juste EGAL au seuil, un survivant
+    # unique survit par saturation du test, pas par force mesuree. Les deux
+    # cas se lisent pareil dans un tableau qui ne les affiche pas.
+    plancher = max(1.0 / (c.get("tirages", 0) + 1) for c in testees)
+    seuil1 = alpha / len(testees)
+
     lignes = [
         "",
         "  VERDICT DE LA GRILLE",
@@ -77,14 +99,27 @@ def rendre_verdict(cellules: list[dict], alpha: float = 0.05) -> str:
         f"  attendues par pur hasard a {alpha:.0%}          {alpha * len(testees):>6.1f}",
         f"  survivantes apres Benjamini-Hochberg      {len(survivants):>4}",
         "  " + "─" * 68,
+        f"  plancher de p (le moins resolu)        {plancher:>9.6f}",
+        f"  seuil Benjamini-Hochberg au rang 1     {seuil1:>9.6f}",
     ]
+    if plancher > seuil1:
+        lignes += [
+            "  Le plancher est AU-DESSUS du seuil : a ce nombre de tirages le",
+            "  criblage ne PEUT rejeter aucune hypothese. Un zero survivant ne",
+            "  mesure ici que la resolution du test. Augmenter --draws.",
+        ]
+    lignes.append("  " + "─" * 68)
 
     if survivants:
         lignes.append("  Ce qui survit au controle du taux de fausses decouvertes :")
         for c in sorted(survivants, key=lambda x: x["p"]):
+            sature = c["p"] <= 1.0 / (c.get("tirages", 0) + 1) + 1e-12
             lignes.append(
                 f"    {c['strategie']:<17}{c['actif']:<6}{c['intervalle']:<4}"
-                f"net {c['net_usd']:>+9.2f}  {c['trades']:>4} trades  p {c['p']:.4f}")
+                f"net {c['net_usd']:>+9.2f}  {c['trades']:>4} trades  "
+                f"p {c['p']:.5f}  ({c.get('tirages', 0)} tirages)"
+                + ("  <- AU PLANCHER : p non mesure, relancer plus haut"
+                   if sature else ""))
     else:
         lignes += [
             f"  AUCUNE. Les {len(bruts)} cellule(s) a p < {alpha} sont compatibles avec",
@@ -124,12 +159,21 @@ def main() -> int:
                         "l'usage important. Ajouter une strategie et corriger "
                         "sa grille toute seule sous-estimerait le nombre "
                         "d'hypotheses testees, donc le nombre de faux "
-                        "positifs attendus.")
+                        "positifs attendus. En cas de doublon, c'est la "
+                        "PREMIERE occurrence qui est gardee : passer la "
+                        "grille la plus finement tiree EN PREMIER.")
     p.add_argument("--strategies", nargs="+", default=None,
                    help="ne calculer que ces strategies. Sert a mesurer une "
                         "strategie ajoutee sans relancer des heures de "
                         "tirages pour les autres — le resultat doit ensuite "
                         "etre relu FUSIONNE, via --from-json.")
+    p.add_argument("--assets", nargs="+", default=None,
+                   help="ne calculer que ces actifs. Meme usage que "
+                        "--strategies : raffiner UNE cellule a fort nombre "
+                        "de tirages sans repayer les 83 autres, puis relire "
+                        "le tout FUSIONNE via --from-json.")
+    p.add_argument("--intervals", nargs="+", default=None,
+                   help="ne calculer que ces intervalles. Voir --assets.")
     args = p.parse_args()
 
     if args.from_json:
@@ -152,7 +196,11 @@ def main() -> int:
     cellules = []
 
     for interval in INTERVALS:
+        if args.intervals and interval not in args.intervals:
+            continue
         for asset in ASSETS:
+            if args.assets and asset not in args.assets:
+                continue
             chemin = f"data/{asset}_{interval}_real.json"
             try:
                 bars = load_from_file(chemin, asset, interval)
@@ -191,14 +239,14 @@ def main() -> int:
                     cell["percentile"] = float(nul.percentile)
                     cell["hasard_moyen"] = float(nul.null_mean_usd)
                 cellules.append(cell)
+                ecrire(Path(args.out), cellules)
                 pp = "  n/a" if cell["p"] is None else f"{cell['p']:.3f}"
                 print(f"  {asset:<5} {interval:<3} {nom:<16} "
                       f"net {cell['net_usd']:>+9.2f}  "
                       f"trades {cell['trades']:>4}  rejets {cell['rejets']:>5}  "
                       f"p {pp}", flush=True)
 
-    Path(args.out).parent.mkdir(parents=True, exist_ok=True)
-    Path(args.out).write_text(json.dumps(cellules, indent=1), encoding="utf-8")
+    ecrire(Path(args.out), cellules)
     print(rendre_verdict(cellules))
     print(f"  {len(cellules)} cellules -> {args.out}")
     return 0

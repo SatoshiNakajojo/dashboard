@@ -15,6 +15,7 @@
 
 (function () {
   const CHEMIN = "/ui/cockpit/";
+  let fitCourant = null;
   let CARTE = null;                 // hotspots.json
   const stage = document.getElementById("cockpit");
   if (!stage) return;
@@ -169,6 +170,7 @@
     CARTE = await fetch(CHEMIN + "hotspots.json").then((r) => r.json());
 
     const fit = creer("div", "cockpit-fit", stage);
+    fitCourant = fit;
     // Le plateau prend le format de la photo declaree, pas un ratio suppose.
     fit.style.setProperty("--ratio", (CARTE.design.w / CARTE.design.h).toFixed(5));
 
@@ -194,10 +196,11 @@
     // Les modules d'ecrans et de boutons vivent dans leurs fichiers. Le shell
     // ne fait que leur donner leur couche et la carte.
     window.Cockpit = { CARTE, CHEMIN, fit, ecrans, hotspots, fx, hotas,
-                       poser, creer, metal, $$ };
+                       poser, creer, metal, plaquer, incliner, $$ };
     if (window.CockpitEcrans) window.CockpitEcrans.monter();
     if (window.CockpitInstruments) window.CockpitInstruments.monter();
     if (window.CockpitBoutons) window.CockpitBoutons.monter();
+    if (window.CockpitVoyants) window.CockpitVoyants.monter();
 
     // Calibrage : D bascule l'overlay. Reste dans le code, exprès — c'est
     // avec lui qu'on recale les rectangles quand la photo change.
@@ -211,6 +214,12 @@
     if (parametres.get("debug") === "1" || garde("cockpit-debug") === "1") {
       stage.classList.add("debug");
     }
+    // Les termes projectifs ont la dimension d'un inverse de longueur : la
+    // matrice depend de la taille en pixels du plateau.
+    const caler = () => { calerPlaques(); calerInclines(); };
+    if (window.ResizeObserver) new ResizeObserver(caler).observe(fit);
+    else addEventListener("resize", caler);
+
     loupe(stage, fit);
 
     addEventListener("keydown", (e) => {
@@ -354,6 +363,112 @@
     });
   }
   void toile;
+
+  /* Plaquer un element sur un quadrilatere de la photo.
+   *
+   * Les logements peints ne sont pas des rectangles : leurs montants gauche
+   * et droit penchent en sens CONTRAIRE, parce qu'ils fuient. C'est de la
+   * perspective, pas du cisaillement, et aucune combinaison rotation +
+   * cisaillement ne la rend — un rectangle d'aplomb dans un logement qui
+   * converge se voit du premier coup d'oeil.
+   *
+   * On calcule donc l'homographie qui envoie le rectangle de mise en page
+   * sur les quatre coins releves, et on la donne a CSS en `matrix3d`. Les
+   * termes projectifs ont la dimension d'un inverse de longueur : la matrice
+   * depend de la taille en PIXELS du plateau, donc se recalcule a chaque
+   * redimensionnement.
+   */
+  function homographie(w, h, q) {
+    const [x0, y0] = q[0], [x1, y1] = q[1], [x2, y2] = q[2], [x3, y3] = q[3];
+    const dx1 = x1 - x2, dx2 = x3 - x2, sx = x0 - x1 + x2 - x3;
+    const dy1 = y1 - y2, dy2 = y3 - y2, sy = y0 - y1 + y2 - y3;
+    const den = dx1 * dy2 - dx2 * dy1;
+    let g = 0, hh = 0;
+    if (Math.abs(den) > 1e-9) {
+      g = (sx * dy2 - dx2 * sy) / den;
+      hh = (dx1 * sy - sx * dy1) / den;
+    }
+    const a = x1 - x0 + g * x1, b = x3 - x0 + hh * x3, c = x0;
+    const dd = y1 - y0 + g * y1, e = y3 - y0 + hh * y3, f = y0;
+    // le carre unite devient le rectangle (w, h) de l'element
+    return [a / w, dd / w, g / w, b / h, e / h, hh / h, c, f, 1];
+  }
+
+  /* Incliner une piece dans le plan de son panneau.
+   *
+   * Une etiquette gravee est petite : lui calculer sa propre homographie
+   * serait exact et illisible. Le panneau, lui, a quatre coins releves ; on
+   * en tire la BASE moyenne de son plan — le vecteur que devient « un pixel
+   * vers la droite » et celui que devient « un pixel vers le bas » — et on
+   * la donne telle quelle a la piece. Elle prend alors la rotation, le
+   * cisaillement et l'echelle du panneau d'un seul coup.
+   *
+   * C'est ce qui manquait : je posais une rotation devinee, puis une
+   * rotation mesuree, mais toujours une ROTATION — alors que les montants
+   * d'un panneau penchent en sens contraire et qu'aucune rotation ne rend
+   * ca. La base, si.
+   */
+  const inclines = [];
+  function incliner(el, nomPlan) {
+    const plan = (CARTE.plans || {})[nomPlan];
+    if (!plan) return;
+    if (!plan.quad) {                       // panneau d'aplomb : simple pente
+      if (plan.pente) {
+        el.style.transformOrigin = "center";
+        el.style.transform = "rotate(" + plan.pente + "deg)";
+      }
+      return;
+    }
+    inclines.push({ el, quad: plan.quad });
+    calerInclines();
+  }
+  function calerInclines() {
+    const r = fitCourant && fitCourant.getBoundingClientRect();
+    if (!r || !r.width) return;
+    for (const p of inclines) {
+      const q = p.quad.map(([x, y]) => [x * r.width / 100, y * r.height / 100]);
+      const [tl, tr, br, bl] = q;
+      const lx = Math.max(...q.map((v) => v[0])) - Math.min(...q.map((v) => v[0]));
+      const ly = Math.max(...q.map((v) => v[1])) - Math.min(...q.map((v) => v[1]));
+      if (!lx || !ly) continue;
+      const ex = [((tr[0]-tl[0]) + (br[0]-bl[0])) / 2 / lx,
+                  ((tr[1]-tl[1]) + (br[1]-bl[1])) / 2 / lx];
+      const ey = [((bl[0]-tl[0]) + (br[0]-tr[0])) / 2 / ly,
+                  ((bl[1]-tl[1]) + (br[1]-tr[1])) / 2 / ly];
+      p.el.style.transformOrigin = "center";
+      p.el.style.transform =
+        `matrix(${ex[0].toFixed(5)},${ex[1].toFixed(5)},` +
+        `${ey[0].toFixed(5)},${ey[1].toFixed(5)},0,0)`;
+    }
+  }
+
+  const plaques = [];
+  function plaquer(el, quad, marge) {
+    plaques.push({ el, quad, marge: marge || 0 });
+    calerPlaques();
+  }
+  function calerPlaques() {
+    const r = fitCourant && fitCourant.getBoundingClientRect();
+    if (!r || !r.width) return;
+    for (const p of plaques) {
+      const xs = p.quad.map((q) => q[0]), ys = p.quad.map((q) => q[1]);
+      const l = Math.min(...xs), t = Math.min(...ys);
+      const w = Math.max(...xs) - l, h = Math.max(...ys) - t;
+      // marge : la dalle vit DANS son biseau, pas dessus
+      const m = p.marge;
+      const cx = l + w / 2, cy = t + h / 2, k = 1 - m;
+      const q = p.quad.map(([qx, qy]) =>
+        [(cx + (qx - cx) * k - l) * r.width / 100,
+         (cy + (qy - cy) * k - t) * r.height / 100]);
+      p.el.style.left = l + "%"; p.el.style.top = t + "%";
+      p.el.style.width = w + "%"; p.el.style.height = h + "%";
+      const px = w * r.width / 100, py = h * r.height / 100;
+      const [a, b, c, d2, e, f, g, hh, i] = homographie(px, py, q);
+      p.el.style.transformOrigin = "0 0";
+      p.el.style.transform =
+        `matrix3d(${a},${b},0,${c},${d2},${e},0,${f},0,0,1,0,${g},${hh},0,${i})`;
+    }
+  }
 
   function basculerHud() {
     const on = stage.classList.toggle("hud");

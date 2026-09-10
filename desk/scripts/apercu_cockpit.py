@@ -84,6 +84,27 @@ for strat in ("ema_cross", "tsmom", "turtle_breakout", "trend_follower_atr"):
 photo = base64.b64encode((UI / "cockpit/assets/cockpit.jpg").read_bytes()).decode()
 PHOTO = "data:image/jpeg;base64," + photo
 
+# Les commandes photographiées voyagent AVEC la page.
+#
+# Elles étaient laissées en URL : sur le desk elles se chargeaient, sur la
+# copie publiée elles répondaient 404 — et le module, qui retire proprement
+# une pièce dont l'image manque, les faisait toutes disparaître EN SILENCE.
+# La page en ligne n'avait donc aucun bouton photographié, et rien ne le
+# disait. Un repli discret est utile quand un fichier manque par accident ;
+# il devient un piège quand c'est le générateur qui l'oublie.
+# On n'embarque QUE celles que la carte référence : une image de plus,
+# c'est un mégaoctet de plus sur une page qu'on ouvre au téléphone.
+_carte = json.loads((UI / "cockpit/hotspots.json").read_text(encoding="utf-8"))
+_noms = {r["image"] for bloc in ("voyants", "hotas")
+         for r in _carte.get(bloc, {}).values() if r.get("image")}
+COMMANDES = {}
+for f in sorted((UI / "cockpit/assets/commandes").glob("*.png")):
+    if f.stem.rsplit("-", 1)[0] not in _noms:
+        continue
+    COMMANDES[f.name] = ("data:image/png;base64,"
+                         + base64.b64encode(f.read_bytes()).decode())
+print(f"  {len(COMMANDES)} commandes embarquées ({len(_noms)} pièces)")
+
 def js(nom):
     return (UI / nom).read_text(encoding="utf-8")
 
@@ -122,7 +143,22 @@ SHIM = """
 document.documentElement.setAttribute("data-theme", "dark");
 
 window.__PHOTO = %s;
+window.__COMMANDES = %s;
 window.__FIGE = %s;
+
+/* Les images des commandes sont dans la page : on detourne leur chargement.
+   Sans ca elles repondraient 404 et chaque piece se retirerait en silence. */
+(function () {
+  const d = Object.getOwnPropertyDescriptor(HTMLImageElement.prototype, "src");
+  Object.defineProperty(HTMLImageElement.prototype, "src", {
+    configurable: true, enumerable: true,
+    get() { return d.get.call(this); },
+    set(v) {
+      const m = /assets\/commandes\/([^/?#]+)$/.exec(String(v));
+      d.set.call(this, m && window.__COMMANDES[m[1]] ? window.__COMMANDES[m[1]] : v);
+    },
+  });
+})();
 
 /* L'aperçu n'a pas de desk derrière lui. Plutôt que de laisser chaque appel
    échouer en silence — ce qui donnerait une page à moitié vide sans qu'on
@@ -154,7 +190,8 @@ window.fetch = function (url, opts) {
 /* Le flux temps réel n'existe pas ici : on laisse le code retomber sur son
    scrutin, qui lit la même réponse gelée. */
 window.EventSource = function () { throw new Error("aperçu figé"); };
-""" % (json.dumps(PHOTO), json.dumps({k: json.loads(v) for k, v in TABLE.items()}))
+""" % (json.dumps(PHOTO), json.dumps(COMMANDES),
+       json.dumps({k: json.loads(v) for k, v in TABLE.items()}))
 
 BANDEAU = """
 <div id="apercu-note"><b>Poste de pilotage</b> — copie figée, aucun desk

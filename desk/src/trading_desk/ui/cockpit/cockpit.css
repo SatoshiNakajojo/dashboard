@@ -98,7 +98,7 @@
   position: absolute; background: rgb(4, 7, 10);
   border-radius: 4px;
   overflow: hidden; contain: layout paint;
-  font-size: 10px; line-height: 1.35;
+  font-size: .50cqw; line-height: 1.32;
   box-shadow: inset 0 0 26px rgba(0, 0, 0, .8),
               inset 0 1px 0 rgba(180, 215, 230, .07);
   transition: filter 140ms ease;
@@ -126,18 +126,19 @@
 }
 .screen:hover { filter: brightness(1.06); }
 .screen:focus-visible { outline: 1px solid var(--amber); outline-offset: -1px; }
-.screen .corps { position: absolute; inset: 0; overflow: auto; padding: 4px 6px; }
+.screen .corps { position: absolute; inset: 0; overflow: auto;
+                 padding: .28cqh .36cqw; }
 .screen .corps::-webkit-scrollbar { width: 4px; }
 .screen .corps::-webkit-scrollbar-thumb { background: #1d2b30; }
 
 .screen h4 {
-  margin: 0 0 3px; font-size: 8px; letter-spacing: .16em;
+  margin: 0 0 .2cqh; font-size: .40cqw; letter-spacing: .14em;
   text-transform: uppercase; color: var(--dim); font-weight: 700;
   display: flex; justify-content: space-between; gap: 6px;
 }
 .screen h4 b { color: var(--cyan); font-weight: 700; }
 .screen .gros {
-  font-size: 15px; font-weight: 700; letter-spacing: -.01em;
+  font-size: .78cqw; font-weight: 700; letter-spacing: -.01em;
   font-variant-numeric: tabular-nums; line-height: 1.15;
 }
 .screen .pos { color: #6fd39c } .screen .neg { color: var(--red) }
@@ -233,7 +234,7 @@
   /* `flex: none` : dans une colonne flex, les entrees se comprimaient et le
      texte se retrouvait coupe en haut et en bas. */
   flex: none; line-height: 1.5;
-  font-family: var(--f-mono); font-size: 9px; letter-spacing: .02em;
+  font-family: var(--f-mono); font-size: .46cqw; letter-spacing: .02em;
   color: #b9d3d8; background: rgba(28, 46, 54, .55);
   border: 1px solid rgba(120, 170, 185, .18); border-radius: 2px;
   padding: 3px 6px; white-space: nowrap; overflow: hidden;
@@ -253,7 +254,7 @@
 /* La liste de verification du poste, dans la dalle centrale. Deux colonnes :
    douze invariants tiennent alors dans la hauteur sans ascenseur. */
 .prevol { display: grid; grid-template-columns: 1fr 1fr; gap: 1px 8px;
-          margin-top: 3px; font-size: 8.5px }
+          margin-top: .2cqh; font-size: .42cqw }
 .ck { display: flex; align-items: center; gap: 5px; padding: .8px 0;
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
 .ck i { width: 4px; height: 4px; border-radius: 50%; flex: none;
@@ -262,12 +263,59 @@
 .ck.ko i { background: #e05a49; box-shadow: 0 0 4px rgba(224,90,73,.9) }
 .ck.ko span { color: #e8a99f }
 .ck span { color: #86a0a7; overflow: hidden; text-overflow: ellipsis }
+.ck b { margin-left: auto; color: #b9d3d8; font-weight: 500;
+        font-variant-numeric: tabular-nums }
+.prevol.flux { margin-top: .5cqh; border-top: 1px solid rgba(120,160,175,.14);
+               padding-top: .4cqh }
+.pied { margin-top: .5cqh; border-top: 1px solid rgba(120,160,175,.14);
+        padding-top: .3cqh }
 
 /* Quand un secteur est ouvert dans la dalle centrale, le contenu propre de
    la dalle s'efface : deux affichages superposes ne se lisent ni l'un ni
    l'autre. Le reste du cockpit, lui, reste allume derriere. */
 .tiroir #screen-main > .corps { display: none }
 .tiroir #screen-main { cursor: default }
+
+/* ================= commandes photographiees ============================== */
+/*
+ * Une piece photographiee vient du meme monde que la photo du cockpit : meme
+ * grain, meme eclairage. C'est ce qu'aucun bouton dessine n'obtient.
+ */
+.voyant {
+  position: absolute; z-index: 3; background: none; border: 0; padding: 0;
+  cursor: pointer; -webkit-tap-highlight-color: transparent;
+}
+.voyant[disabled] { cursor: default }
+.voyant .cmd {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  object-fit: contain; pointer-events: none;
+  transition: opacity 200ms linear;
+}
+/* Les voyants sur fond noir ont leur LUMINANCE cuite dans l'alpha a la
+   conversion : la lueur garde son halo sans qu'on la detoure, et sans
+   dependre d'un mode de fusion — la couche des boutons porte un z-index,
+   donc son propre contexte d'empilement, et « screen » n'y voyait plus la
+   photo derriere. Le carre noir restait. */
+/* L'etat eteint peut etre DERIVE de l'allume : meme fichier, desature et
+   assombri. Deux fichiers a garder alignes, c'est deux occasions de les
+   desaligner. */
+.cmd.derive { filter: grayscale(1) brightness(.42) contrast(.9) }
+.cmd.on, .cmd.alerte { opacity: 0 }
+.voyant[data-etat="on"] .cmd.off { opacity: 0 }
+.voyant[data-etat="on"] .cmd.on { opacity: 1 }
+.voyant[data-etat="alerte"] .cmd.off { opacity: 0 }
+.voyant[data-etat="alerte"] .cmd.alerte { opacity: 1 }
+/* Pas d'image d'alerte fournie ? L'allume clignote. */
+.voyant[data-etat="alerte"] .cmd.alerte:not([src]) ~ .cmd.on,
+.voyant[data-etat="alerte"]:not(:has(.cmd.alerte)) .cmd.on {
+  opacity: 1; animation: bat 1100ms steps(1) infinite;
+}
+@keyframes bat { 0%, 55% { opacity: 1 } 56%, 100% { opacity: .25 } }
+.voyant:hover .cmd { filter: brightness(1.12) }
+.voyant:hover .cmd.derive { filter: grayscale(1) brightness(.55) }
+.voyant:active { transform: translateY(.1cqh) }
+.voyant:focus-visible { outline: 1px solid var(--amber); outline-offset: 2px }
+@media (prefers-reduced-motion: reduce) { .voyant .cmd { animation: none } }
 
 /* --- z-4 : LED et effets ------------------------------------------------ */
 .fx-layer { position: absolute; inset: 0; z-index: 4; pointer-events: none }
@@ -292,7 +340,7 @@
 .hud .screen[data-perce] { -webkit-mask-image: none !important;
                            mask-image: none !important }
 .hud .hotspots-pilot { opacity: .15; pointer-events: none }
-.hud .screen { font-size: 11px }
+.hud .screen { font-size: .56cqw }
 
 /* --- barre haute et rail ------------------------------------------------ */
 .chrome-txt {
@@ -364,28 +412,62 @@
               inset 0 0 0 1px rgba(0, 0, 0, .5),
               0 .05cqw .14cqw rgba(0, 0, 0, .55);
 }
-/* Une plaque gravee : metal clair releve sur la photo, texte sombre en creux.
-   L'inverse d'un ecran — elle ne s'allume pas, elle est vissee. */
+/* Une etiquette GRAVEE dans le metal, pas vissee dessus.
+ *
+ * Elles etaient des plaquettes saillantes : liseré clair en haut, ombre en
+ * bas, fond en degradé. Or la photo, a ces endroits-la, n'a PAS de plaque —
+ * le mot est imprime a meme la tole. Poser un relief la ou la surface est
+ * plate est ce qui trahissait la perspective, bien plus que l'angle : les
+ * plans mesures sont tous entre -2 et +2,6 degres.
+ *
+ * Ici : pas de bord, pas d'ombre portee, le fond exact du metal releve
+ * autour, et le liseré clair d'un creux — une ligne sous le trait, comme
+ * une gravure prend la lumiere.
+ */
 .plaque.grave {
+  background: var(--metal, #b9bcbd);
+  color: #23292c; text-transform: none; letter-spacing: .01em;
+  font-family: var(--f-sans, system-ui, sans-serif); font-weight: 600;
+  font-size: .70cqw; line-height: 1.3;
+  text-shadow: 0 .055cqw 0 rgba(255, 255, 255, .5);
+  box-shadow: none; border-radius: 0;
+}
+/* Les bords du rustine s'estompent.
+ *
+ * La teinte relevee est celle du metal AUTOUR, mais le panneau porte un
+ * degrade — plus clair en haut a gauche. Une couleur unique laisse donc un
+ * rectangle a peine visible, et « a peine visible » suffit a trahir. Un
+ * fondu de quelques pour cent sur les quatre bords le fait disparaitre.
+ * Si `mask-composite` manque, seul le fondu horizontal s'applique : moins
+ * bien, jamais casse. */
+.plaque.grave:not(.plaquette) {
+  -webkit-mask-image:
+    linear-gradient(to right, transparent 0, #000 7%, #000 93%, transparent 100%),
+    linear-gradient(to bottom, transparent 0, #000 14%, #000 86%, transparent 100%);
+  -webkit-mask-composite: source-in;
+  mask-image:
+    linear-gradient(to right, transparent 0, #000 7%, #000 93%, transparent 100%),
+    linear-gradient(to bottom, transparent 0, #000 14%, #000 86%, transparent 100%);
+  mask-composite: intersect;
+}
+/* Les deux seules qui recouvrent une VRAIE plaquette peinte. */
+.plaque.grave.plaquette {
   background: linear-gradient(var(--metal, #b9bcbd),
                               color-mix(in srgb, var(--metal, #b9bcbd) 88%, #000));
-  color: #1b2226; text-transform: none; letter-spacing: .01em;
-  font-family: var(--f-sans, system-ui, sans-serif); font-weight: 600;
-  font-size: .78cqw; line-height: 1.35; text-shadow: 0 1px 0 rgba(255,255,255,.35);
+  border-radius: 1.5px;
   box-shadow: inset 0 .06cqw 0 rgba(255, 255, 255, .35),
               inset 0 -.06cqw .12cqw rgba(0, 0, 0, .3),
               0 .03cqw .1cqw rgba(0, 0, 0, .28);
-  border-radius: 1.5px;
-}
-.plaque.grave.penchee {
-  /* La pente et le biais viennent de la carte : ce sont ceux du plan de la
-     console, releves sur le texte peint que la plaque recouvre. */
-  transform: rotate(var(--pente, 0deg)) skewX(var(--biais, 0deg));
 }
 .plaque.grave.gauche {
   place-items: center start; padding: .5cqh .6cqw; white-space: normal;
-  text-align: left; font-size: .82cqw;
+  text-align: left; font-size: .76cqw;
 }
+
+/* Le plan de l'instrument est pose par le shell : il calcule la BASE du
+   panneau a partir de ses quatre coins releves, et la donne a la piece.
+   Une rotation ne suffisait pas — les montants d'un panneau penchent en
+   sens contraire, et aucune rotation ne rend ca. */
 
 .plaque.amb { color: var(--amber) }
 .plaque.gauche { place-items: center start; padding-left: 6px }
@@ -437,6 +519,20 @@
   filter: drop-shadow(0 0 3px rgba(232, 82, 63, .8));
 }
 .aiguille .moyeu { fill: #d9e3e6 }
+/* La lecture chiffree, sur la face basse du cadran. Le verre du cadran est
+   sombre : le chiffre y passe en phosphore, comme sur les logements. */
+.aiguille .lecture {
+  position: absolute; left: 0; right: 0; top: 63%;
+  text-align: center; font-family: var(--f-mono); font-weight: 700;
+  font-size: .62cqw; color: #8de3b4; letter-spacing: -.01em;
+  text-shadow: 0 0 .35cqw rgba(141, 227, 180, .9);
+  font-variant-numeric: tabular-nums; pointer-events: none;
+  white-space: nowrap; overflow: hidden;
+}
+.aiguille[data-butee="1"] .lecture { color: #e2a54a;
+  text-shadow: 0 0 .35cqw rgba(226, 165, 74, .9) }
+.aiguille[data-butee="1"] .brin { stroke: #e2a54a;
+  filter: drop-shadow(0 0 3px rgba(226, 165, 74, .9)) }
 
 /* Les temoins sont poses sur les carres peints. Eteints, ils laissent voir
    le carre de la photo ; allumes, ils l'eclairent. */
@@ -464,13 +560,13 @@
   background: var(--verre-fenetre, #2e2f33);
   border-radius: 2px; overflow: hidden; white-space: nowrap;
   text-shadow: 0 0 .5cqw rgba(141, 227, 180, .85);
-  font-size: 1.05cqw; letter-spacing: .02em;
+  font-size: .92cqw; letter-spacing: .02em;
   box-shadow: inset 0 .12cqw .34cqw rgba(0, 0, 0, .78),
               inset 0 -.08cqw .22cqw rgba(0, 0, 0, .5),
               inset 0 .04cqw 0 rgba(190, 215, 225, .11);
 }
 .afficheur.flux { background: var(--verre-flux, #1f2122) }
-.afficheur.gros { font-size: 1.6cqw }
+.afficheur.gros { font-size: 1.35cqw }
 .afficheur.amb { color: var(--amber); text-shadow: 0 0 .5cqw rgba(226,165,74,.8) }
 /* Le chiffre est dans un span : quand il deborde de son logement on le
    reduit plutot que de le couper. Un nombre tronque ment. */
@@ -524,7 +620,7 @@
   background: var(--verre-num, #282625); justify-content: flex-end;
   padding-right: .4cqw; font-family: var(--f-mono); font-weight: 700;
   color: #8de3b4; text-shadow: 0 0 .4cqw rgba(141, 227, 180, .8);
-  font-size: 1.1cqw; font-variant-numeric: tabular-nums;
+  font-size: .95cqw; font-variant-numeric: tabular-nums;
 }
 
 /* Un inverseur a deux ou trois positions. Le levier est un dessin vectoriel :
@@ -541,6 +637,25 @@
                          inset 0 -1px 2px rgba(0, 0, 0, .35),
                          0 1px 2px rgba(0, 0, 0, .3) }
 .inverseur svg { width: 100%; height: 100%; display: block; overflow: visible }
+
+/* Une commande photographiee remplace le dessin : plus de cache metal, plus
+   de levier vectoriel — la piece EST une image, posee sur la photo. */
+.inverseur.photo { background: none; box-shadow: none }
+.inverseur.photo svg { display: none }
+.cmd {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  object-fit: contain; pointer-events: none;
+  transition: opacity 160ms linear;
+}
+.cmd.on { opacity: 0 }
+.inverseur[data-on="1"] .cmd.off { opacity: 0 }
+.inverseur[data-on="1"] .cmd.on { opacity: 1 }
+/* Clignotement : on alterne les deux images. Un troisieme fichier serait un
+   cadre de plus a garder aligne avec les deux autres, pour rien. */
+@keyframes clignote-cmd { 0%, 49% { opacity: 1 } 50%, 100% { opacity: 0 } }
+.inverseur[data-clignote="1"] .cmd.on { animation: clignote-cmd 900ms steps(1) infinite }
+.inverseur[data-clignote="1"] .cmd.off { animation: clignote-cmd 900ms steps(1) infinite reverse }
+@media (prefers-reduced-motion: reduce) { .cmd { animation: none !important } }
 .inverseur .lev { transition: transform 190ms cubic-bezier(.34, 1.45, .64, 1);
                   transform-origin: 50% 74% }
 .inverseur[data-p="0"] .lev { transform: rotate(-24deg) }

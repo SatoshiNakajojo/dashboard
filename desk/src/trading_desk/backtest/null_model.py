@@ -277,7 +277,13 @@ def randomization_test(
         null_mean_usd=round(sum(pnls) / draws, 2),
         null_p5_usd=round(ordonnes[int(0.05 * draws)], 2),
         null_p95_usd=round(ordonnes[min(draws - 1, int(0.95 * draws))], 2),
-        p_value=round(p, 4),
+        # PAS d'arrondi. Le plancher du test vaut 1/(draws+1) : a 20 000
+        # tirages il tombe a 0,00005, qu'un round(p, 4) ecraserait a 0,0 —
+        # une valeur impossible, et qui FLATTE le resultat en le faisant
+        # passer sous n'importe quel seuil de correction multiple. Payer
+        # dix fois plus de tirages pour que l'arrondi annule le gain de
+        # resolution serait le pire des deux mondes.
+        p_value=p,
         mean_trades_random=round(sum(counts) / draws, 1),
         observed_trades=n,
     )
@@ -288,10 +294,10 @@ def format_null_report(results: list[NullResult]) -> str:
         "",
         "  LE HASARD AURAIT-IL FAIT AUSSI BIEN ?",
         "  Meme profil de risque, memes couts, entrees tirees au hasard.",
-        "  " + "─" * 92,
+        "  " + "─" * 94,
         f"  {'strategie':<16}{'observe':>10}{'hasard moy':>12}"
-        f"{'p5':>10}{'p95':>10}{'perc.':>8}{'p':>8}{'verdict':>20}",
-        "  " + "─" * 92,
+        f"{'p5':>10}{'p95':>10}{'perc.':>8}{'p':>10}{'verdict':>20}",
+        "  " + "─" * 94,
     ]
     for r in results:
         lines.append(
@@ -301,11 +307,11 @@ def format_null_report(results: list[NullResult]) -> str:
             f"{r.null_p5_usd:>+10.2f}"
             f"{r.null_p95_usd:>+10.2f}"
             f"{r.percentile:>7.0f}%"
-            f"{r.p_value:>8.3f}"
+            f"{r.p_value:>10.5f}"
             f"{r.verdict:>20}"
         )
     lines += [
-        "  " + "─" * 92,
+        "  " + "─" * 94,
         "",
         "  LECTURE",
         "  Le nuage du hasard n'est jamais centre sur zero, et son centre n'est",
