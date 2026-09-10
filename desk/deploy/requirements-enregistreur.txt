@@ -1,0 +1,13 @@
+# Dépendances de l'ENREGISTREUR seul — pas du desk complet.
+#
+# Le VPS n'a besoin ni de FastAPI, ni d'uvicorn, ni du SDK Anthropic : il
+# n'expose aucune API et n'appelle aucun modèle. Installer le desk entier sur
+# une machine exposée à Internet en permanence élargirait sa surface pour
+# rien.
+#
+# `pyarrow` est la seule dépendance lourde du projet, et elle est confinée
+# ici. Le cœur d'analyse reste volontairement sans numpy, scipy ni pandas.
+pydantic>=2.9
+pydantic-settings>=2.5
+websockets>=13
+pyarrow>=17

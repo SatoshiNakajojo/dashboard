@@ -7,10 +7,13 @@ Script autonome : **aucune dépendance**, rien à installer. Python 3.9+ suffit.
     python3 fetch_candles.py --asset ETH
     python3 fetch_candles.py --asset BTC --interval 4h --days 730
 
-Il existe parce que l'environnement où ce projet est développé n'a pas accès
-à `api.hyperliquid.xyz` (refus de politique réseau). Ce fichier se lance
-depuis n'importe quelle machine ayant Internet, et produit exactement les
-données dont le backtest a besoin.
+Il existe parce que l'environnement où ce projet est développé n'avait pas
+accès à `api.hyperliquid.xyz` (refus de politique réseau). **Ce n'est plus le
+cas depuis le 5 septembre 2026** : l'API répond désormais depuis le desk
+(`/info` en HTTP 200, ~300 ms). Le script reste néanmoins utile — il n'a
+aucune dépendance et tourne sur n'importe quelle machine ayant Internet, ce
+qui en fait le moyen le plus simple de reconstituer un jeu de données hors
+du projet.
 
 Le fichier écrit contient les bougies brutes, telles que l'API les renvoie.
 Rien n'est transformé ni filtré ici : la conversion appartient au projet, pour

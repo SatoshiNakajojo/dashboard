@@ -34,7 +34,7 @@ class CostlyLLM:
         self.calls = 0
         self._script = ScriptedLLM(list(script) * 40) if script else None
 
-    def structured(self, *, system, user, schema, max_tokens=4000):
+    def structured(self, *, system, user, schema, max_tokens=4000, agent=""):
         self.calls += 1
         if self._script is not None:
             output, _ = self._script.structured(
@@ -51,7 +51,8 @@ CYCLE_SCRIPT = [
     {"inputs_digest": "x", "momentum": "0.1"},
     {"asset": "BTC", "bias": "LONG", "thesis_summary": "Support tenu."},
     {"asset": "BTC", "side": "LONG", "entry_price": "64000",
-     "stop_price": "63000", "target_price": "66500", "conviction": "0.75"},
+     "stop_price": "63000", "target_price": "66500",
+     "evaluation": ["CONFLUENCE_3P", "OBSTACLE_AUCUN"]},
     {"targets_setup": "BTC", "severity": "0.2", "veto": False},
     {"size_factor": "0.9"},
     {"decision": "APPROVE", "reasoning": "ok", "size_factor": "1"},

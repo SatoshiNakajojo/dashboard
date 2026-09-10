@@ -103,8 +103,45 @@ class SetupProposal(AgentOutput):
     stop_price: Decimal | None = Field(default=None, gt=0)
     target_price: Decimal | None = Field(default=None, gt=0)
     horizon_hours: Decimal = Field(default=Decimal("24"), gt=0, le=720)
-    conviction: Decimal = Field(default=Decimal("0"), ge=0, le=1)
     rationale: str = Field(default="", max_length=800)
+
+    # --- l'evaluation qualitative, a la place du chiffre ---
+    #
+    # L'agent ne rend plus de `conviction`. Mesure faite : celle qu'il
+    # rendait ne correlait pas avec l'issue des setups, plafonnait vers 0,55
+    # et bloquait donc toutes les portes. Il rend maintenant des jugements
+    # ordinaux, et `agents/scoring.py` en fabrique le score.
+    #
+    # **Un seul champ, et non cinq.** Le decodage contraint refuse au-dela de
+    # douze champs OPTIONNELS (mesure contre l'API, voir
+    # `test_aucun_schema_ne_depasse_le_seuil_de_l_api`). Cinq champs separes
+    # en demandaient quatorze : chaque appel Strategie aurait recu un 400, et
+    # l'agent se serait abstenu 100 % du temps pour une raison sans rapport
+    # avec le marche. Une liste d'etiquettes tient dans un seul champ.
+    #
+    # Les etiquettes se decrivent elles-memes (`STOP_ARBITRAIRE`, pas
+    # `ARBITRAIRE`) : une dimension omise doit rester lisible dans le
+    # journal, et deux dimensions ne doivent jamais partager une valeur.
+    # **Deux dimensions, et non cinq.** La premiere version en demandait
+    # cinq ; une execution reelle de douze cycles a montre que trois
+    # d'entre elles rendaient une valeur CONSTANTE sur douze fenetres de
+    # marche differentes. Elles demandaient a l'agent de noter son propre
+    # travail — il a choisi le sens, l'entree et le stop — et un agent qui
+    # s'auto-evalue rend le maximum. C'etait le defaut de l'ancien champ
+    # `conviction`, revenu sous un autre costume.
+    #
+    # Ces trois-la sont maintenant calculees par `agents/scoring.mesurer`,
+    # ce qui les rend variables par construction et respecte la regle de ce
+    # module : un agent LLM ne produit jamais un chiffre qu'un calcul
+    # pourrait donner.
+    #
+    # Restent les deux qui ne se calculent pas. Compter des raisons
+    # INDEPENDANTES demande de comprendre ce qu'elles mesurent ; connaitre
+    # un evenement a venir demande de l'avoir lu.
+    evaluation: tuple[Literal[
+        "CONFLUENCE_3P", "CONFLUENCE_2", "CONFLUENCE_1",
+        "OBSTACLE_AUCUN", "OBSTACLE_MINEUR", "OBSTACLE_MAJEUR",
+    ], ...] = ()
 
     @model_validator(mode="after")
     def _complete_if_proposing(self) -> SetupProposal:

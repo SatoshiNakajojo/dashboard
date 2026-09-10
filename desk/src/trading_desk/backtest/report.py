@@ -243,7 +243,7 @@ def format_report(metrics: list[Metrics]) -> str:
         "  " + "─" * W,
         f"  {'strategie':<16}{'net':>10}{'net %':>9}{'brut':>10}"
         f"{'couts':>9}{'Sharpe':>9}{'DD max':>9}{'trades':>8}"
-        f"{'expo':>7}{'t':>7}{'verdict':>12}",
+        f"{'rejets':>8}{'expo':>7}{'t':>7}{'verdict':>12}",
         "  " + "─" * W,
     ]
     for m in sorted(metrics, key=lambda x: x.net_pnl_usd, reverse=True):
@@ -256,11 +256,38 @@ def format_report(metrics: list[Metrics]) -> str:
             f"{(m.sharpe if m.sharpe is not None else float('nan')):>9.2f}"
             f"{m.max_drawdown_pct:>9.2f}"
             f"{m.trades:>8}"
+            f"{m.rejected_by_risk:>8}"
             f"{m.exposure_pct:>6.0f}%"
             f"{(m.t_stat if m.t_stat is not None else float('nan')):>7.2f}"
             f"{m.edge_verdict:>12}"
         )
     lines += ["  " + "─" * W, ""]
+
+    # Un backtest qui jette la plupart de ses signaux ne mesure pas la
+    # strategie : il mesure le sous-echantillon que le moteur de risque a
+    # bien voulu laisser passer. Et ce sous-echantillon n'est pas aleatoire —
+    # le plafond porte sur la distance de stop, donc sur la volatilite. Les
+    # trades survivants sont les moments les plus calmes. Taire ce chiffre
+    # laisse lire « 4 trades, bat le hasard » la ou il faut lire « 2037
+    # signaux refuses, 4 rescapes tous en basse volatilite ».
+    for m in sorted(metrics, key=lambda x: x.rejected_by_risk, reverse=True):
+        total = m.trades + m.rejected_by_risk
+        if not total or m.rejected_by_risk == 0:
+            continue
+        part = 100 * m.rejected_by_risk / total
+        if part >= 50:
+            lines.append(
+                f"  ATTENTION  {m.strategy} : {m.rejected_by_risk} signaux sur "
+                f"{total} ({part:.0f} %) refuses par le moteur de risque.")
+    if any(m.rejected_by_risk > m.trades for m in metrics):
+        lines += [
+            "             Cause la plus frequente : la distance de stop sort de",
+            "             [min_stop_distance_bps, max_stop_distance_bps]. Un stop",
+            "             ATR en daily depasse largement le plafond de 500 bps",
+            "             calibre pour l'intraday. Les chiffres ci-dessus ne",
+            "             mesurent alors PAS la strategie.",
+            "",
+        ]
 
     # Le detail statistique, strategie par strategie. C'est cette section, et
     # pas la ligne de PnL, qui dit ce qu'on a le droit de conclure.

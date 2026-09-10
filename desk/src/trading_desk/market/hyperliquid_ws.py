@@ -148,6 +148,33 @@ class HyperliquidFeed:
     def stop(self) -> None:
         self._stop.set()
 
+    async def force_reconnect(self, motif: str = "") -> bool:
+        """Ferme la connexion pour que la boucle la rouvre. Ne l'arrete pas.
+
+        Le ping applicatif envoie, il n'attend rien. Une connexion a moitie
+        morte — TCP vivant, serveur muet — laisse donc `_read_loop` bloquee
+        indefiniment sans lever la moindre exception : le backoff ne se
+        declenche jamais, et le desk lit des indicateurs calcules sur une
+        valeur figee. C'est l'angle mort A-10 sous sa forme la plus sournoise,
+        parce que tout a l'air en marche.
+
+        `feeds()` sait deja detecter ce gel ; il manquait seulement de quoi
+        AGIR dessus. Un appelant qui constate que tous les flux sont morts
+        appelle ceci, la fermeture leve dans `_read_loop`, et le chemin de
+        reconnexion normal — backoff, gigue, re-souscription — reprend la main.
+
+        Renvoie faux s'il n'y avait rien a fermer.
+        """
+        ws = self._ws
+        if ws is None:
+            return False
+        log.warning("reconnexion forcee%s", f" : {motif}" if motif else "")
+        try:
+            await ws.close()
+        except Exception:  # deja morte : le resultat voulu est atteint
+            return True
+        return True
+
     async def run(self) -> None:
         """Boucle de connexion. Ne rend la main que sur `stop()` ou annulation."""
         attempt = 0

@@ -15,8 +15,17 @@ de la strategie **sauf le moment ou elle entre**.
 - meme nombre de trades,
 - meme melange long/short,
 - memes distances de stop et de cible, tirees de ses propres signaux,
+- **memes durees de detention**, tirees de ses propres trades,
 - meme moteur, memes couts, meme dimensionnement par le risque,
 - entrees a des dates **tirees au hasard**.
+
+La duree de detention a longtemps manque a cette liste, et c'etait un defaut
+grave. Les quatre strategies sortent sur signal (`exit_now`) ; le bras
+aleatoire, lui, ne pouvait sortir qu'au stop ou a la cible. Mesure sur la
+grille : ses positions tenaient **1,4 a 6,7 fois plus longtemps**. La
+comparaison ne portait donc pas sur le moment d'entree mais sur deux regles
+de sortie differentes — et une strategie qui coupe vite paraissait brillante
+face a un hasard qui encaissait toutes les reprises.
 
 Si la vraie strategie ne se distingue pas de ce nuage, son signal n'apporte
 rien : n'importe quelle strategie de meme profil, entrant au hasard, aurait
@@ -95,19 +104,28 @@ class RandomEntry:
     name = "hasard"
 
     def __init__(self, shapes: list[EntryShape], *, n_trades: int,
-                 seed: int, warmup: int = 50) -> None:
+                 seed: int, warmup: int = 50,
+                 holding_bars: list[int] | None = None) -> None:
         if not shapes:
             raise ValueError("aucune forme d'entree : rien a randomiser")
         self.shapes = shapes
         self.n_trades = n_trades
         self.rng = random.Random(seed)
         self.warmup = warmup
+        # Les durees observees de la strategie. Sans elles, le bras aleatoire
+        # ne sort qu'au stop et tient bien plus longtemps : on comparerait
+        # deux regles de sortie au lieu de deux facons d'entrer.
+        self.holding_bars = [d for d in (holding_bars or []) if d > 0]
         self._plan: dict[int, EntryShape] = {}
         self._emises = 0
+        self._entree: int | None = None
+        self._duree: int = 0
 
     def prepare(self, bars: list[Bar]) -> None:
         self._plan = {}
         self._emises = 0
+        self._entree = None
+        self._duree = 0
         candidates = range(self.warmup, len(bars) - 2)
         if not candidates:
             return
@@ -120,7 +138,17 @@ class RandomEntry:
             self._plan[i] = self.rng.choice(self.shapes)
 
     def on_bar(self, i: int, bars: list[Bar], in_position: Side | None) -> Signal:
-        if in_position is not None or self._emises >= self.n_trades:
+        if in_position is not None:
+            # Sortie par duree, le pendant du `exit_now` de la strategie. Le
+            # stop et la cible restent prioritaires : le moteur les evalue
+            # avant d'appeler la strategie, exactement comme pour la vraie.
+            if (self.holding_bars and self._entree is not None
+                    and i - self._entree >= self._duree):
+                self._entree = None
+                return Signal(exit_now=True, note="duree tiree au hasard")
+            return FLAT
+
+        if self._emises >= self.n_trades:
             return FLAT
         shape = self._plan.get(i)
         if shape is None:
@@ -135,6 +163,9 @@ class RandomEntry:
             return FLAT
 
         self._emises += 1
+        self._entree = i
+        self._duree = (self.rng.choice(self.holding_bars)
+                       if self.holding_bars else 10**9)
         return Signal(side=shape.side, stop_price=stop, target_price=target,
                       note="entree tiree au hasard")
 
@@ -194,10 +225,36 @@ def randomization_test(
     if not shapes or n == 0:
         raise ValueError("strategie sans entree exploitable : rien a comparer")
 
+    # Les durees VOULUES par la strategie, en barres : celles des trades
+    # qu'elle a fermes sur son propre signal.
+    #
+    # On exclut les trades sortis au stop a dessein. Leur duree n'est pas une
+    # intention, c'est une troncature ; la tirer puis lui appliquer un stop la
+    # tronquerait une seconde fois, et le bras aleatoire tiendrait
+    # systematiquement moins longtemps que la strategie — ce qui reduirait son
+    # exposition a la derive du marche et le handicaperait. Un contrefactuel
+    # handicape fabrique des edges.
+    index = {b.ts_ms: i for i, b in enumerate(bars)}
+    durees = [
+        index[t.exit_ts_ms] - index[t.entry_ts_ms]
+        for t in observed.trades
+        if t.entry_ts_ms in index and t.exit_ts_ms in index
+        and t.reason not in ("stop", "cible")
+    ]
+    # Si tout est parti au stop, il n'y a pas de duree voulue a imiter : on
+    # laisse le bras aleatoire sortir au stop, comme elle.
+    if not durees:
+        durees = [
+            index[t.exit_ts_ms] - index[t.entry_ts_ms]
+            for t in observed.trades
+            if t.entry_ts_ms in index and t.exit_ts_ms in index
+        ]
+
     pnls: list[float] = []
     counts: list[int] = []
     for d in range(draws):
-        alea = RandomEntry(shapes, n_trades=n, seed=seed + d, warmup=warmup)
+        alea = RandomEntry(shapes, n_trades=n, seed=seed + d, warmup=warmup,
+                           holding_bars=durees)
         res = run_backtest(bars, alea, costs=costs, limits=limits,
                            initial_equity_usd=initial_equity_usd,
                            interval=interval, warmup=warmup)

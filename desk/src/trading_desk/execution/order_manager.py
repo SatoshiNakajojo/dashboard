@@ -185,13 +185,26 @@ class OrderManager:
         entry_price: Decimal,
         stop_price: Decimal,
         target_price: Decimal | None = None,
+        style: EntryStyle = EntryStyle.LIMIT_PASSIVE,
     ) -> OpenOutcome:
-        """Entree + stop, dans cet ordre, avec repli si le stop echoue."""
+        """Entree + stop, dans cet ordre, avec repli si le stop echoue.
+
+        `style` est expose parce que tous les signaux n'ont pas la meme
+        urgence, et que le defaut passif ne convient pas a tous. Un signal
+        CALENDAIRE — la regle des deblocages entre a J-7 — doit etre en
+        position ce jour-la : un ordre passif qui n'est pas servi lui fait
+        rater la fenetre entiere, et le backtest qui a valide l'edge facturait
+        des couts taker. Entrer passivement serait donc trader autre chose que
+        ce qui a ete mesure, en plus flatteur.
+
+        Le defaut reste passif : c'est le bon choix pour un signal qui peut
+        attendre, et il economise la moitie du spread a chaque aller-retour.
+        """
         entry_intent = OrderIntent(
             intent_id=self.next_intent_id("e"),
             mandate_id=mandate.mandate_id,
             asset=asset, side=side, purpose=OrderPurpose.ENTRY,
-            size=size, limit_price=entry_price,
+            size=size, limit_price=entry_price, style=style,
         )
         entry = self.submit(entry_intent, ctx)
         if not entry.accepted:

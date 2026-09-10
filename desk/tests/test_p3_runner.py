@@ -73,13 +73,14 @@ def test_dry_run_tourne_sans_cle_et_sans_depense(monkeypatch, capsys):
 
 
 def test_sans_cle_la_commande_refuse_au_lieu_d_echouer_plus_tard(
-        monkeypatch, capsys, tmp_path):
+        monkeypatch, capsys):
     """Echouer a l'appel numero un apres avoir charge les donnees serait un
-    message d'erreur obscur ; refuser d'emblee dit quoi faire."""
-    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
-    monkeypatch.delenv("ANTHROPIC_AUTH_TOKEN", raising=False)
-    monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
+    message d'erreur obscur ; refuser d'emblee dit quoi faire.
 
+    Les variables sont retirees par la fixture `_aucune_cle_reelle`, qui les
+    lit dans `API_KEY_VARS` : ce test ne peut donc pas partir appeler l'API
+    parce qu'une variable a ete ajoutee au desk sans etre ajoutee ici.
+    """
     assert _lance(monkeypatch, "--runs", "30") == 2
     err = capsys.readouterr().err
     assert "Aucune clé Anthropic" in err
@@ -247,3 +248,120 @@ def test_le_message_d_erreur_nomme_les_deux_variables(monkeypatch, capsys, tmp_p
     assert "DESK_ANTHROPIC_API_KEY" in err
     assert "ANTHROPIC_API_KEY" in err
     assert "nom réservé" in err
+
+
+def test_un_agent_conditionnel_ne_fait_pas_echouer_la_porte(monkeypatch, capsys):
+    """Un echantillon court est une mesure a poursuivre, pas un echec.
+
+    Le graphe est conditionnel : l'Avocat du diable n'est appele que s'il
+    existe un setup a attaquer. Trente cycles ne font donc pas trente appels
+    pour lui, et le code de sortie ne doit pas dire « echec » pour ca — sinon
+    une CI refuse une porte dont la qualite est atteinte partout.
+    """
+    from trading_desk.agents import metrics as m
+
+    reel = m.summarize
+
+    def conditionnel(runs):
+        out = reel(runs)
+        if out.agent == "avocat_du_diable":
+            return out.model_copy(update={"runs": 15, "valid": 15})
+        return out
+
+    monkeypatch.setattr(m, "summarize", conditionnel)
+    monkeypatch.setattr("trading_desk.agents.__main__.summarize", conditionnel)
+
+    code = _lance(monkeypatch, "--dry-run", "--runs", "30")
+    sortie = capsys.readouterr().out
+
+    assert "INDETERMINEE" in sortie
+    assert "avocat_du_diable" in sortie
+    assert "il manque des appels, pas de la fiabilite" in sortie
+    assert code == 0, "un echantillon court ne doit pas valoir un code d'erreur"
+
+
+def test_une_qualite_insuffisante_fait_bien_echouer(monkeypatch, capsys):
+    """L'inverse : un agent qui ne respecte pas son schema bloque le P4, et
+    le code de sortie doit le dire."""
+    from trading_desk.agents import metrics as m
+
+    reel = m.summarize
+
+    def faible(runs):
+        out = reel(runs)
+        if out.agent == "avocat_du_diable":
+            return out.model_copy(update={"valid": 0})
+        return out
+
+    monkeypatch.setattr(m, "summarize", faible)
+    monkeypatch.setattr("trading_desk.agents.__main__.summarize", faible)
+
+    code = _lance(monkeypatch, "--dry-run", "--runs", "30")
+    sortie = capsys.readouterr().out
+
+    assert "NON FRANCHIE" in sortie and "qualite" in sortie
+    assert code == 1
+
+
+def test_le_cout_d_un_cycle_est_annonce(monkeypatch, capsys):
+    """Le chiffre qui tranchera le P5 est le cout d'un CYCLE : additionner les
+    extrapolations par agent surestime ceux qui ne tournent pas a chaque tour."""
+    _lance(monkeypatch, "--dry-run", "--runs", "30")
+    sortie = capsys.readouterr().out
+    assert "Cout d'un cycle complet" in sortie
+    assert "$/mois a 12 decisions/h" in sortie
+
+
+# --------------------------------------------------------------------------
+#  Le plafond du COMPTE n'est pas un défaut du modèle
+# --------------------------------------------------------------------------
+
+def test_le_plafond_de_compte_arrete_la_campagne_au_lieu_de_la_fausser():
+    """Le 8 septembre 2026, une campagne a rendu ce verdict :
+
+        PORTE P3 : NON FRANCHIE — qualite insuffisante : regime
+
+    L'agent Régime n'avait jamais été sollicité. L'API répondait 400 « you
+    have reached your specified API usage limits », le runner réessayait
+    deux fois, l'agent s'abstenait, et le rapport concluait à un défaut de
+    qualité. Huit cycles sur douze sont morts ainsi.
+
+    Deux dégâts, et le second est le pire : on dépense des appels contre une
+    API qui refuse, et on accuse un modèle d'un défaut de facturation — donc
+    on cherche au mauvais endroit.
+    """
+    from trading_desk.agents.llm import LLMError, QuotaEpuise
+    from trading_desk.agents.roster import run_regime
+
+    class _Plafonne:
+        model = "claude-haiku-4-5"
+
+        def structured(self, **kw):
+            raise QuotaEpuise(
+                "You have reached your specified API usage limits. "
+                "You will regain access on 2026-10-01 at 00:00 UTC.")
+
+    # Le runner ne doit NI réessayer NI absorber en abstention : il remonte.
+    with pytest.raises(QuotaEpuise):
+        run_regime(llm=_Plafonne(), context={"actif": "BTC"})
+
+    # Et il reste bien une panne de modèle pour le reste du code.
+    assert issubclass(QuotaEpuise, LLMError)
+
+
+def test_une_panne_ordinaire_reste_absorbee_en_abstention():
+    """L'autre sens. Une erreur transitoire doit continuer d'être réessayée
+    puis absorbée : sans ça, une coupure réseau ferait tomber la campagne
+    entière au lieu d'un cycle."""
+    from trading_desk.agents.llm import LLMError
+    from trading_desk.agents.roster import run_regime
+
+    class _Casse:
+        model = "claude-haiku-4-5"
+
+        def structured(self, **kw):
+            raise LLMError("connexion réinitialisée")
+
+    run = run_regime(llm=_Casse(), context={"actif": "BTC"})
+    assert run.abstained
+    assert run.attempts >= 2, "une panne ordinaire doit être réessayée"

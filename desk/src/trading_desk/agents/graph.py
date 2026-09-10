@@ -52,6 +52,7 @@ from .roster import (
     run_strategy,
 )
 from .runner import AgentRun
+from .scoring import Note, noter
 
 log = logging.getLogger(__name__)
 
@@ -67,6 +68,7 @@ class Stage(str, Enum):
     OBJECTION = "OBJECTION"            # objection trop sévère
     CONVICTION = "CONVICTION"          # conviction sous le seuil
     ASYMETRIE = "ASYMETRIE"            # rapport gain/risque insuffisant
+    STOP_HORS_LIMITES = "STOP_HORS_LIMITES"   # distance de stop refusée
     REJET_CHEF = "REJET_CHEF"          # le chef de desk a rejeté
     MANDAT = "MANDAT"                  # mandat directionnel émis
 
@@ -95,6 +97,7 @@ class GraphResult(Frozen):
     setup: SetupProposal | None = None
     counter: CounterThesis | None = None
     verdict: DeskVerdict | None = None
+    note: Note | None = None
     reason: str = ""
 
     @property
@@ -142,6 +145,7 @@ def run_desk_cycle(
         setup: SetupProposal | None = None,
         counter: CounterThesis | None = None,
         verdict: DeskVerdict | None = None,
+        note: Note | None = None,
     ) -> GraphResult:
         """Sortie FLAT, en transportant ce qui a déjà été formulé.
 
@@ -159,7 +163,7 @@ def run_desk_cycle(
         return GraphResult(
             mandate=Mandate.flat(ttl_ms=config.mandate_ttl_ms, journal_ref=ref),
             stage=stage, runs=tuple(runs), reason=reason,
-            setup=setup, counter=counter, verdict=verdict,
+            setup=setup, counter=counter, verdict=verdict, note=note,
         )
 
     # Porte 0 — le quota. Il ne dépend d'aucun agent, et se vérifie avant
@@ -176,22 +180,43 @@ def run_desk_cycle(
         news_run = run_news(llm=llm, items=news_items, store=store)
         runs.append(news_run)
 
-    regime_run = run_regime(llm=llm, context=context, store=store)
-    runs.append(regime_run)
+    # Porte 1 — une lecture amont manquante rend la suite indécidable, donc
+    # elle se vérifie APRÈS CHAQUE lecture et non après les trois.
+    #
+    # Le verdict est rigoureusement le même : une seule abstention suffisait
+    # déjà à fermer la porte. Ce qui change est ce qu'on a payé avant de le
+    # savoir. Une abstention du Régime faisait appeler le Quant et l'Analyste
+    # pour un cycle dont l'issue était acquise — deux appels dont le résultat
+    # partait à la poubelle.
+    #
+    # L'ordre est inchangé. Le trier par coût croissant (Régime 0,0142 $,
+    # Analyste 0,0211 $, Quant 0,0316 $) ne rapporterait qu'à la marge : une
+    # lecture ne s'abstient que sur ~1 cycle sur 10, et l'écart entre deux
+    # ordres vaut alors moins de 1 % du cycle. C'est l'arrêt anticipé qui
+    # rapporte, pas la permutation — et l'ordre actuel est celui que les
+    # scripts de test rejouent.
+    lectures = (
+        ("regime", lambda: run_regime(llm=llm, context=context, store=store)),
+        ("quant", lambda: run_quant(
+            llm=llm, indicators=context["indicateurs"], store=store)),
+        ("analyste", lambda: run_analyst(llm=llm, bars=bars, store=store)),
+    )
+    faites: dict[str, AgentRun] = {}
+    for nom, appel in lectures:
+        run = appel()
+        runs.append(run)
+        faites[nom] = run
+        if run.abstained:
+            # Nommer explicitement ce qui n'a PAS été demandé : sans ça, le
+            # journal se lirait comme « seul le Régime s'est abstenu » alors
+            # que les autres n'ont jamais été interrogés.
+            restantes = [n for n, _ in lectures if n not in faites]
+            suite = (f" ; {', '.join(restantes)} non demandé(s)"
+                     if restantes else "")
+            return flat(Stage.LECTURE, f"lecture indisponible : {nom}{suite}")
 
-    quant_run = run_quant(llm=llm, indicators=context["indicateurs"], store=store)
-    runs.append(quant_run)
-
-    analyst_run = run_analyst(llm=llm, bars=bars, store=store)
-    runs.append(analyst_run)
-
-    # Porte 1 — une lecture amont manquante rend la suite indécidable.
-    # Continuer produirait une décision fondée sur un trou.
-    manquantes = [
-        r.agent for r in (regime_run, quant_run, analyst_run) if r.abstained
-    ]
-    if manquantes:
-        return flat(Stage.LECTURE, f"lectures indisponibles : {', '.join(manquantes)}")
+    regime_run, quant_run, analyst_run = (
+        faites["regime"], faites["quant"], faites["analyste"])
 
     regime: RegimeRead = regime_run.output       # type: ignore[assignment]
     quant: QuantRead = quant_run.output          # type: ignore[assignment]
@@ -243,15 +268,41 @@ def run_desk_cycle(
                     + "; ".join(counter.objections[:2]), setup, counter)
 
     # --- portes déterministes sur le setup lui-même ---
-    if setup.conviction < config.min_conviction:
+    #
+    # La note est calculée APRÈS l'avocat du diable pour que la sévérité de
+    # l'objection y entre. L'ordre compte : noter avant reviendrait à ouvrir
+    # la porte sur une lecture que la contradiction a déjà entamée.
+    note = noter(setup, bars=bars, regime=regime, counter=counter)
+    if note.score < config.min_conviction:
         return flat(Stage.CONVICTION,
-                    f"conviction {setup.conviction} < {config.min_conviction}",
-                    setup, counter)
+                    f"score {note.score:.2f} < {config.min_conviction} "
+                    f"({note.explication})",
+                    setup, counter, note=note)
 
     rr = setup.reward_risk
     if rr is not None and rr < config.min_reward_risk:
         return flat(Stage.ASYMETRIE, f"gain/risque {rr:.2f} < {config.min_reward_risk}",
                     setup, counter)
+
+    # La distance de stop se vérifie ICI, pas dans `build_mandate`.
+    #
+    # `build_mandate` construit une fourchette bornée par les limites dures.
+    # Quand le setup demande un stop plus large que `max_stop_distance_bps`,
+    # cette fourchette sort avec un minimum supérieur à son maximum, et le
+    # schéma lève — ce qui FAIT TOMBER LE CYCLE au lieu de refuser le
+    # mandat. Le commentaire de `build_mandate` affirmait pourtant le
+    # contraire, et l'a affirmé jusqu'à ce qu'un dry-run ancré sur les
+    # barres produise un stop de 719 bps.
+    #
+    # Un setup hors limites est un refus ordinaire, pas une panne.
+    distance = setup.stop_distance_bps
+    if distance is not None and not (
+            limits.min_stop_distance_bps <= distance <= limits.max_stop_distance_bps):
+        return flat(Stage.STOP_HORS_LIMITES,
+                    f"stop à {distance:.0f} bps hors de "
+                    f"[{limits.min_stop_distance_bps:.0f}, "
+                    f"{limits.max_stop_distance_bps:.0f}]",
+                    setup, counter, note=note)
 
     # --- avis de risque, puis décision ---
     advisor_run = run_risk_advisor(llm=llm, setup=setup, counter=counter,
@@ -275,9 +326,10 @@ def run_desk_cycle(
 
     mandate = build_mandate(
         setup=setup, verdict=verdict, advice=advice, regime=regime,
-        config=config, limits=limits, store=store,
+        note=note, config=config, limits=limits, store=store,
         journal_payload={
             "setup": setup.model_dump(mode="json"),
+            "note": note.model_dump(mode="json"),
             "objection": counter.model_dump(mode="json"),
             "avis_risque": advice.model_dump(mode="json"),
             "verdict": verdict.model_dump(mode="json"),
@@ -287,7 +339,7 @@ def run_desk_cycle(
     log.info("mandat émis : %s %s", mandate.bias.value, mandate.universe)
     return GraphResult(
         mandate=mandate, stage=Stage.MANDAT, runs=tuple(runs),
-        setup=setup, counter=counter, verdict=verdict,
+        setup=setup, counter=counter, verdict=verdict, note=note,
         reason="toutes les portes franchies",
     )
 
@@ -298,6 +350,7 @@ def build_mandate(
     verdict: DeskVerdict,
     advice: RiskAdvice,
     regime: RegimeRead,
+    note: Note,
     config: GraphConfig,
     limits: RiskLimits,
     store=None,
@@ -333,7 +386,7 @@ def build_mandate(
     return Mandate(
         bias=Bias.LONG if setup.side is Side.LONG else Bias.SHORT,
         regime=regime.regime,
-        conviction=min(setup.conviction, Decimal("1")),
+        conviction=note.score,
         universe=(setup.asset,),
         max_notional_usd=notional,
         max_leverage=min(limits.max_effective_leverage, Decimal("2")),

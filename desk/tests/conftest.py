@@ -8,11 +8,35 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
+from trading_desk.agents.llm import API_KEY_VARS  # noqa: E402
 from trading_desk.contracts import (  # noqa: E402
     AccountState, Bias, DeskMode, FeedHealth, FeedStatus, Mandate, Position,
     Side, now_ms,
 )
 from trading_desk.risk import RiskContext, RiskLimits  # noqa: E402
+
+# Toutes les facons de s'authentifier, y compris celles que le SDK resout
+# seul. `API_KEY_VARS` est importe plutot que recopie : le jour ou le desk
+# accepte une variable de plus, l'isolation la couvre sans qu'on y pense.
+CREDENTIALS = (*API_KEY_VARS, "ANTHROPIC_AUTH_TOKEN")
+
+
+@pytest.fixture(autouse=True)
+def _aucune_cle_reelle(monkeypatch, tmp_path):
+    """Aucun test ne doit pouvoir appeler l'API pour de vrai.
+
+    Sans cette isolation, un test qui verifie le comportement « sans cle »
+    passe sur une machine nue et, sur une machine ou la cle du projet est
+    posee, part faire trente cycles factures a la place. Ce n'est pas
+    theorique : c'est arrive, et le seul symptome etait une suite lente.
+
+    Un test qui a besoin d'une cle la pose lui-meme avec `monkeypatch.setenv` —
+    il s'execute apres cette fixture, donc il gagne.
+    """
+    for var in CREDENTIALS:
+        monkeypatch.delenv(var, raising=False)
+    # Le SDK sait aussi resoudre un profil `ant auth login` sur le disque.
+    monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
 
 
 @pytest.fixture

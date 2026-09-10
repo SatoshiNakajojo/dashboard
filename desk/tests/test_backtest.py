@@ -414,3 +414,482 @@ def test_sharpe_absent_si_trop_peu_de_points():
     bars = synthetic_bars(count=60, seed=3)
     m = compute_metrics(run_backtest(bars, EmaCross(), warmup=20))
     assert m.sharpe is None or isinstance(m.sharpe, float)
+
+
+# --------------------------------------------------------------------------
+#  Les strategies documentees, et le piege qu'elles ont revele
+# --------------------------------------------------------------------------
+
+def test_la_cassure_turtle_ne_lit_jamais_la_barre_courante():
+    """Le canal doit exclure la bougie qui le teste.
+
+    L'inclure ferait « casser » le canal par la barre qui le definit : une
+    fuite de futur discrete, qui rend n'importe quelle strategie de cassure
+    brillante.
+    """
+    from trading_desk.backtest.strategies import TurtleBreakout
+
+    bars = synthetic_bars(count=400, seed=11)
+    s = TurtleBreakout(entry_period=20, exit_period=10)
+    s.prepare(bars)
+
+    # Une barre qui explose a la hausse ne doit pas relever le canal qui lui
+    # sert de reference : le signal se juge contre le passe, pas contre soi.
+    haut_du_canal = s._eh[300]
+    assert haut_du_canal == max(float(b.high) for b in bars[280:300])
+
+
+def test_le_momentum_temporel_suit_le_signe_du_rendement_passe():
+    """La regle de Moskowitz-Ooi-Pedersen, telle quelle : rien qu'un signe."""
+    from trading_desk.backtest.strategies import TimeSeriesMomentum
+
+    montant = [
+        Bar(asset="BTC", ts_ms=i * 86_400_000,
+            open=Decimal(100 + i), high=Decimal(101 + i),
+            low=Decimal(99 + i), close=Decimal(100 + i), volume=Decimal("1"))
+        for i in range(60)
+    ]
+    s = TimeSeriesMomentum(lookback=20, atr_period=5)
+    s.prepare(montant)
+    assert s._sens(50, montant) is Side.LONG
+
+    baissier = list(reversed(montant))
+    # Reconstruire des horodatages croissants apres inversion.
+    baissier = [b.model_copy(update={"ts_ms": i * 86_400_000})
+                for i, b in enumerate(baissier)]
+    s2 = TimeSeriesMomentum(lookback=20, atr_period=5)
+    s2.prepare(baissier)
+    assert s2._sens(50, baissier) is Side.SHORT
+
+    # Avant le lookback, aucun avis — surtout pas un avis neutre par defaut.
+    assert s.on_bar(5, montant, None).side is None
+
+
+def test_un_signal_refuse_par_le_risque_est_compte():
+    """Un backtest qui jette ses signaux en silence ne mesure pas la
+    strategie : il mesure le sous-echantillon que le moteur a laisse passer.
+
+    Et ce sous-echantillon n'est pas aleatoire — le plafond porte sur la
+    distance de stop, donc sur la volatilite. Constate sur BTC daily :
+    `turtle_breakout` affichait « BAT LE HASARD, p = 0,010 » sur les 4 % de
+    signaux acceptes, et « non distinguable du hasard, p = 0,48 » une fois
+    les 96 % restants admis.
+    """
+    from trading_desk.backtest.strategies import TurtleBreakout
+
+    bars = synthetic_bars(count=600, seed=3)
+
+    # Un plafond volontairement etroit refuse tout stop ATR un peu large.
+    etroit = run_backtest(
+        bars, TurtleBreakout(entry_period=20, exit_period=10),
+        limits=RiskLimits(min_stop_distance_bps=Decimal("1"),
+                          max_stop_distance_bps=Decimal("5")),
+        interval="1d")
+    assert etroit.rejected_by_risk > 0, "les refus doivent etre comptes"
+    assert not etroit.trades, "un plafond a 5 bps ne laisse rien passer"
+
+    large = run_backtest(bars, TurtleBreakout(entry_period=20, exit_period=10),
+                         limits=RiskLimits(max_stop_distance_bps=Decimal("5000")),
+                         interval="1d")
+    assert large.rejected_by_risk < etroit.rejected_by_risk
+
+
+def test_un_stop_hors_contrat_est_refuse_pas_fatal():
+    """Un stop trop large doit compter comme un signal refuse.
+
+    `StopBand` plafonne `max_bps` a 5000. Sur un actif volatil, un stop ATR
+    le depasse : construire la fourchette hors du `try` arretait le backtest
+    entier au milieu de la serie, avec une ValidationError pydantic. Un
+    moteur qui tombe sur une entree qu'il aurait simplement du refuser est
+    une panne, pas une validation.
+    """
+    from trading_desk.backtest.engine import _try_open
+    from trading_desk.backtest.costs import FRICTIONLESS
+
+    bar = Bar(asset="AVAX", ts_ms=0, open=Decimal("100"), high=Decimal("101"),
+              low=Decimal("99"), close=Decimal("100"), volume=Decimal("1"))
+
+    # Stop a 60 % : au-dela des 5000 bps que le contrat autorise.
+    ouvert = _try_open(
+        bar=bar, side=Side.LONG, stop=Decimal("40"), target=None,
+        equity=Decimal("1000"),
+        limits=RiskLimits(max_stop_distance_bps=Decimal("5000")),
+        costs=FRICTIONLESS,
+    )
+    assert ouvert is None, "refus attendu, pas d'exception"
+
+
+def test_aucune_strategie_n_emet_de_stop_negatif():
+    """Sur un actif dont l'ATR approche le prix, `close - k*ATR` passe sous
+    zero. `Signal.stop_price` exige `> 0` : emettre cette valeur arrete le
+    backtest au milieu de la serie.
+
+    Le defaut etait present dans les deux baselines d'origine ; il n'etait
+    jamais apparu parce qu'elles n'avaient tourne que sur BTC.
+    """
+    from trading_desk.backtest.strategies import BASELINES
+
+    # Prix minuscule, amplitude enorme : l'ATR depasse largement le prix.
+    extremes = []
+    for i in range(400):
+        cloture = Decimal("0.80") if i % 3 else Decimal("0.10")
+        extremes.append(Bar(
+            asset="MEME", ts_ms=i * 86_400_000, open=Decimal("0.30"),
+            high=Decimal("0.95"), low=Decimal("0.05"),
+            close=cloture, volume=Decimal("1")))
+
+    for nom, cls in BASELINES.items():
+        s = cls()
+        s.prepare(extremes)
+        for i in range(len(extremes)):
+            for pos in (None, Side.LONG, Side.SHORT):
+                sig = s.on_bar(i, extremes, pos)
+                if sig.stop_price is not None:
+                    assert sig.stop_price > 0, f"{nom} : stop <= 0 a la barre {i}"
+                if sig.target_price is not None:
+                    assert sig.target_price > 0, f"{nom} : cible <= 0 a la barre {i}"
+
+
+def test_les_horizons_sont_convertis_a_l_echelle_de_temps():
+    """Les strategies comptent en barres, leurs regles d'origine en jours.
+
+    `TurtleBreakout()` tel quel sur du 4 h donne un canal de 55 barres, soit
+    neuf jours : ce n'est plus la regle des Turtles. Le meme piege dans
+    l'autre sens vaut pour `tsmom`, dont le defaut de 168 barres fait 168
+    JOURS en daily quand la litterature mesure l'effet sur une a quatre
+    semaines.
+
+    Constate : sur BTC daily, `tsmom` rend +35 a 168 jours et +245 a 28
+    jours. Une grille qui compare des horizons differents d'une cellule a
+    l'autre ne mesure pas ce qu'elle annonce.
+    """
+    # La conversion vit dans la BIBLIOTHEQUE, pas dans le script : l'interface
+    # rejoue les memes backtests pour tracer ses courbes, et une deuxieme copie
+    # des horizons ferait diverger la courbe affichee de la grille validee.
+    from trading_desk.backtest.strategies import BARRES_PAR_JOUR, parametres
+
+    # 55 jours de canal, quelle que soit l'echelle.
+    for iv, n in BARRES_PAR_JOUR.items():
+        assert parametres("turtle_breakout", iv)["entry_period"] == 55 * n
+        assert parametres("turtle_breakout", iv)["exit_period"] == 20 * n
+        assert parametres("tsmom", iv)["lookback"] == 28 * n
+
+    # Les periodes conventionnelles restent en barres, telles qu'employees.
+    assert parametres("ema_cross", "4h") == {}
+    assert parametres("rsi_reversion", "1d") == {}
+
+
+def test_le_verdict_de_la_grille_dit_ce_qu_on_attendait_du_hasard():
+    """Trois cellules a p < 0,05 sur 56 ne sont pas une decouverte.
+
+    Un criblage qui affiche ses cellules significatives sans afficher combien
+    on en attendait sans aucun signal se lit a l'envers. Les deux chiffres
+    doivent apparaitre ensemble.
+    """
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+    from robustness_grid import rendre_verdict
+
+    # 56 cellules de pur bruit, dont 3 sous 0,05 par hasard.
+    bruit = [{"strategie": "s", "actif": "A", "intervalle": "1d",
+              "net_usd": 1.0, "trades": 10, "p": p}
+             for p in ([0.01, 0.02, 0.04] + [0.3] * 53)]
+    texte = rendre_verdict(bruit)
+    assert "56" in texte and "2.8" in texte, "l'attendu du hasard doit figurer"
+    assert "AUCUNE" in texte, "aucune ne doit survivre a BH"
+
+    # Une cellule ecrasante survit, meme noyee dans 55 autres.
+    fort = [{"strategie": "s", "actif": "A", "intervalle": "1d",
+             "net_usd": 1.0, "trades": 10, "p": p}
+            for p in ([0.00001] + [0.5] * 55)]
+    assert "AUCUNE" not in rendre_verdict(fort)
+
+    # Une grille sans aucun test exploitable ne doit pas planter.
+    assert "Aucune cellule" in rendre_verdict(
+        [{"strategie": "s", "actif": "A", "intervalle": "1d",
+          "net_usd": 0.0, "trades": 0, "p": None}])
+
+
+def test_le_hasard_herite_des_durees_de_detention():
+    """Le contrefactuel doit tenir ses positions aussi longtemps qu'elle.
+
+    Les quatre strategies sortent sur signal (`exit_now`) ; le bras aleatoire
+    ne pouvait sortir qu'au stop ou a la cible. Mesure sur la grille : ses
+    positions tenaient 1,4 a 6,7 fois plus longtemps. La comparaison ne
+    portait donc pas sur le moment d'entree mais sur deux regles de sortie
+    differentes — et une strategie qui coupe vite paraissait brillante face a
+    un hasard qui encaissait toutes les reprises.
+    """
+    from trading_desk.backtest.null_model import EntryShape, RandomEntry
+
+    bars = synthetic_bars(count=600, seed=17)
+    # 10 % de stop : assez large pour survivre a une barre, assez etroit pour
+    # rester sous le plafond du contrat `StopBand`.
+    formes = [EntryShape(side=Side.LONG, stop_frac=Decimal("0.10"),
+                         target_frac=None)]
+
+    # Sans duree, la position ne sort qu'au stop : elle tient tres longtemps.
+    sans = run_backtest(bars, RandomEntry(formes, n_trades=5, seed=1),
+                        limits=RiskLimits(max_stop_distance_bps=Decimal("5000")),
+                        interval="1d")
+    # Avec des durees courtes, elle sort quand elles sont atteintes.
+    avec = run_backtest(bars, RandomEntry(formes, n_trades=5, seed=1,
+                                          holding_bars=[3]),
+                        limits=RiskLimits(max_stop_distance_bps=Decimal("5000")),
+                        interval="1d")
+
+    index = {b.ts_ms: i for i, b in enumerate(bars)}
+    def duree(res):
+        d = [index[t.exit_ts_ms] - index[t.entry_ts_ms] for t in res.trades]
+        return sum(d) / len(d) if d else 0
+
+    assert avec.trades, "le bras aleatoire doit produire des trades"
+    assert duree(avec) < duree(sans), "la duree tiree doit ecourter la detention"
+    assert any(t.reason == "duree tiree au hasard" for t in avec.trades)
+
+
+def test_les_durees_imitees_sont_celles_voulues_pas_les_stops():
+    """Tirer parmi TOUTES les sorties tronquerait deux fois.
+
+    Une duree issue d'un trade stoppe n'est pas une intention, c'est une
+    troncature. La retirer puis lui appliquer un stop raccourcirait encore le
+    bras aleatoire, reduirait son exposition a la derive du marche et le
+    handicaperait — un contrefactuel handicape fabrique des edges.
+    """
+    from trading_desk.backtest.null_model import randomization_test
+    from trading_desk.backtest.strategies import TurtleBreakout
+
+    bars = synthetic_bars(count=900, seed=23)
+    lim = RiskLimits(max_stop_distance_bps=Decimal("5000"))
+    strat = TurtleBreakout(entry_period=40, exit_period=15)
+    obs = run_backtest(bars, strat, limits=lim, interval="1d")
+    if not obs.trades:
+        pytest.skip("aucun trade sur cette serie synthetique")
+
+    res = randomization_test(bars, TurtleBreakout(entry_period=40, exit_period=15),
+                             obs, draws=30, limits=lim, interval="1d")
+    # Le nuage doit contenir des trades : un contrefactuel vide ne compare rien.
+    assert res.mean_trades_random > 0
+    assert 0.0 <= res.p_value <= 1.0
+
+
+def test_l_effet_week_end_se_mesure_sur_les_queues_pas_la_mediane():
+    """Une affirmation sur des MECHES porte sur la queue, pas sur le courant.
+
+    La documentation annonce des meches de liquidation le week-end. Mesurer
+    la seule mediane ne peut ni la confirmer ni l'infirmer : une distribution
+    peut etre plus calme d'ordinaire et plus violente dans ses extremes.
+    """
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+    from weekend_effect import ecart_pct, quantile
+
+    # Distribution calme en median, violente en queue : le p99 doit le voir.
+    calme_mais_extreme = [1.0] * 99 + [50.0]
+    assert quantile(calme_mais_extreme, 0.50) == 1.0
+    assert quantile(calme_mais_extreme, 0.99) == 50.0
+
+    assert quantile([], 0.95) == 0.0, "une serie vide ne doit pas lever"
+    assert ecart_pct(100.0, 57.0) == -43.0
+    assert ecart_pct(0.0, 5.0) == 0.0, "pas de division par zero"
+
+
+def test_kelly_refuse_une_esperance_defavorable():
+    """Kelly renvoie une fraction NEGATIVE quand l'esperance est mauvaise.
+
+    C'est la seule partie du critere qui protege sans hypothese : elle ne
+    demande pas que `p` et `R` soient bien estimes pour dire « ne pas
+    trader ». Mesure sur les baselines : `rsi_reversion` donne f* = -0,265,
+    ce qui rejoint le verdict independant du modele nul.
+    """
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+    from kelly_sur_mesure import drawdown_serie, kelly, proba_serie_perdante
+
+    assert kelly(0.44, 0.79) < 0, "esperance defavorable -> ne pas trader"
+    assert kelly(0.60, 2.0) > 0
+    assert kelly(0.50, 0.0) == -1.0, "un ratio nul ne doit pas diviser par zero"
+
+    # Le quart d'un edge surestime reste dangereux : c'est le point du script.
+    f = kelly(0.369, 8.90)
+    assert drawdown_serie(0.25 * f, 8) > 0.30, "zone de mort attendue"
+    assert drawdown_serie(0.01, 8) < 0.10, "le plafond du document, lui, tient"
+
+    # Une serie de 8 pertes est quasi certaine a ce taux de reussite.
+    assert proba_serie_perdante(0.369, 8, 500) > 0.95
+
+
+def test_le_balayage_distingue_un_plateau_d_un_pic():
+    """Un p-value spectaculaire sur UNE valeur de parametre ne prouve rien.
+
+    Avec assez de valeurs essayees, l'une finit par bien tomber. Ce qui
+    distingue un signal d'un artefact, c'est qu'il survive au voisinage.
+    Mesure sur BTC 1d : `tsmom` tient sur 7 valeurs de lookback sur 8
+    (14 a 56 jours), `turtle_breakout` sur 3 sur 7 et decroit de facon
+    monotone.
+    """
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+    from sensibilite_parametres import BALAYAGES
+
+    # Chaque balayage doit couvrir un voisinage large, pas trois valeurs.
+    for nom, (param, valeurs, cls) in BALAYAGES.items():
+        assert len(valeurs) >= 7, f"{nom} : voisinage trop etroit pour conclure"
+        assert valeurs == sorted(valeurs)
+        # Le parametre balaye doit exister sur la strategie.
+        instance = cls(**{param: valeurs[0]})
+        assert getattr(instance, param) == valeurs[0]
+
+
+def test_engle_granger_reconnait_une_paire_construite_co_integree():
+    """Le test doit trouver ce qui EST co-integre, et rejeter ce qui ne l'est pas.
+
+    Sans ces deux cotes, un test qui ne trouve jamais rien passerait pour
+    prudent alors qu'il serait simplement casse.
+    """
+    import random
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+    from cointegration import MACKINNON, engle_granger
+
+    rng = random.Random(42)
+
+    # Co-integree par construction : y = 1.5x + 10 + bruit stationnaire.
+    x, prix = [], 100.0
+    for _ in range(600):
+        prix += rng.gauss(0, 1)
+        x.append(prix)
+    y = [1.5 * xi + 10 + rng.gauss(0, 0.5) for xi in x]
+    beta, t = engle_granger(y, x)
+    assert abs(beta - 1.5) < 0.05, "le ratio de couverture doit etre retrouve"
+    assert t <= MACKINNON[0.01], "une paire construite doit etre detectee"
+
+    # Deux marches aleatoires independantes : aucune relation stable.
+    a, b, pa, pb = [], [], 100.0, 100.0
+    for _ in range(600):
+        pa += rng.gauss(0, 1)
+        pb += rng.gauss(0, 1)
+        a.append(pa)
+        b.append(pb)
+    _, t_faux = engle_granger(a, b)
+    assert t_faux > MACKINNON[0.05], "deux marches independantes ne le sont pas"
+
+
+def test_le_funding_du_modele_est_la_mediane_mesuree_pas_une_estimation():
+    """La constante de `costs.py` doit rester ancree a une mesure.
+
+    Mesure du 5 septembre 2026 sur un an de funding horaire Hyperliquid :
+    mediane 0,1250 bps/h sur BTC et ETH. La valeur du modele est exactement
+    celle-la — mais elle vaut le double de la MOYENNE, le funding etant
+    negatif 17 a 36 % du temps.
+
+    Ce test fige l'ancrage : si quelqu'un change la constante, il doit
+    reconsiderer la mesure plutot que d'ajuster un chiffre au jugement.
+    """
+    from trading_desk.backtest.costs import CostModel
+
+    assert CostModel().funding_bps_per_hour == Decimal("0.125")
+
+    # Le sens de l'erreur compte : surestimer le portage rend les baselines
+    # plus dures a battre. C'est le bon defaut pour une reference que le desk
+    # multi-agents devra depasser au P5.
+    mediane_mesuree = Decimal("0.125")
+    moyenne_mesuree = Decimal("0.069")   # BTC, un an d'historique reel
+    assert CostModel().funding_bps_per_hour >= moyenne_mesuree
+    assert CostModel().funding_bps_per_hour == mediane_mesuree
+
+
+def test_le_drawdown_croit_avec_la_taille_de_position():
+    """Le Monte-Carlo doit sanctionner un dimensionnement excessif.
+
+    C'est ce qui distingue les deux prescriptions du manuel de risque : son
+    plafond dur (1 %) reste survivable, son quarter-Kelly (7,46 % sur les
+    donnees mesurees) mene a une ruine quasi certaine. Un test qui ne verrait
+    pas la difference ne servirait a rien.
+    """
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+    from monte_carlo_ruine import pire_drawdown
+
+    # Une serie perdante nette : huit pertes de 1 R pour deux gains de 2 R.
+    serie = [-1.0] * 8 + [2.0] * 2
+
+    petit = pire_drawdown(serie, 0.005)
+    moyen = pire_drawdown(serie, 0.01)
+    gros = pire_drawdown(serie, 0.0746)
+
+    assert petit < moyen < gros, "le drawdown doit croitre avec la fraction"
+    assert petit < 0.05, "a 0,5 % du capital, huit pertes restent absorbables"
+    assert gros > 0.30, "a 7,46 %, la meme serie entre en zone de mort"
+
+    # Une serie qui efface tout le capital est plafonnee a 100 %.
+    assert pire_drawdown([-1.0] * 50, 0.5) <= 1.0
+
+
+def test_le_walk_forward_ne_confond_pas_optimise_et_fixe():
+    """Un WFE bas sur un parametre FIXE ne diagnostique pas un sur-ajustement.
+
+    Rien n'a ete optimise : il mesure seulement que la fenetre suivante a
+    moins bien rendu. Confondre les deux ferait accuser de sur-optimisation
+    une strategie qui n'a rien optimise du tout.
+
+    Mesure sur BTC 1d, 20 passes : lookback optimise WFE 26,7 %, lookback
+    documente fige a 28 jours WFE 47,1 % — et l'OOS est IDENTIQUE (+1,0 %/an)
+    dans les deux cas. Optimiser n'a rien rapporte devant ; ca n'a enfle que
+    l'IS de 64 %.
+    """
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+    from walk_forward import rendement_annualise
+
+    # Une fenetre courte doit s'annualiser plus fort qu'une longue.
+    court = rendement_annualise(net=10.0, capital=1000.0, barres=91,
+                                barres_par_an=365)
+    long_ = rendement_annualise(net=10.0, capital=1000.0, barres=365,
+                                barres_par_an=365)
+    assert court > long_
+    assert abs(long_ - 1.0) < 1e-9, "1 % sur un an doit rendre 1 %/an"
+
+    # Une fenetre vide ne doit pas diviser par zero.
+    assert rendement_annualise(5.0, 1000.0, 0, 365) == 0.0
+
+
+def test_le_signal_de_funding_est_bien_contrarien():
+    """Funding fortement positif = longs surendettes => on prend le SHORT.
+
+    C'est la these du document : le desequilibre de levier annonce la
+    cascade de liquidations qui le corrige. Se tromper de sens ici ferait
+    suivre la foule endettee au lieu de la contrer, et le backtest mesurerait
+    une strategie qui n'est pas celle qu'on croit tester.
+    """
+    from trading_desk.backtest.strategies import FundingExtreme
+
+    bars = synthetic_bars(count=300, seed=9)
+
+    # Un funding qui oscille — une fenetre CONSTANTE aurait un ecart-type nul
+    # et aucun z-score ne pourrait s'en deduire, ce qui est le comportement
+    # correct de la strategie mais rendrait ce test vide.
+    import math
+    ondule = [0.5 + 0.2 * math.sin(i / 3) for i in range(len(bars) - 1)]
+    calme = [*ondule, 50.0]
+    s = FundingExtreme(calme, lookback=42, seuil_z=1.5)
+    s.prepare(bars)
+    assert s.on_bar(len(bars) - 1, bars, None).side is Side.SHORT
+
+    # Creux symetrique : les shorts sont surendettes, on prend le LONG.
+    creux = [*ondule, -50.0]
+    s2 = FundingExtreme(creux, lookback=42, seuil_z=1.5)
+    s2.prepare(bars)
+    assert s2.on_bar(len(bars) - 1, bars, None).side is Side.LONG
+
+    # Sans serie de funding, la strategie s'abstient plutot que d'inventer.
+    s3 = FundingExtreme(None)
+    s3.prepare(bars)
+    assert s3.on_bar(len(bars) - 1, bars, None).side is None

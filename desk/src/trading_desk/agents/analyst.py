@@ -82,6 +82,24 @@ def build_market_context(bars: list[Bar], *, lookback: int = 60) -> dict:
             "variation_periode_pct": round(change_pct, 2),
             "plus_haut_20": _round(hi[-1]),
             "plus_bas_20": _round(lo[-1]),
+            # Les extremes a plus long terme, et ils ne sont pas decoratifs.
+            #
+            # Le scorer MESURE si le stop du setup depasse la structure —
+            # au-dela du plus bas de 120 barres il est structurel, au-dela
+            # de celui de 40 barres il reste defendable, en deca c'est une
+            # distance de dimensionnement. Une execution reelle a rendu
+            # ARBITRAIRE sur six setups sur six.
+            #
+            # La cause n'etait pas l'agent : le contexte ne lui montrait que
+            # l'extreme a 20 barres. On le notait sur une information qu'il
+            # n'avait pas. Les lui donner n'est pas lui souffler le bareme,
+            # c'est cesser de lui cacher le marche — et la porte d'asymetrie
+            # l'empeche d'en abuser, puisqu'un stop plus large degrade
+            # mecaniquement le gain/risque.
+            "plus_haut_40": _round(max(float(b.high) for b in bars[-40:])),
+            "plus_bas_40": _round(min(float(b.low) for b in bars[-40:])),
+            "plus_haut_120": _round(max(float(b.high) for b in bars[-120:])),
+            "plus_bas_120": _round(min(float(b.low) for b in bars[-120:])),
         },
         "indicateurs": {
             "rsi_14": _round(rsi_series[-1], 1),

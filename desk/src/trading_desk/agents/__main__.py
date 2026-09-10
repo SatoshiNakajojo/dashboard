@@ -28,17 +28,30 @@ import os
 import sys
 from decimal import Decimal
 from pathlib import Path
+from typing import Any
 
 from ..backtest.data import DataUnavailable, load_from_file, load_synthetic
 from ..features.bars import Bar
 from .budget import BudgetedLLM, BudgetExceeded
-from .graph import run_desk_cycle
+from .graph import GraphConfig, run_desk_cycle
 from .llm import (
-    API_KEY_VARS, DEFAULT_MODEL, OFFICIAL_BASE_URL, AnthropicLLM, LLMClient,
-    LLMError, LLMRefusal, ScriptedLLM, api_key_source, desk_api_key,
+    API_KEY_VARS,
+    DEFAULT_MODEL,
+    OFFICIAL_BASE_URL,
+    AnthropicLLM,
+    LLMClient,
+    LLMError,
+    LLMRefusal,
+    LLMResponse,
+    QuotaEpuise,
+    RoutedLLM,
+    api_key_source,
+    desk_api_key,
 )
 from .memory import SqliteLessonStore
 from .metrics import format_report, summarize
+from .roster import POLITIQUES
+
 
 def _credential_available() -> bool:
     """Y a-t-il de quoi s'authentifier ?
@@ -78,24 +91,158 @@ def _windows(bars: list[Bar], count: int) -> list[list[Bar]]:
     return [bars[int(i * step):int(i * step) + WINDOW_BARS] for i in range(count)]
 
 
-def _script() -> list:
-    """Reponses fixes pour `--dry-run`. Le meme chemin de code, sans depense."""
+def _script(fenetre: list[Bar] | None = None) -> list:
+    """Reponses fixes pour `--dry-run`. Le meme chemin de code, sans depense.
+
+    **La geometrie du setup est ancree sur la fenetre**, et ce n'est pas du
+    confort. Depuis que le scorer MESURE l'alignement, le niveau d'entree et
+    la solidite du stop sur les barres, un prix d'entree fixe ne peut pas
+    convenir a trente fenetres de marche differentes : il tomberait hors de
+    l'etendue de la plupart, noterait zero sur les trois mesures, et le
+    dry-run s'arreterait a la porte du score sans jamais exercer le Conseil
+    de risque ni le Chef de desk.
+
+    Un dry-run qui n'atteint pas la moitie des agents ne verifie pas le
+    cablage — c'est precisement ce qu'il existe pour faire.
+    """
+    entree, stop, cible = "64000", "61120", "72640"
+    if fenetre:
+        # La mediane des clotures est, par construction, un prix que la
+        # fenetre traverse souvent : le comptage de touches y trouve
+        # plusieurs grappes, donc `NIVEAU_NET`.
+        milieu = sorted(float(b.close) for b in fenetre)[len(fenetre) // 2]
+        # Le stop se pose a 450 bps, PAS sous le plus bas de la fenetre.
+        #
+        # Ce choix expose une tension reelle du desk, et le dry-run n'a pas
+        # a la masquer : sur une fenetre volatile, un stop veritablement
+        # STRUCTUREL — au-dela du plus bas — depasse la limite dure de
+        # 500 bps que le moteur de risque impose. Les deux criteres se
+        # contredisent, et c'est la limite de risque qui gagne.
+        #
+        # Le setup scripte prend donc un stop defendable plutot que
+        # structurel, ce qui lui coute 0,10 au score et le fait quand meme
+        # passer. Un dry-run qui contournerait la contrainte en elargissant
+        # le stop ne testerait pas le desk qu'on execute.
+        risque = milieu * 0.045
+        entree = f"{milieu:.0f}"
+        stop = f"{milieu - risque:.0f}"
+        cible = f"{milieu + risque * 3:.0f}"
     return [
-        {"regime": "RANGE", "confidence": "0.6"},
+        {"regime": "TREND_UP", "confidence": "0.6"},
         {"inputs_digest": "dry", "momentum": "0.1"},
         {"asset": "BTC", "bias": "LONG", "thesis_summary": "Fenetre de test."},
-        {"asset": "BTC", "side": "LONG", "entry_price": "64000",
-         "stop_price": "63000", "target_price": "66500", "conviction": "0.7"},
+        {"asset": "BTC", "side": "LONG", "entry_price": entree,
+         "stop_price": stop, "target_price": cible,
+         "evaluation": ["CONFLUENCE_3P", "OBSTACLE_AUCUN"]},
         {"targets_setup": "BTC", "severity": "0.3", "veto": False},
         {"size_factor": "0.9"},
         {"decision": "APPROVE", "reasoning": "test", "size_factor": "1"},
     ]
 
 
-def _build_llm(args) -> LLMClient:
+class _DryRunLLM:
+    """Modele scripte pour `--dry-run`, qui repond PAR ROLE et non par rang.
+
+    `ScriptedLLM` sert ses reponses dans l'ordre, et c'est ce qu'il faut aux
+    tests : ils scriptent des sequences exactes, exceptions comprises.
+
+    Le dry-run a besoin de l'inverse. Ses cycles ne meurent pas tous a la
+    meme porte — l'un s'arrete au score, l'autre au stop hors limites — donc
+    ils ne consomment pas le meme nombre de reponses. Une liste positionnelle
+    se decale au premier cycle court, et le cycle suivant sert un
+    `size_factor` a l'agent Regime, qui echoue son schema. Le rapport
+    annonce alors « qualite insuffisante : regime » — un defaut du banc
+    d'essai pris pour un defaut du modele.
+
+    Repondre par role rend l'alignement impossible a perdre, et c'est aussi
+    plus fidele : un vrai modele recoit un schema a chaque appel, jamais un
+    rang.
+    """
+
+    ROLES = ("regime", "quant", "analyste", "strategie",
+             "avocat_du_diable", "risk_advisor", "chef_de_desk")
+
+    def __init__(self, fenetres: list[list[Bar]]) -> None:
+        self.fenetres = fenetres or [[]]
+        self.model = "scripted"
+        self.calls: list[dict[str, str]] = []
+        self._cycle = -1
+
+    def structured(self, *, system: str, user: str, schema, max_tokens: int = 4000,
+                   agent: str = "") -> tuple[Any, LLMResponse]:
+        self.calls.append({"system": system, "user": user, "agent": agent})
+        # Le Regime ouvre chaque cycle : c'est lui qui fait avancer la
+        # fenetre. Un cycle interrompu n'en decale donc aucun autre.
+        if agent == "regime":
+            self._cycle += 1
+        f = self.fenetres[min(max(self._cycle, 0), len(self.fenetres) - 1)]
+        reponses = dict(zip(self.ROLES, _script(f), strict=False))
+        brut = reponses.get(agent, {})
+        valeur = schema.model_validate(brut)
+        meta = LLMResponse(model=self.model, input_tokens=1200, output_tokens=300,
+                           latency_ms=42, stop_reason="end_turn",
+                           raw_text=valeur.model_dump_json())
+        return valeur, meta
+
+
+def _build_llm(args, fenetres: list[list[Bar]] | None = None) -> LLMClient:
     if args.dry_run:
-        return ScriptedLLM(_script() * (args.runs + 2))
-    return AnthropicLLM(model=args.model, effort=args.effort)
+        return _DryRunLLM(fenetres or [])
+    if args.politique == "uniforme":
+        # Pas de `RoutedLLM` inutile : un seul modele, un seul client, et le
+        # journal continue de nommer un modele unique sans indirection.
+        return AnthropicLLM(model=args.model, effort=args.effort)
+    return RoutedLLM(POLITIQUES[args.politique], effort=args.effort)
+
+
+def _rapport_notes(notes: list, seuil) -> None:
+    """La distribution des scores, et ce que chaque critere a coute.
+
+    Sans ce bloc, un « CONVICTION 19 » dit QUE la porte se referme et jamais
+    POURQUOI. La premiere execution reelle l'a appris a mes depens : elle a
+    coute 2,88 $ et n'a rien laisse pour diagnostiquer, parce que le detail
+    de la note ne vivait que dans une chaine de rejet jamais affichee.
+
+    Deux chiffres decident de la suite. **L'ecart au seuil** dit si la porte
+    est manquee de peu ou de loin — un desk qui echoue a 0,58 et un desk qui
+    echoue a 0,30 n'ont pas le meme probleme. **Le terme median de chaque
+    dimension** dit lequel des criteres plafonne : si l'un rend zero a
+    chaque cycle, ce n'est pas le marche qui est mediocre, c'est ce critere
+    qui ne se declenche jamais.
+    """
+    if not notes:
+        return
+    import statistics
+
+    scores = sorted(float(n.score) for n in notes)
+    print("\n  SCORES DU SCORER — pourquoi la porte s'ouvre ou non")
+    print("  " + "-" * 58)
+    print(f"  {'notes calculées':<28} {len(scores):>10}")
+    print(f"  {'médiane':<28} {statistics.median(scores):>10.2f}")
+    print(f"  {'minimum / maximum':<28} "
+          f"{scores[0]:>4.2f} / {scores[-1]:.2f}")
+    print(f"  {'seuil de la porte':<28} {float(seuil):>10.2f}")
+    print(f"  {'au-dessus du seuil':<28} "
+          f"{sum(1 for x in scores if x >= float(seuil)):>10}")
+
+    par_terme: dict[str, list[float]] = {}
+    for n in notes:
+        for nom, valeur in n.termes:
+            par_terme.setdefault(nom, []).append(float(valeur))
+        for nom in n.omises:
+            par_terme.setdefault(nom + " (omis)", []).append(0.0)
+    print("  " + "-" * 58)
+    print(f"  {'terme':<20} {'médiane':>9} {'min':>7} {'max':>7} {'n':>6}")
+    for nom, v in sorted(par_terme.items()):
+        print(f"  {nom:<20} {statistics.median(v):>+9.2f} "
+              f"{min(v):>+7.2f} {max(v):>+7.2f} {len(v):>6}")
+    print("  " + "-" * 58)
+    manque = float(seuil) - statistics.median(scores)
+    if manque > 0:
+        print(f"  Il manque {manque:.2f} au cycle médian pour franchir la "
+              "porte.\n")
+    else:
+        print("  Le cycle médian franchit la porte.\n")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -114,6 +261,10 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--model", default=DEFAULT_MODEL)
     p.add_argument("--effort", default="medium",
                    choices=["low", "medium", "high", "xhigh", "max"])
+    p.add_argument("--politique", default="uniforme", choices=sorted(POLITIQUES),
+                   help="repartition des modeles par role. `uniforme` met tout "
+                        "sur --model ; les autres routent les roles de lecture "
+                        "vers un modele moins cher. Voir agents/roster.py.")
     p.add_argument("--budget-usd", type=float, default=5.0,
                    help="plafond de depense. Aucun appel au-dela.")
     p.add_argument("--cadence", type=float, default=12.0,
@@ -158,7 +309,7 @@ def _check(args) -> int:
         print("  Causes probables, dans l'ordre :")
         print("   1. clé absente, expirée ou révoquée")
         print("   2. crédit épuisé (console Anthropic → Billing)")
-        print(f"   3. api.anthropic.com bloqué par la politique réseau")
+        print("   3. api.anthropic.com bloqué par la politique réseau")
         print(f"   4. modèle « {args.model} » inconnu de ce compte\n")
         return 2
 
@@ -214,20 +365,45 @@ def main() -> int:
               "câblage,\n  ils ne disent rien du comportement des agents sur "
               "un vrai marché.")
 
-    llm = BudgetedLLM(_build_llm(args), max_usd=Decimal(str(args.budget_usd)))
+    llm = BudgetedLLM(_build_llm(args, fenetres),
+                      max_usd=Decimal(str(args.budget_usd)))
     memory = SqliteLessonStore(args.memory_db) if args.memory_db else None
 
-    print(f"\n  {args.runs} cycles fantômes · {args.model} · effort {args.effort}"
+    # Le bandeau doit dire ce qui a REELLEMENT tourne : afficher `--model`
+    # sous une politique heterogene ferait lire au rapport un modele unique
+    # la ou plusieurs ont decide.
+    if args.politique == "uniforme":
+        modeles = args.model
+    else:
+        pol = POLITIQUES[args.politique]
+        distincts = sorted(set(pol.model_dump().values()))
+        modeles = f"politique {args.politique} ({', '.join(distincts)})"
+    print(f"\n  {args.runs} cycles fantômes · {modeles} · effort {args.effort}"
           f" · plafond {args.budget_usd:.2f} $")
     if not args.dry_run:
         print("  Aucun ordre n'est émis. Le mandat est journalisé puis jeté.\n")
 
     tous = []
     stages: dict[str, int] = {}
+    notes: list = []
     interrompu = ""
     for i, fenetre in enumerate(fenetres, 1):
         try:
             res = run_desk_cycle(llm=llm, bars=fenetre, memory=memory)
+        except QuotaEpuise as exc:
+            # Le plafond du COMPTE, pas celui du run. Continuer dépenserait
+            # des appels contre une API qui refuse, et le rapport final
+            # accuserait le modèle d'une qualité insuffisante qui n'est pas
+            # la sienne — c'est ce qui s'est produit le 8 septembre 2026.
+            print(f"\n\n  PLAFOND DE COMPTE ATTEINT — campagne interrompue "
+                  f"au cycle {i}.\n", file=sys.stderr)
+            print(f"  {exc}\n", file=sys.stderr)
+            print("  Ce n'est ni un défaut du modèle ni un dépassement de "
+                  "`--budget-usd` :\n  c'est la limite de dépense du compte "
+                  "Anthropic. Elle se relève dans\n  la console, sous "
+                  "Limits.\n", file=sys.stderr)
+            interrompu = "plafond de compte atteint"
+            break
         except BudgetExceeded as exc:
             # Le graphe absorbe normalement le depassement via l'abstention ;
             # s'il remonte jusqu'ici, on arrete la boucle plutot que de la
@@ -236,6 +412,12 @@ def main() -> int:
             break
         tous.extend(res.runs)
         stages[res.stage.value] = stages.get(res.stage.value, 0) + 1
+        # La note de chaque cycle, gardee pour le rapport. Sans elle, un
+        # « CONVICTION 19 » dit QUE la porte se referme et jamais POURQUOI —
+        # et le diagnostic coute alors une seconde execution payante. C'est
+        # exactement ce qui est arrive a la premiere.
+        if res.note is not None:
+            notes.append(res.note)
         print(f"    cycle {i}/{len(fenetres)} — {res.stage.value:<14} "
               f"{float(llm.spent_usd):.4f} $ dépensés", end="\r", flush=True)
 
@@ -256,31 +438,59 @@ def main() -> int:
                             decisions_per_hour=args.cadence))
 
     global_ = summarize(tous)
+    cycles = sum(stages.values())
     print("  " + "=" * 58)
     print(f"  TOTAL   {global_.runs} appels · "
           f"{float(llm.spent_usd):.4f} $ · "
           f"{global_.valid_rate_pct:.1f} % valides · "
           f"p95 {global_.latency_p95_ms} ms")
+
+    # Le chiffre qui tranchera le P5. Par CYCLE, parce que c'est l'unite de
+    # decision : additionner les extrapolations par agent surestimerait ceux
+    # qui ne sont appeles que sous condition — l'Avocat du diable n'intervient
+    # que s'il existe un setup a attaquer.
+    if cycles:
+        par_cycle = llm.spent_usd / cycles
+        mensuel = float(par_cycle) * args.cadence * 24 * 30
+        print(f"  Cout d'un cycle complet : {float(par_cycle):.4f} $ "
+              f"— soit {mensuel:,.0f} $/mois a {args.cadence:.0f} decisions/h")
+        print("  Le P5 exige de battre les baselines NET de ce montant.")
     if llm.unpriced_calls:
         print(f"  {llm.unpriced_calls} appel(s) sur un modèle hors grille : "
               "le coût affiché n'est pas fiable.")
     print("  répartition des issues : "
           + ", ".join(f"{k} {v}" for k, v in sorted(stages.items())))
+    _rapport_notes(notes, GraphConfig().min_conviction)
 
     # La porte se joue agent par agent : une moyenne globale masque l'agent
     # qui echoue, et c'est precisement celui qui bloque le passage au P4.
-    faibles = [n for n in sorted(par_agent)
-               if not summarize(par_agent[n]).passes_p3_gate]
+    mesures = {n: summarize(r) for n, r in par_agent.items()}
+    rates = [n for n in sorted(mesures) if not mesures[n].quality_passes]
+    courts = [n for n in sorted(mesures)
+              if mesures[n].quality_passes and not mesures[n].sample_is_sufficient]
+
     print("  " + "=" * 58)
-    if faibles:
-        print(f"  PORTE P3 : NON FRANCHIE — {', '.join(faibles)}")
+    if rates:
+        print(f"  PORTE P3 : NON FRANCHIE — qualite insuffisante : {', '.join(rates)}")
+    elif courts:
+        # Un agent conditionnel recoit moins d'appels qu'il n'y a de cycles.
+        # Dire combien de cycles il faudrait evite de relancer au hasard.
+        print(f"  PORTE P3 : INDETERMINEE — echantillon trop court : {', '.join(courts)}")
+        for n in courts:
+            m = mesures[n]
+            besoin = int(cycles * m.MIN_SAMPLE / m.runs) + 1 if m.runs else 0
+            print(f"    {n} : {m.runs} appels sur {cycles} cycles "
+                  f"({100 * m.runs / cycles:.0f} %) — il en faudrait ~{besoin}")
+        print("  La qualite est atteinte partout ; il manque des appels, pas de la fiabilite.")
     else:
         print("  PORTE P3 : FRANCHIE pour tous les agents.")
     print()
 
     if memory:
         memory.close()
-    return 0 if not faibles else 1
+    # Un echantillon trop court n'est pas un echec : c'est une mesure a
+    # poursuivre. Seule la qualite insuffisante justifie un code d'erreur.
+    return 1 if rates else 0
 
 
 if __name__ == "__main__":

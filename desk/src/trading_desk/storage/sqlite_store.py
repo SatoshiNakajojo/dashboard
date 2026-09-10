@@ -102,6 +102,9 @@ class Store(Protocol):
     def write_fill(self, f: Fill) -> None: ...
     def journal(self, kind: str, payload: dict[str, Any], mandate_id: str | None) -> str: ...
     def recent_journal(self, limit: int) -> list[dict[str, Any]]: ...
+    def recent_fills(self, limit: int) -> list[dict[str, Any]]: ...
+    def recent_mandates(self, limit: int) -> list[dict[str, Any]]: ...
+    def recent_halts(self, limit: int) -> list[dict[str, Any]]: ...
 
 
 def _s(v: Decimal | None) -> str | None:
@@ -241,6 +244,42 @@ class SqliteStore:
             }
             for r in rows
         ]
+
+    def recent_fills(self, limit: int = 200) -> list[dict[str, Any]]:
+        """Les executions, de la plus recente a la plus ancienne.
+
+        Ordre CHRONOLOGIQUE inverse ici, comme `recent_journal` : c'est
+        l'ordre d'affichage. Un appelant qui veut cumuler un P&L doit
+        re-trier — la table `fills` n'est pas une courbe.
+        """
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT fill_id, ts_ms, cloid, asset, side, size, price, "
+                "fee_usd, is_maker FROM fills ORDER BY ts_ms DESC LIMIT ?",
+                (limit,),
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    def recent_mandates(self, limit: int = 50) -> list[dict[str, Any]]:
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT mandate_id, ts_ms, payload FROM mandates "
+                "ORDER BY ts_ms DESC LIMIT ?",
+                (limit,),
+            ).fetchall()
+        return [
+            {"mandate_id": r["mandate_id"], "ts_ms": r["ts_ms"],
+             "payload": json.loads(r["payload"])}
+            for r in rows
+        ]
+
+    def recent_halts(self, limit: int = 20) -> list[dict[str, Any]]:
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT ts_ms, reason, detail FROM halts ORDER BY ts_ms DESC LIMIT ?",
+                (limit,),
+            ).fetchall()
+        return [dict(r) for r in rows]
 
     def counts(self) -> dict[str, int]:
         with self._lock:

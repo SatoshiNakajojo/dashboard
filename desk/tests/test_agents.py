@@ -23,7 +23,10 @@ from trading_desk.agents import (
     run_agent, run_analyst, sanitize, summarize, wrap,
 )
 from trading_desk.agents.isolation import CLOSE, OPEN, PREAMBLE
-from trading_desk.contracts import AnalystView, Bias, NewsRead
+from trading_desk.contracts import (
+    AgentOutput, AnalystView, Bias, CounterThesis, DeskVerdict, NewsRead,
+    QuantRead, Regime, RegimeRead, RiskAdvice, SetupProposal,
+)
 from trading_desk.features import synthetic_bars
 from trading_desk.storage import SqliteStore
 
@@ -296,6 +299,37 @@ def test_la_porte_p3_echoue_sous_98_pourcent():
     assert not m.passes_p3_gate
 
 
+def test_un_echantillon_court_n_est_pas_un_echec_de_qualite():
+    """Les deux conditions de la porte doivent rester lisibles separement.
+
+    Mesure reelle du 5 septembre 2026 : l'Avocat du diable n'a recu que 15
+    appels sur 30 cycles — il n'intervient que s'il existe un setup a
+    attaquer, et la Strategie s'est abstenue une fois sur deux. Le verdict
+    disait « NON FRANCHIE — avocat_du_diable », ce qui se lit comme un defaut
+    de l'agent alors que sa qualite etait de 100 %.
+    """
+    m = summarize(_runs(15))
+    assert m.quality_passes, "100 % de sorties valides"
+    assert not m.sample_is_sufficient, "15 appels, il en faut 30"
+    assert not m.passes_p3_gate
+
+
+def test_le_verdict_nomme_ce_qui_manque():
+    """« NON FRANCHIE » sans motif envoie chercher un probleme de prompt la
+    ou il n'y a qu'un echantillon trop court."""
+    from trading_desk.agents.metrics import _verdict
+
+    assert _verdict(summarize(_runs(30))) == "FRANCHIE"
+
+    court = _verdict(summarize(_runs(15)))
+    assert court.startswith("INDETERMINEE")
+    assert "15 appels sur 30" in court
+
+    mauvais = _verdict(summarize(_runs(40, failures=5)))
+    assert mauvais.startswith("NON FRANCHIE")
+    assert "qualite" in mauvais
+
+
 def test_extrapolation_du_cout_mensuel():
     m = summarize(_runs(30))
     mensuel = m.monthly_cost_usd(decisions_per_hour=12)
@@ -348,6 +382,7 @@ def test_le_mandat_emis_ne_depasse_jamais_les_limites():
     from decimal import Decimal
 
     from trading_desk.agents import GraphConfig, build_mandate
+    from trading_desk.agents.scoring import noter
     from trading_desk.contracts import (
         DeskVerdict, Regime, RegimeRead, RiskAdvice, SetupProposal, Side,
     )
@@ -364,13 +399,14 @@ def test_le_mandat_emis_ne_depasse_jamais_les_limites():
     setup = SetupProposal(
         asset="BTC", side=Side.LONG, entry_price=Decimal("60000"),
         stop_price=Decimal("59400"), target_price=Decimal("70000"),
-        conviction=Decimal("1"),
+        evaluation=("CONFLUENCE_3P", "OBSTACLE_AUCUN"),
     )
     mandat = build_mandate(
         setup=setup,
         verdict=DeskVerdict(decision="APPROVE", size_factor=Decimal("1")),
         advice=RiskAdvice(size_factor=Decimal("1")),
         regime=RegimeRead(regime=Regime.TREND_UP),
+        note=noter(setup),
         config=GraphConfig(base_notional_usd=Decimal("1000000")),
         limits=limits,
     )
@@ -387,3 +423,222 @@ def test_le_systeme_dit_a_l_agent_qu_il_n_execute_rien():
     assert "AUCUN pouvoir d'exécution" in SYSTEM
     assert "FLAT" in SYSTEM
     assert "abstiens-toi" in SYSTEM
+
+
+# --------------------------------------------------------------------------
+#  Ce qu'on demande au modele, et ce que le desk sait deja
+# --------------------------------------------------------------------------
+
+def test_le_modele_ne_remplit_pas_les_champs_que_le_desk_mesure():
+    """Cout, latence et identifiant de modele sont MESURES apres l'appel.
+
+    Les demander au modele, c'est demander une valeur inventee — et ce sont
+    exactement les deux chiffres que la porte P3 doit mesurer honnetement.
+    """
+    from trading_desk.agents.runner import ENVELOPPE, payload_schema
+
+    champs = payload_schema(SetupProposal).model_fields
+    for interdit in ("cost_usd", "latency_ms", "model_id", "journal_ref",
+                     "produced_at_ms", "agent"):
+        assert interdit in ENVELOPPE
+        assert interdit not in champs, f"{interdit} ne doit pas etre demande"
+
+
+def test_l_abstention_reste_une_reponse_que_le_modele_peut_donner():
+    """L'inverse du test precedent : s'abstenir est un droit de l'agent, pas
+    une decision du runner. Retirer ces champs du schema le lui oterait."""
+    from trading_desk.agents.runner import payload_schema
+
+    champs = payload_schema(QuantRead).model_fields
+    assert "abstained" in champs
+    assert "abstain_reason" in champs
+
+
+@pytest.mark.parametrize("schema", [
+    AnalystView, CounterThesis, DeskVerdict, NewsRead, QuantRead, RegimeRead,
+    RiskAdvice, SetupProposal,
+])
+def test_aucun_schema_ne_depasse_le_seuil_de_l_api(schema):
+    """Le decodage contraint compile le schema en automate, et chaque champ
+    OPTIONNEL multiplie les chemins. Au-dela de douze, l'API repond
+    « Schema is too complex » (400) et l'agent s'abstient — pour une raison
+    qui n'a rien a voir avec sa competence.
+
+    Mesure, constatee contre l'API : 12 champs optionnels passent, 13 non.
+    On garde une marge, parce qu'ajouter un champ a un contrat est une
+    modification banale qui ne doit pas casser la porte P3 en silence.
+    """
+    from trading_desk.agents.runner import payload_schema
+
+    demande = payload_schema(schema)
+    optionnels = [n for n, f in demande.model_fields.items() if not f.is_required()]
+    assert len(optionnels) <= 10, (
+        f"{schema.__name__} demande {len(optionnels)} champs optionnels ; "
+        "l'API en refuse 13 ou plus"
+    )
+
+
+def test_le_contrat_complet_se_reconstruit_depuis_la_charge_utile():
+    """Le sous-schema ne sert qu'a poser la question : c'est le contrat
+    complet qui circule ensuite dans le desk."""
+    from trading_desk.agents.runner import payload_schema
+
+    charge = payload_schema(RegimeRead)(regime=Regime.RANGE, confidence=Decimal("0.6"))
+    plein = RegimeRead(**charge.model_dump())
+    assert plein.agent == "regime"
+    assert plein.regime is Regime.RANGE
+    assert plein.cost_usd == Decimal("0")
+
+
+def test_les_bornes_de_longueur_sont_dites_au_modele():
+    """Le decodage contraint garantit la forme, pas les longueurs : un champ
+    trop long est rejete APRES l'appel et apres la depense. Un agent qui
+    ignore la borne s'abstient a chaque cycle."""
+    from trading_desk.agents.runner import limites_de_longueur, payload_schema
+
+    texte = limites_de_longueur(payload_schema(AnalystView))
+    assert "600" in texte and "thesis_summary" in texte
+    assert "300" in texte and "invalidation_summary" in texte
+
+
+def test_les_bornes_annoncees_sont_celles_du_schema():
+    """Recopier la borne dans le prompt la ferait mentir des la premiere
+    modification du `Field`. Elle est donc lue, pas ecrite."""
+    from pydantic import Field
+
+    from trading_desk.agents.runner import limites_de_longueur, payload_schema
+
+    class Bavard(AgentOutput):
+        agent: str = "bavard"
+        propos: str = Field(default="", max_length=42)
+
+    assert "42 caracteres" in limites_de_longueur(payload_schema(Bavard))
+    assert limites_de_longueur(payload_schema(RegimeRead)) == ""
+
+
+def test_le_journal_garde_le_prompt_reellement_envoye(tmp_path):
+    """Un journal qui stocke un prompt different de celui envoye ne rejoue
+    rien — et rejouer est sa seule raison d'etre."""
+    store = SqliteStore(tmp_path / "j.db")
+    llm = ScriptedLLM([{"asset": "BTC", "bias": "LONG", "thesis_summary": "Court."}])
+    run = run_agent(name="analyste", llm=llm, system="SYSTEME DE BASE.",
+                    user="u", schema=AnalystView, store=store)
+
+    assert run.succeeded
+    envoye = llm.calls[0]["system"]
+    journalise = store.recent_journal(1)[0]["payload"]["prompt_system"]
+    assert journalise == envoye
+    assert "600 caracteres" in journalise
+    store.close()
+
+
+def test_le_run_conserve_les_tokens_pas_seulement_leur_prix():
+    """Un total en dollars ne dit pas quel levier tirer.
+
+    L'entree se traite par le cache et des prompts plus courts ; la sortie ne
+    se traite que par l'effort. Un run a 4 $ qui ne garde que l'agregat ne
+    laisse aucune trace de la ou est parti l'argent — il faut le repayer pour
+    le savoir.
+    """
+    llm = ScriptedLLM([_view()])
+    run = run_analyst(llm=llm, bars=synthetic_bars(count=120, seed=5))
+
+    assert run.input_tokens == 1200, "les tokens d'entree remontent du client"
+    assert run.output_tokens == 300, "ceux de sortie aussi"
+
+    m = summarize([run])
+    assert m.input_tokens == 1200
+    assert m.output_tokens == 300
+
+
+def test_la_part_de_sortie_designe_le_levier():
+    """`output_share_pct` pondere les tokens par le tarif, pas par leur nombre.
+
+    Opus-5 facture la sortie cinq fois l'entree : 1000 tokens de sortie
+    pesent autant que 5000 d'entree. Compter les tokens bruts designerait le
+    mauvais levier.
+    """
+    from trading_desk.agents.metrics import AgentMetrics
+
+    # Autant de tokens des deux cotes -> la sortie pese 5/6 de la facture.
+    egal = AgentMetrics(agent="x", runs=1, valid=1, abstentions=0,
+                        input_tokens=1000, output_tokens=1000)
+    assert round(egal.output_share_pct) == 83
+
+    # Facture dominee par l'entree : le cache et des prompts courts servent.
+    lourd = AgentMetrics(agent="x", runs=1, valid=1, abstentions=0,
+                         input_tokens=50_000, output_tokens=100)
+    assert lourd.output_share_pct < 2
+
+    vide = AgentMetrics(agent="x", runs=0, valid=0, abstentions=0)
+    assert vide.output_share_pct == 0.0
+
+
+def test_les_bornes_de_longueur_sont_dites_en_mots_et_en_caracteres():
+    """Un modèle ne compte pas les caractères pendant qu'il rédige.
+
+    Mesure du 5 septembre 2026 : neuf des dix dépassements observés portaient
+    sur `thesis_summary`, malgré une consigne en caractères déjà présente.
+    Chacun coûte une tentative entière — un appel complet refacturé.
+    """
+    from trading_desk.agents.runner import limites_de_longueur, payload_schema
+    from trading_desk.contracts.signals import AnalystView
+
+    texte = limites_de_longueur(payload_schema(AnalystView))
+    assert "600 caracteres maximum" in texte
+    assert "85 mots" in texte, "le budget en mots doit accompagner la borne"
+    assert "300 caracteres maximum" in texte
+    assert "42 mots" in texte
+
+
+def test_le_budget_en_mots_garde_une_marge_sous_la_borne():
+    """Plus serré que la conversion exacte : mieux vaut une marge inutilisée
+    qu'un rejet. Le caractère reste la borne qui fait foi."""
+    from trading_desk.agents.runner import limites_de_longueur, payload_schema
+    from trading_desk.contracts.signals import AnalystView
+
+    texte = limites_de_longueur(payload_schema(AnalystView))
+    # 85 mots x ~6 caracteres = ~510, sous les 600 imposes.
+    assert 85 * 6 < 600
+
+
+def test_un_schema_sans_borne_najoute_rien_au_prompt():
+    """Une section vide ferait payer des tokens pour une consigne creuse."""
+    from trading_desk.agents.runner import limites_de_longueur, payload_schema
+    from trading_desk.contracts.signals import RegimeRead
+
+    assert limites_de_longueur(payload_schema(RegimeRead)) == ""
+
+
+def test_le_contexte_donne_les_horizons_sur_lesquels_le_stop_est_JUGE():
+    """Un agent noté sur une information qu'il n'a pas est noté au hasard.
+
+    Le scorer mesure si le stop dépasse le plus bas de 120 barres
+    (structurel) ou celui de 40 (défendable). Le contexte ne montrait que
+    l'extrême à 20 barres — et une exécution réelle a rendu
+    `STOP_ARBITRAIRE` sur six setups sur six.
+
+    Ce test lie les deux : ajouter un horizon au barème sans l'ajouter au
+    contexte le fait tomber.
+    """
+    from trading_desk.agents.analyst import build_market_context
+    from trading_desk.agents.scoring import _FENETRE_PROCHE, _FENETRE_STRUCTURE
+    from trading_desk.features import synthetic_bars
+
+    prix = build_market_context(synthetic_bars(count=200, seed=5))["prix"]
+    for fenetre in (_FENETRE_PROCHE, _FENETRE_STRUCTURE):
+        assert f"plus_bas_{fenetre}" in prix, (
+            f"le barème juge sur {fenetre} barres, le contexte ne le montre pas")
+        assert f"plus_haut_{fenetre}" in prix
+
+
+def test_les_extremes_du_contexte_sont_coherents_entre_eux():
+    """Un plus bas à 120 barres supérieur à celui de 40 serait une erreur de
+    fenêtrage, et elle passerait inaperçue : les deux nombres sont
+    plausibles isolément."""
+    from trading_desk.agents.analyst import build_market_context
+    from trading_desk.features import synthetic_bars
+
+    prix = build_market_context(synthetic_bars(count=300, seed=9))["prix"]
+    assert prix["plus_bas_120"] <= prix["plus_bas_40"]
+    assert prix["plus_haut_120"] >= prix["plus_haut_40"]

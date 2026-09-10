@@ -25,16 +25,21 @@ qualité qui appartient à l'utilisateur, pas au code.
 from __future__ import annotations
 
 import json
-from decimal import Decimal
 
 from ..contracts.common import Frozen
 from ..contracts.signals import (
-    AnalystView, CounterThesis, DeskVerdict, NewsRead, QuantRead, RegimeRead,
-    RiskAdvice, SetupProposal,
+    AnalystView,
+    CounterThesis,
+    DeskVerdict,
+    NewsRead,
+    QuantRead,
+    RegimeRead,
+    RiskAdvice,
+    SetupProposal,
 )
 from .isolation import ExternalContent, wrap
 from .llm import DEFAULT_MODEL, LLMClient
-from .runner import AgentRun, run_agent
+from .runner import ENVELOPPE, AgentRun, run_agent
 
 
 class ModelPolicy(Frozen):
@@ -54,12 +59,91 @@ class ModelPolicy(Frozen):
     avocat: str = DEFAULT_MODEL
     risk_advisor: str = DEFAULT_MODEL
     chef: str = DEFAULT_MODEL
+    post_mortem: str = DEFAULT_MODEL
 
     @property
     def is_homogeneous(self) -> bool:
         return len({self.news, self.quant, self.regime, self.analyste,
                     self.strategie, self.avocat, self.risk_advisor,
-                    self.chef}) == 1
+                    self.chef, self.post_mortem}) == 1
+
+
+# Modeles disponibles pour le routage. Voir `PRICING_USD_PER_MTOK` : Haiku
+# coute 1/5 d'Opus, Sonnet 2/5, sur l'entree comme sur la sortie.
+_HAIKU = "claude-haiku-4-5"
+_SONNET = "claude-sonnet-5"
+
+
+# --------------------------------------------------------------------------
+#  Politiques nommees
+# --------------------------------------------------------------------------
+#
+# Le decoupage ne vient pas d'une intuition sur « quel agent est important »,
+# mais de deux choses mesurables.
+#
+# **Ce que chaque agent fait reellement.** Trois roles LISENT : News extrait
+# un score d'un texte, le Quant et le Regime interpretent des indicateurs
+# deja calcules par le desk — leurs prompts leur interdisent explicitement de
+# produire le moindre chiffre. Ce sont des taches de lecture contrainte, dont
+# la sortie est bornee par un schema ferme. Les autres TRANCHENT : ils
+# choisissent, s'opposent, arbitrent.
+#
+# **Ce que chacun coute.** Mesure sur la porte P3 du 5 septembre 2026, en
+# part du cycle complet a 0,1335 $ :
+#
+#     avocat_du_diable  25,7 %   (0,0688 $/appel, mais 1 cycle sur 2)
+#     strategie         24,2 %
+#     quant             23,7 %
+#     analyste          15,8 %
+#     regime            10,6 %
+#
+# Le Quant pese donc presque autant que la Strategie pour un travail de
+# lecture. C'est la ou l'ecart entre le prix paye et la difficulte de la
+# tache est le plus large — et c'est ce que `economique` corrige.
+#
+# Ces politiques sont des points de depart mesurables, pas des reglages
+# recommandes : leur effet sur la QUALITE doit etre mesure avant usage, et
+# c'est la raison d'etre de la porte P3.
+
+UNIFORME = ModelPolicy()
+"""Tout sur le meme modele. Le comportement historique, inchange."""
+
+ECONOMIQUE = ModelPolicy(
+    news=_HAIKU, quant=_HAIKU, regime=_HAIKU, post_mortem=_HAIKU,
+)
+"""Modele bon marche sur les trois roles de LECTURE, plus le post-mortem.
+
+Le post-mortem s'y ajoute pour une raison differente des trois autres : il
+n'est pas sur le chemin de decision. Il relit apres coup ; sa latence et sa
+finesse n'engagent aucun ordre.
+
+Economie attendue sur les agents mesures : le Quant et le Regime passent de
+0,0458 $ a ~0,0092 $ par cycle a tokens constants, soit -27 % du cycle. Le
+mot important est *attendu* : un modele plus petit peut produire des sorties
+plus longues, ou echouer le schema plus souvent. Seule la mesure tranche.
+"""
+
+DIVERSIFIE = ModelPolicy(
+    news=_HAIKU, quant=_HAIKU, regime=_HAIKU, post_mortem=_HAIKU,
+    avocat=_SONNET,
+)
+"""`ECONOMIQUE`, plus un modele DIFFERENT sur l'Avocat du diable.
+
+Ici l'argument principal n'est pas le cout, meme s'il vient avec : l'Avocat
+est le seul agent dont la valeur vient de son desaccord. Le faire tourner sur
+le meme modele que la Strategie qu'il doit attaquer, c'est demander a un
+modele de trouver ses propres angles morts. Un modele d'une autre famille
+rend l'objection moins correlee a la proposition.
+
+Le cout suit : premier poste du cycle a 25,7 %, il tombe a ~10,3 % a tokens
+constants.
+"""
+
+POLITIQUES: dict[str, ModelPolicy] = {
+    "uniforme": UNIFORME,
+    "economique": ECONOMIQUE,
+    "diversifie": DIVERSIFIE,
+}
 
 
 # --------------------------------------------------------------------------
@@ -117,7 +201,52 @@ vérifie.
 **Ne rien proposer est la réponse par défaut.** La plupart des moments de
 marché ne méritent pas de position. Tu n'es pas évalué sur le nombre de
 setups que tu trouves ; le desk a un quota quotidien précisément parce qu'un
-excès de propositions est le mode d'échec le plus courant."""
+excès de propositions est le mode d'échec le plus courant.
+
+**Tu ne donnes aucun chiffre de confiance.** Ton schéma n'a pas de champ
+pour ça — c'est structurel, pas une consigne. Une probabilité de réussite
+n'est pas quelque chose qu'on lit sur un graphique, et celle que cet agent
+produisait autrefois ne corrélait avec rien.
+
+**On ne te demande pas non plus de noter ton propre travail.** Le sens de ta
+position, la qualité de ton niveau d'entrée et la solidité de ton stop sont
+mesurés par le code, sur les barres. Tu les as choisis ; les évaluer
+toi-même ne dirait rien de plus que « je les trouve bons ».
+
+Une conséquence pratique : **ton stop est jugé sur la structure, pas sur ton
+intention.** Le contexte te donne les extrêmes du marché sur plusieurs
+profondeurs, pas seulement les vingt dernières barres. Un stop posé à
+l'intérieur de l'amplitude récente sera lu comme une distance de
+dimensionnement, quelle que soit ta thèse — parce que le marché y est déjà
+passé sans que rien ne soit invalidé.
+
+Élargir mécaniquement le stop pour autant serait un mauvais calcul : une
+porte déterministe compare aussi ton gain à ton risque, et un stop lointain
+la referme.
+
+Tu remplis `evaluation` avec **deux étiquettes**, sur les deux seules choses
+qu'aucun calcul ne peut établir. Un calcul déterministe les combine ensuite
+avec ses propres mesures. Réponds pour ce qu'elles sont, pas pour l'effet que
+tu crois qu'elles auront : tu ne connais pas les poids.
+
+- **La confluence** — combien de raisons **indépendantes** soutiennent ce
+  setup ? `CONFLUENCE_1`, `CONFLUENCE_2`, ou `CONFLUENCE_3P`. Deux façons de
+  dire « le prix monte » n'en font qu'une : un RSI bas et un stochastique bas
+  mesurent la même chose. Un niveau technique respecté et un financement
+  extrême en font deux, parce qu'ils peuvent se contredire. C'est un
+  jugement que le code ne sait pas rendre, parce qu'il demande de comprendre
+  ce que chaque raison mesure.
+
+- **L'obstacle** — un événement daté peut-il invalider ce setup dans son
+  horizon ? Publication macro, déblocage de jetons, financement qui mangera
+  le gain, carnet trop mince pour la taille.
+
+  `OBSTACLE_AUCUN` est la réponse **normale et attendue** : la plupart des
+  fenêtres de marché ne contiennent aucun événement daté. Réserve
+  `OBSTACLE_MINEUR` à un risque que tu peux nommer, et `OBSTACLE_MAJEUR` à
+  un événement dont tu sais qu'il tombe dans la fenêtre. Une inquiétude
+  générale sur le marché n'est pas un obstacle — c'est le marché."""
+
 
 DEVIL_SYSTEM = _COMMON + """
 Ton rôle : détruire le setup qu'on te soumet.
@@ -130,7 +259,20 @@ funding qui mangera le gain.
 Si tu ne trouves rien de sérieux, dis-le avec une sévérité faible. Un veto de
 complaisance est aussi inutile qu'une approbation de complaisance.
 
-Pose `veto` à vrai uniquement pour un défaut qui, seul, invalide le setup."""
+**`severity` mesure ce que ton objection FAIT AU SETUP**, pas la force avec
+laquelle tu y crois :
+
+- 0,2 — une remarque à consigner ; la thèse tient telle quelle ;
+- 0,5 — une vraie faiblesse, qui réduit les chances sans les annuler ;
+- 0,8 — la thèse ne tient probablement pas.
+
+Un aval déterministe compare ce chiffre à un seuil. Ne cherche pas à le
+deviner : une sévérité gonflée pour faire tomber un setup que tu n'arrives
+pas à détruire vaut le veto de complaisance que ton rôle t'interdit.
+
+Pose `veto` à vrai uniquement pour un défaut qui, seul, invalide le setup —
+c'est l'échappatoire binaire quand aucune graduation ne rend justice au
+problème."""
 
 RISK_ADVISOR_SYSTEM = _COMMON + """
 Ton rôle : recommander une RÉDUCTION de taille, en fonction du contexte
@@ -170,6 +312,30 @@ relira quand la décision aura coûté de l'argent."""
 
 def _dumps(payload: dict) -> str:
     return json.dumps(payload, indent=2, ensure_ascii=False, default=str)
+
+
+def _avis(sortie) -> dict:
+    """La sortie d'un agent telle qu'un autre agent doit la lire.
+
+    `model_dump()` renvoie aussi l'enveloppe que le RUNNER a ecrite apres
+    l'appel : `cost_usd`, `latency_ms`, `model_id`, `journal_ref`,
+    `produced_at_ms`, `agent`. Les transmettre a l'agent suivant a deux
+    defauts, et le second est le plus serieux :
+
+    - **du bruit paye.** Mesure sur un cycle type : 487 caracteres sur 1 634,
+      soit 30 % de ce qu'on transmet a la Strategie, ~139 tokens d'entree par
+      appel aval. Petit en dollars ; gratuit a supprimer.
+    - **de l'information hors sujet dans un prompt de decision.** On disait au
+      Chef de desk combien l'avis du Quant avait coute et en combien de temps
+      il etait arrive. Rien dans son prompt ne lui interdit d'en tenir compte,
+      et « cet avis a coute cher donc il compte » est exactement le genre de
+      raccourci qu'on ne veut pas laisser disponible.
+
+    `abstained` et `abstain_reason` RESTENT : ils font partie de l'avis. Un
+    aval doit savoir qu'un amont s'est abstenu, et pourquoi.
+    """
+    plein = sortie.model_dump(mode="json")
+    return {k: v for k, v in plein.items() if k not in ENVELOPPE}
 
 
 def run_news(*, llm: LLMClient, items: list[ExternalContent], store=None) -> AgentRun:
@@ -218,10 +384,10 @@ def run_strategy(
     """
     payload = {
         "marche": context,
-        "analyste": analyst.model_dump(mode="json"),
-        "quant": quant.model_dump(mode="json"),
-        "regime": regime.model_dump(mode="json"),
-        "news": news.model_dump(mode="json") if news else None,
+        "analyste": _avis(analyst),
+        "quant": _avis(quant),
+        "regime": _avis(regime),
+        "news": _avis(news) if news else None,
     }
     parties = ["Lectures de l'équipe :", "", _dumps(payload)]
     if memories:
@@ -239,9 +405,9 @@ def run_devil(
     regime: RegimeRead, store=None,
 ) -> AgentRun:
     payload = {
-        "setup": setup.model_dump(mode="json"),
+        "setup": _avis(setup),
         "marche": context,
-        "regime": regime.model_dump(mode="json"),
+        "regime": _avis(regime),
     }
     return run_agent(
         name="avocat_du_diable", llm=llm, system=DEVIL_SYSTEM,
@@ -255,8 +421,8 @@ def run_risk_advisor(
     account: dict, store=None,
 ) -> AgentRun:
     payload = {
-        "setup": setup.model_dump(mode="json"),
-        "objection": counter.model_dump(mode="json"),
+        "setup": _avis(setup),
+        "objection": _avis(counter),
         "compte": account,
     }
     return run_agent(
@@ -272,11 +438,11 @@ def run_chef(
     context: dict, store=None,
 ) -> AgentRun:
     payload = {
-        "setup": setup.model_dump(mode="json"),
-        "objection": counter.model_dump(mode="json"),
-        "avis_risque": advice.model_dump(mode="json"),
-        "regime": regime.model_dump(mode="json"),
-        "quant": quant.model_dump(mode="json"),
+        "setup": _avis(setup),
+        "objection": _avis(counter),
+        "avis_risque": _avis(advice),
+        "regime": _avis(regime),
+        "quant": _avis(quant),
         "marche": context,
     }
     return run_agent(

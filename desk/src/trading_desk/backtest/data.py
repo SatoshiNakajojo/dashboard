@@ -149,6 +149,7 @@ def load_from_file(
     interval: str = "1h",
     *,
     max_gap_ratio: float = 0.02,
+    silencieux: bool = False,
 ) -> list[Bar]:
     """Charge un fichier de bougies produit par `scripts/fetch_candles.py`.
 
@@ -217,7 +218,16 @@ def load_from_file(
             "n'ont pas existe. Re-telecharger."
         )
 
-    if trous or rejetees:
+    # `silencieux` existe pour un cas precis : les series d'ACTIONS. Le
+    # marche ferme les week-ends et les jours feries, donc chaque fichier
+    # porte deux cents discontinuites parfaitement normales. Les annoncer
+    # noierait le rapport sous quatre cents lignes d'avertissement — c'est
+    # arrive le 9 septembre 2026 — et un avertissement qu'on apprend a
+    # ignorer ne protege plus de rien.
+    #
+    # Le defaut par defaut reste bruyant : sur des bougies crypto, un trou
+    # est une vraie anomalie.
+    if (trous or rejetees) and not silencieux:
         print(f"  Fichier accepte avec reserve : {trous} discontinuite(s), "
               f"{manquantes} barre(s) manquante(s), {rejetees} rejetee(s).")
 

@@ -18,19 +18,114 @@ from __future__ import annotations
 
 import logging
 from decimal import Decimal
+from functools import cache
 from typing import TypeVar
 
-from pydantic import BaseModel, ValidationError
+from pydantic import BaseModel, ValidationError, create_model
 
 from ..contracts.common import Frozen, now_ms
 from ..contracts.signals import AgentOutput
-from .llm import LLMClient, LLMError, LLMRefusal, LLMResponse
+from .llm import LLMClient, LLMError, LLMRefusal, LLMResponse, QuotaEpuise
 
 log = logging.getLogger(__name__)
 
 T = TypeVar("T", bound=AgentOutput)
 
 MAX_ATTEMPTS = 2
+
+
+# Ce que le desk sait deja, et ne demande donc pas au modele.
+#
+# Ces champs de `AgentOutput` sont remplis par le runner : l'identifiant du
+# modele servi, la latence et le cout sont *mesures* apres l'appel, la
+# reference de journal est ecrite apres l'ecriture, l'horodatage vient de
+# l'horloge du desk et `agent` est fixe par le role. Les envoyer au modele
+# aurait deux effets, tous deux mauvais :
+#
+# 1. **Une mesure fabriquee.** Demander a un agent son propre cout et sa
+#    propre latence, c'est demander une valeur inventee — et ce sont
+#    exactement les deux chiffres que la porte P3 doit mesurer honnetement.
+# 2. **Un schema que l'API refuse.** Le decodage contraint compile le schema
+#    en automate ; chaque champ *optionnel* multiplie les chemins possibles.
+#    Au-dela de douze champs optionnels, l'API repond « Schema is too
+#    complex » (400) et l'agent s'abstient — pour une raison qui n'a rien a
+#    voir avec sa competence. Les huit champs du socle poussaient les quatre
+#    agents les plus riches par-dessus ce seuil.
+#
+# `abstained` et `abstain_reason` ne sont PAS dans cette liste : s'abstenir
+# est une reponse que le modele doit pouvoir donner lui-meme.
+ENVELOPPE = (
+    "agent", "produced_at_ms", "model_id", "latency_ms", "cost_usd",
+    "journal_ref",
+)
+
+
+@cache
+def payload_schema(schema: type[AgentOutput]) -> type[BaseModel]:
+    """Le sous-schema reellement demande au modele : ses champs a lui.
+
+    Le contrat complet reste la seule chose qui circule dans le desk — il est
+    reconstruit des la reponse recue. Ce schema reduit ne sert qu'a poser la
+    question.
+    """
+    champs = {
+        nom: (f.annotation, f)
+        for nom, f in schema.model_fields.items()
+        if nom not in ENVELOPPE
+    }
+    return create_model(  # type: ignore[call-overload]
+        f"{schema.__name__}Payload", __base__=Frozen, **champs
+    )
+
+
+def limites_de_longueur(schema: type[BaseModel]) -> str:
+    """Les bornes `max_length` du schema, dites en clair au modele.
+
+    Le decodage contraint garantit la *forme* — types, enums, structure — mais
+    pas les bornes de longueur : le modele peut produire un champ trop long,
+    et c'est Pydantic qui le rejette, apres l'appel et apres la depense. Un
+    agent bavard s'abstenait donc systematiquement, pour une raison qui ne
+    disait rien de son jugement.
+
+    Ces bornes sont lues dans le schema plutot que recopiees dans le prompt :
+    une consigne recopiee ment des que quelqu'un modifie le `Field`, et un
+    prompt qui ment sur son propre schema est pire que pas de consigne.
+
+    **La borne est doublee d'un budget en MOTS**, et ce n'est pas de la
+    redondance. Un modele ne compte pas les caracteres — il n'a aucun moyen
+    fiable de verifier « 600 caracteres » pendant qu'il redige. Mesure sur les
+    campagnes du 5 septembre 2026 : neuf des dix depassements observes
+    portaient sur `thesis_summary`, malgre une consigne en caracteres deja
+    presente. Chacun coute une tentative entiere, soit un appel complet
+    refacture — et la reprise se fait sous contrainte de longueur, donc rien
+    ne dit qu'elle produit une meilleure analyse.
+
+    Le budget est volontairement PLUS SERRE que la conversion exacte
+    (`max_length // 7` la ou le francais tourne autour de 6 caracteres par
+    mot, espace comprise) : il vaut mieux une marge inutilisee qu'un rejet.
+    Le caractere reste la borne qui fait foi ; le mot est ce que le modele
+    sait viser.
+
+    Ceci reduit les rejets, ne les supprime pas : Pydantic reste le seul
+    arbitre, et c'est bien lui qui doit l'etre.
+    """
+    bornes = []
+    for nom, f in schema.model_fields.items():
+        for m in f.metadata:
+            longueur = getattr(m, "max_length", None)
+            if longueur is not None:
+                bornes.append(
+                    f"- `{nom}` : {longueur} caracteres maximum, "
+                    f"soit environ {longueur // 7} mots"
+                )
+    if not bornes:
+        return ""
+    return (
+        "\n\nLongueurs imposees par ton schema de sortie. Un champ trop long "
+        "est rejete\net te fait perdre ton tour. Vise le budget en mots : "
+        "c'est celui que tu peux\ncontroler en redigeant.\n"
+        + "\n".join(bornes)
+    )
 
 
 class AgentRun(Frozen):
@@ -48,6 +143,13 @@ class AgentRun(Frozen):
     succeeded: bool
     cost_usd: Decimal = Decimal("0")
     latency_ms: int = 0
+    # Les tokens, et pas seulement leur prix. Un total en dollars ne dit pas
+    # quel levier tirer : l'entree se cache et se raccourcit, la sortie se
+    # regle par l'effort. Sans cette decomposition, un run a 4 $ ne laisse
+    # aucune trace exploitable de la ou est parti l'argent.
+    input_tokens: int = 0
+    output_tokens: int = 0
+    cache_read_tokens: int = 0
     model: str = ""
     journal_ref: str = ""
     errors: tuple[str, ...] = ()
@@ -78,13 +180,31 @@ def run_agent(
     errors: list[str] = []
     total_cost = Decimal("0")
     total_latency = 0
+    total_in = total_out = total_cache = 0
     model_used = ""
+
+    demande = payload_schema(schema)
+    consignes = system + limites_de_longueur(demande)
 
     for attempt in range(1, MAX_ATTEMPTS + 1):
         try:
-            output, meta = llm.structured(
-                system=system, user=user, schema=schema, max_tokens=max_tokens
+            payload, meta = llm.structured(
+                system=consignes, user=user, schema=demande,
+                max_tokens=max_tokens, agent=name,
             )
+            # Reconstruit dans le `try` a dessein : une abstention sans motif
+            # est refusee par le validateur du contrat, et doit compter comme
+            # une tentative ratee — pas remonter jusqu'a l'appelant.
+            output = schema(**payload.model_dump())
+        except QuotaEpuise:
+            # Le plafond du COMPTE ne se réessaie pas, et ne s'absorbe pas
+            # non plus en abstention : il remonte jusqu'au runner, qui
+            # arrête la campagne.
+            #
+            # L'absorber ici produirait le rapport du 8 septembre 2026 :
+            # huit cycles morts à la lecture, « qualité insuffisante :
+            # regime », et un modèle accusé d'un défaut de facturation.
+            raise
         except LLMRefusal as exc:
             # Un refus ne se réessaie pas : le modèle a tranché, réinsister
             # coûterait un appel pour le même résultat.
@@ -98,6 +218,9 @@ def run_agent(
 
         total_cost += meta.cost_usd
         total_latency += meta.latency_ms
+        total_in += meta.input_tokens
+        total_out += meta.output_tokens
+        total_cache += meta.cache_read_tokens
         model_used = meta.model
 
         enriched = output.model_copy(update={
@@ -105,12 +228,14 @@ def run_agent(
             "latency_ms": meta.latency_ms,
             "cost_usd": meta.cost_usd,
         })
-        ref = _journal(store, name, system, user, meta, enriched, context, attempt)
+        ref = _journal(store, name, consignes, user, meta, enriched, context, attempt)
         return AgentRun(
             agent=name,
             output=enriched.model_copy(update={"journal_ref": ref}),
             attempts=attempt, succeeded=True,
             cost_usd=total_cost, latency_ms=total_latency,
+            input_tokens=total_in, output_tokens=total_out,
+            cache_read_tokens=total_cache,
             model=model_used, journal_ref=ref, errors=tuple(errors),
             pricing_known=meta.pricing_known,
         )
@@ -121,7 +246,7 @@ def run_agent(
         abstain_reason=f"{MAX_ATTEMPTS} tentatives sans sortie valide — {reason}"[:300],
         model_id=model_used,
     )
-    ref = _journal(store, name, system, user, None, abstention, context, MAX_ATTEMPTS)
+    ref = _journal(store, name, consignes, user, None, abstention, context, MAX_ATTEMPTS)
     log.warning("%s : abstention après %d tentatives", name, MAX_ATTEMPTS)
 
     return AgentRun(
@@ -129,6 +254,8 @@ def run_agent(
         output=abstention.model_copy(update={"journal_ref": ref}),
         attempts=MAX_ATTEMPTS, succeeded=False,
         cost_usd=total_cost, latency_ms=total_latency,
+        input_tokens=total_in, output_tokens=total_out,
+        cache_read_tokens=total_cache,
         model=model_used, journal_ref=ref, errors=tuple(errors),
     )
 

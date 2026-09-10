@@ -49,9 +49,22 @@ def _analyst(**o) -> dict:
 
 
 def _setup(**o) -> dict:
-    return {"asset": "BTC", "side": "LONG", "entry_price": "64000",
-            "stop_price": "63000", "target_price": "66500",
-            "conviction": "0.75", "rationale": "Rebond sur support.", **o}
+    # La géométrie est calée sur BARS, pas inventée. Depuis que le scorer
+    # MESURE l'alignement, le niveau et le stop sur les barres, un setup à
+    # 64 000 sur une série qui oscille entre 56 900 et 61 000 note zéro sur
+    # les trois — et le cycle meurt à la porte du score. C'est le bon
+    # comportement ; c'était la fixture qui mentait.
+    #
+    # 58 138 est traversé par treize grappes distinctes de BARS (NIVEAU_NET)
+    # et 56 138 passe sous le plus bas de la série, 56 903 (STOP_STRUCTUREL).
+    # Le risque vaut donc 2 000 points ronds, et la cible 2,5 R.
+    return {"asset": "BTC", "side": "LONG", "entry_price": "58138",
+            "stop_price": "56138", "target_price": "63138",
+            "rationale": "Rebond sur support.",
+            # Une evaluation franche : le scorer doit la noter au-dessus de
+            # la porte, sinon aucun test de bout en bout ne franchirait rien
+            # et ils mesureraient tous la meme chose — le blocage.
+            "evaluation": ["CONFLUENCE_3P", "OBSTACLE_AUCUN"], **o}
 
 
 def _counter(**o) -> dict:
@@ -204,14 +217,24 @@ def test_l_abstention_de_l_avocat_ne_vaut_pas_absence_d_objection():
 
 
 def test_conviction_insuffisante_arrete_le_cycle():
-    res = run_desk_cycle(llm=_script(setup=_setup(conviction="0.4")), bars=BARS,
+    # Entrée hors de l'étendue de BARS, stop dans le bruit : les trois
+    # mesures tombent au plancher et les deux jugements aussi.
+    faible = _setup(evaluation=["CONFLUENCE_1", "OBSTACLE_MAJEUR"],
+                    entry_price="70000", stop_price="69000",
+                    target_price="75000")
+    res = run_desk_cycle(llm=_script(setup=faible), bars=BARS,
                          config=GraphConfig(min_conviction=Decimal("0.6")))
     assert res.stage is Stage.CONVICTION
 
 
 def test_asymetrie_insuffisante_arrete_le_cycle():
-    """Entrée 64000, stop 63000, cible 64500 : gain/risque = 0,5."""
-    res = run_desk_cycle(llm=_script(setup=_setup(target_price="64500")), bars=BARS)
+    """Entrée 58138, stop 56138, cible 59138 : gain/risque = 0,50.
+
+    Le risque est de 2 000 points ; une cible à 1 000 points ne le paie pas.
+    La géométrie suit BARS depuis que le scorer mesure sur les barres — une
+    cible choisie sans regarder l'entrée testerait le mauvais rejet.
+    """
+    res = run_desk_cycle(llm=_script(setup=_setup(target_price="59138")), bars=BARS)
     assert res.stage is Stage.ASYMETRIE
 
 
@@ -301,13 +324,21 @@ def test_les_news_passent_par_l_isolation():
 #  Registre fantôme
 # --------------------------------------------------------------------------
 
-def test_le_registre_suit_les_setups_rejetes():
+def test_le_registre_suit_les_rejets_ET_les_mandats():
+    """Les deux, et à l'identique.
+
+    Une espérance négative sur les seuls rejets est compatible avec un desk
+    qui refuse au hasard dans un univers de setups globalement perdants — et
+    le P2 a montré que c'est l'univers dans lequel on est. Sans les mandats
+    émis comme point de comparaison, la mesure ne peut pas trancher.
+    """
     book = ShadowBook()
     book.record(run_desk_cycle(llm=_script(counter=_counter(veto=True)), bars=BARS))
     book.record(run_desk_cycle(llm=_script(), bars=BARS))
 
-    assert len(book.entries) == 1, "seul le setup rejeté est suivi"
-    assert book.entries[0].stage is Stage.VETO
+    assert len(book.entries) == 2
+    assert [e.stage for e in book.rejetes] == [Stage.VETO]
+    assert [e.stage for e in book.emis] == [Stage.MANDAT]
     assert book.stage_stats().total == 2
     assert book.stage_stats().mandate_rate_pct == 50.0
 
@@ -327,8 +358,9 @@ def test_le_registre_resout_avec_le_stop_prioritaire():
     book = ShadowBook()
     book.record(run_desk_cycle(llm=_script(counter=_counter(veto=True)), bars=BARS))
 
-    # Une bougie qui contient stop ET cible.
-    book.resolve("BTC", high=Decimal("67000"), low=Decimal("62500"))
+    # Une bougie qui contient l'entrée, le stop ET la cible.
+    book.amorcer("BTC", high=Decimal("63138"), low=Decimal("56000"))
+    book.resolve("BTC", high=Decimal("63138"), low=Decimal("56000"))
     assert book.entries[0].outcome == "stop"
     assert book.entries[0].pnl_r == Decimal("-1")
 
@@ -336,7 +368,8 @@ def test_le_registre_resout_avec_le_stop_prioritaire():
 def test_le_registre_resout_une_cible():
     book = ShadowBook()
     book.record(run_desk_cycle(llm=_script(counter=_counter(veto=True)), bars=BARS))
-    book.resolve("BTC", high=Decimal("67000"), low=Decimal("63500"))
+    book.amorcer("BTC", high=Decimal("63138"), low=Decimal("57000"))
+    book.resolve("BTC", high=Decimal("63138"), low=Decimal("57000"))
 
     assert book.entries[0].outcome == "cible"
     assert book.entries[0].pnl_r == Decimal("2.5")   # 2500 de gain / 1000 de risque
@@ -346,7 +379,7 @@ def test_l_esperance_exige_un_echantillon():
     """Sur moins de trente setups résolus, elle ne veut rien dire."""
     book = ShadowBook()
     book.record(run_desk_cycle(llm=_script(counter=_counter(veto=True)), bars=BARS))
-    book.resolve("BTC", high=Decimal("67000"), low=Decimal("62500"))
+    book.resolve("BTC", high=Decimal("63138"), low=Decimal("56000"))
     assert book.rejected_expectancy_r() is None
     assert "échantillon insuffisant" in book.format_report()
 
@@ -383,3 +416,252 @@ def test_aucun_module_d_agents_n_importe_l_execution():
         source = fichier.read_text(encoding="utf-8")
         for interdit in ("from ..execution", "OrderIntent", "OrderManager"):
             assert interdit not in source, f"{fichier.name} référence {interdit}"
+
+
+def test_une_lecture_qui_sabstient_arrete_avant_les_suivantes():
+    """La porte 1 se vérifie après CHAQUE lecture, pas après les trois.
+
+    Le verdict est le même — une seule abstention suffisait déjà à fermer la
+    porte. Ce qui change est ce qu'on a payé avant de le savoir : une
+    abstention du Régime faisait appeler le Quant et l'Analyste pour un cycle
+    dont l'issue était acquise.
+    """
+    from trading_desk.agents.graph import Stage, run_desk_cycle
+    from trading_desk.agents.llm import ScriptedLLM
+    from trading_desk.features import synthetic_bars
+
+    llm = ScriptedLLM([
+        {"regime": "UNKNOWN", "abstained": True,
+         "abstain_reason": "données insuffisantes"},
+    ])
+    res = run_desk_cycle(llm=llm, bars=synthetic_bars(count=300, seed=1))
+
+    assert res.stage is Stage.LECTURE
+    assert [c["agent"] for c in llm.calls] == ["regime"], \
+        "des lectures ont été payées après la fermeture de la porte"
+    assert "quant" in res.reason and "analyste" in res.reason, \
+        "le journal doit nommer ce qui n'a PAS été demandé"
+
+
+def test_la_derniere_lecture_qui_sabstient_ne_promet_rien_de_non_demande():
+    """Sur la dernière, il ne reste rien à ne pas demander — la phrase ne
+    doit pas se terminer par une liste vide."""
+    from trading_desk.agents.graph import Stage, run_desk_cycle
+    from trading_desk.agents.llm import ScriptedLLM
+    from trading_desk.features import synthetic_bars
+
+    llm = ScriptedLLM([
+        {"regime": "RANGE", "confidence": "0.6"},
+        {"liquidity_note": "carnet normal"},
+        {"abstained": True, "abstain_reason": "structure illisible"},
+    ])
+    res = run_desk_cycle(llm=llm, bars=synthetic_bars(count=300, seed=1))
+    assert res.stage is Stage.LECTURE
+    assert [c["agent"] for c in llm.calls] == ["regime", "quant", "analyste"]
+    assert "non demandé" not in res.reason
+
+
+def test_la_cloture_dhorizon_compte_les_setups_qui_ne_bougent_pas():
+    """Sans elle, la mesure ne retient que les setups à forte amplitude.
+
+    Un trade qui n'atteint ni sa cible ni son stop reste « non résolu » et
+    sort de l'espérance. Ce filtrage n'est pas neutre : il jette les setups
+    calmes et gonfle la dispersion des deux populations qu'on veut comparer.
+    """
+    book = ShadowBook()
+    book.record(run_desk_cycle(llm=_script(counter=_counter(veto=True)), bars=BARS))
+    entree = book.entries[0]
+
+    # Un prix qui ne touche ni le stop ni la cible.
+    entre_les_deux = (entree.entry_price + entree.target_price) / 2
+    book.amorcer("BTC", high=entree.entry_price, low=entree.entry_price)
+    assert book.resolve("BTC", high=entre_les_deux, low=entre_les_deux) == 0
+    assert not book.entries[0].resolved
+
+    assert book.cloturer("BTC", entre_les_deux) == 1
+    resolu = book.entries[0]
+    assert resolu.outcome == "horizon"
+    attendu = (entre_les_deux - resolu.entry_price) / resolu.risk_per_unit
+    assert resolu.pnl_r == attendu
+
+
+def test_la_cloture_ne_touche_pas_une_entree_deja_resolue():
+    book = ShadowBook()
+    book.record(run_desk_cycle(llm=_script(counter=_counter(veto=True)), bars=BARS))
+    book.amorcer("BTC", high=Decimal("63138"), low=Decimal("56000"))
+    book.resolve("BTC", high=Decimal("63138"), low=Decimal("56000"))
+    assert book.entries[0].outcome == "stop"
+    assert book.cloturer("BTC", Decimal("66000")) == 0
+    assert book.entries[0].pnl_r == Decimal("-1")
+
+
+def test_la_discrimination_exige_les_deux_populations():
+    """Une espérance négative sur les seuls rejets est compatible avec un
+    desk qui refuse au hasard. Sans les mandats, on ne peut pas trancher."""
+    book = ShadowBook()
+    for _ in range(35):
+        book.record(run_desk_cycle(llm=_script(counter=_counter(veto=True)),
+                                   bars=BARS))
+    book.amorcer("BTC", high=Decimal("63138"), low=Decimal("56000"))
+    book.resolve("BTC", high=Decimal("63138"), low=Decimal("56000"))
+    assert book.rejected_expectancy_r() == Decimal("-1")
+    assert book.issued_expectancy_r() is None
+    assert book.discrimination_r() is None
+    assert "indéterminée" in book.format_report()
+
+
+def test_le_prompt_explique_CHAQUE_categorie_que_le_scorer_pondere():
+    """Le lien entre le prompt et le barème, verrouillé des deux côtés.
+
+    Le scorer attribue un poids à chaque valeur de chaque champ qualitatif.
+    Si le prompt en oublie une, l'agent la choisira sans qu'on lui ait dit ce
+    qu'elle signifie — et le scorer pondèrera très sérieusement une réponse
+    au hasard. Le défaut serait invisible : le cycle tournerait, le score
+    sortirait, il ne voudrait simplement rien dire.
+
+    Ce test parcourt les tables de `scoring.py`, pas une liste recopiée : y
+    ajouter une catégorie sans l'expliquer dans le prompt fait tomber le
+    test le jour même.
+    """
+    from trading_desk.agents import scoring
+    from trading_desk.agents.roster import STRATEGY_SYSTEM
+
+    # Seules les étiquettes que le MODÈLE rend doivent être expliquées.
+    # Les trois autres sont calculées sur les barres depuis que douze cycles
+    # réels ont montré qu'elles rendaient une valeur constante : l'agent y
+    # notait son propre travail. Les expliquer ici l'inviterait à les
+    # deviner.
+    manquantes = [e for e in sorted(scoring.ETIQUETTES_MODELE)
+                  if e not in STRATEGY_SYSTEM]
+    calculees = [e for e in sorted(scoring.ETIQUETTES - scoring.ETIQUETTES_MODELE)
+                 if e in STRATEGY_SYSTEM]
+    assert not calculees, f"étiquettes calculées exposées au modèle : {calculees}"
+    assert not manquantes, f"catégories pondérées mais non expliquées : {manquantes}"
+
+
+def test_le_prompt_ne_demande_plus_de_chiffre_de_confiance():
+    """La mesure qui a motivé le changement : la conviction annoncée par
+    l'agent ne corrélait pas avec l'issue des setups. Laisser traîner la
+    consigne d'origine ferait réapparaître le nombre par la porte de service,
+    dans `rationale` ou ailleurs."""
+    from trading_desk.agents.roster import STRATEGY_SYSTEM
+    from trading_desk.contracts import SetupProposal
+
+    assert "conviction" not in SetupProposal.model_fields
+    assert "aucun chiffre de confiance" in STRATEGY_SYSTEM
+
+
+def test_le_prompt_ne_revele_pas_le_seuil_de_la_porte():
+    """Donner le seuil inviterait à s'y poser juste au-dessus.
+
+    Le champ ne transporte alors plus d'information : il transporte la
+    connaissance du seuil, que le desk possédait déjà.
+    """
+    from trading_desk.agents.graph import GraphConfig
+    from trading_desk.agents.roster import STRATEGY_SYSTEM
+
+    seuil = str(GraphConfig().min_conviction)          # "0.6"
+    assert seuil not in STRATEGY_SYSTEM
+    assert seuil.replace(".", ",") not in STRATEGY_SYSTEM
+
+
+def test_le_prompt_de_lavocat_ancre_la_severite():
+    """Le graphe écarte le setup au-dessus de `max_objection_severity`.
+    « Sévérité faible » sans point d'ancrage laisse l'agent inventer son
+    échelle, et la porte filtre alors du bruit de notation."""
+    from trading_desk.agents.roster import DEVIL_SYSTEM
+
+    assert "severity" in DEVIL_SYSTEM
+    assert "0,2" in DEVIL_SYSTEM and "0,8" in DEVIL_SYSTEM
+
+
+def test_aucun_prompt_ne_revele_le_seuil_de_sa_porte():
+    """Un seuil révélé invite l'agent à s'y poser juste au-dessus ou juste
+    en dessous. Le champ ne transporterait plus que la connaissance du
+    seuil, que le desk possédait déjà."""
+    from trading_desk.agents.graph import GraphConfig
+    from trading_desk.agents.roster import DEVIL_SYSTEM, STRATEGY_SYSTEM
+
+    cfg = GraphConfig()
+    for seuil, prompt in ((cfg.min_conviction, STRATEGY_SYSTEM),
+                          (cfg.max_objection_severity, DEVIL_SYSTEM)):
+        for forme in (str(seuil), str(seuil).replace(".", ",")):
+            assert forme not in prompt, f"seuil {forme} révélé"
+
+
+def _entree_r(pnl: str, issued: bool = False) -> "ShadowEntry":
+    from trading_desk.agents.shadow_book import ShadowEntry
+    return ShadowEntry(
+        ts_ms=0, stage=Stage.CONVICTION, reason="t", asset="BTC",
+        side=Side.LONG, entry_price=Decimal("100"), stop_price=Decimal("95"),
+        issued=issued, filled=True, resolved=True, outcome="cible",
+        pnl_r=Decimal(pnl))
+
+
+def test_lesperance_est_accompagnee_de_son_intervalle():
+    """Une espérance nue se lit comme un fait.
+
+    Mesure du 5 septembre : +0,35 R sur 47 rejets se lit « le desk rejette
+    des trades gagnants », alors que l'intervalle contient zéro.
+    """
+    book = ShadowBook()
+    book.entries = [_entree_r("2")] * 20 + [_entree_r("-1")] * 25
+    rapport = book.format_report()
+    assert "IC 95 %" in rapport
+    assert "compatible avec zéro" in rapport
+
+
+def test_un_effet_franc_nest_pas_dit_compatible_avec_zero():
+    book = ShadowBook()
+    book.entries = [_entree_r("2")] * 40
+    assert book.intervalle(book.entries)[0] > 0
+    assert "compatible avec zéro" not in book.format_report()
+
+
+def test_lintervalle_exige_le_meme_echantillon_que_lesperance():
+    book = ShadowBook()
+    book.entries = [_entree_r("1")] * 29
+    assert book.intervalle(book.entries) is None
+    book.entries.append(_entree_r("1"))
+    assert book.intervalle(book.entries) is not None
+
+
+def test_lintervalle_ne_bouge_pas_dun_affichage_a_lautre():
+    """Un intervalle qui change ferait douter du chiffre plutôt que de la
+    mesure."""
+    book = ShadowBook()
+    book.entries = [_entree_r("2")] * 20 + [_entree_r("-1")] * 25
+    assert book.intervalle(book.entries) == book.intervalle(book.entries)
+
+
+def test_un_stop_hors_limites_est_REFUSE_pas_une_panne():
+    """Un défaut trouvé en ancrant le dry-run sur ses barres.
+
+    `build_mandate` construit une fourchette de stop bornée par les limites
+    dures. Quand le setup demande un stop plus large que
+    `max_stop_distance_bps`, cette fourchette sort avec un minimum supérieur
+    à son maximum et le schéma lève — ce qui faisait TOMBER LE CYCLE au lieu
+    de refuser le mandat. Le commentaire de `build_mandate` affirmait
+    pourtant que le mandat serait « refusé à la construction », et l'a
+    affirmé jusqu'à ce qu'un stop de 719 bps traverse le graphe.
+
+    Un setup hors limites est un refus ordinaire. Une exception non
+    rattrapée au milieu d'un cycle de décision n'en est pas un.
+    """
+    limits = RiskLimits(max_stop_distance_bps=Decimal("500"))
+    large = _setup(entry_price="58138", stop_price="52000",
+                   target_price="70000")          # ~1 054 bps de stop
+    res = run_desk_cycle(llm=_script(setup=large), bars=BARS, limits=limits)
+
+    assert res.stage is Stage.STOP_HORS_LIMITES, res.reason
+    assert not res.is_directional
+    assert "1054" in res.reason or "bps" in res.reason
+
+
+def test_un_stop_trop_SERRE_est_refuse_aussi():
+    """La borne basse compte autant : un stop à 5 bps se fait balayer par le
+    bruit, et le moteur de risque le refuse pour cette raison."""
+    limits = RiskLimits(min_stop_distance_bps=Decimal("30"))
+    serre = _setup(entry_price="58138", stop_price="58130", target_price="63138")
+    res = run_desk_cycle(llm=_script(setup=serre), bars=BARS, limits=limits)
+    assert res.stage is Stage.STOP_HORS_LIMITES, res.reason
