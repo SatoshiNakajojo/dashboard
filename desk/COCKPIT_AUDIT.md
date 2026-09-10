@@ -691,3 +691,51 @@ depuis toujours qu'ils n'existaient pas. Les variantes livrées sont
 maintenant **déclarées** dans la carte, et un test les compare au
 répertoire : un fichier ajouté sans déclaration resterait invisible, un
 fichier déclaré sans être livré ramènerait le 404 qu'on vient d'enlever.
+
+## Phase 11 — six retours, et un bug qui n'avait jamais rien affiché
+
+### Le PFD n'était pas flou, il était minuscule
+
+`#panneaux` composait la mise en page de l'app à **900 px** puis la
+réduisait dans une dalle de 381 px : facteur 0,41. Un corps de 10 px
+finissait à **quatre pixels physiques**, et le halo de phosphore achevait
+de le noyer. J'ai d'abord soupçonné le `matrix3d` de la dalle — une
+transformation 3D fait rastériser puis rééchantillonner son sous-arbre.
+L'essai A/B a réfuté ça net : en remplaçant la transformation par un
+rectangle, le texte restait exactement aussi mou. Ce n'était pas un défaut
+de rendu, c'était de la typographie à 4 px.
+
+On compose maintenant à la largeur que la dalle a **dans la photo**. Le
+facteur vaut 1 à la taille de référence, 1,43 sur un grand écran, 0,71 sur
+un petit. La règle : agrandir un texte le garde net, le réduire non — donc
+`--k` ne doit jamais descendre franchement sous 1 par construction.
+
+### L'interrupteur photographié n'avait jamais pu s'afficher
+
+`inverseur()` appelait `habiller()` — qui pose les deux images — **avant**
+d'écrire le levier vectoriel dans `innerHTML`. Or `innerHTML` remplace tous
+les enfants : les images étaient créées puis effacées, systématiquement,
+depuis le premier jour.
+
+Ce qui rendait la panne muette : la classe `photo` était quand même posée,
+parce qu'un `load` se déclenche sur une image même détachée du document. Et
+`.inverseur.photo svg { display: none }` masquait alors le levier de repli.
+Résultat : rien à l'écran, aucune erreur, aucun 404, et un test voisin qui
+vérifiait que les deux appels existaient — ils existaient tous les deux.
+
+Le test ajouté porte donc sur l'**ordre**, seule chose qui était fausse.
+
+### Le reste
+
+- **Les cadrans s'approchent.** Premier clic : le plateau grossit et se
+  recadre sur l'instrument. Second clic seulement : le secteur s'ouvre.
+  Ouvrir dès le premier clic ferait du cadran un lien déguisé.
+- **Le PFD s'approche aussi**, au premier clic, intercepté à la capture
+  pour ne pas actionner au passage le contrôle sous le curseur. Une fois
+  approché il redevient une dalle ordinaire — sinon on ne pourrait plus
+  s'en servir.
+- La loupe accepte désormais un rectangle quelconque, pas seulement un des
+  huit blocs : inventer un bloc par cadran aurait été huit fois le même
+  code.
+- Le bouton *live feed* est retiré, le bouton *auto-pilot* ramené de 38 à
+  24 px — il était plus gros que le voyant peint qu'il double.

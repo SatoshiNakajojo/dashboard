@@ -65,6 +65,36 @@
       // de combien. Le cadran peint porte une graduation inventee, donc
       // inutilisable — la valeur s'inscrit en clair sous le moyeu.
       const lecture = creer("b", "lecture", el);
+
+      /* Un cadran se lit de pres. Le premier clic APPROCHE — le plateau
+       * entier grossit et se recadre sur l'instrument — et c'est seulement
+       * une fois approche que le clic suivant ouvre le secteur qui porte la
+       * mesure. Ouvrir directement ferait du cadran un lien deguise ; on
+       * veut qu'il se comporte comme un instrument qu'on penche la tete pour
+       * lire. Vingt-six pour cent de large : assez pres pour lire l'aiguille
+       * et le chiffre, assez large pour garder le panneau autour et savoir
+       * ou l'on est.
+       */
+      el.tabIndex = 0;
+      el.setAttribute("role", "button");
+      el.setAttribute("aria-label", r.nom);
+      const marque = "cadran:" + cle;
+      const approcher = () => {
+        const L = window.cockpitLoupe;
+        if (!L) return;
+        if (L.vue() === marque) {
+          const suite = r.vers && window.CockpitBoutons
+            && window.CockpitBoutons.agir("secteur:" + r.vers);
+          if (suite) suite();
+          return;
+        }
+        L({ l: r.cx - 13, t: r.cy - 13, w: 26, h: 26, nom: r.nom }, marque);
+      };
+      el.addEventListener("click", approcher);
+      el.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); approcher(); }
+      });
+
       aiguilles[cle] = { el: el.querySelector(".brin"), src: r.src,
                          lecture, unite: r.unite || "", boite: el, nom: r.nom };
     }

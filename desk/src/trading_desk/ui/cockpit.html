@@ -31,12 +31,15 @@
  * jusqu'a ce que `boutons.js` l'y transplante. */
 #panneaux {
   position: absolute; top: 0; left: 0; display: none; z-index: 4;
-  /* La mise en page de l'app a besoin d'environ 900 px pour respirer. On la
-   * compose a cette largeur-la, puis on la REDUIT dans la dalle : `--k` vaut
-   * la largeur de la dalle divisee par 900, et le shell le recalcule a
-   * chaque redimensionnement. Composer directement dans 380 px donnerait une
-   * colonne ou chaque titre passe a la ligne tous les deux mots — ce qu'on
-   * a vu au premier essai. */
+  /* `--k` vaut la largeur de la dalle divisee par la largeur que cette dalle
+   * a DANS LA PHOTO — le shell la calcule et la recalcule a chaque
+   * redimensionnement. Il vaut donc 1 a la taille de reference et davantage
+   * sur un grand ecran.
+   *
+   * Il a valu 0,41 : on composait a 900 px et on reduisait. Un corps de
+   * 10 px finissait a quatre pixels physiques, et le halo de phosphore
+   * achevait de le rendre illisible. Agrandir un texte le garde net,
+   * le reduire non — c'est tout ce qu'il y a a savoir ici. */
   width: calc(100% / var(--k, 1)); height: calc(100% / var(--k, 1));
   transform: scale(var(--k, 1)); transform-origin: 0 0;
   overflow: auto; overscroll-behavior: contain;

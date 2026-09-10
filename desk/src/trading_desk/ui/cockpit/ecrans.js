@@ -439,20 +439,71 @@
    * secteur. Le deplacement a lieu apres le montage : avant, la dalle
    * n'existe pas.
    */
-  const LARGEUR_APP = 900;   // largeur de composition des panneaux, en px CSS
+  /* La largeur de composition des panneaux, en px CSS.
+   *
+   * Elle valait 900 : la mise en page etait composee la, puis REDUITE a 0,41
+   * pour tenir dans la dalle. Un titre de 10 px finissait a quatre pixels
+   * physiques — illisible, et ce qu'on prenait pour du flou n'etait que du
+   * texte trop petit noye dans son propre halo de phosphore.
+   *
+   * On compose maintenant a la largeur que la dalle a DANS LA PHOTO. Le
+   * facteur vaut donc 1 a la taille de reference, et monte au-dessus de 1
+   * sur un grand ecran : agrandir un texte le garde net, le reduire non.
+   * La regle a retenir est la : `--k` ne doit jamais descendre sous 1 par
+   * construction. Les surcharges de `#panneaux` (grilles a une colonne,
+   * corps a 9-11 px) sont ce qui rend cette largeur-la tenable.
+   */
+  function largeurComposition() {
+    const q = (M().CARTE.screens.main || {}).quad;
+    const d = M().CARTE.design;
+    if (!q || !d) return 380;
+    const xs = q.map((c) => c[0]);
+    return Math.round((Math.max(...xs) - Math.min(...xs)) / 100 * d.w);
+  }
 
   function poserPanneaux() {
     const dalle = document.getElementById("screen-main");
     const pan = document.getElementById("panneaux");
     if (!dalle || !pan) return;
     if (pan.parentNode !== dalle) dalle.appendChild(pan);
+    const ref = largeurComposition();
     const calibrer = () => {
       const l = dalle.clientWidth;
-      if (l) pan.style.setProperty("--k", (l / LARGEUR_APP).toFixed(5));
+      if (l) pan.style.setProperty("--k", (l / ref).toFixed(5));
     };
     calibrer();
     if (window.ResizeObserver) new ResizeObserver(calibrer).observe(dalle);
     else addEventListener("resize", calibrer);
+    approcheAuClic(dalle);
+  }
+
+  /* S'approcher du PFD au clic.
+   *
+   * Le PREMIER clic approche et s'arrete la — il est intercepte a la
+   * capture pour qu'il n'actionne pas au passage le controle qui se trouvait
+   * sous le curseur. Une fois approche, la dalle redevient une dalle
+   * ordinaire et tous les clics y passent normalement : sans ca on ne
+   * pourrait plus jamais s'en servir. Echap, ou un second clic hors dalle,
+   * fait reculer.
+   */
+  function approcheAuClic(dalle) {
+    const q = (M().CARTE.screens.main || {}).quad;
+    if (!q) return;
+    const xs = q.map((c) => c[0]), ys = q.map((c) => c[1]);
+    const marge = 1.2;
+    const cadre = {
+      l: Math.min(...xs) - marge, t: Math.min(...ys) - marge,
+      w: Math.max(...xs) - Math.min(...xs) + 2 * marge,
+      h: Math.max(...ys) - Math.min(...ys) + 2 * marge,
+      nom: "Écran central",
+    };
+    dalle.addEventListener("click", (ev) => {
+      const L = window.cockpitLoupe;
+      if (!L || L.vue() === "pfd") return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      L(cadre, "pfd");
+    }, true);
   }
 
   function monter() {
