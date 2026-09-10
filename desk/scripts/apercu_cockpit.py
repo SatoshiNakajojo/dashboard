@@ -87,6 +87,12 @@ def enligne(m):
 corps = re.sub(r'<script src="([^"]+)"></script>', enligne, corps)
 
 SHIM = """
+/* Le poste est sombre. La page hôte enveloppe ce fichier dans son propre
+   <html>, donc l'attribut posé sur celui de `cockpit.html` ne survit pas au
+   voyage : sans cette ligne, les secteurs s'affichaient en BLANC dans une
+   vitre de bord. `desk.js` remettra la préférence de l'utilisateur ensuite. */
+document.documentElement.setAttribute("data-theme", "dark");
+
 window.__PHOTO = %s;
 window.__FIGE = %s;
 
