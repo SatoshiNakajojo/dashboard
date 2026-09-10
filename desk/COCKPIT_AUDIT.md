@@ -333,3 +333,73 @@ ramène les étoiles vers l'avant, le fond passe d'un noir plat à une nappe
 autour du point de fuite. La vidéo reste la source de vérité quand elle
 charge ; le canvas couvre le premier dixième de seconde, l'absence de
 fichier, et `prefers-reduced-motion`.
+
+---
+
+## Phase 6 — la photo change de format, 10 septembre 2026
+
+Nouvelle photo : **1792 × 1008**, soit du 16:9 là où la précédente était en
+16:10, sans mains ni manches, et le pare-brise vidé. Trois demandes : refaire
+la découpe du pare-brise, mieux intégrer les écrans, et **afficher les
+secteurs dans l'écran central** plutôt que dans une page à part.
+
+### Le ratio ne s'écrit plus en dur
+
+`width: min(100vw, calc(100vh * 1280 / 800))` étirait tout le cockpit de 11 %
+à la seconde où la photo a changé de format. Le plateau prend maintenant son
+ratio de `design` dans `hotspots.json`, posé par le shell. Même correction
+dans le module d'aiguilles : le facteur `1.6` qui rendait les cadrans ronds
+était la valeur du plateau 16:10 — en 16:9 les aiguilles se posaient à côté.
+
+### Le pare-brise
+
+Le vitrage est désormais la plus grande plage noire de l'image : un
+remplissage depuis un point intérieur, seuil de luminance 18, donne 378 082
+pixels et un contour propre. Vingt-huit points relevés ligne par ligne,
+rentrés de 0,35 point pour laisser vivre le biseau peint. Aucune estimation
+à l'œil, contrairement aux deux versions précédentes.
+
+### Un cadran n'est pas « une tache sombre »
+
+La recherche du centre par minimum de luminance posait les aiguilles **cinq
+points sous les cadrans** : sous les panneaux il y a des ombres plus sombres
+que les cadrans eux-mêmes, et la fenêtre de recherche, choisie à l'œil, les
+contenait. Un cadran, c'est un **cercle clair autour d'un disque sombre** ;
+on maximise donc l'écart couronne/disque. Une ombre n'a pas de couronne.
+
+### Les boutons câblés en dur ont disparu en silence
+
+`boutons.js` tenait la liste des clés de la carte **écrite dans son code**.
+La photo a changé, les clés avec, et le cockpit est passé de quarante-six
+boutons à **un** — sans qu'aucun test ne le voie, puisqu'ils vérifient des
+rectangles, pas des branchements.
+
+Chaque bouton porte maintenant son verbe dans la carte (`secteur:vols`,
+`loupe:flux`, `kill`, `campagnes`…), et le module ne fait que traduire. Un
+test parcourt la carte, vérifie que chaque bouton a un verbe, que le module
+sait le traduire, et que les secteurs et blocs nommés existent.
+
+### L'application entière dans l'écran du milieu
+
+Les panneaux vivaient dans un tiroir plein écran : cliquer un bouton du
+cockpit quittait le cockpit. Ils sont **déplacés** — pas copiés — dans la
+dalle centrale, et la loupe s'en approche.
+
+Deux choses ont dû être réglées avant que ce soit lisible. La page était
+**blanche** dans une vitre de bord : le poste force désormais le thème
+sombre, la préférence de l'utilisateur restant prioritaire. Et composer
+directement dans les 380 px de la dalle donnait une colonne où chaque titre
+passait à la ligne tous les deux mots ; les panneaux sont donc composés à
+**900 px** puis réduits par `transform: scale(--k)`, `--k` valant la largeur
+réelle de la dalle divisée par 900 et recalculé par un `ResizeObserver`. On
+lit un petit écran de bord, pas une page web rétrécie.
+
+Le reflet de la vitre est passé au-dessus de tout ce qui s'affiche, panneaux
+compris : une dalle a une seule vitre.
+
+### Ce que la dalle centrale montre au repos
+
+Elle est devenue la plus grande de la photo, et trois lignes y flottaient
+dans du noir. Elle porte maintenant **les douze invariants**, deux colonnes,
+une pastille verte ou rouge chacun — ce qu'un poste affiche avant le départ,
+et le seul contenu qui vaut la place qu'il prend.

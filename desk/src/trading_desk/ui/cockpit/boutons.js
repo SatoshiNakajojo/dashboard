@@ -100,123 +100,73 @@
     return b;
   }
 
+  /* Le vocabulaire des commandes.
+   *
+   * Chaque bouton porte son action DANS LA CARTE ; ce module ne fait que
+   * traduire. La version precedente tenait la liste des cles en dur ici :
+   * la photo a change, les cles avec, et le cockpit s'est retrouve avec un
+   * seul bouton sur quarante-six — sans qu'aucun test ne le voie, puisqu'ils
+   * verifient des rectangles, pas des branchements.
+   */
+  function agir(verbe) {
+    const [nom, a, b] = String(verbe).split(":");
+    switch (nom) {
+      case "secteur":            return () => D().montrer(a);
+      case "secteur-suivant":    return () => secteurVoisin(1);
+      case "secteur-precedent":  return () => secteurVoisin(-1);
+      case "fermer":             return () => window.cockpitFermerSecteur &&
+                                              window.cockpitFermerSecteur();
+      case "loupe":              return () => window.cockpitLoupe &&
+                                              window.cockpitLoupe(a);
+      case "hud":                return () => window.cockpitHud();
+      case "calibrage":          return () => document.getElementById("cockpit")
+                                                .classList.toggle("debug");
+      case "theme":              return () => document.getElementById("theme").click();
+      case "recharger":          return () => location.reload();
+      // Le coupe-circuit delegue au bouton existant, qui porte deja la
+      // confirmation en deux temps. Un second chemin d'arret serait moins
+      // teste que celui qu'on veut voir marcher.
+      case "kill":               return () => document.getElementById("kill").click();
+      case "arm":                return () => D().post("/api/arm");
+      case "campagnes":          return () => window.CockpitCampagnes &&
+                                              window.CockpitCampagnes.ouvrir();
+      case "campagne-stop":      return () => window.CockpitCampagnes &&
+                                              window.CockpitCampagnes.arreter();
+      case "cycle":              return () => cycler(a, Number(b) || 1);
+      default:                   return null;
+    }
+  }
+
+  function verbeDe(r) {
+    if (r.action) return r.action;
+    if (r.secteur) return "secteur:" + r.secteur;
+    return null;
+  }
+
   function monter() {
-    const { CARTE, hotspots: couche, hotas, fx, creer, poser } = M();
-    const H = CARTE.hotspots;
+    const { CARTE, hotspots: couche, hotas, creer, poser } = M();
+    void creer; void poser;
 
-    /* ---- rangee haute et colonnes ------------------------------------- */
-
-    hotspot(couche, "btn-sources", H["btn-sources"], {
-      titre: "Sources de recherche — campagnes, artefacts, journaux",
-      action: () => D().montrer("soufflerie"),
-    });
-    hotspot(couche, "btn-poste", H["btn-poste"], {
-      titre: "Pré-vol — la liste de vérifications",
-      action: () => D().montrer("prevol"),
-    });
-    hotspot(couche, "btn-rail", H["btn-rail"], {
-      titre: "Sources de recherche", action: () => D().montrer("soufflerie"),
-    });
-    hotspot(couche, "btn-desk-left", H["btn-desk-left"], {
-      titre: "Pré-vol", action: () => D().montrer("prevol"),
-    });
-    hotspot(couche, "btn-desk-right", H["btn-desk-right"], {
-      titre: "Systèmes", action: () => D().montrer("systemes"),
-    });
-
-    const onglets = {
-      "tab-poste": "prevol", "tab-telemetrie": "telemetrie",
-      "tab-navigation": "navigation", "tab-conso": "consommation",
-      "tab-vols": "vols", "tab-systemes": "systemes",
-    };
-    for (const [cle, secteur] of Object.entries(onglets)) {
-      hotspot(couche, cle, H[cle], {
-        titre: H[cle].label, action: () => D().montrer(secteur),
-      });
+    // Les zones cliquables du tableau de bord.
+    for (const [cle, r] of Object.entries(CARTE.hotspots || {})) {
+      const action = agir(verbeDe(r));
+      if (!action) continue;
+      hotspot(couche, cle, r, { titre: r.label || cle, action });
     }
 
-    const icones = [
-      ["icon-1", "Rafraîchir la recherche", () => location.reload()],
-      ["icon-2", "Soufflerie", () => D().montrer("soufflerie")],
-      ["icon-3", "Télémétrie", () => D().montrer("telemetrie")],
-      ["icon-4", "Navigation", () => D().montrer("navigation")],
-      ["icon-5", "Thème", () => document.getElementById("theme").click()],
-      ["icon-6", "Mode HUD — dégage les mains", () => window.cockpitHud()],
-    ];
-    for (const [cle, titre, action] of icones) {
-      hotspot(couche, cle, H[cle], { titre, action });
+    // Les commandes physiques : pupitres, molettes, inverseurs.
+    for (const [cle, r] of Object.entries(CARTE.hotas || {})) {
+      if (r.type === "inverseur") {
+        // Un inverseur ouvre un secteur, comme l'onglet qu'il double : sur un
+        // vrai poste, plusieurs commandes menent au meme systeme.
+        const action = agir(verbeDe(r));
+        inverseur(hotas, cle, r, (p) => { if (p && action) action(); });
+        continue;
+      }
+      const action = agir(verbeDe(r));
+      if (!action) continue;
+      hotspot(hotas, cle, r, { titre: r.label || cle, action });
     }
-
-    /* ---- ecrans -------------------------------------------------------- */
-
-    // Le coupe-circuit. Il delegue au bouton existant, qui porte deja la
-    // confirmation en deux temps : la reimplémenter ici creerait un second
-    // chemin d'arret, moins teste que celui qu'on veut voir marcher.
-    hotspot(couche, "btn-kill", H["btn-kill"], {
-      titre: "Tout arrêter — deux clics",
-      action: () => document.getElementById("kill").click(),
-    });
-    hotspot(couche, "btn-mandat", H["btn-mandat"], {
-      titre: "Mandat en vigueur", action: () => D().montrer("systemes"),
-    });
-
-    /* ---- HOTAS --------------------------------------------------------- */
-
-    const T = CARTE.hotas;
-    const mort = "Cette interface ne passe aucun ordre. Elle peut arrêter le " +
-                 "desk, elle ne peut pas le faire trader.";
-
-    // Les inverseurs ouvrent un secteur, comme les onglets qu'ils doublent :
-    // sur un vrai poste, plusieurs commandes menent au meme systeme.
-    const SECT = {
-      "inv-g-1": "prevol", "inv-g-2": "telemetrie", "inv-g-3": "navigation",
-      "inv-d-1": "consommation", "inv-d-2": "vols",
-    };
-    for (const [cle, secteur] of Object.entries(SECT)) {
-      if (T[cle]) inverseur(hotas, cle, T[cle], (p) => { if (p) D().montrer(secteur); });
-    }
-
-    hotspot(hotas, "joy-l-trigger", T["joy-l-trigger"],
-            { cls: "trigger", raison: mort });
-    hotspot(hotas, "joy-r-trigger", T["joy-r-trigger"],
-            { cls: "trigger", raison: mort });
-
-    hotspot(hotas, "joy-l-hat", T["joy-l-hat"], {
-      titre: "Intervalle du backtest", action: () => cycler("cbIv", 1) });
-    hotspot(hotas, "joy-r-hat", T["joy-r-hat"], {
-      titre: "Actif du backtest", action: () => cycler("cbActif", 1) });
-
-    const commandes = [
-      ["btn-l-1", "Tout arrêter", () => document.getElementById("kill").click()],
-      ["btn-l-2", "Réarmer le desk", () => D().post("/api/arm")],
-      ["btn-l-3", "Rafraîchir", () => location.reload()],
-      ["btn-l-4", "Pré-vol", () => D().montrer("prevol")],
-      ["btn-l-5", "Soufflerie", () => D().montrer("soufflerie")],
-      ["btn-l-6", "Systèmes", () => D().montrer("systemes")],
-      ["btn-r-1", "Secteur précédent", () => secteurVoisin(-1)],
-      ["btn-r-2", "Secteur suivant", () => secteurVoisin(1)],
-      ["btn-r-3", "Mode HUD", () => window.cockpitHud()],
-      ["btn-r-4", "Vols", () => D().montrer("vols")],
-      ["btn-r-5", "Navigation", () => D().montrer("navigation")],
-      ["btn-r-6", "Calibrage", () => document.getElementById("cockpit")
-                                       .classList.toggle("debug")],
-      ["mol-red", "Thème", () => document.getElementById("theme").click()],
-      ["mol-check", "Rafraîchir", () => location.reload()],
-      ["mol-trig-1", "Secteur précédent", () => secteurVoisin(-1)],
-      ["mol-trig-2", "Secteur suivant", () => secteurVoisin(1)],
-    ];
-    for (const [cle, titre, action] of commandes) {
-      if (T[cle]) hotspot(hotas, cle, T[cle], { titre, action });
-    }
-
-    hotspot(hotas, "thr-left", T["thr-left"], {
-      titre: "Stratégie précédente", action: () => cycler("cbStrat", -1) });
-    hotspot(hotas, "thr-right", T["thr-right"], {
-      titre: "Stratégie suivante", action: () => cycler("cbStrat", 1) });
-
-    // Les trois boutons du quadrant des gaz commandent les campagnes. Le
-    // lanceur les cable lui-meme : il connait son etat, pas ce module.
-    if (window.CockpitCampagnes) window.CockpitCampagnes.cabler(hotas, T, hotspot);
   }
 
   /* Les temoins lumineux sont rendus par `ecrans.js`, dans le contenu des

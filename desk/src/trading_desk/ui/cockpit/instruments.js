@@ -44,12 +44,18 @@
       couche.style.setProperty("--verre-" + nom, "rgb(" + rgb + ")");
     }
 
+    // Un cadran est ROND. Sa largeur est un % de la largeur du plateau, sa
+    // hauteur un % de sa hauteur : sans le rapport des deux, un rayon de 2 %
+    // donne une ellipse — et l'aiguille sort du cadran d'un cote. Le facteur
+    // etait ecrit 1.6 en dur, la valeur du plateau 16:10 ; la photo est
+    // passee en 16:9 et les aiguilles se sont posees a cote.
+    const ratio = CARTE.design.w / CARTE.design.h;
     for (const [cle, r] of Object.entries(inst.aiguilles)) {
       const el = creer("div", "aiguille", couche);
       el.style.left = (r.cx - r.r) + "%";
-      el.style.top = (r.cy - r.r * 1.6) + "%";
+      el.style.top = (r.cy - r.r * ratio) + "%";
       el.style.width = (r.r * 2) + "%";
-      el.style.height = (r.r * 3.2) + "%";
+      el.style.height = (r.r * 2 * ratio) + "%";
       el.title = r.nom;
       el.innerHTML =
         '<svg viewBox="0 0 100 100" aria-hidden="true">' +
@@ -156,6 +162,7 @@
       "budget-n": s.budget.ip_used + "/" + s.budget.ip_limit,
       reserve: s.budget.reserve_pct + " %",
       pnl: a && a.day_pnl_usd != null ? D().usd(a.day_pnl_usd) : "—",
+      "reserve-n": s.budget.reserve_left + " r",
     };
     for (const [, af] of Object.entries(afficheurs)) {
       const v = valeurs[af.src];

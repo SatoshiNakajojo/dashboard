@@ -123,20 +123,10 @@
     if (e.key === "Escape" && ouvert) fermer();
   });
 
-  /* Le quadrant des gaz : lancer, arreter, ouvrir. Cable par `boutons.js`,
-   * qui nous passe sa fabrique de hotspots plutot que de la dupliquer. */
-  function cabler(couche, T, hotspot) {
-    if (T["gaz-1"]) hotspot(couche, "gaz-1", T["gaz-1"],
-      { titre: "Campagnes — lancer", action: ouvrir });
-    if (T["gaz-2"]) hotspot(couche, "gaz-2", T["gaz-2"],
-      { titre: "Arrêter la campagne", action: arreter });
-    if (T["gaz-3"]) hotspot(couche, "gaz-3", T["gaz-3"],
-      { titre: "Soufflerie", action: () => D().montrer("soufflerie") });
-    if (T["thr-left"]) hotspot(couche, "thr-left", T["thr-left"],
-      { titre: "Campagnes", action: ouvrir });
-    if (T["thr-right"]) hotspot(couche, "thr-right", T["thr-right"],
-      { titre: "Campagnes", action: ouvrir });
-  }
-
-  window.CockpitCampagnes = { cabler, ouvrir, fermer };
+  /* Les boutons du poste appellent ces trois-la par leur nom, depuis la
+   * carte. `cabler()` cablait lui-meme trois cles precises du quadrant des
+   * gaz ; ces cles ont disparu avec les manettes de la photo, et une
+   * fabrique de hotspots passee d'un module a l'autre pour trois boutons
+   * etait de toute facon un detour. */
+  window.CockpitCampagnes = { ouvrir, fermer, arreter };
 })();

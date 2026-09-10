@@ -1,1126 +1,1032 @@
 {
-  "_lisez_moi": [
-    "Toutes les coordonnees sont en POURCENTAGE du plateau 1280x800.",
-    "Jamais de pixels : le plateau se met a l'echelle du viewport en letterbox,",
-    "et des pixels bruts derailleraient a la premiere resolution differente.",
-    "Fichier UNIQUE : ne recopiez pas ces valeurs dans un composant.",
-    "Relues sur la photo le 9 septembre 2026, PAS reprises du brief : ses",
-    "valeurs de depart faisaient deborder l'ecran central sur LIVE FEED.",
-    "Calibrage fin : ouvrir le cockpit et appuyer sur D.",
-    "Les temoins lumineux vivent DANS le contenu des ecrans qui recouvrent les panneaux ou la photo les peint. Une surcouche les ferait flotter par-dessus le texte qu'ils qualifient.",
-    "La section `chrome` recouvre les etiquettes peintes dans le JPEG, qui sont hallucinees et figees : un chrono qui ne compte pas, un nom d'utilisateur qui ne designe personne, des fautes. Voir COCKPIT_AUDIT.md."
-  ],
+  "_lisez_moi": "Geometrie du poste de pilotage. TOUT est en % de la boite de reference ci-dessous, jamais en pixels : le plateau se met a l'echelle du viewport en letterbox. Ce fichier est la SEULE source de coordonnees ; recopier un rectangle ailleurs le fait deriver a la premiere recalibration. Releve au pixel sur assets/cockpit.jpg le 10 septembre 2026 — voir COCKPIT_AUDIT.md pour la methode.",
   "design": {
-    "w": 1280,
-    "h": 800
+    "w": 1792,
+    "h": 1008
   },
   "glass": {
-    "clip": "polygon(29.0% 5.55%, 34% 5.6%, 42% 5.9%, 50% 6.25%, 58% 5.9%, 66% 5.6%, 71.5% 5.55%, 73.2% 6.4%, 73.7% 8.5%, 73.7% 43.2%, 73.3% 47.9%, 69% 47.2%, 63% 46.4%, 56% 45.4%, 48% 45.1%, 40% 45.9%, 33% 47.4%, 27.9% 48.2%, 27.3% 43.2%, 27.3% 8.5%, 27.8% 6.4%)"
+    "clip": "polygon(30.1% 4.8%, 27.65% 6.85%, 26.9% 9.35%, 26.6% 11.75%, 26.7% 16.6%, 26.8% 21.45%, 26.9% 26.3%, 26.98% 31.05%, 27.02% 35.9%, 27.02% 40.8%, 27.02% 45.6%, 27.1% 48.0%, 27.4% 50.5%, 28.8% 52.55%, 71.25% 52.55%, 72.75% 50.5%, 73.03% 48.0%, 73.03% 45.6%, 73.09% 40.8%, 73.09% 35.9%, 73.14% 31.05%, 73.2% 26.3%, 73.25% 21.45%, 73.42% 16.6%, 73.53% 11.75%, 73.31% 9.35%, 72.59% 6.85%, 69.95% 4.8%)"
   },
   "screens": {
     "left-log": {
-      "l": 2.4,
-      "t": 6.56,
-      "w": 22.35,
-      "h": 10.4,
+      "l": 3.91,
+      "t": 5.16,
+      "w": 20.65,
+      "h": 12.9,
       "titre": "État du desk"
     },
     "minis": {
-      "l": 76.0,
-      "t": 6.8,
-      "w": 22.5,
-      "h": 10.0,
+      "l": 76.62,
+      "t": 5.85,
+      "w": 19.81,
+      "h": 12.3,
       "titre": "Stratégies contre HODL"
     },
     "feed": {
-      "l": 27.0,
-      "t": 55.7,
-      "w": 10.25,
-      "h": 20.5,
+      "l": 26.79,
+      "t": 63.49,
+      "w": 10.49,
+      "h": 18.65,
       "titre": "Journal de décisions"
     },
     "main": {
-      "l": 39.5,
-      "t": 51.2,
-      "w": 21.75,
-      "h": 24.4,
+      "l": 39.51,
+      "t": 55.16,
+      "w": 21.21,
+      "h": 27.78,
       "titre": "Desk"
     },
     "autopilot": {
-      "l": 62.85,
-      "t": 55.9,
-      "w": 9.35,
-      "h": 20.2,
+      "l": 62.95,
+      "t": 63.49,
+      "w": 10.71,
+      "h": 18.65,
       "titre": "Mandat"
-    }
-  },
-  "hotspots": {
-    "btn-sources": {
-      "l": 39.75,
-      "t": 0.8,
-      "w": 21.0,
-      "h": 2.56,
-      "label": "Sources de recherche"
-    },
-    "btn-poste": {
-      "l": 2.75,
-      "t": 1.2,
-      "w": 13.25,
-      "h": 2.64,
-      "label": "Poste de pilotage"
-    },
-    "btn-rail": {
-      "l": 41.5,
-      "t": 46.3,
-      "w": 18.3,
-      "h": 1.9,
-      "label": "Sources de recherche"
-    },
-    "btn-kill": {
-      "l": 2.4,
-      "t": 6.56,
-      "w": 22.35,
-      "h": 3.84,
-      "label": "Tout arrêter"
-    },
-    "btn-desk-left": {
-      "l": 1.5,
-      "t": 51.04,
-      "w": 14.5,
-      "h": 2.72,
-      "label": "Pré-vol"
-    },
-    "btn-desk-right": {
-      "l": 85.0,
-      "t": 51.04,
-      "w": 10.0,
-      "h": 2.72,
-      "label": "Systèmes"
-    },
-    "tab-poste": {
-      "l": 2.4,
-      "t": 18.56,
-      "w": 6.6,
-      "h": 2.08,
-      "label": "Pré-vol"
-    },
-    "tab-telemetrie": {
-      "l": 9.5,
-      "t": 18.56,
-      "w": 6.5,
-      "h": 2.08,
-      "label": "Télémétrie"
-    },
-    "tab-navigation": {
-      "l": 16.4,
-      "t": 18.56,
-      "w": 7.0,
-      "h": 2.08,
-      "label": "Navigation"
-    },
-    "tab-conso": {
-      "l": 77.5,
-      "t": 18.56,
-      "w": 7.0,
-      "h": 2.08,
-      "label": "Consommation"
-    },
-    "tab-vols": {
-      "l": 85.0,
-      "t": 18.56,
-      "w": 5.5,
-      "h": 2.08,
-      "label": "Vols"
-    },
-    "tab-systemes": {
-      "l": 91.0,
-      "t": 18.56,
-      "w": 7.5,
-      "h": 2.08,
-      "label": "Systèmes"
-    },
-    "icon-1": {
-      "l": 76.4,
-      "t": 21.76,
-      "w": 3.1,
-      "h": 4.64,
-      "label": "Rafraîchir"
-    },
-    "icon-2": {
-      "l": 79.9,
-      "t": 21.76,
-      "w": 3.1,
-      "h": 4.64,
-      "label": "Soufflerie"
-    },
-    "icon-3": {
-      "l": 83.4,
-      "t": 21.76,
-      "w": 3.1,
-      "h": 4.64,
-      "label": "Télémétrie"
-    },
-    "icon-4": {
-      "l": 86.9,
-      "t": 21.76,
-      "w": 3.1,
-      "h": 4.64,
-      "label": "Navigation"
-    },
-    "icon-5": {
-      "l": 90.4,
-      "t": 21.76,
-      "w": 3.1,
-      "h": 4.64,
-      "label": "Thème"
-    },
-    "icon-6": {
-      "l": 93.9,
-      "t": 21.76,
-      "w": 3.1,
-      "h": 4.64,
-      "label": "Mode HUD"
-    },
-    "btn-mandat": {
-      "l": 62.9,
-      "t": 56.0,
-      "w": 9.2,
-      "h": 2.4,
-      "label": "Mandat en vigueur"
-    },
-    "btn-debit": {
-      "l": 32.75,
-      "t": 51.6,
-      "w": 4.5,
-      "h": 2.0,
-      "label": "Débit du flux"
-    }
-  },
-  "leds": {},
-  "pilot": {
-    "stickL": {
-      "l": 19.5,
-      "t": 62.4,
-      "w": 12.5,
-      "h": 37.6
-    },
-    "stickR": {
-      "l": 72.0,
-      "t": 62.4,
-      "w": 12.5,
-      "h": 37.6
-    },
-    "throttle": {
-      "l": 45.0,
-      "t": 80.8,
-      "w": 9.5,
-      "h": 19.2
-    }
-  },
-  "hotas": {
-    "joy-l-trigger": {
-      "l": 25.25,
-      "t": 63.6,
-      "w": 2.25,
-      "h": 4.0,
-      "label": "Achat — non branché"
-    },
-    "joy-l-hat": {
-      "l": 25.0,
-      "t": 68.0,
-      "w": 2.25,
-      "h": 3.2,
-      "label": "Intervalle du backtest"
-    },
-    "joy-r-trigger": {
-      "l": 73.5,
-      "t": 63.2,
-      "w": 2.25,
-      "h": 4.0,
-      "label": "Vente — non branché"
-    },
-    "joy-r-hat": {
-      "l": 73.25,
-      "t": 67.6,
-      "w": 2.25,
-      "h": 3.2,
-      "label": "Actif du backtest"
-    },
-    "thr-left": {
-      "l": 45.75,
-      "t": 86.4,
-      "w": 3.0,
-      "h": 13.6,
-      "label": "Stratégie précédente"
-    },
-    "thr-right": {
-      "l": 49.5,
-      "t": 86.4,
-      "w": 3.25,
-      "h": 13.6,
-      "label": "Stratégie suivante"
-    },
-    "mol-red": {
-      "l": 19.2,
-      "t": 60.4,
-      "w": 1.8,
-      "h": 2.8,
-      "label": "Thème"
-    },
-    "mol-check": {
-      "l": 22.1,
-      "t": 60.4,
-      "w": 1.8,
-      "h": 2.8,
-      "label": "Rafraîchir"
-    },
-    "mol-trig-1": {
-      "l": 91.8,
-      "t": 43.0,
-      "w": 1.8,
-      "h": 2.8,
-      "label": "Secteur précédent"
-    },
-    "mol-trig-2": {
-      "l": 94.9,
-      "t": 43.0,
-      "w": 1.8,
-      "h": 2.8,
-      "label": "Secteur suivant"
-    },
-    "inv-g-1": {
-      "l": 4.05,
-      "t": 73.4,
-      "w": 1.6,
-      "h": 2.5,
-      "label": "Pré-vol",
-      "type": "inverseur",
-      "n": 2
-    },
-    "inv-g-2": {
-      "l": 8.15,
-      "t": 73.4,
-      "w": 1.6,
-      "h": 2.5,
-      "label": "Télémétrie",
-      "type": "inverseur",
-      "n": 2
-    },
-    "inv-g-3": {
-      "l": 12.25,
-      "t": 73.4,
-      "w": 1.6,
-      "h": 2.5,
-      "label": "Navigation",
-      "type": "inverseur",
-      "n": 3
-    },
-    "inv-d-1": {
-      "l": 82.4,
-      "t": 73.4,
-      "w": 1.6,
-      "h": 2.5,
-      "label": "Consommation",
-      "type": "inverseur",
-      "n": 2
-    },
-    "inv-d-2": {
-      "l": 85.37,
-      "t": 73.4,
-      "w": 1.6,
-      "h": 2.5,
-      "label": "Vols",
-      "type": "inverseur",
-      "n": 2
-    },
-    "btn-l-1": {
-      "l": 27.6,
-      "t": 83.4,
-      "w": 1.7,
-      "h": 2.2,
-      "label": "Tout arrêter"
-    },
-    "btn-l-2": {
-      "l": 29.4,
-      "t": 83.4,
-      "w": 1.7,
-      "h": 2.2,
-      "label": "Réarmer"
-    },
-    "btn-l-3": {
-      "l": 31.2,
-      "t": 83.4,
-      "w": 1.7,
-      "h": 2.2,
-      "label": "Rafraîchir"
-    },
-    "btn-l-4": {
-      "l": 27.6,
-      "t": 86.0,
-      "w": 1.7,
-      "h": 2.2,
-      "label": "Pré-vol"
-    },
-    "btn-l-5": {
-      "l": 29.4,
-      "t": 86.0,
-      "w": 1.7,
-      "h": 2.2,
-      "label": "Soufflerie"
-    },
-    "btn-l-6": {
-      "l": 31.2,
-      "t": 86.0,
-      "w": 1.7,
-      "h": 2.2,
-      "label": "Systèmes"
-    },
-    "btn-r-1": {
-      "l": 68.6,
-      "t": 83.4,
-      "w": 1.7,
-      "h": 2.2,
-      "label": "Secteur précédent"
-    },
-    "btn-r-2": {
-      "l": 70.4,
-      "t": 83.4,
-      "w": 1.7,
-      "h": 2.2,
-      "label": "Secteur suivant"
-    },
-    "btn-r-3": {
-      "l": 72.2,
-      "t": 83.4,
-      "w": 1.7,
-      "h": 2.2,
-      "label": "Mode HUD"
-    },
-    "btn-r-4": {
-      "l": 68.6,
-      "t": 86.0,
-      "w": 1.7,
-      "h": 2.2,
-      "label": "Vols"
-    },
-    "btn-r-5": {
-      "l": 70.4,
-      "t": 86.0,
-      "w": 1.7,
-      "h": 2.2,
-      "label": "Navigation"
-    },
-    "btn-r-6": {
-      "l": 72.2,
-      "t": 86.0,
-      "w": 1.7,
-      "h": 2.2,
-      "label": "Calibrage"
-    },
-    "gaz-1": {
-      "l": 47.1,
-      "t": 82.9,
-      "w": 1.9,
-      "h": 2.4,
-      "label": "Lancer une campagne"
-    },
-    "gaz-2": {
-      "l": 49.2,
-      "t": 82.9,
-      "w": 1.9,
-      "h": 2.4,
-      "label": "Arrêter la campagne"
-    },
-    "gaz-3": {
-      "l": 51.3,
-      "t": 82.9,
-      "w": 1.9,
-      "h": 2.4,
-      "label": "Soufflerie"
     }
   },
   "chrome": {
     "haut-gauche": {
-      "l": 2.75,
-      "t": 1.2,
-      "w": 13.25,
-      "h": 2.64,
+      "l": 3.63,
+      "t": 0.2,
+      "w": 12.55,
+      "h": 2.58,
       "src": "titre",
       "align": "center"
     },
     "haut-centre": {
-      "l": 39.75,
-      "t": 0.8,
-      "w": 21.0,
-      "h": 2.56,
+      "l": 39.0,
+      "t": 0.1,
+      "w": 21.9,
+      "h": 2.68,
       "src": "sources",
       "align": "center",
       "ton": "amb"
     },
     "haut-actif": {
-      "l": 82.75,
-      "t": 0.96,
-      "w": 10.75,
-      "h": 2.64,
+      "l": 81.75,
+      "t": 0.3,
+      "w": 12.05,
+      "h": 2.48,
       "src": "actif",
       "align": "center"
     },
     "haut-mode": {
-      "l": 94.0,
-      "t": 0.96,
-      "w": 4.6,
-      "h": 2.64,
+      "l": 94.7,
+      "t": 0.3,
+      "w": 4.8,
+      "h": 2.48,
       "src": "mode",
       "align": "center",
       "ton": "amb"
     },
-    "tab-1": {
-      "l": 2.4,
-      "t": 18.56,
-      "w": 6.6,
-      "h": 2.08,
-      "src": "t-prevol",
-      "align": "center"
-    },
-    "tab-2": {
-      "l": 9.5,
-      "t": 18.56,
-      "w": 6.5,
-      "h": 2.08,
-      "src": "t-telemetrie",
-      "align": "center"
-    },
-    "tab-3": {
-      "l": 16.4,
-      "t": 18.56,
-      "w": 7.0,
-      "h": 2.08,
-      "src": "t-navigation",
-      "align": "center"
-    },
-    "tab-4": {
-      "l": 77.5,
-      "t": 18.56,
-      "w": 7.0,
-      "h": 2.08,
-      "src": "t-conso",
-      "align": "center"
-    },
-    "tab-5": {
-      "l": 85.0,
-      "t": 18.56,
-      "w": 5.5,
-      "h": 2.08,
-      "src": "t-vols",
-      "align": "center"
-    },
-    "tab-6": {
-      "l": 91.0,
-      "t": 18.56,
-      "w": 7.5,
-      "h": 2.08,
-      "src": "t-systemes",
-      "align": "center"
-    },
     "rail": {
-      "l": 41.5,
-      "t": 46.3,
-      "w": 18.3,
-      "h": 1.9,
+      "l": 41.3,
+      "t": 50.0,
+      "w": 20.2,
+      "h": 2.28,
       "src": "rail",
       "align": "center",
       "ton": "amb"
     },
     "bas-gauche": {
-      "l": 1.5,
-      "t": 51.04,
-      "w": 14.5,
-      "h": 2.72,
-      "src": "titre2",
+      "l": 1.51,
+      "t": 55.75,
+      "w": 3.0,
+      "h": 1.98,
+      "src": "desk",
       "align": "center"
     },
-    "bas-mode-g": {
-      "l": 16.75,
-      "t": 51.04,
-      "w": 8.25,
-      "h": 2.72,
-      "src": "invariants",
-      "align": "center",
-      "ton": "amb"
-    },
-    "bas-actif": {
-      "l": 84.0,
-      "t": 51.04,
-      "w": 11.5,
-      "h": 2.72,
-      "src": "journal",
-      "align": "center",
-      "ton": "amb"
-    },
-    "bas-mode-d": {
-      "l": 95.6,
-      "t": 51.04,
-      "w": 4.2,
-      "h": 2.72,
-      "src": "lien",
-      "align": "center",
-      "ton": "amb"
-    },
-    "bas-droite": {
-      "l": 88.5,
-      "t": 71.6,
-      "w": 8.0,
-      "h": 2.4,
-      "src": "pied",
-      "align": "center",
-      "ton": "amb"
-    },
-    "bas-desk": {
-      "l": 75.3,
-      "t": 51.04,
-      "w": 4.6,
-      "h": 2.72,
-      "src": "strategies",
+    "bas-titre": {
+      "l": 4.8,
+      "t": 55.16,
+      "w": 10.83,
+      "h": 3.17,
+      "src": "titre",
       "align": "center"
     },
     "bas-debit": {
-      "l": 32.75,
-      "t": 51.6,
-      "w": 4.5,
-      "h": 2.0,
+      "l": 32.37,
+      "t": 56.55,
+      "w": 5.47,
+      "h": 2.38,
       "src": "debit",
       "align": "center",
       "ton": "amb"
     },
+    "bas-vols": {
+      "l": 62.16,
+      "t": 56.25,
+      "w": 5.92,
+      "h": 2.28,
+      "src": "pied",
+      "align": "center"
+    },
+    "bas-desk": {
+      "l": 75.73,
+      "t": 55.75,
+      "w": 2.9,
+      "h": 1.98,
+      "src": "lien",
+      "align": "center"
+    },
+    "bas-actif": {
+      "l": 83.71,
+      "t": 55.46,
+      "w": 11.16,
+      "h": 3.08,
+      "src": "actif",
+      "align": "center",
+      "ton": "amb"
+    },
+    "bas-journal": {
+      "l": 95.26,
+      "t": 55.46,
+      "w": 4.35,
+      "h": 3.08,
+      "src": "journal",
+      "align": "center",
+      "ton": "amb"
+    },
     "pas-regime": {
-      "l": 84.5,
-      "t": 28.25,
-      "w": 4.7,
-      "h": 1.5,
+      "l": 84.3,
+      "t": 29.76,
+      "w": 4.42,
+      "h": 2.19,
       "src": "mode",
       "align": "center",
       "ton": "amb"
     },
     "pas-mandat": {
-      "l": 82.7,
-      "t": 38.25,
-      "w": 4.0,
-      "h": 1.5,
+      "l": 82.5,
+      "t": 41.07,
+      "w": 4.31,
+      "h": 1.99,
       "src": "mandat",
       "align": "center",
       "ton": "amb"
+    },
+    "pas-ampl": {
+      "l": 10.6,
+      "t": 61.01,
+      "w": 4.39,
+      "h": 2.09,
+      "src": "pnl",
+      "align": "center",
+      "ton": "amb"
+    },
+    "bas-inv": {
+      "l": 16.74,
+      "t": 55.36,
+      "w": 4.24,
+      "h": 2.78,
+      "src": "invariants",
+      "align": "center",
+      "ton": "amb"
+    },
+    "bas-strat": {
+      "l": 21.26,
+      "t": 55.36,
+      "w": 4.19,
+      "h": 2.78,
+      "src": "strategies",
+      "align": "center",
+      "ton": "amb"
+    }
+  },
+  "graves": {
+    "lab-para": {
+      "l": 3.46,
+      "t": 22.82,
+      "w": 21.65,
+      "h": 6.15,
+      "src": "prevol",
+      "aligne": "gauche"
+    },
+    "lab-reg-1": {
+      "l": 76.8,
+      "t": 32.44,
+      "w": 3.9,
+      "h": 1.69,
+      "texte": "Équité"
+    },
+    "lab-reg-2": {
+      "l": 82.17,
+      "t": 32.44,
+      "w": 4.25,
+      "h": 1.69,
+      "texte": "Exposition"
+    },
+    "lab-reg-3": {
+      "l": 87.08,
+      "t": 32.44,
+      "w": 4.75,
+      "h": 1.69,
+      "texte": "Positions"
+    },
+    "lab-reg-4": {
+      "l": 92.27,
+      "t": 32.44,
+      "w": 4.75,
+      "h": 1.69,
+      "texte": "Mandats"
+    },
+    "lab-amp": {
+      "l": 3.65,
+      "t": 61.01,
+      "w": 8.3,
+      "h": 2.28,
+      "texte": "Exposition"
+    },
+    "lab-flux-1": {
+      "l": 76.68,
+      "t": 62.5,
+      "w": 4.62,
+      "h": 1.89,
+      "texte": "Latence"
+    },
+    "lab-flux-2": {
+      "l": 87.17,
+      "t": 63.39,
+      "w": 4.22,
+      "h": 1.89,
+      "texte": "Budget"
+    },
+    "lab-sect": {
+      "l": 3.2,
+      "t": 77.58,
+      "w": 8.0,
+      "h": 1.99,
+      "texte": "Secteurs"
+    },
+    "lab-merci": {
+      "l": 89.5,
+      "t": 77.68,
+      "w": 7.1,
+      "h": 1.99,
+      "texte": "Campagnes"
+    },
+    "lab-sc-1": {
+      "l": 14.1,
+      "t": 32.44,
+      "w": 4.7,
+      "h": 1.89,
+      "texte": "Seaux"
+    },
+    "lab-sc-2": {
+      "l": 20.0,
+      "t": 32.44,
+      "w": 4.1,
+      "h": 1.89,
+      "texte": "Score"
     }
   },
   "instruments": {
     "aiguilles": {
       "amp-expo": {
-        "cx": 5.36,
-        "cy": 62.6,
-        "r": 2.5,
+        "cx": 5.97,
+        "cy": 69.05,
+        "r": 2.3,
         "src": "expo",
         "nom": "Exposition"
       },
       "amp-lev": {
-        "cx": 10.8,
-        "cy": 62.6,
-        "r": 2.5,
+        "cx": 11.61,
+        "cy": 68.45,
+        "r": 2.3,
         "src": "levier",
         "nom": "Levier"
       },
       "trig-1": {
-        "cx": 78.6,
-        "cy": 43.6,
-        "r": 2.2,
+        "cx": 78.29,
+        "cy": 47.52,
+        "r": 2.15,
         "src": "invariants",
         "nom": "Invariants"
       },
       "trig-2": {
-        "cx": 83.1,
-        "cy": 43.6,
-        "r": 2.2,
+        "cx": 83.59,
+        "cy": 47.52,
+        "r": 2.0,
         "src": "mandat",
         "nom": "Mandat"
       },
       "flux-1": {
-        "cx": 78.8,
-        "cy": 62.8,
-        "r": 2.5,
+        "cx": 78.96,
+        "cy": 67.56,
+        "r": 2.1,
         "src": "latence",
         "nom": "Latence"
       },
       "flux-2": {
-        "cx": 89.3,
-        "cy": 63.0,
-        "r": 2.5,
+        "cx": 89.4,
+        "cy": 69.74,
+        "r": 2.1,
         "src": "budget",
         "nom": "Budget de requêtes"
       }
     },
     "temoins": {
       "trig-a": {
-        "l": 87.0,
-        "t": 40.6,
-        "w": 0.9,
-        "h": 1.2,
+        "l": 87.05,
+        "t": 43.65,
+        "w": 0.84,
+        "h": 1.19,
         "src": "ws"
       },
       "trig-b": {
-        "l": 87.0,
-        "t": 42.5,
-        "w": 0.9,
-        "h": 1.2,
+        "l": 87.05,
+        "t": 45.83,
+        "w": 0.84,
+        "h": 1.19,
         "src": "halt"
       },
       "trig-c": {
-        "l": 87.0,
-        "t": 44.4,
-        "w": 0.9,
-        "h": 1.2,
+        "l": 87.05,
+        "t": 48.02,
+        "w": 0.84,
+        "h": 1.19,
         "src": "stops"
       },
       "trig-d": {
-        "l": 87.0,
-        "t": 46.4,
-        "w": 0.9,
-        "h": 1.2,
+        "l": 87.05,
+        "t": 50.2,
+        "w": 0.84,
+        "h": 1.19,
         "src": "recon"
       },
       "amp-a": {
-        "l": 14.5,
-        "t": 58.7,
-        "w": 0.9,
-        "h": 1.2,
+        "l": 14.73,
+        "t": 63.89,
+        "w": 0.84,
+        "h": 1.29,
         "src": "expo-ok"
       },
       "amp-b": {
-        "l": 14.5,
-        "t": 60.9,
-        "w": 0.9,
-        "h": 1.2,
+        "l": 14.73,
+        "t": 65.87,
+        "w": 0.84,
+        "h": 1.29,
         "src": "lev-ok"
       },
       "amp-c": {
-        "l": 14.5,
-        "t": 63.0,
-        "w": 0.9,
-        "h": 1.2,
+        "l": 14.73,
+        "t": 68.06,
+        "w": 0.84,
+        "h": 1.29,
         "src": "feeds-ok"
       },
       "amp-d": {
-        "l": 14.5,
-        "t": 65.1,
-        "w": 0.9,
-        "h": 1.2,
+        "l": 14.73,
+        "t": 70.04,
+        "w": 0.84,
+        "h": 1.29,
         "src": "sain"
       }
     },
     "afficheurs": {
       "reg-1": {
-        "l": 76.64,
-        "t": 32.13,
-        "w": 4.69,
-        "h": 3.0,
+        "l": 76.9,
+        "t": 34.52,
+        "w": 4.58,
+        "h": 2.88,
         "src": "equite"
       },
       "reg-2": {
-        "l": 82.34,
-        "t": 32.13,
-        "w": 4.22,
-        "h": 3.0,
+        "l": 82.25,
+        "t": 34.52,
+        "w": 4.58,
+        "h": 2.88,
         "src": "expo-usd"
       },
       "reg-3": {
-        "l": 87.5,
-        "t": 32.13,
-        "w": 4.22,
-        "h": 3.0,
+        "l": 87.17,
+        "t": 34.52,
+        "w": 4.58,
+        "h": 2.88,
         "src": "positions"
       },
       "reg-4": {
-        "l": 92.66,
-        "t": 32.13,
-        "w": 4.06,
-        "h": 3.0,
+        "l": 92.41,
+        "t": 34.52,
+        "w": 4.58,
+        "h": 2.88,
         "src": "mandats"
       },
       "flu-1": {
-        "l": 81.95,
-        "t": 57.5,
-        "w": 4.22,
-        "h": 2.15,
+        "l": 81.81,
+        "t": 62.6,
+        "w": 4.46,
+        "h": 1.89,
         "src": "lat-1"
       },
       "flu-2": {
-        "l": 81.95,
-        "t": 59.75,
-        "w": 4.22,
-        "h": 2.15,
+        "l": 81.81,
+        "t": 65.08,
+        "w": 4.46,
+        "h": 1.89,
         "src": "lat-2"
       },
       "flu-3": {
-        "l": 81.95,
-        "t": 62.0,
-        "w": 4.22,
-        "h": 2.15,
+        "l": 81.81,
+        "t": 67.66,
+        "w": 4.46,
+        "h": 1.89,
         "src": "lat-3"
       },
       "flu-4": {
-        "l": 81.95,
-        "t": 64.38,
-        "w": 4.22,
-        "h": 2.15,
+        "l": 81.81,
+        "t": 70.44,
+        "w": 4.46,
+        "h": 1.89,
         "src": "lat-4"
       },
       "flu-5": {
-        "l": 92.5,
-        "t": 58.5,
-        "w": 4.45,
-        "h": 2.15,
+        "l": 92.3,
+        "t": 63.99,
+        "w": 4.58,
+        "h": 1.89,
         "src": "budget-n"
       },
       "flu-6": {
-        "l": 92.5,
-        "t": 60.88,
-        "w": 4.45,
-        "h": 5.0,
-        "src": "reserve",
-        "gros": true
+        "l": 92.3,
+        "t": 66.67,
+        "w": 4.58,
+        "h": 1.89,
+        "src": "reserve"
       },
       "flu-7": {
-        "l": 92.5,
-        "t": 66.0,
-        "w": 4.45,
-        "h": 2.4,
+        "l": 92.3,
+        "t": 69.44,
+        "w": 4.58,
+        "h": 1.89,
         "src": "pnl"
+      },
+      "flu-8": {
+        "l": 92.3,
+        "t": 72.12,
+        "w": 4.58,
+        "h": 1.89,
+        "src": "reserve-n"
       }
     },
     "bargraphes": {
       "sc-1": {
-        "l": 4.06,
-        "t": 30.75,
-        "w": 3.36,
-        "h": 15.8,
+        "l": 4.19,
+        "t": 33.2,
+        "w": 3.52,
+        "h": 16.6,
         "src": "sous-seuil",
         "ton": "amb"
       },
       "sc-2": {
-        "l": 9.06,
-        "t": 30.75,
-        "w": 3.36,
-        "h": 15.8,
+        "l": 9.15,
+        "t": 33.2,
+        "w": 3.46,
+        "h": 16.6,
         "src": "au-seuil",
         "ton": "ok"
       }
     },
     "colonnes": {
       "sc-bar": {
-        "l": 14.22,
-        "w": 4.3,
-        "h": 1.63,
+        "l": 14.29,
+        "w": 4.35,
+        "h": 1.79,
         "lignes": [
-          32.13,
-          34.25,
-          36.25,
-          38.25,
-          40.38,
-          42.38,
-          44.5
+          34.52,
+          36.71,
+          38.99,
+          41.27,
+          43.55,
+          45.83,
+          48.12
         ],
         "src": "scores-bar"
       },
       "sc-num": {
-        "l": 20.08,
-        "w": 3.75,
-        "h": 1.63,
+        "l": 20.2,
+        "w": 3.74,
+        "h": 1.79,
         "lignes": [
-          32.13,
-          34.25,
-          36.25,
-          38.25,
-          40.38,
-          42.38,
-          44.5
+          34.52,
+          36.71,
+          38.99,
+          41.27,
+          43.55,
+          45.83,
+          48.12
         ],
         "src": "scores-num"
       }
     },
     "teintes": {
-      "fenetre": "46,47,51",
-      "flux": "31,33,34",
-      "tube": "29,35,42",
-      "led": "45,43,43",
-      "num": "40,38,37"
+      "fenetre": "34,36,38",
+      "flux": "26,30,32",
+      "tube": "22,26,31",
+      "led": "36,34,33",
+      "num": "30,29,28"
     }
   },
-  "graves": {
-    "lab-reg-1": {
-      "l": 76.56,
-      "t": 30.5,
-      "w": 4.84,
-      "h": 1.9,
-      "texte": "Équité"
+  "hotspots": {
+    "tab-1": {
+      "l": 3.68,
+      "t": 19.44,
+      "w": 6.14,
+      "h": 2.38,
+      "secteur": "prevol",
+      "label": "Pré-vol"
     },
-    "lab-reg-2": {
-      "l": 82.27,
-      "t": 30.5,
-      "w": 4.3,
-      "h": 1.9,
-      "texte": "Exposition"
+    "tab-2": {
+      "l": 9.99,
+      "t": 19.44,
+      "w": 6.19,
+      "h": 2.38,
+      "secteur": "telemetrie",
+      "label": "Télémétrie"
     },
-    "lab-reg-3": {
-      "l": 87.34,
-      "t": 30.5,
-      "w": 4.38,
-      "h": 1.9,
-      "texte": "Positions"
+    "tab-3": {
+      "l": 16.3,
+      "t": 19.44,
+      "w": 6.7,
+      "h": 2.38,
+      "secteur": "navigation",
+      "label": "Navigation"
     },
-    "lab-reg-4": {
-      "l": 92.58,
-      "t": 30.5,
-      "w": 5.16,
-      "h": 1.9,
-      "texte": "Mandats"
+    "tab-4": {
+      "l": 77.73,
+      "t": 19.44,
+      "w": 6.92,
+      "h": 2.38,
+      "secteur": "consommation",
+      "label": "Consommation"
     },
-    "lab-sc-1": {
-      "l": 14.06,
-      "t": 29.9,
-      "w": 4.6,
-      "h": 2.0,
-      "texte": "Seaux"
+    "tab-5": {
+      "l": 84.93,
+      "t": 19.44,
+      "w": 5.25,
+      "h": 2.38,
+      "secteur": "vols",
+      "label": "Vols"
     },
-    "lab-sc-2": {
-      "l": 19.9,
-      "t": 29.9,
-      "w": 4.1,
-      "h": 2.0,
-      "texte": "Compte"
+    "tab-6": {
+      "l": 90.51,
+      "t": 19.44,
+      "w": 6.59,
+      "h": 2.38,
+      "secteur": "systemes",
+      "label": "Systèmes"
     },
-    "lab-para": {
-      "l": 3.13,
-      "t": 21.25,
-      "w": 22.73,
-      "h": 6.38,
-      "src": "prevol",
-      "aligne": "gauche"
+    "icon-1": {
+      "l": 76.28,
+      "t": 23.61,
+      "w": 2.23,
+      "h": 4.37,
+      "secteur": "soufflerie",
+      "label": "Soufflerie"
     },
-    "lab-amp": {
-      "l": 2.5,
-      "t": 55.6,
-      "w": 7.9,
-      "h": 3.1,
-      "texte": "Exposition"
+    "icon-2": {
+      "l": 78.79,
+      "t": 23.61,
+      "w": 2.23,
+      "h": 4.37,
+      "secteur": "consommation",
+      "label": "Consommation"
     },
-    "lab-flux-1": {
-      "l": 75.2,
-      "t": 57.2,
-      "w": 5.9,
-      "h": 2.6,
-      "texte": "Latence"
+    "icon-3": {
+      "l": 81.3,
+      "t": 23.61,
+      "w": 2.23,
+      "h": 4.37,
+      "secteur": "telemetrie",
+      "label": "Telemetrie"
     },
-    "lab-flux-2": {
-      "l": 87.0,
-      "t": 57.2,
-      "w": 5.2,
-      "h": 2.6,
-      "texte": "Budget"
+    "icon-4": {
+      "l": 83.81,
+      "t": 23.61,
+      "w": 2.23,
+      "h": 4.37,
+      "secteur": "navigation",
+      "label": "Navigation"
     },
-    "lab-sect": {
-      "l": 3.9,
-      "t": 71.2,
-      "w": 7.2,
-      "h": 1.7,
-      "texte": "Secteurs"
+    "icon-5": {
+      "l": 86.32,
+      "t": 23.61,
+      "w": 2.23,
+      "h": 4.37,
+      "secteur": "vols",
+      "label": "Vols"
+    },
+    "icon-6": {
+      "l": 88.83,
+      "t": 23.61,
+      "w": 2.23,
+      "h": 4.37,
+      "secteur": "systemes",
+      "label": "Systemes"
+    },
+    "icon-7": {
+      "l": 91.34,
+      "t": 23.61,
+      "w": 2.23,
+      "h": 4.37,
+      "secteur": "prevol",
+      "label": "Prevol"
+    },
+    "icon-8": {
+      "l": 93.85,
+      "t": 23.61,
+      "w": 2.23,
+      "h": 4.37,
+      "secteur": "soufflerie",
+      "label": "Soufflerie"
+    },
+    "ecran-alarme": {
+      "l": 3.91,
+      "t": 5.16,
+      "w": 20.65,
+      "h": 12.9,
+      "secteur": "systemes",
+      "label": "Invariants",
+      "action": "secteur:systemes"
+    },
+    "ecran-minis": {
+      "l": 76.62,
+      "t": 5.85,
+      "w": 19.81,
+      "h": 12.3,
+      "secteur": "soufflerie",
+      "label": "Soufflerie"
+    },
+    "ecran-feed": {
+      "l": 26.79,
+      "t": 63.49,
+      "w": 10.49,
+      "h": 18.65,
+      "secteur": "systemes",
+      "label": "Journal"
+    },
+    "ecran-auto": {
+      "l": 62.95,
+      "t": 63.49,
+      "w": 10.71,
+      "h": 18.65,
+      "secteur": "navigation",
+      "label": "Mandat"
+    },
+    "rail-docs": {
+      "l": 41.3,
+      "t": 50.0,
+      "w": 20.2,
+      "h": 2.28,
+      "secteur": "soufflerie",
+      "label": "Sources"
+    },
+    "haut-kill": {
+      "l": 94.7,
+      "t": 0.3,
+      "w": 4.8,
+      "h": 2.48,
+      "action": "kill",
+      "label": "Tout arrêter"
     }
   },
-  "mains": {
-    "gauche": [
-      [
-        21.35,
-        64.5
-      ],
-      [
-        24.35,
-        63.2
-      ],
-      [
-        26.9,
-        64.0
-      ],
-      [
-        27.5,
-        67.0
-      ],
-      [
-        27.8,
-        72.0
-      ],
-      [
-        27.85,
-        78.0
-      ],
-      [
-        26.65,
-        85.0
-      ],
-      [
-        25.65,
-        92.0
-      ],
-      [
-        25.35,
-        100
-      ],
-      [
-        5.15,
-        100
-      ],
-      [
-        5.65,
-        96.0
-      ],
-      [
-        9.65,
-        92.0
-      ],
-      [
-        14.35,
-        87.5
-      ],
-      [
-        17.95,
-        82.5
-      ],
-      [
-        20.35,
-        76.0
-      ],
-      [
-        20.75,
-        70.0
-      ]
-    ],
-    "droite": [
-      [
-        78.65,
-        64.5
-      ],
-      [
-        75.65,
-        63.2
-      ],
-      [
-        73.1,
-        64.0
-      ],
-      [
-        72.5,
-        67.0
-      ],
-      [
-        72.2,
-        72.0
-      ],
-      [
-        72.15,
-        78.0
-      ],
-      [
-        73.35,
-        85.0
-      ],
-      [
-        74.35,
-        92.0
-      ],
-      [
-        74.65,
-        100
-      ],
-      [
-        94.85,
-        100
-      ],
-      [
-        94.35,
-        96.0
-      ],
-      [
-        90.35,
-        92.0
-      ],
-      [
-        85.65,
-        87.5
-      ],
-      [
-        82.05,
-        82.5
-      ],
-      [
-        79.65,
-        76.0
-      ],
-      [
-        79.25,
-        70.0
-      ]
-    ]
+  "hotas": {
+    "btn-g-1": {
+      "l": 19.25,
+      "t": 92.16,
+      "w": 1.51,
+      "h": 1.69,
+      "label": "Pré-vol",
+      "action": "secteur:prevol"
+    },
+    "btn-g-2": {
+      "l": 21.26,
+      "t": 92.16,
+      "w": 1.51,
+      "h": 1.69,
+      "label": "Télémétrie",
+      "action": "secteur:telemetrie"
+    },
+    "btn-g-3": {
+      "l": 23.27,
+      "t": 92.16,
+      "w": 1.51,
+      "h": 1.69,
+      "label": "Navigation",
+      "action": "secteur:navigation"
+    },
+    "btn-g-4": {
+      "l": 25.39,
+      "t": 92.16,
+      "w": 1.51,
+      "h": 1.69,
+      "label": "Soufflerie",
+      "action": "secteur:soufflerie"
+    },
+    "btn-g-5": {
+      "l": 27.46,
+      "t": 92.16,
+      "w": 1.51,
+      "h": 1.69,
+      "label": "Consommation",
+      "action": "secteur:consommation"
+    },
+    "btn-g-6": {
+      "l": 29.58,
+      "t": 92.16,
+      "w": 1.51,
+      "h": 1.69,
+      "label": "Vols",
+      "action": "secteur:vols"
+    },
+    "btn-g-7": {
+      "l": 18.14,
+      "t": 93.95,
+      "w": 1.62,
+      "h": 2.28,
+      "label": "Systèmes",
+      "action": "secteur:systemes"
+    },
+    "btn-g-8": {
+      "l": 20.26,
+      "t": 93.95,
+      "w": 1.62,
+      "h": 2.28,
+      "label": "Secteur précédent",
+      "action": "secteur-precedent"
+    },
+    "btn-g-9": {
+      "l": 22.38,
+      "t": 93.95,
+      "w": 1.62,
+      "h": 2.28,
+      "label": "Secteur suivant",
+      "action": "secteur-suivant"
+    },
+    "btn-g-10": {
+      "l": 24.5,
+      "t": 93.95,
+      "w": 1.62,
+      "h": 2.28,
+      "label": "Fermer l'écran central",
+      "action": "fermer"
+    },
+    "btn-g-11": {
+      "l": 26.62,
+      "t": 93.95,
+      "w": 1.62,
+      "h": 2.28,
+      "label": "Mode HUD",
+      "action": "hud"
+    },
+    "btn-g-12": {
+      "l": 28.74,
+      "t": 93.95,
+      "w": 1.62,
+      "h": 2.28,
+      "label": "Calibrage",
+      "action": "calibrage"
+    },
+    "btn-d-1": {
+      "l": 68.75,
+      "t": 91.96,
+      "w": 1.68,
+      "h": 1.88,
+      "label": "Lancer une campagne",
+      "action": "campagnes"
+    },
+    "btn-d-2": {
+      "l": 70.7,
+      "t": 91.96,
+      "w": 1.68,
+      "h": 1.88,
+      "label": "Tout arrêter",
+      "action": "kill"
+    },
+    "btn-d-3": {
+      "l": 72.82,
+      "t": 91.96,
+      "w": 1.68,
+      "h": 1.88,
+      "label": "Réarmer le desk",
+      "action": "arm"
+    },
+    "btn-d-4": {
+      "l": 74.89,
+      "t": 91.96,
+      "w": 1.68,
+      "h": 1.88,
+      "label": "Rafraîchir",
+      "action": "recharger"
+    },
+    "btn-d-5": {
+      "l": 77.57,
+      "t": 91.96,
+      "w": 1.68,
+      "h": 1.88,
+      "label": "Thème",
+      "action": "theme"
+    },
+    "btn-d-6": {
+      "l": 79.91,
+      "t": 91.96,
+      "w": 1.68,
+      "h": 1.88,
+      "label": "Vue pare-brise",
+      "action": "loupe:pare-brise"
+    },
+    "btn-d-7": {
+      "l": 69.2,
+      "t": 93.95,
+      "w": 1.79,
+      "h": 2.28,
+      "label": "Vue pré-vol",
+      "action": "loupe:prevol"
+    },
+    "btn-d-8": {
+      "l": 71.37,
+      "t": 93.95,
+      "w": 1.79,
+      "h": 2.28,
+      "label": "Vue régime",
+      "action": "loupe:regime"
+    },
+    "btn-d-9": {
+      "l": 73.38,
+      "t": 93.95,
+      "w": 1.79,
+      "h": 2.28,
+      "label": "Vue amplitude",
+      "action": "loupe:amplitude"
+    },
+    "btn-d-10": {
+      "l": 75.45,
+      "t": 93.95,
+      "w": 1.79,
+      "h": 2.28,
+      "label": "Vue journal",
+      "action": "loupe:journal"
+    },
+    "btn-d-11": {
+      "l": 77.85,
+      "t": 93.95,
+      "w": 1.79,
+      "h": 2.28,
+      "label": "Vue mandat",
+      "action": "loupe:mandat"
+    },
+    "btn-d-12": {
+      "l": 80.47,
+      "t": 93.95,
+      "w": 1.79,
+      "h": 2.28,
+      "label": "Vue flux",
+      "action": "loupe:flux"
+    },
+    "mol-1": {
+      "l": 13.45,
+      "t": 78.47,
+      "w": 1.5,
+      "h": 3.17,
+      "label": "Cycle stratégie",
+      "action": "cycle:cbStrat:1"
+    },
+    "mol-2": {
+      "l": 16.18,
+      "t": 78.47,
+      "w": 1.5,
+      "h": 3.17,
+      "label": "Cycle actif",
+      "action": "cycle:cbActif:1"
+    },
+    "mol-3": {
+      "l": 18.8,
+      "t": 78.47,
+      "w": 1.5,
+      "h": 3.17,
+      "label": "Cycle intervalle",
+      "action": "cycle:cbIv:1"
+    },
+    "inv-g-1": {
+      "l": 4.91,
+      "t": 80.06,
+      "w": 1.34,
+      "h": 2.78,
+      "label": "Pré-vol",
+      "type": "inverseur",
+      "n": 2,
+      "secteur": "prevol"
+    },
+    "inv-g-2": {
+      "l": 8.76,
+      "t": 79.37,
+      "w": 1.4,
+      "h": 2.98,
+      "label": "Télémétrie",
+      "type": "inverseur",
+      "n": 2,
+      "secteur": "telemetrie"
+    },
+    "inv-d-1": {
+      "l": 80.33,
+      "t": 78.07,
+      "w": 1.4,
+      "h": 3.17,
+      "label": "Consommation",
+      "secteur": "consommation",
+      "action": "secteur:consommation"
+    },
+    "inv-d-2": {
+      "l": 82.92,
+      "t": 78.07,
+      "w": 1.4,
+      "h": 3.17,
+      "label": "Vols",
+      "secteur": "vols",
+      "action": "secteur:vols"
+    },
+    "inv-d-3": {
+      "l": 85.38,
+      "t": 78.07,
+      "w": 1.4,
+      "h": 3.17,
+      "label": "Systèmes",
+      "secteur": "systemes",
+      "action": "secteur:systemes"
+    },
+    "cmp-1": {
+      "l": 89.95,
+      "t": 79.86,
+      "w": 1.4,
+      "h": 3.17,
+      "action": "campagnes",
+      "label": "Lancer une campagne"
+    },
+    "cmp-2": {
+      "l": 93.66,
+      "t": 79.86,
+      "w": 1.4,
+      "h": 3.17,
+      "action": "campagne-stop",
+      "label": "Arrêter la campagne"
+    }
   },
+  "leds": {},
   "blocs": {
     "prevol": {
-      "l": 1.0,
-      "t": 4.0,
-      "w": 25.5,
-      "h": 46.0,
+      "l": 1.2,
+      "t": 3.0,
+      "w": 26.5,
+      "h": 48.0,
       "nom": "Pré-vol et scores"
     },
     "pare-brise": {
-      "l": 26.0,
+      "l": 25.5,
       "t": 3.0,
-      "w": 48.0,
-      "h": 46.0,
+      "w": 49.0,
+      "h": 50.0,
       "nom": "Pare-brise"
     },
     "regime": {
       "l": 73.5,
-      "t": 4.0,
+      "t": 3.0,
       "w": 26.0,
-      "h": 46.0,
+      "h": 48.0,
       "nom": "Stratégies et régime"
     },
     "amplitude": {
-      "l": 1.0,
-      "t": 50.0,
-      "w": 22.5,
-      "h": 46.0,
+      "l": 1.2,
+      "t": 53.5,
+      "w": 25.0,
+      "h": 44.0,
       "nom": "Amplitude"
     },
     "journal": {
-      "l": 24.0,
-      "t": 50.0,
-      "w": 15.0,
-      "h": 46.0,
+      "l": 25.5,
+      "t": 53.5,
+      "w": 13.5,
+      "h": 44.0,
       "nom": "Journal"
     },
     "desk": {
       "l": 38.0,
-      "t": 50.0,
+      "t": 53.0,
       "w": 24.5,
-      "h": 46.0,
+      "h": 44.0,
       "nom": "Desk"
     },
     "mandat": {
-      "l": 61.0,
-      "t": 50.0,
-      "w": 14.0,
-      "h": 46.0,
+      "l": 62.0,
+      "t": 53.5,
+      "w": 13.0,
+      "h": 44.0,
       "nom": "Mandat"
     },
     "flux": {
-      "l": 73.5,
-      "t": 50.0,
-      "w": 26.0,
-      "h": 46.0,
+      "l": 74.0,
+      "t": 53.5,
+      "w": 25.5,
+      "h": 44.0,
       "nom": "Flux de données"
     }
   }

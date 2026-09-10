@@ -159,7 +159,7 @@
     for (const [k, r] of Object.entries(CARTE.hotspots)) ajouter(r, "hs", k);
     for (const [k, r] of Object.entries(CARTE.leds)) ajouter(r, "led", k);
     for (const [k, r] of Object.entries(CARTE.hotas)) ajouter(r, "hs", k);
-    for (const [k, r] of Object.entries(CARTE.pilot)) ajouter(r, "", k);
+    for (const [k, r] of Object.entries(CARTE.pilot || {})) ajouter(r, "", k);
     return d;
   }
 
@@ -169,6 +169,8 @@
     CARTE = await fetch(CHEMIN + "hotspots.json").then((r) => r.json());
 
     const fit = creer("div", "cockpit-fit", stage);
+    // Le plateau prend le format de la photo declaree, pas un ratio suppose.
+    fit.style.setProperty("--ratio", (CARTE.design.w / CARTE.design.h).toFixed(5));
 
     const photo = creer("img", "cockpit-photo", fit);
     photo.alt = "";
@@ -181,18 +183,11 @@
     const hotspots = creer("div", "hotspots-layer", fit);
     const fx = creer("div", "fx-layer", fit);
 
-    /* Les mains ne sont plus recomposees.
-     *
-     * On posait par-dessus tout un PNG detoure des deux avant-bras, pour que
-     * les dalles passent derriere eux. Cette image reprend des pixels de la
-     * photo et les repose sur eux-memes : au moindre ecart d'alignement, ou
-     * partout ou le detourage n'etait pas franc, le decor se dedoublait — le
-     * halo bleuatre qui suivait le contour du manche, visible a la loupe.
-     *
-     * La photo contient deja les mains, nettes, a leur place. Il suffit donc
-     * de PERCER les deux dalles qu'elles traversent : plus rien n'est
-     * recompose, et le bord des gants est celui du JPEG, au pixel. Le PNG ne
-     * sert plus qu'au mode HUD, ou les mains doivent s'effacer. */
+    /* Plus de mains, plus de manches : la photo du 10 septembre les a
+     * retires pour degager les ecrans. La couche qui les recomposait et le
+     * percage des dalles a leur silhouette n'ont donc plus d'objet — ils
+     * restent dans le code, inertes, parce que `mains` absent de la carte
+     * suffit a les eteindre, et qu'une photo peut les ramener. */
     const hotas = creer("div", "hotspots-pilot", fit);
     couche_debug(fit);
 
@@ -321,9 +316,9 @@
         const img = new Image();
         img.onload = () => {
           const c = document.createElement("canvas");
-          c.width = 1280; c.height = 800;
+          c.width = CARTE.design.w; c.height = CARTE.design.h;
           const x = c.getContext("2d", { willReadFrequently: true });
-          x.drawImage(img, 0, 0, 1280, 800);
+          x.drawImage(img, 0, 0, CARTE.design.w, CARTE.design.h);
           toile = x; ok(x);
         };
         img.onerror = () => ok(null);
@@ -332,14 +327,15 @@
     }
     toilePrete.then((x) => {
       if (!x) return;
-      const px = Math.round(r.l * 12.8), py = Math.round(r.t * 8);
-      const w = Math.max(4, Math.round(r.w * 12.8));
-      const h = Math.max(4, Math.round(r.h * 8));
+      const DW = CARTE.design.w / 100, DH = CARTE.design.h / 100;
+      const px = Math.round(r.l * DW), py = Math.round(r.t * DH);
+      const w = Math.max(4, Math.round(r.w * DW));
+      const h = Math.max(4, Math.round(r.h * DH));
       // Trois bandes de metal nu : a gauche, a droite, en dessous. Au-dessus
       // d'une piece il y a souvent un bandeau sombre, qui fausserait tout.
       const t = [];
       const prendre = (a, b, lw, lh) => {
-        if (a < 0 || b < 0 || a + lw > 1280 || b + lh > 800) return;
+        if (a < 0 || b < 0 || a + lw > CARTE.design.w || b + lh > CARTE.design.h) return;
         const p = x.getImageData(a, b, lw, lh).data;
         for (let i = 0; i < p.length; i += 4) t.push([p[i], p[i + 1], p[i + 2]]);
       };

@@ -33,8 +33,12 @@
 .cockpit-fit {
   position: relative;
   transition: transform 420ms cubic-bezier(.32, .72, .24, 1);
-  width: min(100vw, calc(100vh * 1280 / 800));
-  height: min(100vh, calc(100vw * 800 / 1280));
+  /* Le ratio vient de `design` dans hotspots.json, pose par le shell : la
+   * photo a change de format une fois (16:10 puis 16:9) et toute la
+   * geometrie en depend. Un ratio code en dur ici, c'est un etirement
+   * silencieux de tout le cockpit le jour ou la photo change encore. */
+  width: min(100vw, calc(100vh * var(--ratio, 1.7778)));
+  height: min(100vh, calc(100vw / var(--ratio, 1.7778)));
   container-type: size; container-name: fit;
   /* Toutes les couches se superposent exactement sur cette boite, et toutes
    * les coordonnees des enfants sont en % d'elle. */
@@ -102,7 +106,10 @@
 /* Le reflet du verre : une bande diagonale, la meme que la photo peint sur
    ses dalles eteintes. Au-dessus du contenu, sinon elle ne reflete rien. */
 .screen::before {
-  content: ""; position: absolute; inset: 0; z-index: 3; pointer-events: none;
+  /* Le reflet passe AU-DESSUS de tout ce qui s'affiche, panneaux compris :
+     une dalle a une seule vitre. En dessous, les secteurs auraient l'air
+     colles par-dessus le verre plutot que derriere. */
+  content: ""; position: absolute; inset: 0; z-index: 6; pointer-events: none;
   border-radius: inherit;
   background: linear-gradient(152deg,
     rgba(196, 224, 238, .085) 0%, rgba(196, 224, 238, .028) 21%,
@@ -207,6 +214,25 @@
 .hotspot.trigger:active::after {
   background: radial-gradient(circle at 50% 40%, rgba(224, 90, 73, .55), transparent 70%);
 }
+
+/* La liste de verification du poste, dans la dalle centrale. Deux colonnes :
+   douze invariants tiennent alors dans la hauteur sans ascenseur. */
+.prevol { display: grid; grid-template-columns: 1fr 1fr; gap: 1px 8px;
+          margin-top: 3px; font-size: 8.5px }
+.ck { display: flex; align-items: center; gap: 5px; padding: .8px 0;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.ck i { width: 4px; height: 4px; border-radius: 50%; flex: none;
+        background: #2a3a3f }
+.ck.ok i { background: #6fd39c; box-shadow: 0 0 4px rgba(111,211,156,.9) }
+.ck.ko i { background: #e05a49; box-shadow: 0 0 4px rgba(224,90,73,.9) }
+.ck.ko span { color: #e8a99f }
+.ck span { color: #86a0a7; overflow: hidden; text-overflow: ellipsis }
+
+/* Quand un secteur est ouvert dans la dalle centrale, le contenu propre de
+   la dalle s'efface : deux affichages superposes ne se lisent ni l'un ni
+   l'autre. Le reste du cockpit, lui, reste allume derriere. */
+.tiroir #screen-main > .corps { display: none }
+.tiroir #screen-main { cursor: default }
 
 /* --- z-4 : LED et effets ------------------------------------------------ */
 .fx-layer { position: absolute; inset: 0; z-index: 4; pointer-events: none }

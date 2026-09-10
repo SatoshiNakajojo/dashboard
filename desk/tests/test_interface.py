@@ -17,6 +17,7 @@ erreurs commises en construisant ces panneaux le 9 septembre 2026 :
 from __future__ import annotations
 
 import json
+import re
 
 import pytest
 from fastapi.testclient import TestClient
@@ -469,13 +470,18 @@ def test_la_carte_des_coordonnees_est_unique_et_en_pourcentages():
     carte = json.loads(
         (recherche.RACINE / "src/trading_desk/ui/cockpit/hotspots.json")
         .read_text(encoding="utf-8"))
-    assert carte["design"] == {"w": 1280, "h": 800}
+    # La photo a change de format le 10 septembre : 16:10 puis 16:9. La boîte
+    # de référence la suit, et le plateau prend son ratio depuis ce champ —
+    # un ratio écrit en dur dans le CSS étirerait tout le cockpit en silence.
+    assert carte["design"] == {"w": 1792, "h": 1008}
+    assert carte["design"]["w"] / carte["design"]["h"] > 1.0
+
     # Cinq dalles, pas dix : les cinq autres recouvraient des INSTRUMENTS
     # peints — cadrans, bargraphes, logements — qu'on rallume désormais au
     # lieu de les cacher sous un rectangle noir.
     assert len(carte["screens"]) == 5
 
-    plats = ("screens", "hotspots", "leds", "hotas", "pilot", "chrome",
+    plats = ("screens", "hotspots", "hotas", "chrome",
              "graves", "blocs", "instruments.temoins", "instruments.afficheurs",
              "instruments.bargraphes")
     for chemin in plats:
@@ -488,11 +494,7 @@ def test_la_carte_des_coordonnees_est_unique_et_en_pourcentages():
             assert r["l"] + r["w"] <= 100.5, f"{chemin}.{nom} déborde à droite"
             assert r["t"] + r["h"] <= 100.5, f"{chemin}.{nom} déborde en bas"
 
-    # Les silhouettes des mains et les centres de cadran suivent la même
-    # règle : tout est en % du plateau, rien en pixels.
-    for nom, pts in carte["mains"].items():
-        for x, y in pts:
-            assert 0 <= x <= 100 and 0 <= y <= 100, f"mains.{nom} hors du plateau"
+    # Les centres de cadran suivent la même règle : tout est en % du plateau.
     for nom, a in carte["instruments"]["aiguilles"].items():
         assert 0 <= a["cx"] <= 100 and 0 <= a["cy"] <= 100, f"aiguille {nom}"
 
@@ -513,7 +515,12 @@ def test_aucun_lorem_de_la_photo_ne_survit():
     for lorem in ("ALDO PORTOMANICE", "RERERSONT", "ANRLESUHE", "SUPYTANTES",
                   "SQUIPE", "ROLLANT SERIATOR", "QUARCED ON DRAPPED",
                   "PILGTAGE", "Analog diars", "Thana", "TELEMETRIC",
-                  "orbital_sources"):
+                  "orbital_sources",
+                  # la photo du 10 septembre en a apporté d'autres
+                  "ORBITAL TRADING DESK", "ALDO PERFORMANCE", "HODL curne",
+                  "GUARDED UN QUARRED", "NVELNENT SEROITOR", "SEROITOR",
+                  "SURVIVAINTS", "ATTENDUES", "Seuil 1 seuli", "book.BTX",
+                  "PR9-VOL", "SYSTENES", "CONSUMATION", "SCOORET"):
         assert lorem not in texte, f"lorem halluciné conservé : {lorem}"
 
     # La règle vaut aussi pour les COMMENTAIRES. Elle m'a attrapé le
@@ -624,3 +631,61 @@ def test_la_sortie_est_bornee():
         lan.lignes.append(f"ligne {i}")
     assert len(lan.lignes) == LIGNES_MAX
     assert lan.lignes[-1] == f"ligne {LIGNES_MAX * 3 - 1}"
+
+
+def test_chaque_bouton_de_la_carte_porte_une_action():
+    """Un bouton sans verbe est un bouton mort, et rien ne le dit.
+
+    Le câblage vivait dans une liste de clés en dur dans `boutons.js`. La
+    photo a changé, les clés avec, et le cockpit est passé de quarante-six
+    boutons à UN — sans qu'aucun test ne le voie, puisqu'ils vérifiaient des
+    rectangles, pas des branchements. Les actions vivent maintenant dans la
+    carte ; ce test vérifie qu'elles y sont toutes et qu'aucune n'invente un
+    verbe que le module ne sait pas traduire.
+    """
+    racine = recherche.RACINE / "src/trading_desk/ui/cockpit"
+    carte = json.loads((racine / "hotspots.json").read_text(encoding="utf-8"))
+    module = (racine / "boutons.js").read_text(encoding="utf-8")
+
+    verbes = set(re.findall(r'case "([a-z-]+)":', module))
+    assert "secteur" in verbes, "le module ne sait plus ouvrir un secteur"
+
+    secteurs = {"prevol", "telemetrie", "navigation", "soufflerie",
+                "consommation", "vols", "systemes"}
+    blocs = set(carte["blocs"])
+
+    muets = []
+    for groupe in ("hotspots", "hotas"):
+        for nom, r in carte[groupe].items():
+            verbe = r.get("action") or (
+                "secteur:" + r["secteur"] if r.get("secteur") else None)
+            if verbe is None:
+                muets.append(f"{groupe}.{nom}")
+                continue
+            tete, _, arg = verbe.partition(":")
+            assert tete in verbes, f"{groupe}.{nom} : verbe inconnu « {tete} »"
+            if tete == "secteur":
+                assert arg in secteurs, f"{groupe}.{nom} : secteur « {arg} » inexistant"
+            if tete == "loupe":
+                assert arg in blocs, f"{groupe}.{nom} : bloc « {arg} » inexistant"
+    assert not muets, f"boutons sans action : {muets}"
+
+
+def test_les_secteurs_s_affichent_dans_la_dalle_centrale(client):
+    """Cliquer un bouton du poste ne doit pas quitter le poste.
+
+    Les panneaux vivaient dans un tiroir plein écran : on se retrouvait
+    devant une page web, pas devant un appareil. Ils sont désormais montés
+    DANS l'écran du milieu — les mêmes nœuds, pas une copie — et la loupe
+    s'en approche.
+    """
+    page = client.get("/").text
+    assert 'id="panneaux"' in page
+    ecrans = (recherche.RACINE
+              / "src/trading_desk/ui/cockpit/ecrans.js").read_text(encoding="utf-8")
+    assert 'getElementById("screen-main")' in ecrans
+    assert 'getElementById("panneaux")' in ecrans
+    # et surtout : une seule implémentation de chaque secteur
+    for secteur in ("prevol", "telemetrie", "navigation", "soufflerie",
+                    "consommation", "vols", "systemes"):
+        assert page.count(f'id="sec-{secteur}"') == 1, f"{secteur} dupliqué"

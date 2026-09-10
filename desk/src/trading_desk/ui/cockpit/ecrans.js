@@ -110,8 +110,16 @@
         ? `<div style="height:52px;overflow:hidden">${
             D().courbeSVG([{ pts: serie, cls: "serie" }],
                           { zero: true, y: "pnl_usd", hauteur: 150 })}</div>`
-        : `<div class="mut" style="padding:6px 0;font-size:9px">` +
+        : `<div class="mut" style="padding:3px 0 5px;font-size:9px">` +
           `Aucun vol effectué — le desk s'arrête au portier du score.</div>`) +
+      // La liste de verification, comme sur un vrai poste avant depart. Elle
+      // remplit la dalle avec ce qui bloque reellement, pas avec un trace
+      // decoratif : c'est le seul contenu qui vaut la place qu'il prend.
+      (s.checks && s.checks.length
+        ? `<div class="prevol">` + s.checks.map((k) =>
+            `<div class="ck ${k.passed ? "ok" : "ko"}"><i></i>` +
+            `<span>${esc(k.name || k.id || "")}</span></div>`).join("") + `</div>`
+        : "") +
       (a && a.positions.length
         ? a.positions.slice(0, 3).map((p) =>
             rangee(`${p.asset} ${p.side}`,
@@ -331,8 +339,10 @@
                       + "/" + ((s.checks || []).length || 0) + " inv" : "—",
       journal: (() => {
         const n = document.querySelectorAll("#journal .jr").length;
-        return n ? n + " décisions" : "journal vide";
+        return n ? n + " déc" : "vide";
       })(),
+      pnl: s && s.account && s.account.day_pnl_usd != null
+        ? D().usd(s.account.day_pnl_usd) : "—",
       lien: s ? (s.ws_connected ? "lien" : "coupé") : "—",
       strategies: (() => {
         const n = document.querySelectorAll("#cbStrat option").length;
@@ -370,9 +380,34 @@
 
   /* ------------------------------------------------------------ orchestration */
 
+  /* L'application entiere tient dans la dalle du milieu.
+   *
+   * On DEPLACE `#panneaux` dedans — on ne le recopie pas. Les identifiants
+   * restent les memes, `desk.js` continue de l'alimenter sans savoir ou il
+   * est affiche, et il n'existe toujours qu'une implementation de chaque
+   * secteur. Le deplacement a lieu apres le montage : avant, la dalle
+   * n'existe pas.
+   */
+  const LARGEUR_APP = 900;   // largeur de composition des panneaux, en px CSS
+
+  function poserPanneaux() {
+    const dalle = document.getElementById("screen-main");
+    const pan = document.getElementById("panneaux");
+    if (!dalle || !pan) return;
+    if (pan.parentNode !== dalle) dalle.appendChild(pan);
+    const calibrer = () => {
+      const l = dalle.clientWidth;
+      if (l) pan.style.setProperty("--k", (l / LARGEUR_APP).toFixed(5));
+    };
+    calibrer();
+    if (window.ResizeObserver) new ResizeObserver(calibrer).observe(dalle);
+    else addEventListener("resize", calibrer);
+  }
+
   function monter() {
     for (const cle of Object.keys(M().CARTE.screens)) bati(cle);
     batiChrome();
+    poserPanneaux();
 
     document.addEventListener("desk:snapshot", (e) => {
       snap = e.detail;
