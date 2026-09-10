@@ -23,10 +23,10 @@
       "titre": "Stratégies contre HODL"
     },
     "feed": {
-      "l": 26.79,
-      "t": 63.49,
-      "w": 10.49,
-      "h": 18.65,
+      "l": 26.73,
+      "t": 64.68,
+      "w": 10.44,
+      "h": 17.66,
       "titre": "Journal de décisions"
     },
     "main": {
@@ -37,10 +37,10 @@
       "titre": "Desk"
     },
     "autopilot": {
-      "l": 62.95,
-      "t": 63.49,
-      "w": 10.71,
-      "h": 18.65,
+      "l": 62.89,
+      "t": 64.68,
+      "w": 10.44,
+      "h": 17.66,
       "titre": "Mandat"
     }
   },
@@ -94,7 +94,8 @@
       "w": 3.0,
       "h": 1.98,
       "src": "desk",
-      "align": "center"
+      "align": "center",
+      "plan": "barre-g"
     },
     "bas-titre": {
       "l": 4.8,
@@ -102,7 +103,8 @@
       "w": 10.83,
       "h": 3.17,
       "src": "titre",
-      "align": "center"
+      "align": "center",
+      "plan": "barre-g"
     },
     "bas-debit": {
       "l": 32.37,
@@ -111,7 +113,8 @@
       "h": 2.38,
       "src": "debit",
       "align": "center",
-      "ton": "amb"
+      "ton": "amb",
+      "plan": "barre-g"
     },
     "bas-vols": {
       "l": 62.16,
@@ -119,7 +122,8 @@
       "w": 5.92,
       "h": 2.28,
       "src": "pied",
-      "align": "center"
+      "align": "center",
+      "plan": "barre-d"
     },
     "bas-desk": {
       "l": 75.73,
@@ -127,7 +131,8 @@
       "w": 2.9,
       "h": 1.98,
       "src": "lien",
-      "align": "center"
+      "align": "center",
+      "plan": "barre-d"
     },
     "bas-actif": {
       "l": 83.71,
@@ -136,7 +141,8 @@
       "h": 3.08,
       "src": "actif",
       "align": "center",
-      "ton": "amb"
+      "ton": "amb",
+      "plan": "barre-d"
     },
     "bas-journal": {
       "l": 95.26,
@@ -145,7 +151,8 @@
       "h": 3.08,
       "src": "journal",
       "align": "center",
-      "ton": "amb"
+      "ton": "amb",
+      "plan": "barre-d"
     },
     "pas-regime": {
       "l": 84.3,
@@ -154,7 +161,8 @@
       "h": 2.19,
       "src": "mode",
       "align": "center",
-      "ton": "amb"
+      "ton": "amb",
+      "plan": "regime"
     },
     "pas-mandat": {
       "l": 82.5,
@@ -163,7 +171,8 @@
       "h": 1.99,
       "src": "mandat",
       "align": "center",
-      "ton": "amb"
+      "ton": "amb",
+      "plan": "decl"
     },
     "pas-ampl": {
       "l": 10.6,
@@ -172,7 +181,8 @@
       "h": 2.09,
       "src": "pnl",
       "align": "center",
-      "ton": "amb"
+      "ton": "amb",
+      "plan": "expo"
     },
     "bas-inv": {
       "l": 16.74,
@@ -181,7 +191,8 @@
       "h": 2.78,
       "src": "invariants",
       "align": "center",
-      "ton": "amb"
+      "ton": "amb",
+      "plan": "barre-g"
     },
     "bas-strat": {
       "l": 21.26,
@@ -190,7 +201,8 @@
       "h": 2.78,
       "src": "strategies",
       "align": "center",
-      "ton": "amb"
+      "ton": "amb",
+      "plan": "barre-g"
     }
   },
   "graves": {
@@ -200,130 +212,130 @@
       "w": 21.65,
       "h": 6.15,
       "src": "prevol",
-      "aligne": "gauche"
+      "aligne": "gauche",
+      "plan": "scores"
     },
     "lab-reg-1": {
       "l": 76.8,
       "t": 32.44,
       "w": 3.9,
       "h": 1.69,
-      "texte": "Équité"
+      "texte": "Équité",
+      "plan": "regime"
     },
     "lab-reg-2": {
       "l": 82.17,
       "t": 32.44,
       "w": 4.25,
       "h": 1.69,
-      "texte": "Exposition"
+      "texte": "Exposition",
+      "plan": "regime"
     },
     "lab-reg-3": {
       "l": 87.08,
       "t": 32.44,
       "w": 4.75,
       "h": 1.69,
-      "texte": "Positions"
+      "texte": "Positions",
+      "plan": "regime"
     },
     "lab-reg-4": {
       "l": 92.27,
       "t": 32.44,
       "w": 4.75,
       "h": 1.69,
-      "texte": "Mandats"
+      "texte": "Mandats",
+      "plan": "regime"
     },
     "lab-amp": {
-      "l": 3.65,
+      "l": 3.2,
       "t": 61.01,
-      "w": 8.3,
+      "w": 9.2,
       "h": 2.28,
-      "texte": "Exposition"
+      "texte": "Exposition",
+      "plan": "expo"
     },
     "lab-flux-1": {
       "l": 76.68,
       "t": 62.5,
       "w": 4.62,
       "h": 1.89,
-      "texte": "Latence"
+      "texte": "Latence",
+      "plan": "flux"
     },
     "lab-flux-2": {
       "l": 87.17,
       "t": 63.39,
       "w": 4.22,
       "h": 1.89,
-      "texte": "Budget"
+      "texte": "Budget",
+      "plan": "flux"
     },
     "lab-sect": {
-      "l": 3.4,
-      "t": 78.67,
-      "w": 8.2,
-      "h": 2.09,
+      "l": 3.24,
+      "t": 77.3,
+      "w": 7.8,
+      "h": 2.3,
       "texte": "Secteurs",
-      "pente": -3.0,
-      "biais": -2.5
+      "plan": "secteurs",
+      "relief": "plaquette"
     },
     "lab-merci": {
-      "l": 89.05,
-      "t": 78.47,
-      "w": 7.2,
-      "h": 2.09,
+      "l": 88.3,
+      "t": 77.3,
+      "w": 7.0,
+      "h": 2.3,
       "texte": "Campagnes",
-      "pente": -2.5,
-      "biais": 2.7
+      "plan": "campagnes",
+      "relief": "plaquette"
     },
     "lab-sc-1": {
       "l": 14.1,
       "t": 32.44,
       "w": 4.7,
       "h": 1.89,
-      "texte": "Seaux"
+      "texte": "Seaux",
+      "plan": "scores"
     },
     "lab-sc-2": {
       "l": 20.0,
       "t": 32.44,
       "w": 4.1,
       "h": 1.89,
-      "texte": "Score"
+      "texte": "Score",
+      "plan": "scores"
     },
     "lab-t1": {
       "l": 15.63,
       "t": 63.49,
       "w": 3.85,
       "h": 1.79,
-      "texte": "Expo"
+      "texte": "Expo",
+      "plan": "expo"
     },
     "lab-t2": {
       "l": 15.63,
       "t": 65.67,
       "w": 3.85,
       "h": 1.79,
-      "texte": "Levier"
+      "texte": "Levier",
+      "plan": "expo"
     },
     "lab-t3": {
       "l": 15.63,
       "t": 67.76,
       "w": 3.85,
       "h": 1.79,
-      "texte": "Flux"
+      "texte": "Flux",
+      "plan": "expo"
     },
     "lab-t4": {
       "l": 15.63,
       "t": 69.84,
       "w": 3.85,
       "h": 1.79,
-      "texte": "Sain"
-    },
-    "lab-cad-1": {
-      "l": 4.3,
-      "t": 73.41,
-      "w": 3.4,
-      "h": 1.39,
-      "texte": "Expo"
-    },
-    "lab-cad-2": {
-      "l": 9.94,
-      "t": 72.81,
-      "w": 3.4,
-      "h": 1.39,
-      "texte": "Levier"
+      "texte": "Sain",
+      "plan": "expo"
     }
   },
   "instruments": {
@@ -435,84 +447,96 @@
         "t": 34.52,
         "w": 4.58,
         "h": 2.88,
-        "src": "equite"
+        "src": "equite",
+        "plan": "regime"
       },
       "reg-2": {
         "l": 82.25,
         "t": 34.52,
         "w": 4.58,
         "h": 2.88,
-        "src": "expo-usd"
+        "src": "expo-usd",
+        "plan": "regime"
       },
       "reg-3": {
         "l": 87.17,
         "t": 34.52,
         "w": 4.58,
         "h": 2.88,
-        "src": "positions"
+        "src": "positions",
+        "plan": "regime"
       },
       "reg-4": {
         "l": 92.41,
         "t": 34.52,
         "w": 4.58,
         "h": 2.88,
-        "src": "mandats"
+        "src": "mandats",
+        "plan": "regime"
       },
       "flu-1": {
         "l": 81.81,
         "t": 62.6,
         "w": 4.46,
         "h": 1.89,
-        "src": "lat-1"
+        "src": "lat-1",
+        "plan": "flux"
       },
       "flu-2": {
         "l": 81.81,
         "t": 65.08,
         "w": 4.46,
         "h": 1.89,
-        "src": "lat-2"
+        "src": "lat-2",
+        "plan": "flux"
       },
       "flu-3": {
         "l": 81.81,
         "t": 67.66,
         "w": 4.46,
         "h": 1.89,
-        "src": "lat-3"
+        "src": "lat-3",
+        "plan": "flux"
       },
       "flu-4": {
         "l": 81.81,
         "t": 70.44,
         "w": 4.46,
         "h": 1.89,
-        "src": "lat-4"
+        "src": "lat-4",
+        "plan": "flux"
       },
       "flu-5": {
         "l": 92.3,
         "t": 63.99,
         "w": 4.58,
         "h": 1.89,
-        "src": "budget-n"
+        "src": "budget-n",
+        "plan": "flux"
       },
       "flu-6": {
         "l": 92.3,
         "t": 66.67,
         "w": 4.58,
         "h": 1.89,
-        "src": "reserve"
+        "src": "reserve",
+        "plan": "flux"
       },
       "flu-7": {
         "l": 92.3,
         "t": 69.44,
         "w": 4.58,
         "h": 1.89,
-        "src": "pnl"
+        "src": "pnl",
+        "plan": "flux"
       },
       "flu-8": {
         "l": 92.3,
         "t": 72.12,
         "w": 4.58,
         "h": 1.89,
-        "src": "reserve-n"
+        "src": "reserve-n",
+        "plan": "flux"
       }
     },
     "bargraphes": {
@@ -977,7 +1001,8 @@
       "label": "Pré-vol",
       "type": "inverseur",
       "n": 2,
-      "secteur": "prevol"
+      "secteur": "prevol",
+      "image": "inter"
     },
     "inv-g-2": {
       "l": 8.76,
@@ -987,7 +1012,8 @@
       "label": "Télémétrie",
       "type": "inverseur",
       "n": 2,
-      "secteur": "telemetrie"
+      "secteur": "telemetrie",
+      "image": "inter"
     },
     "inv-d-1": {
       "l": 80.33,
@@ -1136,6 +1162,41 @@
     "vols": {
       "bloc": "desk",
       "ecran": "main"
+    }
+  },
+  "plans": {
+    "expo": {
+      "pente": -1.4
+    },
+    "secteurs": {
+      "pente": 0.0
+    },
+    "flux": {
+      "pente": 1.5
+    },
+    "campagnes": {
+      "pente": -2.0
+    },
+    "regime": {
+      "pente": 0.0
+    },
+    "decl": {
+      "pente": 0.7
+    },
+    "scores": {
+      "pente": 1.5
+    },
+    "barre-g": {
+      "pente": 1.8
+    },
+    "barre-d": {
+      "pente": -0.4
+    },
+    "feed": {
+      "pente": 0.0
+    },
+    "auto": {
+      "pente": 0.0
     }
   }
 }

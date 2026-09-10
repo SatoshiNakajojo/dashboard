@@ -69,6 +69,20 @@
 
   /* Une dalle qui sert d'index de station ne doit pas etre reecrite par la
    * trame suivante : sinon l'index disparait une seconde apres le clic. */
+  /* Poser une piece dans le plan de son instrument.
+   *
+   * La pente vient de `plans` : elle a ete mesuree sur l'axe du grand titre
+   * peint du panneau, qui est la ligne de delimitation la plus franche qu'il
+   * offre. Une piece sans plan reste d'aplomb — c'est le cas des bandeaux du
+   * haut, qui le sont vraiment. */
+  function poserPlan(el, r) {
+    if (!r.plan) return;
+    const plan = (M().CARTE.plans || {})[r.plan];
+    if (!plan || !plan.pente) return;
+    el.dataset.plan = r.plan;
+    el.style.setProperty("--pente", plan.pente + "deg");
+  }
+
   function libre(cle) {
     const el = document.getElementById("screen-" + cle);
     return !el || !el.classList.contains("station");
@@ -100,7 +114,7 @@
 
   function ecranPrincipal(s) {
     const c = ecrans.main; if (!c || !s) return;
-    const a = s.account;
+    const a = s.account, m = s.mandate;
     const pnl = a && a.day_pnl_usd != null ? Number(a.day_pnl_usd) : null;
     const cls = pnl == null ? "mut" : (pnl >= 0 ? "pos" : "neg");
     const prix = Object.entries(s.last_prices || {}).slice(0, 4);
@@ -135,6 +149,23 @@
         ? `<div class="prevol">` + s.checks.map((k) =>
             `<div class="ck ${k.passed ? "ok" : "ko"}"><i></i>` +
             `<span>${esc(k.name || k.id || "")}</span></div>`).join("") + `</div>`
+        : "") +
+      // Le bas de la dalle : les canaux de collecte et le mandat. Elle est la
+      // plus grande du poste — trois lignes flottant dans du noir gaspillent
+      // la seule surface ou l'on peut vraiment lire.
+      (s.feeds && s.feeds.length
+        ? `<div class="prevol flux">` + s.feeds.slice(0, 8).map((f) => {
+            const vieux = f.age_ms != null && f.max_age_ms && f.age_ms > f.max_age_ms;
+            return `<div class="ck ${vieux ? "ko" : "ok"}"><i></i><span>` +
+              `${esc(f.name || f.channel || "")}</span>` +
+              `<b>${f.age_ms == null ? "—" : f.age_ms + " ms"}</b></div>`;
+          }).join("") + `</div>`
+        : "") +
+      (m
+        ? `<div class="pied">` +
+          rangee("Mandat", `${esc(m.side || "—")} · ${esc(m.universe || "—")}`, "cy") +
+          rangee("Reste", D().dur(m.remaining_ms), m.remaining_ms > 0 ? "" : "neg") +
+          `</div>`
         : "") +
       (a && a.positions.length
         ? a.positions.slice(0, 3).map((p) =>
@@ -267,6 +298,7 @@
       const el = creer("div", "plaque" + (r.ton === "amb" ? " amb" : ""), couche);
       el.id = "plaque-" + cle;
       poser(el, r);
+      poserPlan(el, r);
       plaques[cle] = { el, span: creer("span", null, el), src: r.src };
     }
     batiGraves(couche);
@@ -303,11 +335,10 @@
     for (const cle of cles) {
       const r = graves[cle];
       const el = creer("div", "plaque grave" + (r.aligne === "gauche" ? " gauche" : "")
-                       + (r.pente || r.biais ? " penchee" : ""), couche);
+                       + (r.relief === "plaquette" ? " plaquette" : ""), couche);
       el.id = "grave-" + cle;
       poser(el, r);
-      if (r.pente) el.style.setProperty("--pente", r.pente + "deg");
-      if (r.biais) el.style.setProperty("--biais", r.biais + "deg");
+      poserPlan(el, r);
       const sp = creer("span", null, el);
       if (r.texte) { sp.textContent = r.texte; ajuster(el, sp); }
       els[cle] = el;

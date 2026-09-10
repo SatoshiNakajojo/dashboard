@@ -732,3 +732,54 @@ def test_la_page_hors_ligne_est_un_document_complet():
     # Elle ne doit pas prétendre pouvoir agir sur le desk.
     assert "aucun desk" in texte
     assert "/api/order" not in texte
+
+
+def test_chaque_etiquette_declare_le_plan_de_son_instrument():
+    """Une étiquette posée d'aplomb sur une console qui fuit se lit comme un
+    autocollant.
+
+    Les plans ont été mesurés sur l'axe des grands titres peints — la ligne
+    de délimitation la plus franche qu'un panneau offre. Ils sont tous entre
+    -2 et +2,6 degrés : les consoles sont presque d'aplomb, et une pente
+    inventée « pour faire perspective » serait pire que pas de pente.
+    """
+    carte = json.loads(
+        (recherche.RACINE / "src/trading_desk/ui/cockpit/hotspots.json")
+        .read_text(encoding="utf-8"))
+    plans = carte["plans"]
+    for nom, p in plans.items():
+        assert abs(p["pente"]) <= 4, f"plan {nom} : pente invraisemblable"
+
+    porteurs = list(carte["graves"].items()) + list(carte["chrome"].items()) \
+        + list(carte["instruments"]["afficheurs"].items())
+    for nom, r in porteurs:
+        if "plan" in r:
+            assert r["plan"] in plans, f"{nom} : plan « {r['plan']} » inconnu"
+        # une pente écrite en dur à côté du système de plans dériverait
+        assert "pente" not in r, f"{nom} : pente en dur, elle doit venir du plan"
+
+
+def test_une_commande_photographiee_retombe_sur_son_dessin():
+    """Une image absente ne doit jamais faire un trou dans le tableau de bord.
+
+    Les interrupteurs peuvent être des photos plutôt que des dessins. Tant
+    que la paire de PNG n'est pas déposée, la pièce garde son levier
+    vectoriel — sinon le cockpit se viderait au premier fichier oublié.
+    """
+    racine = recherche.RACINE / "src/trading_desk/ui/cockpit"
+    module = (racine / "boutons.js").read_text(encoding="utf-8")
+    assert 'addEventListener("error"' in module, "aucun repli si l'image manque"
+    assert 'classList.remove("photo")' in module
+
+    carte = json.loads((racine / "hotspots.json").read_text(encoding="utf-8"))
+    dossier = racine / "assets/commandes"
+    assert (dossier / "LISEZ-MOI.md").exists(), "le contrat des images manque"
+    for nom, r in carte["hotas"].items():
+        if "image" not in r:
+            continue
+        # Si les fichiers SONT là, ils vont par paire : un seul des deux états
+        # donnerait une commande qui change d'aspect en changeant de taille.
+        on = dossier / f"{r['image']}-on.png"
+        off = dossier / f"{r['image']}-off.png"
+        assert on.exists() == off.exists(), \
+            f"{nom} : « {r['image']} » n'a qu'un seul de ses deux états"

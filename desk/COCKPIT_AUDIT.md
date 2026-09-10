@@ -479,3 +479,88 @@ copie hors ligne l'inline, et le test qui interdit toute route d'ordre dans
 la page a sauté. Il avait raison — c'est la même leçon que les chaînes
 hallucinées : une valeur écartée qui traîne dans un fichier d'interface finit
 recopiée par quelqu'un qui la prend pour une consigne.
+
+---
+
+## Phase 8 — la perspective, et ce qui la trahissait vraiment
+
+Reproche : « les perspectives de tes écritures sur les instruments sont
+souvent fausses ; aide-toi des lignes de délimitation ».
+
+### Ce que la mesure a répondu
+
+Deux méthodes, sur les lignes de délimitation des panneaux :
+
+1. **Suivi d'arête** sur les liserés — pour chaque colonne, la ligne de
+   gradient vertical maximal. Écart type résiduel de 5 à 11 pixels : le
+   maximum saute d'un détail à l'autre. Inexploitable.
+2. **Axe des grands titres peints** — le barycentre vertical par colonne,
+   puis **médiane des pentes deux à deux** (Theil-Sen). Les moindres carrés
+   suivaient les hampes et les jambages ; un accent déplaçait le barycentre
+   d'une colonne de plusieurs pixels et tirait la droite.
+
+| panneau | pente mesurée |
+| --- | --- |
+| Analog diairs (Exposition) | −1,4° |
+| GUARDED UN QUARRED | 0,0° |
+| Flux de données | +1,5° |
+| REMÉRCIEMENTS | −2,0° |
+| Régime commuté | 0,0° |
+| Déclencheurs | +0,7° |
+| Distribution des scores | +1,5° |
+
+**Tout est entre −2 et +2,6 degrés.** Les consoles sont presque d'aplomb. Et
+les deux pentes que j'avais posées à l'œil en phase 7 étaient de −3° et
+−2,5° — l'une des deux avec le **mauvais signe**.
+
+### Ce qui trahissait vraiment
+
+Pas l'angle : le **relief**. Mes étiquettes étaient des plaquettes
+saillantes — liseré clair en haut, ombre en bas, fond en dégradé — alors que
+la photo, à ces endroits-là, n'a aucune plaque : le mot est imprimé à même
+la tôle. Poser un relief sur une surface plate se voit quel que soit
+l'angle.
+
+Elles sont maintenant **gravées** : pas de bord, pas d'ombre portée, le
+métal exact relevé autour, et le liseré clair d'un creux sous le trait.
+Seules deux d'entre elles recouvrent une vraie plaquette peinte et gardent
+le relief.
+
+Un dernier détail les trahissait encore : la teinte relevée est celle du
+métal *autour*, mais le panneau porte un dégradé. Une couleur unique laissait
+un rectangle **à peine** visible — et « à peine visible » suffit. Un fondu de
+quelques pour cent sur les quatre bords le fait disparaître.
+
+### Deux étiquettes de trop
+
+« Expo » et « Levier » gravés sous les cadrans redisaient ce que les deux
+témoins juste à côté disent déjà, et le liseré bas du panneau les coupait.
+Supprimées.
+
+### Les commandes photographiées
+
+Les interrupteurs et voyants peuvent désormais être des **images** plutôt que
+des dessins : une paire de PNG cadrés à l'identique, `<nom>-off.png` et
+`<nom>-on.png`, superposés, dont on change l'opacité. Rien ne bouge d'un
+pixel entre les deux états.
+
+Le clignotement n'a pas besoin d'un troisième fichier : on alterne les deux.
+Un cadre de plus serait un fichier de plus à garder aligné avec les autres,
+pour rien.
+
+Si les fichiers manquent, la pièce retombe sur son dessin vectoriel. Une
+image absente ne doit jamais faire un trou dans le tableau de bord — et un
+test vérifie ce repli, plus le fait qu'un nom d'image a bien ses **deux**
+états.
+
+### Typographie des dalles
+
+Tout le corps des écrans passe en unités du plateau (`cqw`) et se resserre
+d'environ un cinquième : à la loupe on veut lire **plus de choses**, pas des
+caractères plus gros. Les deux dalles latérales ont été recadrées sur la
+plage sombre peinte ; celle de gauche est le miroir exact de celle de droite
+autour de l'axe du poste, la mesure directe butant sur le graphisme peint
+qui la remplit.
+
+La dalle centrale porte maintenant, sous les douze invariants, les canaux de
+collecte avec leur latence et le mandat en cours.
