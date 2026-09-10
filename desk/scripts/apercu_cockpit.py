@@ -1,8 +1,13 @@
 """Fabrique un aperçu partageable À PARTIR DE L'APPLICATION QUI TOURNE.
 
-Usage : lancer le desk (`python -m trading_desk --demo`), puis
+Usage — rien à lancer, le desk démarre en mémoire le temps de la capture :
 
-    python scripts/apercu_cockpit.py --out /tmp/apercu.html
+    python scripts/apercu_cockpit.py --out ../cockpit/index.html --page
+
+`--page` produit un document HTML complet, prêt pour GitHub Pages. Sans lui,
+on obtient un fragment (ce qu'attend un artefact, qui fournit son enveloppe).
+`--desk URL` gèle les réponses d'un desk déjà en marche plutôt que d'en
+démarrer un : utile pour capturer un état réel plutôt que la démo.
 
 Le fichier produit est autonome : la photo y voyage en base64 et les réponses
 du serveur y sont gelées. Il s'ouvre sans desk derrière.
@@ -27,15 +32,38 @@ RACINE = Path(__file__).resolve().parents[1]
 UI = RACINE / "src/trading_desk/ui"
 
 pa = argparse.ArgumentParser(description=__doc__)
-pa.add_argument("--desk", default="http://127.0.0.1:8787",
-                help="le desk qui tourne, dont on gèle les réponses")
+pa.add_argument("--desk", default=None,
+                help="URL d'un desk en marche ; par défaut on en démarre un "
+                     "en mémoire, ce qui rend la capture reproductible et "
+                     "utilisable en intégration continue")
 pa.add_argument("--out", default="apercu-cockpit.html")
+pa.add_argument("--page", action="store_true",
+                help="document HTML complet plutôt qu'un fragment")
 args = pa.parse_args()
-BASE = args.desk
 
-def get(chemin):
-    with urllib.request.urlopen(BASE + chemin, timeout=20) as r:
-        return r.read().decode("utf-8")
+
+if args.desk:
+    def get(chemin):
+        with urllib.request.urlopen(args.desk + chemin, timeout=20) as r:
+            return r.read().decode("utf-8")
+else:
+    # Un desk en mémoire : pas de port ouvert, pas de processus à lancer, et
+    # la capture devient reproductible — c'est ce qui permet de régénérer la
+    # page depuis n'importe où, y compris une machine sans réseau.
+    import sys
+    sys.path.insert(0, str(RACINE / "src"))
+    from fastapi.testclient import TestClient          # noqa: E402
+    from trading_desk.api.server import create_app     # noqa: E402
+    from trading_desk.api.state import DeskState       # noqa: E402
+    from trading_desk.config import Settings           # noqa: E402
+    from trading_desk.storage import SqliteStore       # noqa: E402
+
+    _client = TestClient(create_app(DeskState(Settings(), SqliteStore(":memory:"))))
+
+    def get(chemin):
+        r = _client.get(chemin)
+        r.raise_for_status()
+        return r.text
 
 # --- les réponses réelles du desk, gelées -------------------------------
 TABLE = {
@@ -129,17 +157,21 @@ window.EventSource = function () { throw new Error("aperçu figé"); };
 """ % (json.dumps(PHOTO), json.dumps({k: json.loads(v) for k, v in TABLE.items()}))
 
 BANDEAU = """
-<div id="apercu-note">Aperçu figé — le desk réel tourne sur 127.0.0.1.
-Double-clic&nbsp;: loupe · <b>`</b>&nbsp;: HUD · <b>D</b>&nbsp;: calibrage</div>
+<div id="apercu-note"><b>Poste de pilotage</b> — copie figée, aucun desk
+derrière cette page&nbsp;: rien n'est arrêté ni lancé d'ici. Le desk réel
+tourne sur <code>127.0.0.1:8787</code>.<br>
+Cliquez un bouton&nbsp;· double-clic&nbsp;: loupe&nbsp;· <b>Échap</b>&nbsp;:
+revenir&nbsp;· <b>`</b>&nbsp;: HUD&nbsp;· <b>D</b>&nbsp;: calibrage</div>
 <style>
 #apercu-note {
   position: fixed; left: 12px; bottom: 12px; z-index: 40;
   font: 11px/1.5 ui-monospace, Menlo, Consolas, monospace;
   color: #9fb4bb; background: rgba(4,10,13,.86);
   border: 1px solid rgba(120,160,175,.24); border-radius: 3px;
-  padding: 6px 10px; max-width: 46ch;
+  padding: 7px 11px; max-width: 54ch;
 }
 #apercu-note b { color: #e2a54a }
+#apercu-note code { color: #8de3b4; font-size: 10.5px }
 @media (max-width: 700px) { #apercu-note { position: static; margin: 8px } }
 </style>
 """
@@ -152,6 +184,21 @@ page = ["<title>Poste de pilotage orbital</title>",
         corps]
 assert corps.count("<script>") >= 6, "des scripts n'ont pas été mis en ligne"
 
+corps_final = "\n".join(page)
+if args.page:
+    # GitHub Pages sert le fichier tel quel : il lui faut son enveloppe.
+    # Un artefact, lui, fournit la sienne — d'où les deux formes.
+    corps_final = (
+        "<!doctype html>\n<html lang=\"fr\" data-theme=\"dark\">\n<head>\n"
+        "<meta charset=\"utf-8\">\n"
+        "<meta name=\"viewport\" content=\"width=device-width,"
+        "initial-scale=1,viewport-fit=cover\">\n"
+        "<meta name=\"robots\" content=\"noindex, nofollow\">\n"
+        "<meta name=\"color-scheme\" content=\"dark\">\n"
+        "<style>html,body{margin:0;background:#000;color:#cfe0e4}</style>\n"
+        "</head>\n<body>\n" + corps_final + "\n</body>\n</html>\n")
+
 sortie = Path(args.out)
-sortie.write_text("\n".join(page), encoding="utf-8")
+sortie.parent.mkdir(parents=True, exist_ok=True)
+sortie.write_text(corps_final, encoding="utf-8")
 print(sortie, round(sortie.stat().st_size / 1e6, 2), "Mo")

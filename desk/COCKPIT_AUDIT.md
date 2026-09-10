@@ -403,3 +403,79 @@ Elle est devenue la plus grande de la photo, et trois lignes y flottaient
 dans du noir. Elle porte maintenant **les douze invariants**, deux colonnes,
 une pastille verte ou rouge chacun — ce qu'un poste affiche avant le départ,
 et le seul contenu qui vaut la place qu'il prend.
+
+---
+
+## Phase 7 — les stations, et la mise en ligne, 10 septembre 2026
+
+### On s'approche de l'instrument avant d'ouvrir le secteur
+
+Cliquer « Soufflerie » ouvrait directement l'écran central. C'est rapide, et
+c'est faux : sur un poste, on regarde d'abord l'instrument qui porte le
+sujet, et on ne bascule sur le grand écran que pour ce qu'on veut voir en
+détail. Un bouton qui saute au PFD fait du cockpit une barre de menus.
+
+Le trajet est en deux temps. La loupe cadre le **bloc** du secteur et sa
+dalle affiche l'index de ce secteur ; choisir une entrée ouvre le secteur
+dans la dalle centrale, s'en approche, et fait défiler jusqu'au panneau
+choisi, qui clignote une fois.
+
+L'index n'est pas une liste écrite à la main : ce sont les `<h2>`/`<h3>` du
+secteur, lus dans le DOM. Une liste recopiée cesserait d'être juste au
+premier panneau ajouté, et personne ne s'en apercevrait.
+
+Deux choses trouvées en cliquant pour de vrai, pas en relisant le code :
+
+**Le hotspot qui recouvre la dalle avalait les clics de l'index.** Monter la
+dalle seule ne suffit pas — elle est dans un autre contexte d'empilement, et
+son `z-index` ne se compare pas à celui des boutons. C'est le bug de la
+couche des mains, en plus petit. C'est la **couche** des dalles qui monte.
+
+**`textContent` recolle tout ce qui pend au titre** : le compteur d'un badge,
+un sous-titre. On lisait « SOUFFLERIE0 » et « Déclencheurs —
+directiondirection ». On prend le premier nœud de *texte*.
+
+### Le rebord en carbone
+
+Le bas du pare-brise n'est pas une droite : le rebord **monte** au centre
+(48,8 %) et redescend sur les côtés (53,5 %). Un bord droit à 52,55 %
+passait donc par-dessus le rebord au milieu — il en manquait un bout,
+exactement là où il est le plus visible.
+
+### L'instrument « Exposition »
+
+Les deux cadrans lisaient déjà l'exposition et le levier contre leurs
+plafonds, mais rien ne le disait : ils portent maintenant leur nom, gravé
+dans le métal sous chacun. Les quatre témoins portaient des mots peints qui
+ne disent pas ce qu'ils surveillent — ils affichent « Expo », « Levier »,
+« Flux », « Sain ». Les deux boutons agissent : le rouge coupe le desk (par
+le bouton existant, qui porte déjà la confirmation en deux temps), l'autre
+ouvre Systèmes.
+
+### Les plaques suivent le plan des consoles
+
+Les deux consoles basses fuient vers l'extérieur. Une étiquette posée
+d'aplomb dessus se lit comme un autocollant : « Secteurs » et « Campagnes »
+reprennent la pente et le biais relevés sur le texte peint qu'elles
+recouvrent.
+
+### En ligne, sans passer par un lien d'artefact
+
+Le dépôt sert déjà des pages statiques depuis sa racine. La copie hors ligne
+du poste y est déposée dans `cockpit/`, et `scripts/apercu_cockpit.py`
+la fabrique **sans desk en marche** : il en démarre un en mémoire, sans port
+ouvert ni processus à lancer. La capture devient reproductible depuis
+n'importe quelle machine.
+
+Deux formes, une seule source : `--page` produit un document complet pour un
+hébergement statique, l'absence de `--page` un fragment pour un artefact,
+qui fournit son enveloppe. Sans `<!doctype>`, le navigateur rendait la page
+en mode « quirks » et la mise en page du poste s'effondrait.
+
+Un piège s'est refermé au passage : `boutons.js` **citait le chemin** de la
+route d'ordre dans un commentaire, pour expliquer la règle. Tant que le
+fichier était chargé par balise, la page servie ne le contenait pas ; la
+copie hors ligne l'inline, et le test qui interdit toute route d'ordre dans
+la page a sauté. Il avait raison — c'est la même leçon que les chaînes
+hallucinées : une valeur écartée qui traîne dans un fichier d'interface finit
+recopiée par quelqu'un qui la prend pour une consigne.

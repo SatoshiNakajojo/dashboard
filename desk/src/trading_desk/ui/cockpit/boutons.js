@@ -9,13 +9,19 @@
  * l'infobulle qui dit pourquoi. Deux cas dans ce cockpit, et le deuxieme
  * merite d'etre lu :
  *
- * Les gachettes des joysticks. Le brief les veut sur « acheter » et
+ * Les gachettes des joysticks. Le brief les voulait sur « acheter » et
  * « vendre ». Cette interface ne le peut pas : elle ne passe AUCUN ordre,
- * par construction, et un test du depot le verifie
- * (`assert "/api/order" not in r.text`). Un tableau de bord qui peut ouvrir
- * une position est un tableau de bord qu'on peut cliquer par erreur — et
- * deux gachettes sous les pouces sont exactement le pire endroit pour ca.
- * Elles restent donc mortes, et le disent.
+ * par construction, et un test du depot verifie qu'aucune route d'ordre
+ * n'apparait dans la page. Un tableau de bord qui peut ouvrir une position
+ * est un tableau de bord qu'on peut cliquer par erreur — et deux gachettes
+ * sous les pouces sont exactement le pire endroit pour ca.
+ *
+ * (La photo du 10 septembre a retire les manches : ces deux boutons n'ont
+ * plus de support. La regle, elle, ne depend pas de la photo.)
+ *
+ * On ne cite pas le chemin de la route ici. Une chaine ecartee qui traine
+ * dans un fichier d'interface finit recopiee par quelqu'un qui la prend
+ * pour une valeur — et elle a fait echouer ce test-la, ce qui etait juste.
  */
 
 "use strict";
@@ -111,7 +117,13 @@
   function agir(verbe) {
     const [nom, a, b] = String(verbe).split(":");
     switch (nom) {
-      case "secteur":            return () => D().montrer(a);
+      // On passe par la STATION du secteur : la loupe cadre d'abord
+      // l'instrument concerne, et c'est le choix fait dessus qui envoie vers
+      // l'ecran central. Sauter directement au PFD ferait du cockpit une
+      // barre de menus.
+      case "secteur":            return () => window.CockpitStations
+                                   ? window.CockpitStations.aller(a)
+                                   : D().montrer(a);
       case "secteur-suivant":    return () => secteurVoisin(1);
       case "secteur-precedent":  return () => secteurVoisin(-1);
       case "fermer":             return () => window.cockpitFermerSecteur &&

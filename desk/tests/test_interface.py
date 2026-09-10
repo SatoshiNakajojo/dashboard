@@ -689,3 +689,46 @@ def test_les_secteurs_s_affichent_dans_la_dalle_centrale(client):
     for secteur in ("prevol", "telemetrie", "navigation", "soufflerie",
                     "consommation", "vols", "systemes"):
         assert page.count(f'id="sec-{secteur}"') == 1, f"{secteur} dupliqué"
+
+
+def test_chaque_secteur_a_une_station_qui_existe():
+    """Cliquer un bouton ne saute plus au PFD : on va d'abord à l'instrument.
+
+    Chaque secteur nomme un bloc du poste et la dalle qui y sert d'index. Si
+    l'un des deux n'existe pas, le clic retombe silencieusement sur
+    l'ouverture directe — le bouton marche, mais le détour qu'on voulait
+    disparaît sans bruit. C'est exactement le genre de panne qu'on ne voit
+    pas : le test la voit.
+    """
+    racine = recherche.RACINE / "src/trading_desk/ui/cockpit"
+    carte = json.loads((racine / "hotspots.json").read_text(encoding="utf-8"))
+    page = (recherche.RACINE / "src/trading_desk/ui/cockpit.html").read_text(
+        encoding="utf-8")
+
+    secteurs = {"prevol", "telemetrie", "navigation", "soufflerie",
+                "consommation", "vols", "systemes"}
+    assert set(carte["stations"]) == secteurs, "un secteur sans station"
+    for nom, st in carte["stations"].items():
+        assert st["bloc"] in carte["blocs"], f"{nom} : bloc inconnu"
+        assert st["ecran"] in carte["screens"], f"{nom} : dalle inconnue"
+
+    # Le module doit être chargé, et avant celui qui l'appelle.
+    assert page.index("cockpit/stations.js") < page.index("cockpit/boutons.js")
+
+
+def test_la_page_hors_ligne_est_un_document_complet():
+    """La copie publiée est servie telle quelle : il lui faut son enveloppe.
+
+    Un artefact fournit la sienne ; GitHub Pages non. Le fichier a été
+    produit sans `<!doctype>` la première fois, et le navigateur l'a rendu en
+    mode « quirks » — la mise en page du poste s'effondrait.
+    """
+    page = recherche.RACINE.parent / "cockpit/index.html"
+    if not page.exists():
+        pytest.skip("copie hors ligne non générée sur cette machine")
+    texte = page.read_text(encoding="utf-8")
+    assert texte.lstrip().lower().startswith("<!doctype html>")
+    assert "</html>" in texte
+    # Elle ne doit pas prétendre pouvoir agir sur le desk.
+    assert "aucun desk" in texte
+    assert "/api/order" not in texte

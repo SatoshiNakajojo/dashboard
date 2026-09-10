@@ -67,6 +67,22 @@
     el.dataset.perce = "1";
   }
 
+  /* Une dalle qui sert d'index de station ne doit pas etre reecrite par la
+   * trame suivante : sinon l'index disparait une seconde apres le clic. */
+  function libre(cle) {
+    const el = document.getElementById("screen-" + cle);
+    return !el || !el.classList.contains("station");
+  }
+
+  function rendre() {
+    if (libre("main")) ecranPrincipal(snap);
+    if (libre("autopilot")) ecranAutopilot(snap);
+    if (libre("left-log")) ecranLog(snap);
+    if (libre("minis")) ecranMinis();
+    if (libre("feed")) ecranFeed();
+    rendreChrome(snap);
+  }
+
   const esc = (s) => D().esc(s);
   const usd = (v) => D().usd(v);
   const num = (v, d) => D().num(v, d);
@@ -286,10 +302,12 @@
     const els = {};
     for (const cle of cles) {
       const r = graves[cle];
-      const el = creer("div", "plaque grave" + (r.aligne === "gauche" ? " gauche" : ""),
-                       couche);
+      const el = creer("div", "plaque grave" + (r.aligne === "gauche" ? " gauche" : "")
+                       + (r.pente || r.biais ? " penchee" : ""), couche);
       el.id = "grave-" + cle;
       poser(el, r);
+      if (r.pente) el.style.setProperty("--pente", r.pente + "deg");
+      if (r.biais) el.style.setProperty("--biais", r.biais + "deg");
       const sp = creer("span", null, el);
       if (r.texte) { sp.textContent = r.texte; ajuster(el, sp); }
       els[cle] = el;
@@ -411,15 +429,14 @@
 
     document.addEventListener("desk:snapshot", (e) => {
       snap = e.detail;
-      ecranPrincipal(snap); ecranAutopilot(snap); ecranLog(snap);
-      ecranFeed(); rendreChrome(snap);
+      rendre();
       if (window.CockpitInstruments)
         window.CockpitInstruments.rafraichir(snap, rech);
       if (window.CockpitBoutons) window.CockpitBoutons.rafraichir(snap);
     });
     document.addEventListener("desk:recherche", (e) => {
       rech = e.detail;
-      ecranMinis(); ecranPrincipal(snap); ecranLog(snap);
+      rendre();
       if (window.CockpitInstruments)
         window.CockpitInstruments.rafraichir(snap, rech);
     });
@@ -429,14 +446,11 @@
     // attend d'abord sa carte de coordonnees. Sans ce rattrapage, les deux
     // panneaux de recherche restaient noirs jusqu'a la relecture suivante,
     // soixante secondes plus tard.
-    if (D().snapshot) {
-      snap = D().snapshot;
-      ecranPrincipal(snap); ecranAutopilot(snap); ecranLog(snap);
-    }
-    if (D().recherche) { rech = D().recherche; ecranMinis(); }
+    if (D().snapshot) snap = D().snapshot;
+    if (D().recherche) rech = D().recherche;
+    rendre();
     if (window.CockpitInstruments)
       window.CockpitInstruments.rafraichir(snap, rech);
-    ecranFeed(); rendreChrome(snap);
 
     // Le secteur ouvert change par clic, pas par trame : on suit le tiroir.
     document.getElementById("nav").addEventListener("click",
@@ -444,8 +458,10 @@
 
     // Le journal se recharge sur son propre rythme (10 s) : on le recopie
     // apres, sans le redemander.
-    setInterval(ecranFeed, 4000);
+    setInterval(() => { if (libre("feed")) ecranFeed(); }, 4000);
   }
 
-  window.CockpitEcrans = { monter };
+  // `Cockpit.ecrans` est la COUCHE, pas la table des dalles : les stations
+// ont besoin du corps de chaque dalle pour y ecrire leur index.
+window.CockpitEcrans = { monter, rendre, corps: (cle) => ecrans[cle] };
 })();

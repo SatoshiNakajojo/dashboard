@@ -184,8 +184,9 @@
 .hotspot::before {
   content: ""; position: absolute; inset: -14%; border-radius: 50%;
   pointer-events: none; opacity: .5;
-  background: radial-gradient(circle, rgba(126, 214, 168, .38), transparent 64%);
-  box-shadow: inset 0 0 0 1px rgba(126, 214, 168, .22);
+  /* Une halo, pas un cercle : un anneau dessine par-dessus la photo est un
+     calque, alors qu'une lueur passe pour un retro-eclairage. */
+  background: radial-gradient(circle, rgba(126, 214, 168, .40), transparent 66%);
   transition: opacity 150ms linear;
   animation: eveil 2600ms ease-out 1;
 }
@@ -214,6 +215,40 @@
 .hotspot.trigger:active::after {
   background: radial-gradient(circle at 50% 40%, rgba(224, 90, 73, .55), transparent 70%);
 }
+
+/* Une dalle qui sert d'index de station passe au-dessus de sa propre zone
+   cliquable : sans ca, le hotspot qui la recouvre avalerait les clics de
+   l'index. C'est le bug de la couche des mains, en plus petit — et on ne le
+   voit qu'en essayant de cliquer pour de vrai. */
+.screens-layer { pointer-events: none }
+.screen.station { pointer-events: auto; cursor: default }
+.screen.station .corps { pointer-events: auto; display: flex;
+                          flex-direction: column }
+.index { display: flex; flex-direction: column; gap: 2px; margin-top: 3px;
+          max-height: calc(100% - 34px); overflow-y: auto; overscroll-behavior: contain }
+.index::-webkit-scrollbar { width: 4px }
+.index::-webkit-scrollbar-thumb { background: #26424c; border-radius: 2px }
+.ix {
+  display: block; width: 100%; text-align: left; cursor: pointer;
+  /* `flex: none` : dans une colonne flex, les entrees se comprimaient et le
+     texte se retrouvait coupe en haut et en bas. */
+  flex: none; line-height: 1.5;
+  font-family: var(--f-mono); font-size: 9px; letter-spacing: .02em;
+  color: #b9d3d8; background: rgba(28, 46, 54, .55);
+  border: 1px solid rgba(120, 170, 185, .18); border-radius: 2px;
+  padding: 3px 6px; white-space: nowrap; overflow: hidden;
+  text-overflow: ellipsis; transition: background 120ms, color 120ms;
+}
+.ix:hover { background: rgba(52, 96, 110, .8); color: #e6f4f7 }
+.ix:focus-visible { outline: 1px solid var(--amber); outline-offset: 1px }
+.ix.tout { margin-top: 4px; color: var(--amber); text-align: center;
+           border-color: rgba(226, 165, 74, .35) }
+.ix.tout:hover { background: rgba(226, 165, 74, .22) }
+/* Le panneau vise clignote une fois : sans ca, on ouvre le PFD sans savoir
+   ou l'on vient d'atterrir. */
+@keyframes vise { 0%, 100% { box-shadow: none }
+                  40% { box-shadow: 0 0 0 2px rgba(88, 200, 214, .75) } }
+.vise { animation: vise 1.4s ease-out 1 }
 
 /* La liste de verification du poste, dans la dalle centrale. Deux colonnes :
    douze invariants tiennent alors dans la hauteur sans ascenseur. */
@@ -341,6 +376,11 @@
               inset 0 -.06cqw .12cqw rgba(0, 0, 0, .3),
               0 .03cqw .1cqw rgba(0, 0, 0, .28);
   border-radius: 1.5px;
+}
+.plaque.grave.penchee {
+  /* La pente et le biais viennent de la carte : ce sont ceux du plan de la
+     console, releves sur le texte peint que la plaque recouvre. */
+  transform: rotate(var(--pente, 0deg)) skewX(var(--biais, 0deg));
 }
 .plaque.grave.gauche {
   place-items: center start; padding: .5cqh .6cqw; white-space: normal;
