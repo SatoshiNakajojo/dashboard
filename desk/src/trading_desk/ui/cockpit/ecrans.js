@@ -30,7 +30,7 @@
     // Le logement peint est un quadrilatere, pas un rectangle : on plaque la
     // dalle dessus par homographie. Sans quad releve, on retombe sur le
     // rectangle — la dalle reste utilisable, juste d'aplomb.
-    if (r.quad) M().plaquer(el, r.quad, 0.030);
+    if (r.quad) M().plaquer(el, r.quad, 0.008);
     else poser(el, r);
     percer(el, r);
     const corps = creer("div", "corps", el);
