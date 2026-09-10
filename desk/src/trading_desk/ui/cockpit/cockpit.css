@@ -276,6 +276,47 @@
 .tiroir #screen-main > .corps { display: none }
 .tiroir #screen-main { cursor: default }
 
+/* ================= commandes photographiees ============================== */
+/*
+ * Une piece photographiee vient du meme monde que la photo du cockpit : meme
+ * grain, meme eclairage. C'est ce qu'aucun bouton dessine n'obtient.
+ */
+.voyant {
+  position: absolute; z-index: 3; background: none; border: 0; padding: 0;
+  cursor: pointer; -webkit-tap-highlight-color: transparent;
+}
+.voyant[disabled] { cursor: default }
+.voyant .cmd {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  object-fit: contain; pointer-events: none;
+  transition: opacity 200ms linear;
+}
+/* Les voyants sur fond noir ont leur LUMINANCE cuite dans l'alpha a la
+   conversion : la lueur garde son halo sans qu'on la detoure, et sans
+   dependre d'un mode de fusion — la couche des boutons porte un z-index,
+   donc son propre contexte d'empilement, et « screen » n'y voyait plus la
+   photo derriere. Le carre noir restait. */
+/* L'etat eteint peut etre DERIVE de l'allume : meme fichier, desature et
+   assombri. Deux fichiers a garder alignes, c'est deux occasions de les
+   desaligner. */
+.cmd.derive { filter: grayscale(1) brightness(.42) contrast(.9) }
+.cmd.on, .cmd.alerte { opacity: 0 }
+.voyant[data-etat="on"] .cmd.off { opacity: 0 }
+.voyant[data-etat="on"] .cmd.on { opacity: 1 }
+.voyant[data-etat="alerte"] .cmd.off { opacity: 0 }
+.voyant[data-etat="alerte"] .cmd.alerte { opacity: 1 }
+/* Pas d'image d'alerte fournie ? L'allume clignote. */
+.voyant[data-etat="alerte"] .cmd.alerte:not([src]) ~ .cmd.on,
+.voyant[data-etat="alerte"]:not(:has(.cmd.alerte)) .cmd.on {
+  opacity: 1; animation: bat 1100ms steps(1) infinite;
+}
+@keyframes bat { 0%, 55% { opacity: 1 } 56%, 100% { opacity: .25 } }
+.voyant:hover .cmd { filter: brightness(1.12) }
+.voyant:hover .cmd.derive { filter: grayscale(1) brightness(.55) }
+.voyant:active { transform: translateY(.1cqh) }
+.voyant:focus-visible { outline: 1px solid var(--amber); outline-offset: 2px }
+@media (prefers-reduced-motion: reduce) { .voyant .cmd { animation: none } }
+
 /* --- z-4 : LED et effets ------------------------------------------------ */
 .fx-layer { position: absolute; inset: 0; z-index: 4; pointer-events: none }
 .led {
@@ -478,6 +519,20 @@
   filter: drop-shadow(0 0 3px rgba(232, 82, 63, .8));
 }
 .aiguille .moyeu { fill: #d9e3e6 }
+/* La lecture chiffree, sur la face basse du cadran. Le verre du cadran est
+   sombre : le chiffre y passe en phosphore, comme sur les logements. */
+.aiguille .lecture {
+  position: absolute; left: 0; right: 0; top: 63%;
+  text-align: center; font-family: var(--f-mono); font-weight: 700;
+  font-size: .62cqw; color: #8de3b4; letter-spacing: -.01em;
+  text-shadow: 0 0 .35cqw rgba(141, 227, 180, .9);
+  font-variant-numeric: tabular-nums; pointer-events: none;
+  white-space: nowrap; overflow: hidden;
+}
+.aiguille[data-butee="1"] .lecture { color: #e2a54a;
+  text-shadow: 0 0 .35cqw rgba(226, 165, 74, .9) }
+.aiguille[data-butee="1"] .brin { stroke: #e2a54a;
+  filter: drop-shadow(0 0 3px rgba(226, 165, 74, .9)) }
 
 /* Les temoins sont poses sur les carres peints. Eteints, ils laissent voir
    le carre de la photo ; allumes, ils l'eclairent. */

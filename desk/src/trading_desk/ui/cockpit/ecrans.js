@@ -27,7 +27,11 @@
     el.tabIndex = 0;
     el.setAttribute("role", "group");
     el.setAttribute("aria-label", r.titre);
-    poser(el, r);
+    // Le logement peint est un quadrilatere, pas un rectangle : on plaque la
+    // dalle dessus par homographie. Sans quad releve, on retombe sur le
+    // rectangle — la dalle reste utilisable, juste d'aplomb.
+    if (r.quad) M().plaquer(el, r.quad, 0.030);
+    else poser(el, r);
     percer(el, r);
     const corps = creer("div", "corps", el);
     ecrans[cle] = corps;
@@ -464,6 +468,7 @@
       if (window.CockpitInstruments)
         window.CockpitInstruments.rafraichir(snap, rech);
       if (window.CockpitBoutons) window.CockpitBoutons.rafraichir(snap);
+      if (window.CockpitVoyants) window.CockpitVoyants.rafraichir(snap, rech);
     });
     document.addEventListener("desk:recherche", (e) => {
       rech = e.detail;

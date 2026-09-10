@@ -783,3 +783,48 @@ def test_une_commande_photographiee_retombe_sur_son_dessin():
         off = dossier / f"{r['image']}-off.png"
         assert on.exists() == off.exists(), \
             f"{nom} : « {r['image']} » n'a qu'un seul de ses deux états"
+
+
+def test_chaque_voyant_photographie_a_son_image_et_son_etat():
+    """Un voyant qui ne suit rien est pire qu'un voyant absent.
+
+    On apprend à ne plus le regarder, et le jour où il dit quelque chose,
+    personne ne le voit. Chacun doit donc nommer un état que le module sait
+    lire, et son image allumée doit exister — l'état éteint, lui, peut être
+    dérivé de l'allumé par filtre, ce qui garantit le même cadrage.
+    """
+    racine = recherche.RACINE / "src/trading_desk/ui/cockpit"
+    carte = json.loads((racine / "hotspots.json").read_text(encoding="utf-8"))
+    module = (racine / "voyants.js").read_text(encoding="utf-8")
+    etats = set(re.findall(r'^\s+"?([a-z-]+)"?:\s', module, re.M))
+    dossier = racine / "assets/commandes"
+
+    assert carte["voyants"], "aucun voyant photographié"
+    for nom, r in carte["voyants"].items():
+        assert r["etat"] in etats, f"{nom} : état « {r['etat']} » que le module ne lit pas"
+        assert (dossier / f"{r['image']}-on.png").exists(), \
+            f"{nom} : image allumée « {r['image']}-on.png » absente"
+        # une action, sinon le voyant est un décor cliquable qui ne fait rien
+        assert r.get("action"), f"{nom} : aucune action"
+
+
+def test_les_dalles_sont_plaquees_sur_le_quadrilatere_peint():
+    """Les montants d'un logement penchent en sens contraire : ils fuient.
+
+    C'est de la perspective, pas du cisaillement, et aucune combinaison
+    rotation/cisaillement ne la rend — un rectangle d'aplomb dans un logement
+    qui converge se voit du premier coup d'œil. Chaque dalle porte donc les
+    quatre coins relevés, et le shell en tire une homographie.
+    """
+    racine = recherche.RACINE / "src/trading_desk/ui/cockpit"
+    carte = json.loads((racine / "hotspots.json").read_text(encoding="utf-8"))
+    shell = (racine / "shell.js").read_text(encoding="utf-8")
+    assert "matrix3d" in shell and "homographie" in shell
+
+    for nom, r in carte["screens"].items():
+        q = r.get("quad")
+        assert q and len(q) == 4, f"{nom} : pas de quadrilatère relevé"
+        for x, y in q:
+            assert 0 <= x <= 100 and 0 <= y <= 100, f"{nom} : coin hors du plateau"
+        # les coins tournent dans le sens horaire : haut-gauche d'abord
+        assert q[0][0] < q[1][0] and q[0][1] < q[2][1], f"{nom} : coins désordonnés"

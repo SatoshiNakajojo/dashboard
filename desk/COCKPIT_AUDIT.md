@@ -564,3 +564,69 @@ qui la remplit.
 
 La dalle centrale porte maintenant, sous les douze invariants, les canaux de
 collecte avec leur latence et le mandat en cours.
+
+---
+
+## Phase 9 — les commandes photographiées, et la vraie perspective
+
+### La perspective : ce n'était toujours pas ça
+
+Phase 8 concluait « pas de cisaillement, les consoles sont d'aplomb ». Faux,
+et pour une raison que seule une mesure des **deux** familles de lignes
+pouvait révéler : je n'avais mesuré que les horizontales.
+
+Les montants gauche et droit d'un logement penchent **en sens contraire** :
+
+| dalle | montant gauche | montant droit |
+| --- | --- | --- |
+| auto-pilote | +1,97° | −3,50° |
+| desk (centre) | −1,47° | +1,36° |
+| journal | −3,45° | −1,47° |
+| alarme | −0,65° | +3,58° |
+
+Ce n'est pas un cisaillement, c'est une **convergence** — de la perspective
+pour de vrai. Aucune combinaison rotation + cisaillement ne la rend : un
+rectangle d'aplomb dans un logement qui converge se voit du premier coup
+d'œil, et c'est exactement ce que le reproche disait.
+
+Les quatre coins de chaque dalle sont donc relevés par intersection de ses
+quatre arêtes, et le shell en tire l'**homographie** qui envoie le rectangle
+de mise en page sur ce quadrilatère, donnée à CSS en `matrix3d`. Les termes
+projectifs ont la dimension d'un inverse de longueur : la matrice se
+recalcule à chaque redimensionnement du plateau.
+
+La dalle auto-pilote était par ailleurs cadrée 1,3 point trop bas.
+
+### Les commandes photographiées
+
+Trente images livrées, en JPG avec leur fond cuit dans les pixels. Détourage
+en deux régimes, parce qu'un seul ne pouvait pas marcher :
+
+- **fond clair ou damier** : remplissage depuis les bords en n'acceptant que
+  les couleurs du bord. Un critère *local* (« avance tant que la luminance
+  varie peu ») avait été essayé d'abord : il fuyait à travers les pièces —
+  sur du métal poli, deux pixels voisins diffèrent de moins de seize
+  niveaux, et le remplissage traversait la pièce de part en part. Puis trois
+  passes de nettoyage du halo laissé par l'ombre portée.
+- **fond noir** : pas de détourage du tout — la **luminance devient
+  l'alpha**. Détourer une lueur lui coupe son halo, et le halo est ce qui la
+  rend crédible.
+
+J'ai d'abord compté sur `mix-blend-mode: screen` pour effacer le noir à
+l'affichage. La couche des boutons porte un `z-index`, donc son propre
+contexte d'empilement : le mélange n'y voit plus la photo derrière, et le
+carré noir restait. L'alpha cuit ne dépend d'aucun contexte.
+
+L'état éteint est **dérivé** de l'allumé par filtre quand le fichier manque —
+deux fichiers à garder alignés, c'est deux occasions de les désaligner.
+
+Neuf pièces sont câblées, chacune sur un booléen réel du desk.
+
+### Les cadrans disent enfin quelque chose
+
+Une aiguille sans chiffre ne dit rien : on lit qu'elle a bougé, pas de
+combien — et la graduation peinte du cadran est inventée, donc inutilisable.
+La valeur s'inscrit maintenant en phosphore sous le moyeu, dans son unité,
+et l'aiguille passe à l'ambre quand elle est **en butée** : une aiguille
+collée au maximum sans le signaler laisse croire qu'elle mesure encore. Les
+six cadrans sont cliquables vers le secteur qui porte la mesure.

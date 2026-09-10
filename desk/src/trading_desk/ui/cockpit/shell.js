@@ -15,6 +15,7 @@
 
 (function () {
   const CHEMIN = "/ui/cockpit/";
+  let fitCourant = null;
   let CARTE = null;                 // hotspots.json
   const stage = document.getElementById("cockpit");
   if (!stage) return;
@@ -169,6 +170,7 @@
     CARTE = await fetch(CHEMIN + "hotspots.json").then((r) => r.json());
 
     const fit = creer("div", "cockpit-fit", stage);
+    fitCourant = fit;
     // Le plateau prend le format de la photo declaree, pas un ratio suppose.
     fit.style.setProperty("--ratio", (CARTE.design.w / CARTE.design.h).toFixed(5));
 
@@ -194,10 +196,11 @@
     // Les modules d'ecrans et de boutons vivent dans leurs fichiers. Le shell
     // ne fait que leur donner leur couche et la carte.
     window.Cockpit = { CARTE, CHEMIN, fit, ecrans, hotspots, fx, hotas,
-                       poser, creer, metal, $$ };
+                       poser, creer, metal, plaquer, $$ };
     if (window.CockpitEcrans) window.CockpitEcrans.monter();
     if (window.CockpitInstruments) window.CockpitInstruments.monter();
     if (window.CockpitBoutons) window.CockpitBoutons.monter();
+    if (window.CockpitVoyants) window.CockpitVoyants.monter();
 
     // Calibrage : D bascule l'overlay. Reste dans le code, exprès — c'est
     // avec lui qu'on recale les rectangles quand la photo change.
@@ -211,6 +214,11 @@
     if (parametres.get("debug") === "1" || garde("cockpit-debug") === "1") {
       stage.classList.add("debug");
     }
+    // Les termes projectifs ont la dimension d'un inverse de longueur : la
+    // matrice depend de la taille en pixels du plateau.
+    if (window.ResizeObserver) new ResizeObserver(calerPlaques).observe(fit);
+    else addEventListener("resize", calerPlaques);
+
     loupe(stage, fit);
 
     addEventListener("keydown", (e) => {
@@ -354,6 +362,64 @@
     });
   }
   void toile;
+
+  /* Plaquer un element sur un quadrilatere de la photo.
+   *
+   * Les logements peints ne sont pas des rectangles : leurs montants gauche
+   * et droit penchent en sens CONTRAIRE, parce qu'ils fuient. C'est de la
+   * perspective, pas du cisaillement, et aucune combinaison rotation +
+   * cisaillement ne la rend — un rectangle d'aplomb dans un logement qui
+   * converge se voit du premier coup d'oeil.
+   *
+   * On calcule donc l'homographie qui envoie le rectangle de mise en page
+   * sur les quatre coins releves, et on la donne a CSS en `matrix3d`. Les
+   * termes projectifs ont la dimension d'un inverse de longueur : la matrice
+   * depend de la taille en PIXELS du plateau, donc se recalcule a chaque
+   * redimensionnement.
+   */
+  function homographie(w, h, q) {
+    const [x0, y0] = q[0], [x1, y1] = q[1], [x2, y2] = q[2], [x3, y3] = q[3];
+    const dx1 = x1 - x2, dx2 = x3 - x2, sx = x0 - x1 + x2 - x3;
+    const dy1 = y1 - y2, dy2 = y3 - y2, sy = y0 - y1 + y2 - y3;
+    const den = dx1 * dy2 - dx2 * dy1;
+    let g = 0, hh = 0;
+    if (Math.abs(den) > 1e-9) {
+      g = (sx * dy2 - dx2 * sy) / den;
+      hh = (dx1 * sy - sx * dy1) / den;
+    }
+    const a = x1 - x0 + g * x1, b = x3 - x0 + hh * x3, c = x0;
+    const dd = y1 - y0 + g * y1, e = y3 - y0 + hh * y3, f = y0;
+    // le carre unite devient le rectangle (w, h) de l'element
+    return [a / w, dd / w, g / w, b / h, e / h, hh / h, c, f, 1];
+  }
+
+  const plaques = [];
+  function plaquer(el, quad, marge) {
+    plaques.push({ el, quad, marge: marge || 0 });
+    calerPlaques();
+  }
+  function calerPlaques() {
+    const r = fitCourant && fitCourant.getBoundingClientRect();
+    if (!r || !r.width) return;
+    for (const p of plaques) {
+      const xs = p.quad.map((q) => q[0]), ys = p.quad.map((q) => q[1]);
+      const l = Math.min(...xs), t = Math.min(...ys);
+      const w = Math.max(...xs) - l, h = Math.max(...ys) - t;
+      // marge : la dalle vit DANS son biseau, pas dessus
+      const m = p.marge;
+      const cx = l + w / 2, cy = t + h / 2, k = 1 - m;
+      const q = p.quad.map(([qx, qy]) =>
+        [(cx + (qx - cx) * k - l) * r.width / 100,
+         (cy + (qy - cy) * k - t) * r.height / 100]);
+      p.el.style.left = l + "%"; p.el.style.top = t + "%";
+      p.el.style.width = w + "%"; p.el.style.height = h + "%";
+      const px = w * r.width / 100, py = h * r.height / 100;
+      const [a, b, c, d2, e, f, g, hh, i] = homographie(px, py, q);
+      p.el.style.transformOrigin = "0 0";
+      p.el.style.transform =
+        `matrix3d(${a},${b},0,${c},${d2},${e},0,${f},0,0,1,0,${g},${hh},0,${i})`;
+    }
+  }
 
   function basculerHud() {
     const on = stage.classList.toggle("hud");

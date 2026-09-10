@@ -213,5 +213,5 @@
     if (!s) return;
   }
 
-  window.CockpitBoutons = { monter, rafraichir };
+  window.CockpitBoutons = { monter, rafraichir, agir };
 })();
