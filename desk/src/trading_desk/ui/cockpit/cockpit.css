@@ -287,6 +287,13 @@
 }
 .voyant[disabled] { cursor: default }
 .voyant .cmd {
+  /* L'ombre de contact. Une piece sans ombre flotte : c'est le signal le
+     plus fort qu'un objet REPOSE sur une surface, et son absence est ce qui
+     faisait lire « vignette collee » avant meme qu'on regarde les bords.
+     `drop-shadow` suit la silhouette alpha de l'image, donc l'ombre epouse
+     le dome ou le levier au lieu d'etre un rectangle. */
+  --ombre: drop-shadow(0 1px 1.2px rgba(0, 0, 0, .5));
+  filter: var(--ombre);
   position: absolute; inset: 0; width: 100%; height: 100%;
   object-fit: contain; pointer-events: none;
   transition: opacity 200ms linear;
@@ -299,7 +306,7 @@
 /* L'etat eteint peut etre DERIVE de l'allume : meme fichier, desature et
    assombri. Deux fichiers a garder alignes, c'est deux occasions de les
    desaligner. */
-.cmd.derive { filter: grayscale(1) brightness(.42) contrast(.9) }
+.cmd.derive { filter: grayscale(1) brightness(.42) contrast(.9) var(--ombre) }
 .cmd.on, .cmd.alerte { opacity: 0 }
 .voyant[data-etat="on"] .cmd.off { opacity: 0 }
 .voyant[data-etat="on"] .cmd.on { opacity: 1 }
@@ -311,8 +318,8 @@
   opacity: 1; animation: bat 1100ms steps(1) infinite;
 }
 @keyframes bat { 0%, 55% { opacity: 1 } 56%, 100% { opacity: .25 } }
-.voyant:hover .cmd { filter: brightness(1.12) }
-.voyant:hover .cmd.derive { filter: grayscale(1) brightness(.55) }
+.voyant:hover .cmd { filter: brightness(1.12) var(--ombre) }
+.voyant:hover .cmd.derive { filter: grayscale(1) brightness(.55) var(--ombre) }
 .voyant:active { transform: translateY(.1cqh) }
 .voyant:focus-visible { outline: 1px solid var(--amber); outline-offset: 2px }
 @media (prefers-reduced-motion: reduce) { .voyant .cmd { animation: none } }
@@ -638,11 +645,38 @@
                          0 1px 2px rgba(0, 0, 0, .3) }
 .inverseur svg { width: 100%; height: 100%; display: block; overflow: visible }
 
+/* Le cache : le panneau reconstitue, pose SOUS la piece pour effacer ce que
+   la photo peint la — une molette, une icone, une lampe. Il deborde de la
+   piece (c'est le but : l'original deborde aussi) et se fond dans le
+   panneau par un fondu radial. Sans le fondu on verrait un rectangle de
+   metal legerement different, ce qui est pire que la molette d'origine.
+
+   `closest-side` et non `farthest-side` : sur une piece qui n'est pas
+   carree, c'est le petit cote qui doit finir le fondu, sinon un bord reste
+   franc.
+
+   Le palier plein va jusqu'a 88 % du rayon, pas 74 : a 74 la molette peinte
+   n'etait effacee qu'a trente pour cent sur son pourtour et il restait un
+   arc visible. Le fondu peut etre court parce que le plan ajuste raccorde
+   deja avec le panneau — ce n'est pas lui qui doit rattraper l'ecart. */
+.cache {
+  position: absolute; left: var(--cache-x, 50%); top: var(--cache-y, 50%);
+  translate: -50% -50%;
+  width: var(--cache-w, 160%); height: var(--cache-h, 160%);
+  background-image: var(--cache); background-size: 100% 100%;
+  pointer-events: none; z-index: 0;
+  -webkit-mask-image: radial-gradient(closest-side, #000 88%, transparent 100%);
+  mask-image: radial-gradient(closest-side, #000 88%, transparent 100%);
+}
+.voyant .cmd, .inverseur .cmd { z-index: 1 }
+
 /* Une commande photographiee remplace le dessin : plus de cache metal, plus
    de levier vectoriel — la piece EST une image, posee sur la photo. */
 .inverseur.photo { background: none; box-shadow: none }
 .inverseur.photo svg { display: none }
 .cmd {
+  --ombre: drop-shadow(0 1px 1.2px rgba(0, 0, 0, .5));
+  filter: var(--ombre);
   position: absolute; inset: 0; width: 100%; height: 100%;
   object-fit: contain; pointer-events: none;
   transition: opacity 160ms linear;

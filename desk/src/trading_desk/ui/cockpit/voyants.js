@@ -27,6 +27,23 @@
   const D = () => window.Desk;
   const poses = {};
 
+  /* L'empreinte a effacer sous une piece.
+   *
+   * Par defaut un peu plus large que la piece — ce qu'elle recouvre depasse
+   * presque toujours. `etendue` dans la carte donne le facteur, ou un
+   * rectangle complet quand le voisinage interdit d'elargir : les huit
+   * icones du bandeau de droite se touchent, y effacer trop mangerait la
+   * voisine et laisserait un trou dans la rangee.
+   */
+  const ETENDUE_PAR_DEFAUT = 1.55;
+  function etendue(r) {
+    const e = r.etendue;
+    if (e && typeof e === "object") return e;
+    const k = typeof e === "number" ? e : ETENDUE_PAR_DEFAUT;
+    return { l: r.l - r.w * (k - 1) / 2, t: r.t - r.h * (k - 1) / 2,
+             w: r.w * k, h: r.h * k };
+  }
+
   function monter() {
     const { CARTE, hotspots: couche, creer, poser } = M();
     const liste = CARTE.voyants || {};
@@ -36,6 +53,18 @@
       b.title = r.label || cle;
       b.setAttribute("aria-label", r.label || cle);
       poser(b, r);
+
+      // Effacer AVANT de poser : sans ca la molette, l'icone ou la lampe que
+      // la photo peint a cet endroit deborde autour de la piece, et l'oeil
+      // lit « vignette collee » avant de lire « voyant du cockpit ».
+      // `etendue` dit quelle empreinte effacer : plus large que la piece pour
+      // une molette qui deborde, plus etroite pour un voyant qu'on glisse
+      // DANS un cerclage peint qu'on veut garder.
+      const cache = creer("i", "cache", b);
+      M().cacher(cache, r, etendue(r));
+      // Une piece d'aplomb sur une console qui fuit se voit autant qu'une
+      // molette qui depasse. Le plan vient de la carte, comme les etiquettes.
+      if (r.plan) { b.dataset.plan = r.plan; M().incliner(b, r.plan); }
 
       const base = M().CHEMIN + "assets/commandes/" + r.image + "-";
       // Les variantes reellement livrees sont declarees dans la carte. On

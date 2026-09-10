@@ -739,3 +739,54 @@ Le test ajouté porte donc sur l'**ordre**, seule chose qui était fausse.
   code.
 - Le bouton *live feed* est retiré, le bouton *auto-pilot* ramené de 38 à
   24 px — il était plus gros que le voyant peint qu'il double.
+
+## Phase 12 — effacer avant de poser
+
+Les pièces photographiées étaient posées **par-dessus** ce que la photo peint
+déjà : la molette OLA débordait tout autour de l'interrupteur, la lampe SDAY
+autour du voyant ambre, l'icône peinte autour du voyant HODL. L'œil lit
+« vignette collée » avant même de regarder les bords. Et elles étaient
+d'aplomb sur des consoles qui fuient.
+
+### Le cache : reconstituer le panneau, pas le repeindre
+
+Un aplat de couleur ne suffit pas — un panneau a un dégradé, un grain, une
+lumière. On lit donc la couronne de pixels autour de l'empreinte et on
+**ajuste un plan dessus, par canal, aux moindres carrés**.
+
+La première version interpolait bord à bord, chaque pixel entre son bord
+gauche et son bord droit. Résultat : tout ce qui touchait la couronne — une
+lettre peinte, l'arête de la plaque — était étiré en traînée verticale à
+travers tout le cache. Un plan, lui, **ne peut pas porter de détail** : il ne
+retient que le dégradé et l'orientation de la lumière. C'est toute la raison
+de ce choix.
+
+L'ajustement est écrêté : on ajuste, on jette le quart des points les plus
+éloignés — une vis, un caractère, un reflet — et on recommence. Sans ça une
+seule vis sur la couronne fait basculer le plan.
+
+Le grain est réinjecté à la fin, déterministe. Un aplat parfaitement lisse à
+côté du bruit du JPEG se repère immédiatement, et c'est précisément ce qui
+fait « retouche ».
+
+### Trois réglages qui se sont révélés à l'usage
+
+- **Le palier du fondu à 88 %, pas 74.** À 74 la molette « Cefe » n'était
+  effacée qu'à trente pour cent sur son pourtour et il restait un arc. Le
+  fondu peut être court parce que le plan ajusté raccorde déjà avec le
+  panneau — ce n'est pas à lui de rattraper l'écart.
+- **L'empreinte à 1,45–1,6, pas 1,75.** Au-delà, le cache atteint le texte
+  peint et l'arête de la plaque : la couronne lue n'est plus du panneau nu.
+- **Une ombre de contact** sous chaque pièce. Une pièce sans ombre flotte, et
+  `drop-shadow` suit la silhouette alpha, donc l'ombre épouse le dôme ou le
+  levier au lieu d'être un rectangle.
+
+### Une pièce déplacée plutôt qu'intégrée de force
+
+Le voyant `nav` est une molette métallique. Dans la rangée d'icônes plates du
+bandeau de droite, rien ne pouvait la faire passer pour peinte : aucune autre
+n'a de relief. Elle est allée sur la molette BBV, en bas à droite, où une
+molette est justement ce que la photo attend — et la forme d'onde peinte a
+retrouvé sa place dans la rangée.
+
+Intégrer, parfois, c'est déplacer.

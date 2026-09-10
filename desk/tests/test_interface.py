@@ -832,11 +832,64 @@ def test_l_habillage_photo_vient_apres_le_dessin_de_la_piece():
     module = (recherche.RACINE / "src/trading_desk/ui/cockpit/boutons.js") \
         .read_text(encoding="utf-8")
     dessin = module.find("b.innerHTML =")
-    habillage = module.find("habiller(b, r.image)")
+    habillage = module.find("habiller(b, r.image")
     assert dessin != -1 and habillage != -1, "la pièce ne se construit plus ainsi"
     assert habillage > dessin, (
         "habiller() est appelé avant l'écriture de innerHTML : les images "
         "seront effacées et aucun interrupteur photographié n'apparaîtra")
+
+
+def test_toute_piece_rapportee_efface_ce_qu_elle_recouvre_et_prend_son_plan():
+    """Une pièce posée sur la photo doit effacer l'original et suivre le plan.
+
+    Sans les deux, elle se lit « vignette collée » : la molette peinte
+    dépasse tout autour, et la pièce reste d'aplomb sur une console qui
+    fuit. C'est exactement ce qu'on voyait — les deux interrupteurs de la
+    plaque « Secteurs » flottaient sur les molettes OLA et OOS, à zéro
+    degré sur une plaque qui monte de huit.
+
+    `etendue` dit quelle empreinte reconstituer. Un facteur > 1 pour une
+    pièce qui recouvre plus large qu'elle ; < 1 pour une pièce qu'on glisse
+    DANS un cerclage peint qu'on veut garder — les icônes du bandeau de
+    droite se touchent, élargir mangerait la voisine.
+    """
+    racine = recherche.RACINE / "src/trading_desk/ui/cockpit"
+    carte = json.loads((racine / "hotspots.json").read_text(encoding="utf-8"))
+    plans = carte["plans"]
+
+    rapportees = list(carte["voyants"].items()) + [
+        (k, v) for k, v in carte["hotas"].items() if "image" in v]
+    assert rapportees, "plus aucune pièce photographiée : le test ne garde rien"
+
+    for nom, r in rapportees:
+        assert "plan" in r, f"{nom} : aucun plan, la pièce restera d'aplomb"
+        assert r["plan"] in plans, f"{nom} : plan « {r['plan']} » inconnu"
+        e = r.get("etendue")
+        assert e is not None, f"{nom} : rien à effacer déclaré sous la pièce"
+        if isinstance(e, dict):
+            assert {"l", "t", "w", "h"} <= set(e), f"{nom} : empreinte incomplète"
+        else:
+            # Au-delà, le cache atteint le texte peint ou l'arête de la
+            # plaque, et la couronne lue n'est plus du panneau nu : le plan
+            # ajusté part alors de travers.
+            assert 0.6 <= e <= 1.9, f"{nom} : empreinte invraisemblable ({e})"
+
+
+def test_le_cache_reconstitue_le_panneau_au_lieu_de_le_repeindre():
+    """Le cache s'ajuste au panneau ; il ne pose pas une couleur choisie.
+
+    La première version interpolait bord à bord : tout ce qui touchait la
+    couronne — une lettre peinte, l'arête de la plaque — était étiré en
+    traînée à travers tout le cache. Un plan ne peut pas porter de détail,
+    c'est précisément pourquoi on en ajuste un.
+    """
+    shell = (recherche.RACINE / "src/trading_desk/ui/cockpit/shell.js") \
+        .read_text(encoding="utf-8")
+    assert "function cacher(" in shell, "plus de cache du tout"
+    assert "equations normales" in shell or "moindres carres" in shell, \
+        "le cache ne s'ajuste plus au panneau"
+    # L'écrêtage : une seule vis sur la couronne fait basculer le plan.
+    assert "0.75" in shell, "l'ajustement n'est plus écrêté"
 
 
 def test_une_commande_photographiee_retombe_sur_son_dessin():
