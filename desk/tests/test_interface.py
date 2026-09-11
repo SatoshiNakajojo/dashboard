@@ -471,8 +471,9 @@ def test_aucun_lorem_de_la_photo_ne_survit():
     # peinte est recouverte, en la citant — et le test a échoué. Il avait
     # raison. Une chaîne écartée qui traîne dans les fichiers d'interface
     # finit par être recopiée par quelqu'un qui la prend pour une valeur.
-    # `COCKPIT_AUDIT.md` est le seul endroit où on a le droit de les nommer,
-    # parce que c'est le document qui explique ce qu'on écarte et pourquoi.
+    # Ce test est désormais le seul endroit du dépôt où ces chaînes ont le
+    # droit de figurer : c'est ici qu'on explique ce qu'on écarte et
+    # pourquoi. Le document qui le faisait est parti avec l'ancien cockpit.
 
 
 # --------------------------------------------------------------------------
