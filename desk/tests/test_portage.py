@@ -100,3 +100,26 @@ def test_un_actif_sans_prix_n_est_pas_selectionne():
     assert "A19" not in prix["2026-03"]
     r = rejouer(mois, fin, prix, 3, par_classement)
     assert r["mensuel"], "les autres mois restent jouables"
+
+
+def test_un_mois_incomplet_ne_compte_pas():
+    """Un actif fraîchement listé ne doit pas être classé sur quatre jours.
+
+    Sa somme de financement est mécaniquement minuscule : il se retrouverait
+    « le plus bas du classement » et serait acheté pour une raison purement
+    comptable. Le biais serait systématique et invisible — les nouveaux
+    actifs arrivent tout le temps, et ils se rangeraient toujours du même
+    côté.
+    """
+    from portage_financement import JOURS_MINIMUM
+
+    monde = _monde(n_actifs=20)
+    # Un nouvel entrant : quatre jours seulement sur le dernier mois.
+    monde["NEUF"] = {
+        "funding": {f"2026-03-{j:02d}": 1e-5 for j in range(1, 5)},
+        "close": {f"2026-03-{j:02d}": 100.0 for j in range(1, 5)},
+    }
+    _mois, fin, prix = par_mois(monde)
+    assert "NEUF" not in fin["2026-03"], "classé sur un mois incomplet"
+    assert "NEUF" not in prix["2026-03"]
+    assert JOURS_MINIMUM >= 20

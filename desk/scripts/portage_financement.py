@@ -60,22 +60,34 @@ def charger(chemin: str) -> dict:
     return d["actifs"]
 
 
+# Un mois compte s'il est assez complet. Sans ce seuil, un actif fraîchement
+# listé — quatre jours de données — présente une somme de financement
+# minuscule, se retrouve classé « le plus bas » et se fait acheter pour une
+# raison purement comptable. Le biais serait systématique et invisible : les
+# nouveaux actifs arrivent tout le temps, et ils se rangeraient toujours du
+# même côté du classement.
+JOURS_MINIMUM = 20
+
+
 def par_mois(actifs: dict) -> tuple[list[str], dict, dict]:
     """Financement sommé et rendement de prix, par actif et par mois."""
     fin: dict[str, dict[str, float]] = defaultdict(dict)
     prix: dict[str, dict[str, float]] = defaultdict(dict)
     for nom, d in actifs.items():
         f: dict[str, float] = defaultdict(float)
+        n: dict[str, int] = defaultdict(int)
         for jour, v in d["funding"].items():
             f[jour[:7]] += v
+            n[jour[:7]] += 1
         for m, v in f.items():
-            fin[m][nom] = v
+            if n[m] >= JOURS_MINIMUM:
+                fin[m][nom] = v
         # Rendement du mois : première et dernière clôture observées.
         c: dict[str, list[tuple[str, float]]] = defaultdict(list)
         for jour, v in sorted(d["close"].items()):
             c[jour[:7]].append((jour, v))
         for m, serie in c.items():
-            if len(serie) >= 20 and serie[0][1] > 0:
+            if len(serie) >= JOURS_MINIMUM and serie[0][1] > 0:
                 prix[m][nom] = serie[-1][1] / serie[0][1] - 1
     mois = sorted(set(fin) & set(prix))
     return mois, fin, prix
