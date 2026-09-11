@@ -177,6 +177,79 @@ class RsiReversion:
 
 
 
+class RsiContinuation:
+    """Le CONTRAIRE de RsiReversion : l'exces se poursuit au lieu de revenir.
+
+    Cette strategie n'a pas ete inventee, elle a ete DEDUITE d'une
+    refutation. La grille de robustesse a conclu que `rsi_reversion` perd,
+    et pas un peu : ses quatorze cellules — sept actifs, deux echelles de
+    temps — finissent TOUTES sous leur propre bras aleatoire, d'un ecart
+    median de 48 $ sur 1000 $ de capital. Quatorze signes identiques ont
+    une chance sur huit mille de sortir par hasard.
+
+    Or le modele nul prend le meme nombre de trades, avec les memes durees
+    et le meme dimensionnement : il paie donc les memes frais. L'ecart entre
+    la strategie et son bras aleatoire ne peut pas etre un cout, c'est du
+    signal — et il est oriente a l'envers. Sur ces actifs et a ces
+    horizons, un RSI a 30 ne dit pas « ca va remonter », il dit « ca
+    descend ».
+
+    La structure est reprise telle quelle, stop et cible a la meme distance
+    ATR des deux cotes. C'est voulu : un profil de risque identique est ce
+    qui rend la comparaison lisible. Si cette strategie gagne la ou l'autre
+    perd, c'est le SENS qui aura change, rien d'autre.
+
+    Prudence, et elle est entiere : gagner ici ne suffira pas a conclure.
+    L'hypothese est nee de ces donnees ; la tester dessus serait la
+    confirmer, pas l'eprouver. Seule une periode tenue a l'ecart pendant
+    qu'on formait l'hypothese peut la refuter — voir
+    `scripts/hors_echantillon.py`.
+    """
+
+    name = "rsi_continuation"
+
+    def __init__(self, period: int = 14, low: float = 30.0, high: float = 70.0,
+                 exit_level: float = 50.0, atr_period: int = 14,
+                 atr_stop: float = 2.5) -> None:
+        self.period, self.low, self.high = period, low, high
+        self.exit_level = exit_level
+        self.atr_period, self.atr_stop = atr_period, atr_stop
+        self._rsi: list[float | None] = []
+        self._atr: list[float | None] = []
+
+    def prepare(self, bars: list[Bar]) -> None:
+        self._rsi = rsi(closes(bars), self.period)
+        self._atr = atr(bars, self.atr_period)
+
+    def on_bar(self, i: int, bars: list[Bar], in_position: Side | None) -> Signal:
+        r, a = self._rsi[i], self._atr[i]
+        if r is None or a is None or not a:
+            return FLAT
+        close = bars[i].close
+        span = Decimal(str(a)) * Decimal(str(self.atr_stop))
+
+        # La sortie garde le meme declencheur : l'exces s'est resorbe, la
+        # raison d'etre en position a disparu. Une sortie differente
+        # changerait DEUX choses a la fois et rendrait la comparaison muette.
+        if in_position is Side.SHORT and r >= self.exit_level:
+            return Signal(exit_now=True, note=f"RSI revenu a {r:.0f}")
+        if in_position is Side.LONG and r <= self.exit_level:
+            return Signal(exit_now=True, note=f"RSI revenu a {r:.0f}")
+        if in_position is not None:
+            return FLAT
+
+        # RSI bas : on suit la baisse au lieu de parier sur le rebond.
+        if r <= self.low and (st := _stop(close, span, Side.SHORT)):
+            bas = close - span
+            return Signal(side=Side.SHORT, stop_price=st,
+                          target_price=bas if bas > 0 else None,
+                          note=f"RSI {r:.0f}")
+        if r >= self.high and (st := _stop(close, span, Side.LONG)):
+            return Signal(side=Side.LONG, stop_price=st,
+                          target_price=close + span, note=f"RSI {r:.0f}")
+        return FLAT
+
+
 class TurtleBreakout:
     """Cassure de canal Donchian — le « Systeme 2 » des Turtles.
 
@@ -620,6 +693,7 @@ def parametres(nom: str, interval: str) -> dict:
 BASELINES: dict[str, type] = {
     "ema_cross": EmaCross,
     "rsi_reversion": RsiReversion,
+    "rsi_continuation": RsiContinuation,
     "turtle_breakout": TurtleBreakout,
     "tsmom": TimeSeriesMomentum,
     "trend_follower_atr": TrendFollowerATR,
