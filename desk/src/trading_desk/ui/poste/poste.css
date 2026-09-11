@@ -28,10 +28,22 @@
 
 * { box-sizing: border-box }
 
+/* Le fond derriere le decor.
+ *
+ * La photo est en 16/9 et `object-fit: contain` : sur une fenetre 16/10 ou
+ * 5/4 il reste une bande en haut et une en bas. Un aplat unique laissait
+ * une couture visible en haut, parce que le bord haut de la photo n'est pas
+ * de la meme valeur que son bord bas — mesures sur l'image : rgb(9,12,17)
+ * en haut, rgb(5,5,7) en bas. Le degrade reprend ces deux valeurs, et les
+ * bandes cessent d'etre des bandes pour devenir la penombre de la piece.
+ *
+ * On garde `contain` plutot que `cover` : recadrer remplirait la fenetre,
+ * mais sur un ecran haut (5/4) la dalle se retrouverait partiellement hors
+ * champ — on perdrait l'instrument pour gagner un bord. */
 html, body {
   height: 100%;
   margin: 0;
-  background: var(--nuit);
+  background: linear-gradient(180deg, #090c11 0%, #05070b 50%, #050507 100%);
   color: var(--texte);
   font: 14px/1.5 "SF Mono", ui-monospace, Menlo, Consolas, monospace;
   overflow: hidden;

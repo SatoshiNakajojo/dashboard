@@ -17,6 +17,35 @@
 (function () {
   "use strict";
 
+  /* Le décor a besoin d'une pièce.
+   *
+   * La dalle occupe 48,8 % de la largeur du décor, et le décor est une
+   * image 16/9 contenue dans la fenêtre. Sur un téléphone en portrait, ça
+   * fait un verre de 190 px sur 149 : le desk y est illisible, et le décor
+   * ne décore plus rien. Mesuré, pas supposé — 390×844 donne 190×149,
+   * 1024×768 donne 500×391.
+   *
+   * En dessous du seuil on rend donc les panneaux nus, qui eux savent
+   * s'afficher partout. `replace` et non `href` : le bouton « retour » doit
+   * ramener d'où l'on vient, pas rejouer la redirection.
+   *
+   * LE SEUIL EST ÉCRIT DEUX FOIS — ici et dans `desk.css`, qui masque le
+   * lien « poste » exactement en dessous. Sans cet accord, le lien mènerait
+   * à une page qui renvoie aussitôt sur celle qu'on vient de quitter : un
+   * clic sans effet, la pire des réponses. Le test
+   * `test_le_seuil_du_decor_est_le_meme_des_deux_cotes` les compare.
+   */
+  const LARGEUR_MINIMALE_DU_DECOR = 1100;
+
+  function laPieceEstTropPetite() {
+    return Math.min(innerWidth, innerHeight * 16 / 9) < LARGEUR_MINIMALE_DU_DECOR;
+  }
+
+  if (laPieceEstTropPetite()) {
+    location.replace("/panneaux");
+    return;
+  }
+
   const accueil = document.getElementById("embarquement");
   const sequence = document.getElementById("sequence");
   const video = document.getElementById("film");

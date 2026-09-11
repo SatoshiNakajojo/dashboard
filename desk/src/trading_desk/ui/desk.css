@@ -365,3 +365,220 @@ button:focus-visible,.link-btn:focus-visible{outline:2px solid var(--accent);out
 .jauge .f{display:flex;justify-content:space-between;font-family:var(--f-mono);
   font-size:10.5px;color:var(--muted);margin-top:6px}
 .jauge .f b{color:var(--ink-2);font-weight:500}
+
+/* ---------------- le chemin de retour vers le poste ---------------- */
+
+/* Masque par defaut, montre seulement quand la fenetre peut porter le decor.
+ *
+ * LE SEUIL EST LE MEME QUE DANS `poste/poste.js` — 1100 px de decor. Le
+ * decor est une image 16/9 contenue dans la fenetre, donc sa largeur vaut
+ * min(largeur, hauteur x 16/9) ; exiger 1100 px de decor revient a exiger
+ * 1100 px de large ET 619 px de haut (1100 x 9/16 = 618,75).
+ *
+ * Si les deux valeurs divergent, le lien mene a une page qui redirige
+ * aussitot vers celle qu'on vient de quitter : un clic sans effet, et rien
+ * a l'ecran pour dire pourquoi. `test_le_seuil_du_decor_est_le_meme_des_
+ * deux_cotes` les compare. */
+/* `.link-btn` a ete dessine pour un <button> : sur un <a> il faut retirer
+   le soulignement, que le bouton n'avait pas. */
+#versPoste { display:none; text-decoration:none }
+@media (min-width:1100px) and (min-height:619px) { #versPoste { display:inline-block } }
+
+/* ==========================================================================
+   DANS LE VERRE — la mise en page quand ces panneaux sont la dalle du poste
+   ==========================================================================
+
+   Le poste charge cette page avec `?verre`, ce qui pose `data-verre` sur
+   la racine avant le premier rendu. Tout ce bloc ne s'applique qu'a ce
+   cas ; la vue sans decor n'est pas touchee, et c'est voulu — c'est celle
+   qu'on ouvre en plein ecran pour LIRE.
+
+   TROIS CHOSES A SAVOIR AVANT DE TOUCHER A CE BLOC.
+
+   1. Le verre n'est pas un telephone. Il est court et plutot large :
+      environ 625x490 sur un petit ecran, 940x730 sur un grand. Or c'est la
+      HAUTEUR qui manque, jamais la largeur. Les regles de `max-width:760px`
+      plus haut sont des adaptations telephone : elles empilent la banniere
+      et font passer les onglets sur deux lignes, donc elles RALLONGENT la
+      page. Dans le verre elles jouent exactement a l'envers du besoin, et
+      c'est pour ca qu'on les annule ici plutot que d'en ajouter d'autres.
+
+   2. On ne met pas la page a l'echelle. La tentation est permanente :
+      composer large, puis `transform:scale()` pour rentrer dans la dalle.
+      Ca a deja ete fait, et ca a produit le defaut le plus long a
+      diagnostiquer de ce projet — une composition de 900 px ramenee a 0,41
+      donnait un texte de quatre pixels physiques, illisible, et le flou a
+      ete attribue au rendu 3D pendant des heures. Le verre grandit avec la
+      fenetre, donc son viewport est un vrai viewport : 13 px restent 13 px.
+
+   3. La page entiere ne defile pas. Une dalle dont tout le contenu glisse
+      sous le cadre cesse d'etre un instrument et redevient une page web
+      posee sur une photo. Ce qui defile, c'est le SECTEUR — la partie
+      detaillee. Ce qui ne defile jamais, c'est l'etat : barre, banniere,
+      tuiles, onglets. Sur un ecran de pilotage, l'etat n'est pas quelque
+      chose qu'on va chercher.
+*/
+
+/* --- L'ossature : une colonne fixe, un seul bloc qui defile --- */
+
+:root[data-verre], :root[data-verre] body { height:100%; overflow:hidden }
+:root[data-verre] body {
+  display:flex; flex-direction:column;
+  padding-bottom:0; font-size:13px;
+}
+:root[data-verre] .wrap {
+  flex:1 1 auto; min-height:0;          /* sans `min-height:0`, un enfant
+                                           qui deborde pousse le conteneur
+                                           au lieu de defiler : le piege
+                                           classique de flexbox */
+  display:flex; flex-direction:column; gap:9px;
+  max-width:none; padding:9px 11px;
+}
+:root[data-verre] .banner,
+:root[data-verre] .tiles,
+:root[data-verre] .nav { flex:0 0 auto; margin-bottom:0 }
+
+/* `min-width:0` SUR CHAQUE ENFANT. Ce n'est pas une precaution, c'est la
+ * correction d'un defaut observe — et d'un defaut du genre le plus
+ * dangereux : silencieux.
+ *
+ * Un enfant de conteneur flex a `min-width:auto`, donc il refuse de
+ * retrecir sous sa largeur min-content. La barre des sept onglets, en
+ * `nowrap`, avait une min-content de 771 px. Elle imposait cette largeur a
+ * `.wrap`, donc a toute la page — dans une dalle de 625 px. Et comme la
+ * racine porte `overflow:hidden`, l'excedent n'etait pas offert au
+ * defilement : il etait COUPE, sans barre, sans indice. Le bouton
+ * « Tout arreter » etait tronque et les deux derniers onglets absents,
+ * sur un ecran dont c'est justement le role de tout montrer.
+ *
+ * La grille de la banniere a la meme faiblesse par une autre porte :
+ * `1fr` vaut `minmax(auto,1fr)`, dont le minimum est min-content. D'ou le
+ * `minmax(0,1fr)` explicite ci-dessous. */
+:root[data-verre] body > *,
+:root[data-verre] .wrap > * { min-width:0 }
+:root[data-verre] .wrap { width:100% }
+
+/* `min-height:26vh` est un PLANCHER, pas une hauteur : le secteur prend
+   tout ce qui reste, mais jamais moins d'un quart de la dalle. Il tient
+   parce que tout ce qui le precede est plafonne — barre, banniere, tuiles
+   et onglets ne peuvent plus grandir avec les donnees. Sans ces plafonds,
+   ce plancher ne ferait que deplacer le debordement d'un cran plus bas. */
+:root[data-verre] .secteur:not([hidden]) {
+  flex:1 1 auto; min-height:26vh;
+  /* Meme piege que pour `.wrap`, par la porte de la grille : une colonne
+     implicite est dimensionnee `auto`, dont le minimum est min-content.
+     Un tableau large ou un intitule long elargissait le secteur au-dela de
+     la dalle, et le defilement horizontal qui apparaissait alors n'etait
+     pas une solution : on ne fait pas glisser un instrument de gauche a
+     droite pour lire une colonne. */
+  grid-template-columns:minmax(0,1fr);
+  overflow-y:auto; overscroll-behavior:contain;
+  gap:9px; padding-right:4px;
+}
+:root[data-verre] .secteur::-webkit-scrollbar { width:7px }
+:root[data-verre] .secteur::-webkit-scrollbar-thumb {
+  background:var(--surface-3); border-radius:4px;
+}
+:root[data-verre] .secteur { scrollbar-width:thin }
+
+/* --- La barre : ce que le cadre dit deja, la dalle n'a pas a le repeter --- */
+
+:root[data-verre] .bar { padding:5px 11px; gap:9px; flex-wrap:nowrap }
+
+/* Le titre est masque a l'oeil, pas retire : « Desk · Poste de pilotage »
+   est le titre du document, et un lecteur d'ecran doit continuer a
+   l'annoncer. Il est en revanche redondant a l'oeil — le cadre autour de
+   la dalle EST le poste — et il prenait a lui seul assez de largeur pour
+   renvoyer le bouton de theme sur une seconde ligne. */
+:root[data-verre] .bar h1 {
+  position:absolute; width:1px; height:1px;
+  margin:-1px; padding:0; border:0;
+  clip-path:inset(50%); overflow:hidden; white-space:nowrap;
+}
+
+/* Le bouton de theme part, lui, pour de bon : le poste force le theme
+   sombre a chaque chargement de la dalle (voir `poste/poste.js`), parce
+   qu'un panneau clair au milieu d'un poste sombre fait tomber l'illusion.
+   Un bouton qui change quelque chose que le rechargement suivant reprend
+   n'est pas une preference, c'est un mensonge. Il reste dans la vue sans
+   decor, ou il decide vraiment. */
+:root[data-verre] #theme { display:none }
+
+/* Et le lien vers le poste n'a pas de sens depuis la dalle DU poste. Il
+   doit battre la requete de media ci-dessus, qui le rallume des 1100 px :
+   la fenetre peut etre large pendant que la dalle, elle, est etroite. */
+:root[data-verre] #versPoste { display:none }
+
+/* --- La banniere d'etat : deux colonnes, toujours --- */
+
+/* `min-width:860px` plus haut ne se declenche jamais dans le verre, donc
+   le bouton d'arret passait SOUS la liste des invariants : une banniere de
+   240 px de haut, pour six lignes de texte. */
+:root[data-verre] .banner {
+  grid-template-columns:minmax(0,1fr) auto; align-items:center;
+  gap:14px; padding:11px 13px; border-left-width:4px;
+}
+:root[data-verre] .banner .state { font-size:18px }
+:root[data-verre] .banner .why { font-size:12px; line-height:1.45; max-width:none }
+:root[data-verre] .banner .why b { font-size:11px }
+:root[data-verre] .kill { padding:10px 16px; font-size:12px }
+:root[data-verre] .kill-note { font-size:10px }
+
+/* La liste des invariants en defaut defile DANS la banniere.
+ *
+ * Sans ce plafond, la banniere est le seul bloc de la dalle dont la hauteur
+ * depend des donnees : cinq invariants en defaut font six lignes, douze en
+ * font treize, et la banniere mange alors la dalle entiere. Le jour ou tout
+ * casse — precisement celui ou on regarde cet ecran — le secteur tombe a
+ * zero et l'instrument n'affiche plus que sa propre alarme.
+ *
+ * `vh` se rapporte ici au viewport de l'iframe, donc a la dalle elle-meme :
+ * le plafond suit la taille du verre sans qu'on ait a le recalculer. */
+:root[data-verre] .banner .why {
+  max-height:21vh; overflow-y:auto; overscroll-behavior:contain;
+  scrollbar-width:thin; padding-right:4px;
+}
+
+/* --- Les tuiles : la ligne d'instruments --- */
+
+/* 92 px, pas 104 : les six tuiles doivent tenir sur UNE ligne jusqu'au plus
+   petit verre (625 px de large, soit 603 px de contenu — six colonnes de
+   92 px en occupent 552). A 104 px elles passaient a deux lignes en dessous
+   de 728 px, ce qui coutait 60 px de hauteur exactement la ou il n'y en a
+   pas. Les passer en defilement horizontal aurait cache des tuiles, et la
+   regle vaut ici comme pour les onglets : une tuile invisible est une
+   mesure qui n'existe pas pour le lecteur. */
+:root[data-verre] .tiles { grid-template-columns:repeat(auto-fit,minmax(92px,1fr)) }
+:root[data-verre] .tile { padding:7px 9px 8px }
+:root[data-verre] .tile .k { font-size:8.5px; margin-bottom:3px; letter-spacing:.1em }
+:root[data-verre] .tile .v { font-size:16px }
+:root[data-verre] .tile .s { font-size:9.5px; margin-top:2px }
+
+/* --- Les onglets : ils tiennent sur une ligne, et ils la gardent --- */
+
+/* On annule ici le repli telephone (`flex:1 0 42%`), qui mettait sept
+   onglets sur deux lignes. Aucun onglet n'est cache pour autant : ils se
+   partagent la largeur et retrecissent, ce qui reste la regle du fichier —
+   un onglet invisible est un panneau qui n'existe pas pour le lecteur. */
+:root[data-verre] .nav { flex-wrap:nowrap; overflow-x:auto }
+:root[data-verre] .nav button {
+  flex:1 1 0; min-width:0; padding:7px 6px 6px;
+  font-size:9px; letter-spacing:.08em;
+}
+:root[data-verre] .nav button .n { margin-left:4px; padding:1px 4px; font-size:8.5px }
+
+/* --- Le contenu des secteurs --- */
+
+/* Chaque tableau defile dans SON panneau, jamais en entrainant le secteur.
+ *
+ * Les tableaux ont un `min-width:520px` legitime — en dessous, les colonnes
+ * de chiffres deviennent illisibles. Dans une dalle de 605 px de contenu,
+ * les plus larges depassent donc. Sans ce `overflow-x` par panneau, c'est
+ * le secteur entier qui glissait : on faisait defiler l'introduction et
+ * les titres pour aller lire une colonne. La barre appartient au tableau,
+ * pas a l'instrument. */
+:root[data-verre] .panel .body { overflow-x:auto; scrollbar-width:thin }
+
+:root[data-verre] .intro { padding:9px 12px; font-size:12px; max-width:none }
+:root[data-verre] .panel > h2 { font-size:12.5px }
+:root[data-verre] .grid { gap:9px }
