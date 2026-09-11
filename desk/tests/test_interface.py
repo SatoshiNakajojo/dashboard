@@ -424,15 +424,15 @@ def test_un_artefact_au_format_liste_nue_est_signale(tmp_path, monkeypatch):
 #  Le poste de pilotage : habillage, pas seconde application
 # --------------------------------------------------------------------------
 
-def test_la_racine_sert_le_cockpit_et_garde_tous_les_secteurs(client):
-    """Le cockpit habille l'app ; il ne la remplace pas.
+def test_le_poste_photographique_reste_joignable(client):
+    """L'ancien poste n'est plus à la racine, mais il n'est pas perdu.
 
-    La page porte les MÊMES identifiants que `/panneaux` — mêmes secteurs,
-    même coupe-circuit — parce que `desk.js` les alimente sans savoir dans
-    quel habillage il tourne. Deux implémentations du même écran finiraient
-    par diverger, et c'est celle qu'on regarde le moins qui mentirait.
+    Deux interfaces principales, c'est déjà une de trop ; laisser au premier
+    plan celle qu'on abandonne est la meilleure façon de ne jamais choisir.
+    Elle reste servie le temps qu'on tranche, et ce test garantit qu'on ne
+    l'a pas cassée en la déplaçant.
     """
-    page = client.get("/").text
+    page = client.get("/cockpit-photo").text
     assert 'id="cockpit"' in page
     for secteur in ("prevol", "telemetrie", "navigation", "soufflerie",
                     "consommation", "vols", "systemes"):
@@ -679,7 +679,7 @@ def test_les_secteurs_s_affichent_dans_la_dalle_centrale(client):
     DANS l'écran du milieu — les mêmes nœuds, pas une copie — et la loupe
     s'en approche.
     """
-    page = client.get("/").text
+    page = client.get("/cockpit-photo").text
     assert 'id="panneaux"' in page
     ecrans = (recherche.RACINE
               / "src/trading_desk/ui/cockpit/ecrans.js").read_text(encoding="utf-8")
@@ -961,3 +961,95 @@ def test_les_dalles_sont_plaquees_sur_le_quadrilatere_peint():
             assert 0 <= x <= 100 and 0 <= y <= 100, f"{nom} : coin hors du plateau"
         # les coins tournent dans le sens horaire : haut-gauche d'abord
         assert q[0][0] < q[1][0] and q[0][1] < q[2][1], f"{nom} : coins désordonnés"
+
+
+# --------------------------------------------------------------------------
+#  Le poste : accueil, séquence, décor
+# --------------------------------------------------------------------------
+
+def _poste() -> str:
+    return (recherche.RACINE / "src/trading_desk/ui/poste.html").read_text(encoding="utf-8")
+
+
+def test_la_racine_sert_le_poste_et_son_accueil(client):
+    """La page d'arrivée porte l'accueil, et la racine le sert."""
+    page = client.get("/").text
+    assert "Welcome on board Boss" in page
+    assert 'id="embarquement"' in page and 'id="sequence"' in page
+
+
+def test_le_poste_charge_les_panneaux_au_lieu_de_les_recopier(client):
+    """Une seule implémentation de l'écran du desk.
+
+    L'ancien poste recopiait tout le balisage de l'application dans sa
+    propre page ; cette seconde copie devait être tenue synchronisée à la
+    main. Deux implémentations du même écran finissent toujours par
+    diverger, et c'est celle qu'on regarde le moins qui dérive — donc celle
+    qui ment sans qu'on s'en aperçoive.
+    """
+    page = client.get("/").text
+    assert 'src="/panneaux"' in page, "la dalle doit charger les panneaux"
+    for secteur in ("prevol", "telemetrie", "navigation", "soufflerie",
+                    "consommation", "vols", "systemes"):
+        assert f'id="sec-{secteur}"' not in page, (
+            f"{secteur} est recopié dans le poste : c'est la seconde "
+            "implémentation qu'on vient d'éviter")
+
+
+def test_la_sequence_offre_deux_encodages(client):
+    """H.264 pour Safari, VP9 pour les navigateurs sans codec propriétaire.
+
+    Sans le second, la séquence ne peut même pas être éprouvée ici — le
+    Chromium de test est construit sans H.264 — et un chemin qu'on ne peut
+    pas éprouver est un chemin qu'on croit bon. C'est ce qui a laissé passer
+    un écran noir au premier essai.
+    """
+    page = client.get("/").text
+    assert "embarquement.mp4" in page and "embarquement.webm" in page
+    for nom in ("embarquement.mp4", "embarquement.webm", "poste.jpg"):
+        chemin = recherche.RACINE / "src/trading_desk/ui/poste/assets" / nom
+        assert chemin.exists(), f"{nom} manque"
+        assert chemin.stat().st_size > 50_000, f"{nom} suspicieusement petit"
+
+
+def test_le_poste_est_pose_sous_la_sequence_pas_apres_elle():
+    """Un décor déjà peint ne peut pas manquer son entrée.
+
+    La première version montait le poste au moment de la bascule et devait
+    ordonner deux images de battement pour qu'il soit peint avant que la
+    vidéo ne parte. Toute panne de cet ordonnancement laissait un écran
+    noir — et c'est exactement ce qui est arrivé quand le navigateur a
+    refusé le codec.
+    """
+    page = _poste()
+    debut_poste = page.index('<div id="poste"')
+    assert 'id="poste" hidden' not in page and "id='poste' hidden" not in page, \
+        "le poste ne doit pas démarrer caché"
+    assert page.index('id="sequence"') < debut_poste, \
+        "la séquence doit être déclarée avant le poste, donc au-dessus"
+
+    js = (recherche.RACINE / "src/trading_desk/ui/poste/poste.js") \
+        .read_text(encoding="utf-8")
+    # Toute panne de lecture doit mener au poste, jamais à un écran noir.
+    for filet in ('addEventListener("error"', "lecture.catch", '"ended"'):
+        assert filet in js, f"filet manquant : {filet}"
+
+
+def test_le_cadrage_de_la_dalle_n_a_qu_une_source():
+    """Le verre et son reflet se superposent : une seule déclaration.
+
+    Répéter les quatre valeurs, c'est garantir qu'un jour l'une sera
+    corrigée et pas l'autre, et que le reflet flottera à côté du verre sans
+    que personne ne comprenne pourquoi.
+    """
+    css = (recherche.RACINE / "src/trading_desk/ui/poste/poste.css") \
+        .read_text(encoding="utf-8")
+    for nom in ("--verre-l", "--verre-t", "--verre-w", "--verre-h"):
+        assert css.count(nom + ":") == 1, f"{nom} déclaré plusieurs fois"
+        assert f"var({nom})" in css, f"{nom} déclaré mais jamais utilisé"
+
+
+def test_le_poste_ne_passe_aucun_ordre(client):
+    """La règle du dépôt vaut aussi sous le décor."""
+    page = client.get("/").text
+    assert "/api/order" not in page and "/api/trade" not in page

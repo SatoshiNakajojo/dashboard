@@ -1,0 +1,220 @@
+/* Poste de pilotage — embarquement, sequence, decor.
+ *
+ * REGLE UNIQUE DE CE FICHIER : la video et le decor doivent occuper
+ * EXACTEMENT la meme boite. La sequence se termine sur l'image qui sert de
+ * decor ; si les deux ne sont pas cadrees pareil, le raccord saute a l'oeil
+ * et tout l'effet tombe. C'est pour ca que `.scene` existe et que la video
+ * comme le decor la portent — pas deux regles qui se ressemblent, une seule
+ * classe partagee.
+ */
+
+:root {
+  --nuit: #05070b;
+  --verre-bord: rgba(120, 190, 255, .18);
+  --texte: #cfe3f2;
+  --accent: #7fc8ff;
+
+  /* La dalle du PFD, relevee sur le decor (1280x720) : elle occupe
+     320..968 en x et 120..622 en y. Mesuree, pas placee a l'oeil — une
+     dalle mal cadree se voit au premier regard, et se corrige mal apres
+     coup parce qu'on finit par deplacer le decor pour rattraper.
+     Le leger retrait laisse voir le cadre peint : sans lui, le contenu
+     affleure le bord et la dalle cesse de ressembler a un ecran encastre. */
+  --verre-l: 25.9%;
+  --verre-t: 17.6%;
+  --verre-w: 48.8%;
+  --verre-h: 67.8%;
+}
+
+* { box-sizing: border-box }
+
+html, body {
+  height: 100%;
+  margin: 0;
+  background: var(--nuit);
+  color: var(--texte);
+  font: 14px/1.5 "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+  overflow: hidden;
+}
+
+/* La boite commune. 16/9, centree, jamais plus grande que la fenetre :
+   c'est le cadrage de la video, donc celui du decor. */
+.scene {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  aspect-ratio: 16 / 9;
+  max-width: 100vw;
+  max-height: 100vh;
+  width: 100%;
+}
+
+/* --- 1. L'embarquement ------------------------------------------------- */
+
+#embarquement {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  background:
+    radial-gradient(ellipse 70% 50% at 50% 45%, #0b1220 0%, #05070b 70%),
+    var(--nuit);
+  transition: opacity 420ms ease;
+  -webkit-tap-highlight-color: transparent;
+}
+#embarquement[hidden] { display: none }
+#embarquement.part { opacity: 0; pointer-events: none }
+
+.accueil { text-align: center; padding: 0 24px }
+
+.accueil h1 {
+  margin: 0;
+  font-size: clamp(22px, 4.6vw, 54px);
+  font-weight: 500;
+  letter-spacing: .22em;
+  text-transform: uppercase;
+  color: #eaf4ff;
+  text-shadow: 0 0 26px rgba(127, 200, 255, .34);
+}
+
+.accueil .trait {
+  width: min(62vw, 420px);
+  height: 1px;
+  margin: 22px auto;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  opacity: .6;
+}
+
+.accueil p {
+  margin: 0;
+  font-size: 12px;
+  letter-spacing: .34em;
+  text-transform: uppercase;
+  color: rgba(207, 227, 242, .55);
+  animation: respire 2.6s ease-in-out infinite;
+}
+
+@keyframes respire { 0%, 100% { opacity: .35 } 50% { opacity: .9 } }
+
+/* --- 2. La sequence ---------------------------------------------------- */
+
+#sequence {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  background: var(--nuit);
+}
+#sequence[hidden] { display: none }
+
+#sequence video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;      /* le meme cadrage que `.scene` */
+}
+
+.passer[hidden] { display: none }
+.passer {
+  position: fixed;
+  right: 18px;
+  bottom: 16px;
+  z-index: 21;
+  padding: 7px 14px;
+  border: 1px solid var(--verre-bord);
+  border-radius: 3px;
+  background: rgba(5, 10, 18, .6);
+  color: rgba(207, 227, 242, .7);
+  font: inherit;
+  font-size: 11px;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.passer:hover { color: #eaf4ff; border-color: var(--accent) }
+
+/* --- 3. Le poste ------------------------------------------------------- */
+
+/* Toujours visible, toujours dessous. Pas d'apparition a orchestrer :
+   c'est le fond de la page, les autres couches passent par-dessus. */
+#poste {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+}
+
+.decor {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+/* Le verre du PFD.
+ *
+ * Releve sur le decor (1280x720) : la dalle occupe 320..968 en x et
+ * 120..622 en y, soit les pourcentages ci-dessous. Mesure et non placee a
+ * l'oeil — une dalle mal cadree se voit au premier regard et se corrige mal
+ * apres coup, parce qu'on finit par deplacer le decor pour rattraper.
+ *
+ * Le leger retrait interieur laisse voir le cadre peint : sans lui, le
+ * contenu affleure le bord et la dalle cesse de ressembler a un ecran
+ * encastre pour ressembler a une fenetre collee.
+ */
+.verre, .reflet {
+  /* Une seule source pour le cadrage de la dalle. Les deux regles se
+     superposent exactement ; repeter les quatre valeurs, c'est garantir
+     qu'un jour l'une sera corrigee et pas l'autre, et que le reflet
+     flottera a cote du verre sans que personne ne comprenne pourquoi. */
+  position: absolute;
+  left: var(--verre-l);
+  top: var(--verre-t);
+  width: var(--verre-w);
+  height: var(--verre-h);
+}
+
+.verre {
+  border: 0;
+  border-radius: 2px;
+  background: #04070a;
+  box-shadow:
+    inset 0 0 0 1px rgba(120, 190, 255, .10),
+    inset 0 0 38px rgba(4, 10, 18, .85);
+}
+
+/* Le reflet du verre : une bande diagonale tres discrete, par-dessus le
+   contenu. Elle ne doit jamais gener la lecture — c'est un rappel de
+   surface, pas un effet. */
+.reflet {
+  pointer-events: none;
+  background: linear-gradient(
+    104deg,
+    rgba(255, 255, 255, 0) 34%,
+    rgba(170, 214, 255, .045) 44%,
+    rgba(170, 214, 255, .012) 52%,
+    rgba(255, 255, 255, 0) 62%);
+}
+
+/* Le rappel discret du chemin de retour. Le poste n'a pas de barre de
+   navigation : elle casserait l'illusion. Mais une interface sans issue
+   visible est une interface ou l'on se sent pris. */
+.sortie {
+  position: fixed;
+  left: 14px;
+  bottom: 12px;
+  z-index: 12;
+  font-size: 10px;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: rgba(207, 227, 242, .28);
+}
+.sortie a { color: rgba(127, 200, 255, .55); text-decoration: none }
+.sortie a:hover { color: var(--accent) }
+
+@media (prefers-reduced-motion: reduce) {
+  #embarquement, #poste { transition: none }
+  .accueil p { animation: none; opacity: .7 }
+}

@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="fr" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Desk — Poste de pilotage</title>
+<link rel="stylesheet" href="/ui/poste/poste.css">
+</head>
+
+<!--
+  Le poste de pilotage.
+
+  Trois etats : l'accueil, la sequence d'embarquement, le poste. Le decor
+  est l'IMAGE SUR LAQUELLE LA SEQUENCE SE TERMINE — pas une autre prise du
+  meme cockpit. C'est ce qui rend le raccord invisible, et aucune image
+  choisie separement ne le garantirait.
+
+  Les panneaux du desk sont charges tels quels depuis `/panneaux`, dans une
+  iframe posee sur la dalle. Ce n'est pas de la paresse : l'ancien poste
+  recopiait tout le balisage de l'application dans sa propre page, et cette
+  seconde copie devait etre tenue synchronisee a la main. Deux
+  implementations du meme ecran finissent toujours par diverger, et c'est
+  celle qu'on regarde le moins qui derive.
+-->
+
+<body>
+
+<!-- 1. L'accueil -->
+<div id="embarquement" role="button" tabindex="0"
+     aria-label="Embarquer — lance la séquence d'arrivée au poste">
+  <div class="accueil">
+    <h1>Welcome on board Boss</h1>
+    <div class="trait"></div>
+    <p>Cliquez pour embarquer</p>
+  </div>
+</div>
+
+<!-- 2. La sequence.
+     Deux encodages : H.264 pour Safari et les navigateurs de bureau, VP9
+     pour ceux qui sont construits sans codec proprietaire — dont le
+     Chromium de test. Sans le second, la sequence ne pouvait meme pas etre
+     verifiee ici, et un chemin qu'on ne peut pas eprouver est un chemin
+     qu'on croit bon.
+
+     Le codec est declare EN ENTIER, pas seulement le conteneur : un
+     navigateur qui lit « video/mp4 » se croit capable et telecharge trois
+     megaoctets avant de decouvrir qu'il n'a pas H.264. Avec le profil et le
+     niveau, il saute le fichier sans rien demander. -->
+<div id="sequence" hidden>
+  <video id="film" playsinline preload="auto">
+    <source src="/ui/poste/assets/embarquement.mp4"
+            type='video/mp4; codecs="avc1.64001f, mp4a.40.2"'>
+    <source src="/ui/poste/assets/embarquement.webm"
+            type='video/webm; codecs="vp9, opus"'>
+  </video>
+</div>
+<button class="passer" id="passer" type="button" hidden>Passer</button>
+
+<!-- 3. Le poste. Monte des le depart, SOUS les deux couches ci-dessus :
+     on ne le revele pas a la fin, on retire ce qui le couvrait. Un decor
+     deja peint ne peut pas manquer son entree — et les panneaux ont le
+     temps de se charger pendant l'accueil. -->
+<div id="poste">
+  <div class="scene">
+    <img class="decor" src="/ui/poste/assets/poste.jpg"
+         alt="Poste de pilotage" draggable="false">
+    <iframe class="verre" src="/panneaux"
+            title="Desk — état, mandat et invariants"></iframe>
+    <div class="reflet"></div>
+  </div>
+</div>
+
+<div class="sortie">
+  Desk · <a href="/panneaux">vue sans décor</a>
+</div>
+
+<script src="/ui/poste/poste.js"></script>
+</body>
+</html>

@@ -162,8 +162,18 @@ Vérifier dans quel interpréteur l'installation a atterri :
 which python && python -c "import trading_desk, uvicorn; print('OK')"
 ```
 
-Puis ouvrir <http://127.0.0.1:8787>. L'écran montre l'état des douze
-invariants, le mandat en vigueur, la fraîcheur des flux et un kill switch.
+Puis ouvrir <http://127.0.0.1:8787>. La page accueille par « Welcome on
+board Boss » ; un clic lance la séquence d'embarquement et dépose au poste
+de pilotage, dont l'écran central affiche l'état des douze invariants, le
+mandat en vigueur, la fraîcheur des flux et un kill switch.
+
+La séquence ne rejoue pas à chaque rechargement — elle est retenue pour la
+durée de l'onglet, pas au-delà : rouvrir le desk demain doit redonner
+l'embarquement, c'est lui qui fait qu'on s'assoit quelque part. `Échap` ou
+« Passer » l'abrège.
+
+Deux autres vues restent servies : `/panneaux` sans décor, pour lire plutôt
+que piloter, et `/cockpit-photo` pour le poste photographique précédent.
 
 Pour ingérer le vrai marché (testnet, toujours en lecture seule) :
 
