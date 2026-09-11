@@ -124,9 +124,23 @@ Trois conséquences, qui sont les seules choses à retenir de ce dépôt :
 
 ```bash
 cd desk
-pip install -e ".[dev]"          # ou : uv sync
-python -m trading_desk --demo    # marché simulé, sans réseau
+pip install -e ".[dev]"          # UNE SEULE FOIS, ou : uv sync
+desk --demo                      # marché simulé, sans réseau
 ```
+
+**`pip install` ne se refait pas.** Il pose la commande `desk` une bonne
+fois ; ensuite il n'y a plus qu'un mot à taper, depuis n'importe quel
+répertoire :
+
+```bash
+desk                             # le desk, avec sa supervision
+desk --demo                      # marché simulé, sans réseau
+DESK_MODE=PAPER desk             # exécution simulée sur le carnet réel
+```
+
+Le refaire à chaque lancement ne casse rien, mais recompile les
+dépendances pour rien. `python -m trading_desk` reste équivalent, en plus
+long.
 
 `No module named trading_desk` signifie que `pip install -e` n'a pas tourné
 dans l'interpréteur courant — typiquement une base conda différente de celle
@@ -155,8 +169,14 @@ Pour ingérer le vrai marché (testnet, toujours en lecture seule) :
 
 ```bash
 cp .env.example .env
-python -m trading_desk
+desk
 ```
+
+`desk` retrouve le dépôt tout seul : `.env` et `data/journal_unlocks.jsonl`
+sont cherchés d'abord à côté de vous, puis dans le dépôt. Lancer le desk
+depuis la maison échouait auparavant sur « journal absent » — un message
+qui ne disait pas la vraie cause, puisque le journal était bien là et que
+c'était le répertoire qui ne l'était pas.
 
 Produire les baselines (**la référence du P2**) :
 
