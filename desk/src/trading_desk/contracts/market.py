@@ -93,12 +93,32 @@ class FeedHealth(Frozen):
     `max_age_ms` est le seuil au-dela duquel le flux est declare mort. Il doit
     etre cale sur la cadence naturelle du flux : quelques secondes pour des
     trades sur un actif liquide, davantage pour le funding.
+
+    **Deux natures de flux, et les confondre coute cher.** Un carnet et des
+    mids ont une cadence GARANTIE : l'exchange pousse a chaque changement,
+    donc leur silence est une panne. Des trades n'ont aucune cadence : leur
+    silence dit « personne n'a echange », ce qui est une information de
+    marche, pas un defaut.
+
+    Mesure faite sur le testnet Hyperliquid, 131 releves sur 105 secondes :
+    carnets 5,9 s d'ecart maximal pour un budget de 10 s, mids 5,5 s pour
+    10 s — confortable ; trades BTC **57 s** et trades ETH **65,5 s** pour un
+    budget de 20 s. Le seuil de 20 s est cale sur un actif liquide en
+    mainnet ; aucune valeur unique ne peut servir les deux marches, parce
+    que ce n'est pas le meme phenomene qu'on mesure.
+
+    D'ou `cadence_garantie`. Un flux evenementiel doit toujours se connecter
+    et livrer au moins un message — sans quoi il est en defaut, comme avant.
+    Passe ce premier message, son silence ne fait plus echouer la fraicheur.
+    Les prix du desk viennent des mids et du carnet, qui restent controles :
+    on ne perd aucune protection contre un prix perime.
     """
 
     name: str
     status: FeedStatus = FeedStatus.NEVER_CONNECTED
     last_message_ms: int | None = None
     max_age_ms: int = 15_000
+    cadence_garantie: bool = True
     messages: int = 0
     reconnects: int = 0
     last_error: str | None = None

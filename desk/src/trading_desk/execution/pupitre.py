@@ -208,7 +208,16 @@ class Pupitre:
         # raison. Ce cablage manquait a la premiere version, et c'est le
         # moteur de risque qui l'a signale en bloquant.
         jour = getattr(self.exchange, "realise_jour_usd", None)
-        if jour is not None:
+        if callable(jour):
+            # Le client reel le calcule depuis ses fills ; un appel reseau
+            # qui echoue ne doit pas emporter le cycle, mais il ne doit pas
+            # non plus laisser croire a un PnL nul : on laisse la valeur
+            # precedente, et I03 finira par se plaindre de son age.
+            try:
+                self.state.day_realized_pnl_usd = jour()
+            except ExchangeError as exc:
+                log.warning("PnL du jour illisible : %s", exc)
+        elif jour is not None:
             self.state.day_realized_pnl_usd = jour
 
         # Ceux nes entre deux tours : fills passifs, stops declenches.
@@ -321,6 +330,43 @@ class Pupitre:
         return base
 
 
+VARIABLE_CLE = "DESK_HYPERLIQUID_PRIVATE_KEY"
+
+
+def cle_de_signature() -> str:
+    """La cle privee, lue dans l'environnement au moment de s'en servir.
+
+    Elle n'entre PAS dans `Settings`. Ce n'est pas du purisme : l'objet de
+    reglages est construit une fois et traverse tout le processus, y compris
+    la couche qui sert l'API de supervision. Un secret qui y sejourne finira
+    par sortir quelque part — dans un dump de debogage, une trace
+    d'exception, un champ ajoute six mois plus tard par quelqu'un qui ne sait
+    pas ce qu'il y a dedans. Lue ici, elle ne vit que le temps d'un appel.
+
+    Le message d'erreur ne contient jamais la valeur, meme tronquee : une
+    cle partiellement revelee dans un journal reste une cle affaiblie.
+    """
+    import os
+
+    brute = (os.environ.get(VARIABLE_CLE) or "").strip()
+    if not brute:
+        raise SystemExit(
+            f"{VARIABLE_CLE} est absente de l'environnement. Ce mode signe des "
+            "ordres : sans cle il n'y a rien a faire, et demarrer pour "
+            "echouer a la premiere signature serait pire que refuser ici."
+        )
+    cle = brute if brute.startswith("0x") else "0x" + brute
+    corps = cle[2:]
+    if len(corps) != 64 or any(c not in "0123456789abcdefABCDEF" for c in corps):
+        raise SystemExit(
+            f"{VARIABLE_CLE} n'est pas une cle de 32 octets en hexadecimal. "
+            "Verifiee ici plutot qu'a la premiere signature, ou l'erreur "
+            "remonterait en INVALID_SIGNATURE et enverrait chercher le "
+            "defaut partout ailleurs."
+        )
+    return cle
+
+
 def exchange_pour(state: DeskState):
     """L'exchange qui correspond au mode. **La seule porte vers l'argent reel.**
 
@@ -336,8 +382,23 @@ def exchange_pour(state: DeskState):
             equity_usd=state.settings.paper_equity_usd,
             costs=CostModel(),
         )
+
+    if state.settings.mode is DeskMode.TESTNET:
+        # La signature est desormais validee vecteur par vecteur contre le SDK
+        # officiel (`tests/test_signature_hyperliquid.py`). Ce qui reste non
+        # valide, c'est le RESTE de la requete : indices d'actifs, pas de
+        # cotation, tailles minimales. C'est precisement ce que le testnet
+        # sert a eprouver, et il n'y engage aucun argent.
+        from .hyperliquid_client import HyperliquidClient
+
+        return HyperliquidClient(
+            account_address=state.settings.agent_wallet_address or "",
+            private_key=cle_de_signature(),
+            testnet=True,
+        )
+
     raise NotImplementedError(
         f"mode {state.settings.mode.value} : aucun exchange cable. "
-        "PAPER est le seul mode qui trade aujourd'hui ; TESTNET et LIVE "
-        "attendent la validation de la signature (porte P1)."
+        "LIVE attend un aller-retour reussi sur testnet — la signature est "
+        "validee, le reste de la requete ne l'est pas."
     )

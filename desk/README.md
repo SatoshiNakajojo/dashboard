@@ -1,12 +1,40 @@
 # Trading Desk — Hyperliquid
 
-Desk de trading automatisé multi-agents. **Phases P0, P2, et le P1 hors
-testnet** : ingestion de marché, moteur de risque, supervision, baselines
+Desk de trading automatisé multi-agents. **Phases P0, P2, et la moitié du
+P1** : ingestion de marché, moteur de risque, supervision, baselines
 chiffrées sans IA, et la couche d'exécution — order manager, idempotence,
-réconciliation — validée contre un faux exchange.
+réconciliation.
 
-Aucun connecteur Hyperliquid réel : ce code ne signe rien et n'envoie aucun
-ordre à un vrai exchange.
+**Le mode LIVE reste fermé.** Il n'engagera d'argent réel qu'après un
+aller-retour réussi sur testnet, et c'est un acte délibéré, pas l'oubli
+d'une variable d'environnement.
+
+> **État au 11 septembre 2026 — le desk tourne sur le marché réel.**
+> Douze invariants sur douze au vert contre le testnet Hyperliquid : flux
+> live, réconciliation du compte, prix réels, PnL du jour calculé depuis les
+> exécutions. Aucune clé n'est nécessaire pour cela — l'endpoint
+> d'information rend l'état d'un compte à partir de sa seule adresse
+> publique, donc le desk voit tout sans rien pouvoir signer.
+>
+> **La signature Hyperliquid est validée.** Chaque hash et chaque signature
+> sont comparés octet pour octet à ceux du SDK officiel, sur 24 vecteurs
+> couvrant ordres limite, Ioc, Alo, stops déclencheurs, prises de bénéfice,
+> ordres groupés, annulations par cloid, coffres, expirations et nonce
+> maximal, sur les deux réseaux. Les vecteurs sont figés dans
+> `tests/vecteurs_signature.json` et rejoués à chaque test.
+>
+> **Cette validation a trouvé un vrai défaut.** Nous émettions `r` et `s`
+> sur trente-deux octets pleins, zéros de tête compris, là où
+> l'implémentation de référence émet le minimum : `0x4bce…` contre
+> `0x04bce…`. Même entier, encodage différent — et sur 2 000 signatures les
+> deux formes divergent dans **16,3 %** des cas. Le pire profil de panne
+> possible : cinq ordres sur six passent, le sixième est refusé, avec de
+> l'argent engagé et rien pour reproduire.
+>
+> Ce qui reste non validé, et c'est exactement ce que le testnet doit
+> éprouver : le **reste** de la requête — indices d'actifs, pas de cotation,
+> tailles minimales. La lecture est déjà confrontée au réel (212 actifs lus,
+> états de compte parsés) ; l'écriture ne l'est pas.
 
 > **État au 5 septembre 2026.** Le P2 est franchi sur données réelles. Sur
 > 208 jours de BTC en 1 h, aucune baseline n'a d'edge statistiquement

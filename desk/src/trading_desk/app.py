@@ -171,6 +171,44 @@ async def run_ingestion(state: DeskState, settings: Settings,
                 # de la partie qui trade, pas l'inverse.
                 log.exception("cycle du pupitre en echec")
 
+    async def reconciliation_loop(lecteur) -> None:
+        """Relever l'etat du compte, en LECTURE SEULE.
+
+        Quatre invariants — I01 reconcilie, I02 stops, I03 perte du jour,
+        I04 exposition — ne peuvent rien dire tant que le desk ignore l'etat
+        du compte. Hors mode demo, personne ne le renseignait : ils
+        restaient donc en defaut indefiniment, et l'ecran affichait
+        « decollage bloque » sur un desk qui allait parfaitement bien. Un
+        controle qui ne peut pas etre evalue est un controle en echec — mais
+        le laisser inevaluable par simple absence de cablage, c'est
+        fabriquer l'echec.
+
+        Le point important : ce releve n'exige AUCUNE cle. L'endpoint
+        d'information d'Hyperliquid rend l'etat d'un compte a partir de sa
+        seule adresse publique. On peut donc tout voir sans rien pouvoir
+        signer, ce qui est exactement la posture qu'on veut en SHADOW.
+
+        En cas d'echec on ne touche a rien : I01 controle lui-meme l'age de
+        la derniere reconciliation et passe au rouge au-dela de soixante
+        secondes. Reecrire un etat perime en le marquant frais serait la
+        seule facon de rendre ce controle dangereux.
+        """
+        while True:
+            try:
+                etat = await asyncio.to_thread(lecteur.account_state)
+                state.set_account(etat, reconciled=True)
+                # I03 exige le PnL du jour. Sans lui il repond « inconnu »,
+                # ce qui vaut ECHEC : un desk parfaitement sain resterait
+                # bloque parce qu'un chiffre n'a pas ete releve.
+                jour = getattr(lecteur, "realise_jour_usd", None)
+                if callable(jour):
+                    state.day_realized_pnl_usd = await asyncio.to_thread(jour)
+                elif jour is not None:
+                    state.day_realized_pnl_usd = jour
+            except Exception as exc:
+                log.warning("reconciliation en echec : %s", exc)
+            await asyncio.sleep(15.0)
+
     tasks = [
         asyncio.create_task(feed.run()),
         asyncio.create_task(health_loop()),
@@ -178,6 +216,18 @@ async def run_ingestion(state: DeskState, settings: Settings,
     ]
     if pupitre is not None:
         tasks.append(asyncio.create_task(pupitre_loop()))
+        tasks.append(asyncio.create_task(reconciliation_loop(pupitre.exchange)))
+    elif settings.agent_wallet_address:
+        # Pas de pupitre (SHADOW) : on ouvre quand meme un client SANS CLE,
+        # uniquement pour lire. Il ne peut rien signer, par construction.
+        from .execution.hyperliquid_client import HyperliquidClient
+
+        tasks.append(asyncio.create_task(reconciliation_loop(
+            HyperliquidClient(
+                account_address=settings.agent_wallet_address,
+                private_key=None,
+                testnet=settings.testnet,
+            ))))
     try:
         await asyncio.gather(*tasks)
     finally:
@@ -332,35 +382,53 @@ async def main_async(demo: bool) -> None:
     store = SqliteStore(settings.db_path)
     state = DeskState(settings, store)
 
-    if settings.mode.sends_orders:
-        # La couche d'execution existe desormais, mais sa SIGNATURE n'a jamais
-        # ete confrontee a l'exchange : les regles viennent de la
-        # documentation, pas d'un aller-retour reel. Envoyer un ordre dans cet
-        # etat, c'est decouvrir un bug de signature avec de l'argent engage.
+    if settings.mode is DeskMode.LIVE:
+        # La porte P1 s'est ouverte a moitie, et la moitie qui reste fermee
+        # est celle qui engage de l'argent.
         #
-        # Ce garde saute quand les vecteurs de signature auront ete valides
-        # contre le SDK officiel sur testnet — c'est la porte P1, et elle se
+        # CE QUI EST ACQUIS : la signature. Chaque hash et chaque signature
+        # sont compares octet pour octet a ceux du SDK officiel, sur des
+        # vecteurs couvrant ordres limite, stops declencheurs, annulations,
+        # coffres et expirations, sur les deux reseaux
+        # (`tests/test_signature_hyperliquid.py`). Un ordre refuse ne le sera
+        # pas pour cause de signature.
+        #
+        # CE QUI NE L'EST PAS : tout le reste de la requete. Les indices
+        # d'actifs, les pas de cotation, les tailles minimales et le
+        # comportement de l'API viennent encore de la documentation. Aucun
+        # aller-retour reel n'a eu lieu. C'est exactement ce que le testnet
+        # sert a eprouver — sans un centime en jeu.
+        #
+        # Ce garde saute quand un aller-retour testnet aura reussi, et il se
         # franchit deliberement, pas par oubli d'une variable d'environnement.
         raise SystemExit(
-            f"mode {settings.mode.value} refuse : la signature Hyperliquid n'a "
-            "pas encore ete validee contre l'exchange (porte P1). "
-            "Utiliser SHADOW ou PAPER."
+            "mode LIVE refuse : la signature est validee contre le SDK "
+            "officiel, mais aucun aller-retour reel n'a encore eu lieu. "
+            "Passer par TESTNET d'abord — le format des requetes n'a jamais "
+            "ete confronte a un exchange."
         )
 
-    # Le pupitre n'existe qu'en PAPER. En SHADOW la meme boucle tourne sans
-    # lui : memes flux, memes invariants, aucun ordre.
+    # Le pupitre existe en PAPER et en TESTNET. En SHADOW la meme boucle
+    # tourne sans lui : memes flux, memes invariants, aucun ordre.
+    #
+    # Les deux modes partagent TOUT sauf l'exchange, et c'est voulu : le
+    # testnet n'est pas un autre desk, c'est le meme contre un carnet reel.
+    # Deux branches separees finiraient par diverger — le jour ou l'une
+    # gagnerait un garde-fou que l'autre n'a pas, c'est celle qui signe pour
+    # de vrai qui en manquerait.
     pupitre = None
-    if settings.mode is DeskMode.PAPER and not demo:
+    if settings.mode in (DeskMode.PAPER, DeskMode.TESTNET) and not demo:
         from .execution.pupitre import Pupitre, exchange_pour
         from .sentinelle.pilote_deblocages import PiloteDeblocages
 
         pilote = PiloteDeblocages(settings.paper_journal)
         if pilote.absent:
             raise SystemExit(
-                f"mode PAPER refuse : {settings.paper_journal} est absent. "
-                "Le desk ne trade que des positions inscrites AVANT les faits ; "
-                "sans journal, il n'y a rien a trader et une entree calculee "
-                "a la volee ne serait pas hors echantillon. "
+                f"mode {settings.mode.value} refuse : {settings.paper_journal} "
+                "est absent. Le desk ne trade que des positions inscrites "
+                "AVANT les faits ; sans journal, il n'y a rien a trader et "
+                "une entree calculee a la volee ne serait pas hors "
+                "echantillon. "
                 "Produire le journal : python scripts/journal_unlocks.py"
             )
         pupitre = Pupitre(state, exchange_pour(state), pilote,
