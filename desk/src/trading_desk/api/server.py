@@ -27,6 +27,7 @@ from .state import DeskState
 
 UI_DIR = Path(__file__).resolve().parent.parent / "ui"
 UI_FILE = UI_DIR / "index.html"
+POSTE_FILE = UI_DIR / "poste.html"
 COCKPIT_FILE = UI_DIR / "cockpit.html"
 
 
@@ -100,18 +101,35 @@ def create_app(state: DeskState) -> FastAPI:
 
     @app.get("/", response_class=HTMLResponse)
     async def index() -> str:
-        """Le poste de pilotage. La page classique reste sur `/panneaux`.
+        """Le poste de pilotage : accueil, sequence d'embarquement, decor.
 
-        L'inversion est deliberee : le cockpit EST l'interface, et les
-        panneaux sont son tiroir. Les deux pages chargent le meme `desk.js`
-        et portent les memes identifiants — il n'y a pas deux applications,
-        il y a deux habillages du meme etat.
+        L'inversion est deliberee — le poste EST l'interface, et les
+        panneaux sont ce qu'il affiche. Mais il n'y a qu'une application :
+        la dalle charge `/panneaux` telle quelle. Recopier son balisage ici
+        creerait une seconde implementation du meme ecran, et c'est toujours
+        celle qu'on regarde le moins qui derive.
+
+        Le repli suit la meme logique de degradation : sans poste, les
+        panneaux ; sans panneaux, un message qui dit quoi chercher.
         """
-        if COCKPIT_FILE.exists():
-            return COCKPIT_FILE.read_text(encoding="utf-8")
-        if not UI_FILE.exists():
-            return "<h1>Interface absente</h1><p>ui/index.html introuvable.</p>"
-        return UI_FILE.read_text(encoding="utf-8")
+        if POSTE_FILE.exists():
+            return POSTE_FILE.read_text(encoding="utf-8")
+        if UI_FILE.exists():
+            return UI_FILE.read_text(encoding="utf-8")
+        return "<h1>Interface absente</h1><p>ui/index.html introuvable.</p>"
+
+    @app.get("/cockpit-photo", response_class=HTMLResponse)
+    async def cockpit_photo() -> str:
+        """Le poste photographique, celui d'avant.
+
+        Garde joignable le temps qu'on tranche entre les deux. Il n'est plus
+        servi a la racine : deux interfaces principales, c'est deja une de
+        trop, et laisser celle qu'on abandonne au premier plan est la
+        meilleure facon de ne jamais choisir.
+        """
+        if not COCKPIT_FILE.exists():
+            raise HTTPException(status_code=404, detail="cockpit.html introuvable")
+        return COCKPIT_FILE.read_text(encoding="utf-8")
 
     @app.get("/panneaux", response_class=HTMLResponse)
     async def panneaux() -> str:

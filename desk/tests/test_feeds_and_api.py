@@ -226,14 +226,27 @@ def test_interface_servie(tmp_path):
     puisqu'il doit rester atteignable quand tout le reste est en defaut.
     """
     client, _ = _client(tmp_path)
-    r = client.get("/")
+
+    # La racine sert le poste. Les panneaux y sont chargés tels quels : le
+    # coupe-circuit n'est plus dans CE document, il est dans celui que la
+    # dalle affiche. L'invariant se déplace donc avec eux — ce qui compte
+    # est qu'il reste atteignable, pas qu'il soit à un endroit précis du
+    # balisage. Le vérifier sur la racine seule laisserait passer une dalle
+    # branchée sur du vide.
+    racine = client.get("/")
+    assert racine.status_code == 200
+    assert "/panneaux" in racine.text, "le poste doit charger les panneaux"
+
+    r = client.get("/panneaux")
     assert r.status_code == 200
     for secteur in ("prevol", "telemetrie", "navigation", "soufflerie",
                     "consommation", "vols", "systemes"):
         assert f'id="sec-{secteur}"' in r.text, f"secteur {secteur} absent"
     assert 'id="kill"' in r.text
-    # L'interface ne doit exposer aucun chemin d'envoi d'ordre.
-    assert "/api/order" not in r.text and "/api/trade" not in r.text
+    # L'interface n'expose aucun chemin d'envoi d'ordre — ni le poste, ni
+    # les panneaux qu'il affiche.
+    for page in (racine.text, r.text):
+        assert "/api/order" not in page and "/api/trade" not in page
 
 
 def test_mode_live_refuse_sans_agent_wallet():
