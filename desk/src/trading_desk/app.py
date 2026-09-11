@@ -59,11 +59,43 @@ async def run_ingestion(state: DeskState, settings: Settings,
     boucles distinctes auraient fini par diverger, et c'est le chemin qui
     trade qui aurait ete le moins teste.
     """
+    # L'univers a suivre. `DESK_ASSETS` donne le socle ; le JOURNAL donne le
+    # reste, et c'est lui qui commande.
+    #
+    # Sans ca, le desk s'abonnait a BTC et ETH pendant que le journal lui
+    # demandait KAITO, ZRO, LISTA. Le pilote sautait chaque position faute de
+    # prix — en silence — et l'ecran affichait douze invariants au vert, zero
+    # position, zero refus. Deux sources de verite sur « ce qu'on trade »
+    # divergent toujours, et ici la divergence ne se voyait pas.
+    #
+    # Le journal gagne parce qu'il est la seule source qui bouge toute seule :
+    # une position inscrite le lundi doit etre suivie le lundi, sans qu'un
+    # humain pense a editer une variable d'environnement.
+    univers = list(dict.fromkeys(settings.assets))
+    # Le signal du pupitre, s'il sait dire a quoi il s'attend. Interroge par
+    # capacite et non par type : un autre signal qui saurait repondre serait
+    # suivi de la meme facon, sans que ce module le connaisse.
+    attendre = getattr(getattr(pupitre, "signal", None), "symboles_attendus", None)
+    if callable(attendre):
+        JOUR_MS = 86_400_000
+        attendus = attendre(now_ms(), horizon_ms=2 * JOUR_MS)
+        for symbole in sorted(attendus):
+            if symbole not in univers:
+                univers.append(symbole)
+        if attendus:
+            log.info("univers du journal : %s", " ".join(sorted(attendus)))
+
+    socle = set(settings.assets)
     feed = HyperliquidFeed(testnet=settings.testnet)
-    for asset in settings.assets:
-        feed.subscribe(Subscription.trades(asset))
-        feed.subscribe(Subscription.book(asset))
-        feed.subscribe(Subscription.asset_ctx(asset))
+    for asset in univers:
+        # Le socle est essentiel ; ce que le journal ajoute est de la
+        # SURVEILLANCE. Un carnet d'alt qui n'arrive jamais — celui de LISTA
+        # sur le testnet — ne doit pas arreter un desk dont le prix arrive
+        # par `mids` de toute facon.
+        cle = asset in socle
+        feed.subscribe(Subscription.trades(asset, essentiel=cle))
+        feed.subscribe(Subscription.book(asset, essentiel=cle))
+        feed.subscribe(Subscription.asset_ctx(asset, essentiel=cle))
     feed.subscribe(Subscription.mids())
 
     last_book_write: dict[str, int] = {}
@@ -234,6 +266,49 @@ async def run_ingestion(state: DeskState, settings: Settings,
         feed.stop()
         for t in tasks:
             t.cancel()
+
+
+def _annoncer_le_programme(pilote, settings: Settings) -> None:
+    """Dire au demarrage ce que le desk va suivre, et ce qu'il ne peut pas.
+
+    Un desk qui demarre sans rien dire laisse son operateur deviner s'il
+    attend une fenetre, s'il lui manque un flux, ou s'il est casse. Les
+    trois se ressemblent a l'ecran — zero position — et seul le premier est
+    normal.
+
+    Le cas concret qui a motive ceci : le journal demandait KAITO, ZRO,
+    LISTA, le desk etait abonne a BTC et ETH, et rien ne le disait.
+    """
+    from datetime import datetime, timezone
+
+    maintenant = now_ms()
+    attendus = pilote.symboles_attendus(maintenant)
+    if attendus:
+        log.info("fenetres ouvertes maintenant : %s", " ".join(sorted(attendus)))
+    else:
+        suite = pilote.prochaine_fenetre(maintenant)
+        if suite is None:
+            log.warning(
+                "aucune position a venir dans le journal : le desk tournera "
+                "sans rien avoir a faire. Regenerer : "
+                "python3 scripts/journal_unlocks.py")
+        else:
+            symbole, quand = suite
+            jour = datetime.fromtimestamp(quand / 1000, timezone.utc)
+            heures = max(0, (quand - maintenant) // 3_600_000)
+            log.info(
+                "aucune fenetre ouverte. Prochaine : %s le %s (dans %d h). "
+                "Zero position d'ici la est le comportement attendu.",
+                symbole, jour.strftime("%Y-%m-%d"), heures)
+
+    # Ce que le journal reclamera bientot et qui n'est pas dans DESK_ASSETS
+    # est desormais suivi automatiquement ; on le dit quand meme, parce
+    # qu'un abonnement implicite est un abonnement qu'on oublie.
+    horizon = pilote.symboles_attendus(maintenant, horizon_ms=7 * 86_400_000)
+    hors_reglage = sorted(horizon - set(settings.assets))
+    if hors_reglage:
+        log.info("suivis d'apres le journal (hors DESK_ASSETS) : %s",
+                 " ".join(hors_reglage))
 
 
 async def run_demo(state: DeskState, settings: Settings) -> None:
@@ -437,6 +512,7 @@ async def main_async(demo: bool) -> None:
         # affichant « aucun blocage » : les invariants disent si le desk a le
         # DROIT d'agir, pas s'il agit.
         state.rapport_pupitre = pupitre.resume
+        _annoncer_le_programme(pilote, settings)
         # Le pilote a besoin des derniers prix pour poser un niveau d'entree.
         # On lui donne la MEME table que la supervision, par reference : deux
         # tables finiraient par diverger, et le desk traderait sur des prix

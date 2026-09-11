@@ -126,6 +126,10 @@ class RiskContext(Frozen):
             etat = f.evaluate(self.now_ms).status
             if etat.is_tradable:
                 continue
+            if not f.essentiel:
+                # Surveillance : rapporte a l'ecran, jamais bloquant. Le
+                # prix de cet actif vient de `mids`, qui reste essentiel.
+                continue
             if not f.cadence_garantie and f.last_message_ms is not None:
                 # Silence apres un premier message : personne n'a echange.
                 # C'est une information de marche, pas une panne.

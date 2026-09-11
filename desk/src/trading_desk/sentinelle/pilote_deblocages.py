@@ -70,8 +70,41 @@ class PiloteDeblocages:
         self.prix: dict[str, Decimal] = prix if prix is not None else {}
         self._entrees_faites: set[tuple[str, int]] = set()
         self.absent = not self.chemin.exists()
+        # Les symboles qu'on a du sauter faute de prix. Remis a zero a
+        # chaque appel a `entrees`, pour que l'ecran montre l'etat courant
+        # et pas un historique qui ne se vide jamais.
+        self.sans_prix: set[str] = set()
 
     # ------------------------------------------------------------- lecture
+
+    def symboles_attendus(self, at_ms: int, horizon_ms: int = 0) -> set[str]:
+        """Les symboles dont la fenetre est ouverte, ou le sera sous peu.
+
+        Sert a savoir a QUOI s'abonner. Le journal est la seule source de
+        verite sur ce que le desk trade ; maintenir a cote une liste
+        d'actifs a la main garantit qu'elles divergeront, et la divergence
+        est silencieuse — le desk se tait sur ce qu'il ne voit pas.
+        """
+        out = set()
+        for e in self.positions():
+            entree = int(e.get("entree_ms", 0))
+            sortie = int(e.get("sortie_ms", 0))
+            if entree - horizon_ms <= at_ms < sortie:
+                symbole = str(e.get("symbole", "")).strip()
+                if symbole:
+                    out.add(symbole)
+        return out
+
+    def prochaine_fenetre(self, at_ms: int) -> tuple[str, int] | None:
+        """Le prochain symbole a entrer, et quand. Pour que l'ecran puisse
+        dire « rien a faire avant mardi » plutot que de rester muet."""
+        futurs = [(int(e.get("entree_ms", 0)), str(e.get("symbole", "")))
+                  for e in self.positions()
+                  if int(e.get("entree_ms", 0)) > at_ms]
+        if not futurs:
+            return None
+        quand, symbole = min(futurs)
+        return symbole, quand
 
     def positions(self) -> list[dict[str, Any]]:
         """Le journal, relu a chaque appel.
@@ -106,6 +139,7 @@ class PiloteDeblocages:
         a moitie ecoulee, c'est trader autre chose que ce qui a ete valide.
         """
         out: list[Intention] = []
+        self.sans_prix = set()
         for e in self.positions():
             symbole = str(e.get("symbole", ""))
             entree_ms = int(e.get("entree_ms", 0))
@@ -121,6 +155,13 @@ class PiloteDeblocages:
             if prix is None or prix <= 0:
                 # Pas de prix : on ne fabrique pas de niveau. La position sera
                 # reprise au cycle suivant si le flux arrive.
+                #
+                # Mais on le DIT. Sauter en silence est ce qui rendait ce cas
+                # indetectable : le desk affichait douze invariants au vert,
+                # zero position et zero refus, pour la seule raison qu'il
+                # n'etait abonne a aucun flux de l'actif concerne. Un desk
+                # qui n'agit pas doit toujours pouvoir dire pourquoi.
+                self.sans_prix.add(symbole)
                 continue
 
             # `sens = COURT` : la regle vend a decouvert avant le deblocage.

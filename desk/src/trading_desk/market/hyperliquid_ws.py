@@ -59,33 +59,39 @@ class Subscription:
     __slots__ = ("payload", "feed", "max_age_ms")
 
     def __init__(self, payload: dict[str, Any], name: str, max_age_ms: int,
-                 *, cadence_garantie: bool = True) -> None:
+                 *, cadence_garantie: bool = True, essentiel: bool = True) -> None:
         self.payload = payload
         self.max_age_ms = max_age_ms
         self.feed = FeedHealth(name=name, max_age_ms=max_age_ms,
-                               cadence_garantie=cadence_garantie)
+                               cadence_garantie=cadence_garantie,
+                               essentiel=essentiel)
 
     @classmethod
-    def trades(cls, coin: str, max_age_ms: int = 20_000) -> Subscription:
+    def trades(cls, coin: str, max_age_ms: int = 20_000,
+                 *, essentiel: bool = True) -> Subscription:
         # Evenementiel : l'exchange ne pousse que s'il y a eu un echange.
         # Le seuil reste, parce qu'il sert a AFFICHER un flux endormi ; il ne
         # fait simplement plus echouer l'invariant de fraicheur.
         return cls({"type": "trades", "coin": coin}, f"trades:{coin}",
-                   max_age_ms, cadence_garantie=False)
+                   max_age_ms, cadence_garantie=False, essentiel=essentiel)
 
     @classmethod
-    def book(cls, coin: str, max_age_ms: int = 10_000) -> Subscription:
-        return cls({"type": "l2Book", "coin": coin}, f"book:{coin}", max_age_ms)
+    def book(cls, coin: str, max_age_ms: int = 10_000,
+                 *, essentiel: bool = True) -> Subscription:
+        return cls({"type": "l2Book", "coin": coin}, f"book:{coin}", max_age_ms,
+                   essentiel=essentiel)
 
     @classmethod
     def mids(cls, max_age_ms: int = 10_000) -> Subscription:
         return cls({"type": "allMids"}, "mids", max_age_ms)
 
     @classmethod
-    def asset_ctx(cls, coin: str, max_age_ms: int = 120_000) -> Subscription:
+    def asset_ctx(cls, coin: str, max_age_ms: int = 120_000,
+                 *, essentiel: bool = True) -> Subscription:
         # Funding et open interest bougent lentement : seuil large, sinon on
         # declare mort un flux parfaitement sain.
-        return cls({"type": "activeAssetCtx", "coin": coin}, f"ctx:{coin}", max_age_ms)
+        return cls({"type": "activeAssetCtx", "coin": coin}, f"ctx:{coin}",
+                   max_age_ms, essentiel=essentiel)
 
 
 class HyperliquidFeed:
