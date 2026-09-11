@@ -288,3 +288,56 @@ def test_le_filtre_de_bruit_ne_prend_que_sa_cible():
         assert not is_known_websockets_noise(exc), (
             "sans origine websockets, la trace doit rester visible"
         )
+
+
+def test_un_port_occupe_est_dit_en_une_phrase():
+    """Quarante lignes de trace pour « le port est pris » est un défaut.
+
+    Uvicorn laisse remonter un `SystemExit(3)` depuis une tâche asyncio : le
+    seul mot utile, « address already in use », se noie au milieu d'une pile
+    d'appels asyncio. On le lit comme une panne du desk alors que c'est
+    l'inverse — un desk tourne déjà, et il va très bien.
+
+    Le test porte sur le CONTENU du message, parce que c'est lui qui décide
+    si la personne comprend en trois secondes ou cherche pendant dix minutes.
+    """
+    import socket
+
+    import pytest
+
+    from trading_desk.app import _verifier_le_port
+    from trading_desk.config import Settings
+
+    occupant = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    occupant.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    occupant.bind(("127.0.0.1", 0))
+    occupant.listen(1)
+    port = occupant.getsockname()[1]
+    try:
+        with pytest.raises(SystemExit) as e:
+            _verifier_le_port(Settings(api_port=port))
+        message = str(e.value)
+        assert "tourne deja" in message, "la cause doit être nommée"
+        assert f"127.0.0.1:{port}" in message, "l'adresse doit figurer"
+        assert "DESK_API_PORT" in message, "la sortie de secours doit être donnée"
+        assert "Traceback" not in message
+    finally:
+        occupant.close()
+
+
+def test_un_port_libre_ne_bloque_pas():
+    """Le garde ne doit pas refuser un port qu'uvicorn accepterait.
+
+    `SO_REUSEADDR` est posé exprès comme uvicorn le fera : sans lui, un port
+    fraîchement libéré (TIME_WAIT) serait déclaré pris à tort.
+    """
+    import socket
+
+    from trading_desk.app import _verifier_le_port
+    from trading_desk.config import Settings
+
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.bind(("127.0.0.1", 0))
+    libre = s.getsockname()[1]
+    s.close()
+    _verifier_le_port(Settings(api_port=libre))      # ne lève pas

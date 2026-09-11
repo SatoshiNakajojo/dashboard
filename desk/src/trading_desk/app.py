@@ -268,6 +268,37 @@ async def run_ingestion(state: DeskState, settings: Settings,
             t.cancel()
 
 
+def _verifier_le_port(settings: Settings) -> None:
+    """Refuser tot, et lisiblement, si le port est deja pris.
+
+    Uvicorn laisse remonter un `SystemExit(3)` depuis une tache asyncio :
+    quarante lignes de trace dont le seul mot utile — « address already in
+    use » — est noye au milieu. On le lit comme une panne du desk alors que
+    c'est l'inverse : un desk tourne deja, et il va tres bien.
+
+    On teste donc le bind nous-memes, avant de construire quoi que ce soit,
+    et on le dit en une phrase. `SO_REUSEADDR` est pose exprès comme uvicorn
+    le fera, sinon on refuserait un port que lui aurait accepte.
+    """
+    import socket
+
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    try:
+        s.bind((settings.api_host, settings.api_port))
+    except OSError:
+        raise SystemExit(
+            f"\n  Un desk tourne deja sur http://{settings.api_host}:"
+            f"{settings.api_port}\n\n"
+            "  Ouvrez-le dans le navigateur, ou arretez-le (Ctrl+C dans sa\n"
+            "  fenetre) avant d'en lancer un autre. Pour en lancer un second\n"
+            "  a cote, choisissez un autre port :\n\n"
+            f"      DESK_API_PORT={settings.api_port + 1} desk\n"
+        ) from None
+    finally:
+        s.close()
+
+
 def _annoncer_le_programme(pilote, settings: Settings) -> None:
     """Dire au demarrage ce que le desk va suivre, et ce qu'il ne peut pas.
 
@@ -526,6 +557,8 @@ async def main_async(demo: bool) -> None:
         "demo": demo,
         "signal": pupitre.signal.nom if pupitre else None,
     })
+
+    _verifier_le_port(settings)
 
     app = create_app(state)
     server = uvicorn.Server(
