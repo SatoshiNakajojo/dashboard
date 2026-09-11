@@ -38,7 +38,13 @@ from typing import Any, Literal
 from ..contracts.common import EntryStyle, Side
 from ..contracts.orders import OrderIntent, OrderPurpose
 from .cloid import make_cloid
-from .hyperliquid_format import AssetMeta, FormatError, format_price, format_size
+from .hyperliquid_format import (
+    NOTIONNEL_MINIMAL_USD,
+    AssetMeta,
+    FormatError,
+    format_price,
+    format_size,
+)
 
 # Le domaine des actions L1. `chainId` vaut 1337 sur mainnet comme sur testnet.
 L1_DOMAIN: dict[str, Any] = {
@@ -125,6 +131,22 @@ def order_to_wire(
         raise FormatError("ordre limite sans prix")
 
     wire["p"] = format_price(price, meta, side=intent.side)
+
+    # Le notionnel minimal. On ne le verifie QUE sur un ordre qui ouvre ou
+    # augmente : un ordre reduce-only ferme une position, et la bloquer parce
+    # qu'elle est petite laisserait un risque ouvert faute d'avoir pu le
+    # solder. Un garde-fou qui empeche de reduire le risque est un defaut,
+    # pas une protection.
+    if not intent.reduce_only:
+        notionnel = Decimal(wire["s"]) * Decimal(wire["p"])
+        if notionnel < NOTIONNEL_MINIMAL_USD:
+            raise FormatError(
+                f"notionnel {notionnel:.2f} USD sous le minimum de "
+                f"{NOTIONNEL_MINIMAL_USD} USD : l'exchange le refuserait, et "
+                "son message ne dirait pas lequel des deux chiffres est en "
+                "cause"
+            )
+
     wire["t"] = {"limit": {"tif": TIF_BY_STYLE[intent.style]}}
     return wire
 

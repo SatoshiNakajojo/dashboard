@@ -433,6 +433,10 @@ async def main_async(demo: bool) -> None:
             )
         pupitre = Pupitre(state, exchange_pour(state), pilote,
                           univers=tuple(settings.assets))
+        # Sans ce branchement, le desk peut refuser toutes ses entrees en
+        # affichant « aucun blocage » : les invariants disent si le desk a le
+        # DROIT d'agir, pas s'il agit.
+        state.rapport_pupitre = pupitre.resume
         # Le pilote a besoin des derniers prix pour poser un niveau d'entree.
         # On lui donne la MEME table que la supervision, par reference : deux
         # tables finiraient par diverger, et le desk traderait sur des prix

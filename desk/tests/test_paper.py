@@ -605,3 +605,49 @@ def test_les_fills_arrivent_dans_le_stockage(tmp_path):
     # Un second cycle ne doit pas dupliquer : `write_fill` déduplique par id.
     pupitre.cycle(t)
     assert state.store.counts()["fills"] == 1
+
+
+def test_le_desk_dit_ce_qu_il_a_refuse_de_faire(monkeypatch, tmp_path):
+    """Un desk qui refuse toute entrée en affichant « aucun blocage » est
+    pire qu'un desk en panne : il a l'air de marcher.
+
+    C'est arrivé. La règle des déblocages demande un stop à 1500 bps ; le
+    défaut en autorise 500. Le pupitre le savait, l'écrivait dans sa liste
+    de refus, et personne ne la lisait — la supervision affichait douze
+    invariants au vert pendant que rien ne se tradait.
+
+    Les invariants disent si le desk a le DROIT d'agir. Ils ne disent pas
+    s'il agit. Il faut les deux à l'écran.
+    """
+    from trading_desk.api.state import DeskState
+    from trading_desk.config import Settings
+    from trading_desk.storage import SqliteStore
+
+    state = DeskState(Settings(), SqliteStore(":memory:"))
+    assert state.snapshot()["pupitre"] is None, "sans pupitre, rien à rapporter"
+
+    state.rapport_pupitre = lambda: {
+        "signal": "deblocages", "ouvertures": 0, "fermetures": 0,
+        "refus": ["BTC non dimensionnable : stop hors bande"], "nb_refus": 7,
+    }
+    rapport = state.snapshot()["pupitre"]
+    assert rapport["nb_refus"] == 7
+    assert "stop hors bande" in rapport["refus"][0]
+
+
+def test_un_rapport_de_pupitre_en_panne_ne_fait_pas_tomber_la_supervision():
+    """Un écran muet vaut mieux qu'un écran absent.
+
+    La supervision est ce qui reste quand le reste casse ; elle ne doit
+    jamais tomber à cause de ce qu'elle rapporte.
+    """
+    from trading_desk.api.state import DeskState
+    from trading_desk.config import Settings
+    from trading_desk.storage import SqliteStore
+
+    def casse():
+        raise RuntimeError("exchange injoignable")
+
+    state = DeskState(Settings(), SqliteStore(":memory:"))
+    state.rapport_pupitre = casse
+    assert state.snapshot()["pupitre"] == {"erreur": "rapport indisponible"}

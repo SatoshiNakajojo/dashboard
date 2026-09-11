@@ -31,10 +31,25 @@ d'une variable d'environnement.
 > possible : cinq ordres sur six passent, le sixième est refusé, avec de
 > l'argent engagé et rien pour reproduire.
 >
-> Ce qui reste non validé, et c'est exactement ce que le testnet doit
-> éprouver : le **reste** de la requête — indices d'actifs, pas de cotation,
-> tailles minimales. La lecture est déjà confrontée au réel (212 actifs lus,
-> états de compte parsés) ; l'écriture ne l'est pas.
+> **Le mode PAPER trade, sur le marché réel.** Chaîne complète vérifiée de
+> bout en bout : journal → pilote → pupitre → moteur de risque →
+> dimensionnement → order manager → simulateur → fills → état du compte.
+> Une position SHORT BTC ouverte depuis une entrée de journal, stop au repos
+> chez l'exchange, notionnel 31 $ pour un levier de 0,03×, douze invariants
+> au vert. Il ne manque que le vrai journal de déblocages.
+>
+> **Le formatage est éprouvé sur tout l'univers de l'exchange** — 212 actifs,
+> de zéro à cinq décimales de taille, prix et tailles vérifiés contre les
+> règles publiées. 127 actifs ont **zéro** décimale de taille quand BTC en a
+> cinq : un test qui ne vérifie que BTC ne prouve rien, c'est aux extrêmes
+> que les règles se cassent. L'instantané est versionné
+> (`tests/meta_hyperliquid.json`) pour que l'épreuve tourne hors réseau.
+>
+> Ce qui reste non validé : l'**écriture**. Les indices d'actifs, la lecture
+> des comptes et le formatage sont confrontés au réel ; aucun ordre n'a
+> jamais été envoyé. Le notionnel minimal, en particulier, vient de la
+> documentation et d'aucun aller-retour — il est nommé et isolé
+> (`NOTIONNEL_MINIMAL_USD`) pour qu'un premier essai puisse le corriger.
 
 > **État au 5 septembre 2026.** Le P2 est franchi sur données réelles. Sur
 > 208 jours de BTC en 1 h, aucune baseline n'a d'edge statistiquement
