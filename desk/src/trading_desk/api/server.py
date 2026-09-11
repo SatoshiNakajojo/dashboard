@@ -28,7 +28,6 @@ from .state import DeskState
 UI_DIR = Path(__file__).resolve().parent.parent / "ui"
 UI_FILE = UI_DIR / "index.html"
 POSTE_FILE = UI_DIR / "poste.html"
-COCKPIT_FILE = UI_DIR / "cockpit.html"
 
 
 # Une courbe d'equite compte une valeur par barre : six mois en 4 h font
@@ -95,7 +94,7 @@ def create_app(state: DeskState) -> FastAPI:
     lanceur = Lanceur(state)
 
     # Les fichiers de l'interface : feuilles de style, scripts, photo du
-    # cockpit, boucle video. Montes en lecture seule sur un chemin dedie —
+    # decor, sequence d'embarquement. Montes en lecture seule sur un chemin
     # jamais a la racine, qui reste reservee aux pages.
     app.mount("/ui", StaticFiles(directory=str(UI_DIR)), name="ui")
 
@@ -118,22 +117,9 @@ def create_app(state: DeskState) -> FastAPI:
             return UI_FILE.read_text(encoding="utf-8")
         return "<h1>Interface absente</h1><p>ui/index.html introuvable.</p>"
 
-    @app.get("/cockpit-photo", response_class=HTMLResponse)
-    async def cockpit_photo() -> str:
-        """Le poste photographique, celui d'avant.
-
-        Garde joignable le temps qu'on tranche entre les deux. Il n'est plus
-        servi a la racine : deux interfaces principales, c'est deja une de
-        trop, et laisser celle qu'on abandonne au premier plan est la
-        meilleure facon de ne jamais choisir.
-        """
-        if not COCKPIT_FILE.exists():
-            raise HTTPException(status_code=404, detail="cockpit.html introuvable")
-        return COCKPIT_FILE.read_text(encoding="utf-8")
-
     @app.get("/panneaux", response_class=HTMLResponse)
     async def panneaux() -> str:
-        """L'interface sans le cockpit. Elle n'est pas un vestige : c'est la
+        """L'interface sans le decor. Elle n'est pas un vestige : c'est la
         vue qui reste lisible sur un ecran qui n'a pas le ratio de la photo,
         et celle qu'on ouvre quand on veut lire plutot que piloter."""
         if not UI_FILE.exists():
