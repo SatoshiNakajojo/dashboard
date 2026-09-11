@@ -308,3 +308,45 @@ def test_les_trades_reels_se_declarent_evenementiels():
     assert Subscription.trades("BTC").feed.cadence_garantie is False
     assert Subscription.book("BTC").feed.cadence_garantie is True
     assert Subscription.mids().feed.cadence_garantie is True
+
+
+def test_un_flux_de_surveillance_n_arrete_pas_le_desk(healthy_ctx):
+    """Surveiller plus d'actifs ne doit pas rendre le desk plus fragile.
+
+    Le cas réel : le journal demandait KAITO, ZRO, LISTA ; s'y abonner a fait
+    passer I09 au rouge parce que le carnet de LISTA n'arrive **jamais** sur
+    le testnet. Un desk parfaitement sain s'est halté pour un actif dont le
+    prix arrivait par `mids` de toute façon.
+
+    Un garde-fou qui s'aggrave à mesure qu'on surveille plus punit la
+    surveillance. C'est l'inverse de ce qu'on veut.
+    """
+    from trading_desk.contracts.market import FeedHealth, FeedStatus
+
+    mort = FeedHealth(name="book:LISTA", max_age_ms=10_000, essentiel=False,
+                      status=FeedStatus.NEVER_CONNECTED, last_message_ms=None)
+    ctx = healthy_ctx.model_copy(
+        update={"feeds": (*healthy_ctx.feeds, mort)})
+    assert ctx.freshest_failure() is None
+    assert Invariant.I09_FRESH_DATA not in evaluate(ctx).blocking
+
+
+def test_un_flux_essentiel_mort_arrete_bien_le_desk(healthy_ctx):
+    """La distinction ne doit pas devenir une porte de sortie générale."""
+    from trading_desk.contracts.market import FeedHealth, FeedStatus
+
+    mort = FeedHealth(name="mids", max_age_ms=10_000, essentiel=True,
+                      status=FeedStatus.NEVER_CONNECTED, last_message_ms=None)
+    ctx = healthy_ctx.model_copy(
+        update={"feeds": (*healthy_ctx.feeds, mort)})
+    assert ctx.freshest_failure() is mort
+    assert Invariant.I09_FRESH_DATA in evaluate(ctx).blocking
+
+
+def test_le_socle_est_essentiel_le_journal_est_surveille():
+    """Le réglage vit à la souscription, pas dans un test."""
+    from trading_desk.market.hyperliquid_ws import Subscription
+
+    assert Subscription.book("BTC").feed.essentiel is True
+    assert Subscription.book("KAITO", essentiel=False).feed.essentiel is False
+    assert Subscription.mids().feed.essentiel is True

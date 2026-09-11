@@ -119,6 +119,20 @@ class FeedHealth(Frozen):
     last_message_ms: int | None = None
     max_age_ms: int = 15_000
     cadence_garantie: bool = True
+    # Ce flux est-il necessaire pour DECIDER, ou seulement regarde ?
+    #
+    # `mids` et les actifs du socle (`DESK_ASSETS`) sont essentiels : sans
+    # eux le desk ne connait plus les prix, et trader devient aveugle.
+    #
+    # Les actifs ajoutes d'apres le journal sont de la SURVEILLANCE. Leur
+    # silence ne doit pas arreter le desk, et la raison est concrete : sur
+    # le testnet, le carnet de LISTA n'arrive jamais. Le suivre a fait
+    # passer I09 au rouge, ce qui a halte un desk qui allait tres bien —
+    # pour un actif dont le prix arrivait par `mids` de toute facon.
+    #
+    # Un garde-fou qui s'aggrave a mesure qu'on surveille plus punit la
+    # surveillance. C'est le contraire de ce qu'on veut.
+    essentiel: bool = True
     messages: int = 0
     reconnects: int = 0
     last_error: str | None = None
