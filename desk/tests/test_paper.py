@@ -9,6 +9,7 @@ qui échoue si on le prend.
 from __future__ import annotations
 
 from decimal import Decimal
+from pathlib import Path
 
 import pytest
 
@@ -651,3 +652,44 @@ def test_un_rapport_de_pupitre_en_panne_ne_fait_pas_tomber_la_supervision():
     state = DeskState(Settings(), SqliteStore(":memory:"))
     state.rapport_pupitre = casse
     assert state.snapshot()["pupitre"] == {"erreur": "rapport indisponible"}
+
+
+def test_le_desk_se_lance_depuis_n_importe_ou(monkeypatch, tmp_path):
+    """`desk` doit marcher sans qu'on se place dans le dépôt.
+
+    Sans ça, lancer le desk depuis la maison échoue sur « journal absent »
+    — et ce message ne dit pas la vraie cause. On croit que le journal
+    manque alors qu'on est simplement au mauvais endroit, ce qui envoie
+    chercher le défaut là où il n'est pas.
+    """
+    from trading_desk.config import Settings, racine_projet
+
+    racine = racine_projet()
+    assert racine is not None, "installation éditable attendue pour ce test"
+    assert (racine / "pyproject.toml").exists()
+
+    relatif = "data/journal_unlocks.jsonl"
+    monkeypatch.chdir(tmp_path)
+    s = Settings(paper_journal=relatif)
+    if (racine / relatif).exists():
+        assert Path(s.paper_journal).is_absolute(), "le dépôt doit être trouvé"
+        assert Path(s.paper_journal).exists()
+    else:
+        assert s.paper_journal == relatif, (
+            "un chemin introuvable reste tel quel : le message d'erreur doit "
+            "parler de ce que l'utilisateur a écrit")
+
+
+def test_un_journal_present_ici_gagne_sur_celui_du_depot(monkeypatch, tmp_path):
+    """Le plus proche gagne. Quelqu'un qui pose un `data/` à côté de lui
+    veut le sien, pas celui du dépôt."""
+    from trading_desk.config import Settings
+
+    (tmp_path / "data").mkdir()
+    local = tmp_path / "data" / "journal_unlocks.jsonl"
+    local.write_text("", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+
+    s = Settings(paper_journal="data/journal_unlocks.jsonl")
+    assert s.paper_journal == "data/journal_unlocks.jsonl", \
+        "trouvé ici : on ne touche à rien"

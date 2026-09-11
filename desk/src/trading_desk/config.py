@@ -13,6 +13,7 @@ Deux precautions valent d'etre soulignees :
 from __future__ import annotations
 
 from decimal import Decimal
+from pathlib import Path
 from typing import Annotated
 
 from pydantic import field_validator, model_validator
@@ -22,10 +23,47 @@ from .contracts.common import DeskMode
 from .risk.limits import RiskLimits
 
 
+def racine_projet() -> Path | None:
+    """Le repertoire du depot, ou None si le paquet est installe en dur.
+
+    Sert a une seule chose : que `desk` marche depuis n'importe ou. Sans
+    elle, `.env` et `data/journal_unlocks.jsonl` se resolvent contre le
+    repertoire COURANT, donc lancer le desk depuis ailleurs echoue sur un
+    « journal absent » qui ne dit pas la vraie cause — on croit que le
+    journal manque alors qu'on est juste au mauvais endroit.
+
+    On remonte depuis le fichier du paquet jusqu'a trouver le `pyproject.toml`
+    du desk. En installation editable il est la ; en installation figee il ne
+    l'est pas, et on rend None plutot que de deviner.
+    """
+    for parent in Path(__file__).resolve().parents:
+        marqueur = parent / "pyproject.toml"
+        if marqueur.exists():
+            try:
+                if 'name = "trading-desk"' in marqueur.read_text(encoding="utf-8"):
+                    return parent
+            except OSError:
+                return None
+    return None
+
+
+def _fichiers_env() -> tuple[str, ...]:
+    """`.env` du depot puis celui du repertoire courant.
+
+    L'ordre compte : pydantic-settings donne la priorite au DERNIER. Un
+    `.env` pose la ou l'on travaille l'emporte donc sur celui du depot, ce
+    qui est le sens attendu — le plus proche gagne.
+    """
+    racine = racine_projet()
+    if racine is None:
+        return (".env",)
+    return (str(racine / ".env"), ".env")
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_prefix="DESK_",
-        env_file=".env",
+        env_file=_fichiers_env(),
         env_file_encoding="utf-8",
         extra="ignore",
     )
@@ -101,6 +139,34 @@ class Settings(BaseSettings):
         if isinstance(v, str):
             return tuple(a.strip().upper() for a in v.split(",") if a.strip())
         return v
+
+    @model_validator(mode="after")
+    def _resoudre_les_chemins(self) -> Settings:
+        """Un chemin relatif se resout d'abord ici, ensuite dans le depot.
+
+        Le repertoire courant d'abord : c'est le plus specifique, et
+        quelqu'un qui pose un `data/` a cote de lui veut le sien. Le depot
+        ensuite, pour que `desk` lance depuis la maison trouve quand meme le
+        journal.
+
+        On ne resout QUE si le fichier existe a l'arrivee. Un chemin qui
+        n'existe nulle part reste tel quel : le message d'erreur doit parler
+        de ce que l'utilisateur a ecrit, pas d'un chemin absolu qu'il n'a
+        jamais tape.
+        """
+        racine = racine_projet()
+        if racine is None:
+            return self
+        for champ in ("paper_journal",):
+            valeur = getattr(self, champ)
+            if not valeur or Path(valeur).is_absolute():
+                continue
+            if Path(valeur).exists():
+                continue                      # trouve ici : on ne touche a rien
+            depuis_depot = racine / valeur
+            if depuis_depot.exists():
+                object.__setattr__(self, champ, str(depuis_depot))
+        return self
 
     @model_validator(mode="after")
     def _live_requires_proof(self) -> Settings:
