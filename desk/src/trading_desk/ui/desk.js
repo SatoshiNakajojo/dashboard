@@ -98,7 +98,7 @@ function flash(msg) { $("killNote").textContent = msg; }
 /* ---------- rendu ---------- */
 function render(s) {
   snap = s;
-  // Le cockpit se greffe ici plutot que de redemander l'etat. Un second
+  // Un habillage se greffe ici plutot que de redemander l'etat. Un second
   // consommateur qui interrogerait `/api/snapshot` de son cote doublerait la
   // charge et, pire, afficherait un instant different de celui des panneaux :
   // deux ecrans du meme desk qui ne racontent pas la meme seconde.
@@ -909,8 +909,15 @@ montrer(secteurInitial);
 chargerRecherche();
 setInterval(chargerRecherche, 60000);
 
-// Surface publique, pour le cockpit. Volontairement minuscule : tout ce qui
-// depasse d'ici serait une seconde implementation de la meme chose.
+// Surface publique. Volontairement minuscule : tout ce qui depasse d'ici
+// serait une seconde implementation de la meme chose.
+//
+// Elle servait au poste photographique, qui greffait son habillage dessus.
+// Ce poste-la n'existe plus — le poste actuel charge cette page dans une
+// iframe et n'a rien a greffer. La surface reste parce qu'elle EST la
+// couture : meme origine, donc `frame.contentWindow.Desk` depuis le poste
+// si un jour il faut lui parler. Un habillage qui irait chercher dans les
+// entrailles de ce fichier serait la vraie dette.
 window.Desk = {
   usd, usdFin, dur, clock, esc, pct, num, courbeSVG, histogramme, post,
   get snapshot() { return snap; },

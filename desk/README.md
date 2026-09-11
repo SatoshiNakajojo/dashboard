@@ -172,8 +172,9 @@ durée de l'onglet, pas au-delà : rouvrir le desk demain doit redonner
 l'embarquement, c'est lui qui fait qu'on s'assoit quelque part. `Échap` ou
 « Passer » l'abrège.
 
-Deux autres vues restent servies : `/panneaux` sans décor, pour lire plutôt
-que piloter, et `/cockpit-photo` pour le poste photographique précédent.
+`/panneaux` sert la même interface sans décor — la vue qu'on ouvre pour lire
+plutôt que pour piloter, et celle qui reste lisible sur un écran qui n'a pas
+le format du poste.
 
 Pour ingérer le vrai marché (testnet, toujours en lecture seule) :
 
