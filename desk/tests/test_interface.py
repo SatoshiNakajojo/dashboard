@@ -600,7 +600,11 @@ def test_le_poste_charge_les_panneaux_au_lieu_de_les_recopier(client):
     qui ment sans qu'on s'en aperçoive.
     """
     page = client.get("/").text
-    assert 'src="/panneaux"' in page, "la dalle doit charger les panneaux"
+    # Le préfixe, pas l'URL exacte : la dalle demande `/panneaux?verre`, et
+    # c'est un autre test qui veille sur ce paramètre. Celui-ci ne surveille
+    # qu'une chose — que la dalle CHARGE les panneaux au lieu d'en recopier
+    # le balisage.
+    assert 'src="/panneaux' in page, "la dalle doit charger les panneaux"
     for secteur in ("prevol", "telemetrie", "navigation", "soufflerie",
                     "consommation", "vols", "systemes"):
         assert f'id="sec-{secteur}"' not in page, (
@@ -659,6 +663,197 @@ def test_le_cadrage_de_la_dalle_n_a_qu_une_source():
     for nom in ("--verre-l", "--verre-t", "--verre-w", "--verre-h"):
         assert css.count(nom + ":") == 1, f"{nom} déclaré plusieurs fois"
         assert f"var({nom})" in css, f"{nom} déclaré mais jamais utilisé"
+
+
+# --------------------------------------------------------------------------
+#  La dalle : les panneaux vus DEPUIS le poste
+# --------------------------------------------------------------------------
+#
+#  La dalle charge `/panneaux?verre`, ce qui pose `data-verre` sur la racine
+#  et declenche une mise en page courte. Tout ce qui suit protege cette mise
+#  en page contre les quatre facons dont elle s'est deja cassee.
+
+def _desk_css() -> str:
+    return (recherche.RACINE / "src/trading_desk/ui/desk.css").read_text(encoding="utf-8")
+
+
+def _panneaux() -> str:
+    return (recherche.RACINE / "src/trading_desk/ui/index.html").read_text(encoding="utf-8")
+
+
+def test_la_dalle_demande_les_panneaux_en_version_verre():
+    """Le poste charge `/panneaux?verre`, pas `/panneaux` tout court."""
+    assert "/panneaux?verre" in _poste(), \
+        "sans le paramètre, la dalle reçoit la mise en page longue"
+
+
+def test_le_marqueur_du_verre_est_pose_avant_le_premier_rendu():
+    """`data-verre` est posé dans le `<head>`, pas par le script de la page.
+
+    Posé après coup, il afficherait la mise en page longue pendant une
+    image, puis la courte — un sursaut visible au moment précis où l'on
+    arrive au poste, là où tout l'effet repose sur la continuité.
+    """
+    page = _panneaux()
+    assert "data-verre" in page, "le marqueur n'est jamais posé"
+    tete = page.index("</head>")
+    assert page.index("data-verre") < tete, \
+        "le marqueur est posé après le <head> : la bascule sera visible"
+
+    js = (recherche.RACINE / "src/trading_desk/ui/desk.js").read_text(encoding="utf-8")
+    assert "data-verre" not in js, \
+        "le marqueur doit être posé par le head, pas par desk.js"
+
+
+def test_la_mise_en_page_du_verre_ne_deborde_pas_sur_la_vue_sans_decor():
+    """Aucune règle du bloc « verre » ne s'applique sans le marqueur.
+
+    La vue sans décor est celle qu'on ouvre en plein écran pour LIRE : 15 px
+    de corps, une largeur de lecture, un défilement normal. Une seule règle
+    qui fuirait hors du bloc la rendrait illisible sans que rien ne le dise,
+    puisque les deux vues servent le même fichier.
+    """
+    css = _desk_css()
+    debut = css.index("DANS LE VERRE")
+    bloc = css[debut:]
+    for ligne in bloc.splitlines():
+        ligne = ligne.strip()
+        # On ne regarde que les lignes qui ouvrent un sélecteur.
+        if not ligne or ligne.startswith(("/*", "*", "}")) or "{" not in ligne:
+            continue
+        selecteur = ligne.split("{")[0].strip()
+        assert selecteur.startswith(":root[data-verre]"), \
+            f"règle non préfixée dans le bloc verre : {selecteur!r}"
+
+
+def test_les_enfants_de_la_dalle_peuvent_retrecir():
+    """`min-width:0`. Le défaut le plus sournois rencontré sur cette dalle.
+
+    Un enfant de conteneur flex a `min-width:auto` : il refuse de rétrécir
+    sous sa largeur min-content. La barre des sept onglets en `nowrap`
+    mesurait 771 px de min-content et imposait cette largeur à toute la
+    page — dans une dalle de 625 px. Et comme la racine porte
+    `overflow:hidden`, l'excédent n'était pas offert au défilement : il
+    était COUPÉ, sans barre, sans indice. Le bouton « Tout arrêter » était
+    tronqué et les deux derniers onglets absents, sur l'écran dont c'est
+    précisément le rôle de tout montrer.
+
+    La grille a la même faiblesse par une autre porte : `1fr` vaut
+    `minmax(auto, 1fr)`, dont le minimum est min-content. D'où `minmax(0,1fr)`.
+    """
+    css = _desk_css()
+    bloc = css[css.index("DANS LE VERRE"):]
+    assert "min-width:0" in bloc, "rien ne permet aux enfants de rétrécir"
+    assert "grid-template-columns:minmax(0,1fr) auto" in bloc, \
+        "la bannière garde un plancher min-content : le bouton d'arrêt sera coupé"
+    assert "grid-template-columns:minmax(0,1fr)" in bloc, \
+        "le secteur garde un plancher min-content"
+
+
+def test_la_hauteur_de_la_dalle_est_budgetee():
+    """Rien au-dessus du secteur ne peut grandir avec les données.
+
+    La bannière était le seul bloc de la dalle dont la hauteur dépend des
+    données : cinq invariants en défaut font six lignes, douze en font
+    treize. Sans plafond, le jour où tout casse — précisément celui où on
+    regarde cet écran — la bannière mange la dalle et le secteur tombe à
+    zéro. Mesuré : 0 px de secteur sur une fenêtre de 1280×800.
+
+    Le plancher du secteur ne vaut que parce que ces plafonds existent ;
+    seul, il ne ferait que déplacer le débordement d'un cran plus bas.
+    """
+    bloc = _desk_css()[_desk_css().index("DANS LE VERRE"):]
+    assert "max-height:21vh" in bloc, "la liste des invariants n'est pas plafonnée"
+    assert "min-height:26vh" in bloc, "le secteur n'a pas de plancher"
+
+
+def test_le_bouton_de_theme_disparait_dans_le_verre():
+    """Le poste force le thème sombre à chaque chargement de la dalle.
+
+    Un bouton qui change quelque chose que le rechargement suivant reprend
+    n'est pas une préférence, c'est un mensonge. Il reste dans la vue sans
+    décor, où il décide vraiment.
+    """
+    bloc = _desk_css()[_desk_css().index("DANS LE VERRE"):]
+    assert ":root[data-verre] #theme { display:none }" in bloc
+
+    js = (recherche.RACINE / "src/trading_desk/ui/poste/poste.js") \
+        .read_text(encoding="utf-8")
+    assert 'setAttribute("data-theme", "dark")' in js, \
+        "le poste ne force plus le thème : cacher le bouton devient arbitraire"
+
+
+def test_le_titre_de_la_dalle_est_masque_sans_etre_retire():
+    """Masqué à l'œil, pas retiré de l'arbre d'accessibilité.
+
+    « Desk · Poste de pilotage » est le titre du document : un lecteur
+    d'écran doit continuer à l'annoncer. Il est en revanche redondant à
+    l'œil — le cadre autour de la dalle EST le poste.
+    """
+    bloc = _desk_css()[_desk_css().index("DANS LE VERRE"):]
+    i = bloc.index(":root[data-verre] .bar h1")
+    regle = bloc[i:bloc.index("}", i)]
+    assert "clip-path" in regle, "le titre doit être rogné, pas caché"
+    assert "display:none" not in regle, \
+        "display:none retire le titre de l'arbre d'accessibilité"
+
+
+def test_le_seuil_du_decor_est_le_meme_des_deux_cotes():
+    """Le seuil est écrit deux fois. Ces deux écritures doivent s'accorder.
+
+    Le poste redirige vers les panneaux quand la fenêtre est trop petite
+    pour le décor ; `desk.css` masque le lien « poste » exactement en
+    dessous du même seuil. S'ils divergent, le lien mène à une page qui
+    renvoie aussitôt sur celle qu'on vient de quitter : un clic sans effet,
+    et rien à l'écran pour dire pourquoi.
+
+    Le décor est une image 16/9 contenue dans la fenêtre, donc sa largeur
+    vaut min(largeur, hauteur × 16/9). Exiger L pixels de décor revient à
+    exiger L de large et L × 9/16 de haut.
+    """
+    js = (recherche.RACINE / "src/trading_desk/ui/poste/poste.js") \
+        .read_text(encoding="utf-8")
+    m = re.search(r"LARGEUR_MINIMALE_DU_DECOR\s*=\s*(\d+)", js)
+    assert m, "le seuil n'est plus une constante nommée dans poste.js"
+    seuil = int(m.group(1))
+
+    css = (recherche.RACINE / "src/trading_desk/ui/desk.css").read_text(encoding="utf-8")
+    q = re.search(r"@media \(min-width:(\d+)px\) and \(min-height:(\d+)px\)"
+                  r"\s*\{\s*#versPoste", css)
+    assert q, "la requête de média qui montre le lien « poste » a disparu"
+    largeur, hauteur = int(q.group(1)), int(q.group(2))
+
+    assert largeur == seuil, (
+        f"le poste redirige sous {seuil} px, le lien réapparaît à {largeur} px")
+    attendue = round(seuil * 9 / 16)
+    assert abs(hauteur - attendue) <= 1, (
+        f"hauteur minimale {hauteur} px, attendue {attendue} px "
+        f"pour un décor 16/9 de {seuil} px")
+
+
+def test_la_piece_trop_petite_rend_les_panneaux_nus():
+    """Sous le seuil, on sert les instruments plutôt qu'un décor minuscule.
+
+    Sur un téléphone en portrait, la dalle mesure 190×149 : le desk y est
+    illisible et le décor ne décore plus rien. `replace` et non `href` — le
+    bouton « retour » doit ramener d'où l'on vient, pas rejouer la
+    redirection.
+    """
+    js = (recherche.RACINE / "src/trading_desk/ui/poste/poste.js") \
+        .read_text(encoding="utf-8")
+    assert 'location.replace("/panneaux")' in js, \
+        "le repli ne mène pas aux panneaux, ou piège le bouton retour"
+    # La redirection doit précéder tout le reste : monter la séquence puis
+    # partir ferait télécharger deux mégaoctets de vidéo pour rien.
+    assert js.index("location.replace") < js.index('getElementById("embarquement")'), \
+        "le repli doit décider avant que la page ne se monte"
+
+
+def test_les_panneaux_savent_revenir_au_poste():
+    """On pouvait quitter le décor, jamais y revenir."""
+    page = _panneaux()
+    assert 'id="versPoste"' in page and 'href="/"' in page, \
+        "la vue sans décor n'a pas de chemin de retour"
 
 
 def test_le_poste_ne_passe_aucun_ordre(client):
