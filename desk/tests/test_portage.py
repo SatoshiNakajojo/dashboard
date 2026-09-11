@@ -43,6 +43,26 @@ def test_la_decomposition_somme_au_net():
     assert abs(r["portage"] + r["cours"] - r["frais"] - r["net"]) < 1e-12
 
 
+def test_la_serie_mensuelle_somme_au_net():
+    """Le net ET la série mensuelle décrivent la MÊME stratégie.
+
+    Le test précédent ne vérifie que la définition de `net` à partir des
+    trois accumulateurs. Il resterait vert si un mois était compté dans le
+    total sans entrer dans `mensuel`, ou l'inverse — et c'est un accident
+    facile : les accumulateurs et la liste sont alimentés par quatre lignes
+    séparées, et un `continue` mal placé n'en saute que certaines.
+
+    L'écart serait invisible là où il compte le plus : l'écart-type, le
+    Sharpe et le compte de mois positifs sont tous calculés sur `mensuel`,
+    le titre du rapport sur `net`. Ils se décriraient l'un l'autre en
+    silence tout en portant sur des périodes différentes.
+    """
+    mois, fin, prix = par_mois(_monde())
+    r = rejouer(mois, fin, prix, 3, par_classement)
+    assert r["mensuel"], "un monde jouet de trois mois doit tenir deux mois"
+    assert abs(sum(r["mensuel"]) - r["net"]) < 1e-12
+
+
 def test_vendre_le_financement_eleve_l_encaisse():
     """Le signe. Un financement positif est payé PAR les longs AUX shorts.
 
