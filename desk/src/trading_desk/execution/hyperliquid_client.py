@@ -323,8 +323,32 @@ class HyperliquidClient:
                 fee_usd=_dec(row.get("fee"), Decimal("0")) or Decimal("0"),
                 is_maker=not bool(row.get("crossed", True)),
                 ts_ms=int(row.get("time") or now_ms()),
+                closed_pnl_usd=_dec(row.get("closedPnl"), Decimal("0")) or Decimal("0"),
             ))
         return out
+
+    def realise_jour_usd(self) -> Decimal:
+        """PnL realise depuis minuit UTC, frais deduits.
+
+        Sans lui, l'invariant I03 repond « PnL du jour inconnu » — ce qui
+        vaut echec, donc desk bloque. Le pupitre le cherchait deja sur
+        l'exchange ; le simulateur l'avait, le client reel non.
+
+        Minuit UTC et non minuit local : la limite de perte quotidienne doit
+        se reinitialiser au meme instant pour tout le monde, sinon deux
+        deploiements de la meme strategie n'ont pas la meme limite.
+
+        `closedPnl` vient de l'exchange, qui seul connait le prix moyen
+        d'entree. Les frais sont comptes a part par l'API, donc soustraits
+        ici : une perte du jour qui ignore ses propres frais sous-estime
+        exactement ce que la limite est censee plafonner.
+        """
+        from datetime import datetime, timezone
+
+        minuit = datetime.now(timezone.utc).replace(
+            hour=0, minute=0, second=0, microsecond=0)
+        fills = self.fills_since(int(minuit.timestamp() * 1000))
+        return sum((f.closed_pnl_usd - f.fee_usd for f in fills), Decimal("0"))
 
     # --------------------------------------------------------------- ordres
 

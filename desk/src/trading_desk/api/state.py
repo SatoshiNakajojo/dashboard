@@ -53,6 +53,11 @@ class DeskState:
         self.orders_last_minute = 0
         self.mandates_today = 0
         self.last_prices: dict[str, str] = {}
+        # Rempli par `app.py` quand un pupitre existe. La supervision ne
+        # connait pas le pupitre ; elle connait une fonction qui rend son
+        # etat, ce qui evite de faire dependre l'etat du desk de la couche
+        # qui trade.
+        self.rapport_pupitre = None
 
     # ------------------------------------------------------------ kill switch
 
@@ -225,7 +230,31 @@ class DeskState:
                 },
                 "last_prices": dict(self.last_prices),
                 "storage": self.store.counts(),
+                "pupitre": self._rapport_pupitre(),
             }
+
+    def _rapport_pupitre(self) -> dict | None:
+        """Ce que le pupitre a fait, et surtout ce qu'il a REFUSE de faire.
+
+        Un desk qui refuse toute entree en affichant « douze invariants au
+        vert, aucun blocage » est pire qu'un desk en panne : il a l'air de
+        marcher. C'est arrive, et la cause etait une bande de stop mal
+        configuree — la regle des deblocages demande 1500 bps, le defaut en
+        autorise 500. Le pupitre le savait, l'ecrivait dans sa liste de
+        refus, et personne ne la lisait.
+
+        Les invariants disent si le desk a le DROIT d'agir. Ils ne disent
+        pas s'il agit. Il fallait les deux.
+        """
+        rapport = self.rapport_pupitre
+        if rapport is None:
+            return None
+        try:
+            return rapport()
+        except Exception:                      # noqa: BLE001
+            # La supervision ne doit jamais tomber a cause de ce qu'elle
+            # rapporte : un ecran muet vaut mieux qu'un ecran absent.
+            return {"erreur": "rapport indisponible"}
 
 
 def demo_account(equity: Decimal = Decimal("1000")) -> AccountState:

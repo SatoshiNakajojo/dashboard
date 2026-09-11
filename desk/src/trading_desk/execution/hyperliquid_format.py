@@ -38,6 +38,20 @@ MAX_DECIMALS_PERP = 6
 MAX_DECIMALS_SPOT = 8
 MAX_SIGNIFICANT_FIGURES = 5
 
+# Notionnel minimal accepte par l'exchange, en dollars.
+#
+# PROVENANCE : la documentation Hyperliquid, PAS un aller-retour reel. C'est
+# la seule valeur de ce module qu'aucun test ne peut confirmer ici — les
+# metadonnees publiees par l'API ne la portent pas, et le SDK officiel non
+# plus. Elle est donc nommee, isolee et surchargeable, pour qu'un premier
+# aller-retour sur testnet puisse la corriger sans toucher au code.
+#
+# A quoi elle sert quand meme : sans elle, un ordre trop petit part, et
+# revient en rejet laconique de l'exchange. Avec elle, il est refuse ici,
+# avec son chiffre et la raison. Un refus explique vaut mieux qu'un refus
+# exact mais muet.
+NOTIONNEL_MINIMAL_USD = Decimal("10")
+
 
 class AssetMeta(Frozen):
     """Metadonnees d'un actif, lues dans la reponse `meta` de l'API Info.

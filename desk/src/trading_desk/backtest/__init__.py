@@ -24,6 +24,7 @@ from .strategies import (
     BASELINES,
     PLAFOND_STOP_CAMPAGNE_BPS,
     EmaCross,
+    RsiContinuation,
     RsiReversion,
     Signal,
     Strategy,
@@ -33,7 +34,7 @@ from .strategies import (
 __all__ = [
     "BASELINES", "FRICTIONLESS", "PLAFOND_STOP_CAMPAGNE_BPS", "BacktestResult", "BacktestTrade",
     "CostModel", "DataUnavailable", "EmaCross", "Metrics", "NullResult",
-    "RsiReversion", "Signal", "Strategy", "benchmark_buy_and_hold",
+    "RsiContinuation", "RsiReversion", "Signal", "Strategy", "benchmark_buy_and_hold",
     "compute_metrics", "fetch_hyperliquid", "format_null_report",
     "format_report", "load_from_file", "load_from_store", "load_synthetic",
     "parametres", "randomization_test", "run_backtest",

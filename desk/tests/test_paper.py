@@ -473,20 +473,95 @@ def test_le_journal_est_relu_a_chaque_cycle(tmp_path):
     assert len(pilote.positions()) == 2, "le journal doit être relu, pas mis en cache"
 
 
-def test_le_mode_paper_est_le_seul_cable():
-    """TESTNET et LIVE attendent la validation de signature (porte P1)."""
+def _etat(mode):
     from trading_desk.api.state import DeskState
     from trading_desk.config import Settings
+    from trading_desk.storage import SqliteStore
+    reglages = {"mode": mode}
+    if mode.name == "TESTNET":
+        reglages["agent_wallet_address"] = "0x" + "ab" * 20
+    return DeskState(Settings(**reglages), SqliteStore(":memory:"))
+
+
+def test_paper_et_testnet_sont_cables_live_ne_l_est_pas():
+    """La porte P1 s'est ouverte a moitie, et LIVE est la moitie fermee.
+
+    La signature est validee vecteur par vecteur contre le SDK officiel, donc
+    TESTNET peut envoyer des ordres : aucun argent en jeu, et c'est
+    precisement ce qui doit eprouver le RESTE de la requete — indices
+    d'actifs, pas de cotation, tailles minimales. LIVE attend que cet
+    aller-retour ait reussi.
+    """
     from trading_desk.contracts.common import DeskMode
     from trading_desk.execution.pupitre import exchange_pour
-    from trading_desk.storage import SqliteStore
 
-    paper = DeskState(Settings(mode=DeskMode.PAPER), SqliteStore(":memory:"))
-    assert exchange_pour(paper).account_state().source == "simulator"
+    assert exchange_pour(_etat(DeskMode.PAPER)).account_state().source == "simulator"
 
-    shadow = DeskState(Settings(mode=DeskMode.SHADOW), SqliteStore(":memory:"))
-    with pytest.raises(NotImplementedError, match="porte P1"):
-        exchange_pour(shadow)
+    with pytest.raises(NotImplementedError, match="LIVE"):
+        exchange_pour(_etat(DeskMode.SHADOW))
+
+
+def test_testnet_refuse_de_demarrer_sans_cle(monkeypatch):
+    """Sans cle, on refuse au demarrage — pas a la premiere signature.
+
+    Decouvrir l'absence de cle au moment de signer, c'est la decouvrir avec
+    un signal en cours et une fenetre d'entree qui se referme.
+    """
+    from trading_desk.contracts.common import DeskMode
+    from trading_desk.execution.pupitre import VARIABLE_CLE, exchange_pour
+
+    monkeypatch.delenv(VARIABLE_CLE, raising=False)
+    with pytest.raises(SystemExit, match=VARIABLE_CLE):
+        exchange_pour(_etat(DeskMode.TESTNET))
+
+
+def test_une_cle_malformee_est_refusee_sans_etre_citee(monkeypatch):
+    """Le message ne contient jamais la valeur, meme tronquee.
+
+    Une cle partiellement revelee dans un journal reste une cle affaiblie.
+    """
+    from trading_desk.contracts.common import DeskMode
+    from trading_desk.execution.pupitre import VARIABLE_CLE, exchange_pour
+
+    for mauvaise in ("pas-une-cle", "0x" + "ff" * 31, "0x" + "zz" * 32):
+        monkeypatch.setenv(VARIABLE_CLE, mauvaise)
+        with pytest.raises(SystemExit) as e:
+            exchange_pour(_etat(DeskMode.TESTNET))
+        message = str(e.value)
+        assert "hexadecimal" in message or "32 octets" in message
+        assert mauvaise not in message, "la cle ne doit jamais etre citee"
+        assert mauvaise.removeprefix("0x")[:8] not in message
+
+
+def test_testnet_construit_bien_un_client_vers_le_testnet(monkeypatch):
+    """Un client pointe sur le mainnet en croyant etre en bac a sable serait
+    la panne la plus chere possible."""
+    from trading_desk.contracts.common import DeskMode
+    from trading_desk.execution.pupitre import VARIABLE_CLE, exchange_pour
+
+    monkeypatch.setenv(VARIABLE_CLE, "0x" + "11" * 32)
+    client = exchange_pour(_etat(DeskMode.TESTNET))
+    assert client.is_mainnet is False
+    assert "testnet" in client.base
+
+
+def test_testnet_exige_une_adresse_de_compte():
+    """Sans adresse, la reconciliation lit le compte de personne — et
+    l'invariant I01 passerait au vert a tort."""
+    from trading_desk.config import Settings
+    from trading_desk.contracts.common import DeskMode
+
+    with pytest.raises(ValueError, match="agent_wallet_address"):
+        Settings(mode=DeskMode.TESTNET)
+
+
+def test_testnet_refuse_un_reglage_qui_viserait_le_mainnet():
+    from trading_desk.config import Settings
+    from trading_desk.contracts.common import DeskMode
+
+    with pytest.raises(ValueError, match="mainnet"):
+        Settings(mode=DeskMode.TESTNET, testnet=False,
+                 agent_wallet_address="0x" + "ab" * 20)
 
 
 def test_les_actifs_se_lisent_depuis_une_liste_separee_par_des_virgules(monkeypatch):
@@ -530,3 +605,49 @@ def test_les_fills_arrivent_dans_le_stockage(tmp_path):
     # Un second cycle ne doit pas dupliquer : `write_fill` déduplique par id.
     pupitre.cycle(t)
     assert state.store.counts()["fills"] == 1
+
+
+def test_le_desk_dit_ce_qu_il_a_refuse_de_faire(monkeypatch, tmp_path):
+    """Un desk qui refuse toute entrée en affichant « aucun blocage » est
+    pire qu'un desk en panne : il a l'air de marcher.
+
+    C'est arrivé. La règle des déblocages demande un stop à 1500 bps ; le
+    défaut en autorise 500. Le pupitre le savait, l'écrivait dans sa liste
+    de refus, et personne ne la lisait — la supervision affichait douze
+    invariants au vert pendant que rien ne se tradait.
+
+    Les invariants disent si le desk a le DROIT d'agir. Ils ne disent pas
+    s'il agit. Il faut les deux à l'écran.
+    """
+    from trading_desk.api.state import DeskState
+    from trading_desk.config import Settings
+    from trading_desk.storage import SqliteStore
+
+    state = DeskState(Settings(), SqliteStore(":memory:"))
+    assert state.snapshot()["pupitre"] is None, "sans pupitre, rien à rapporter"
+
+    state.rapport_pupitre = lambda: {
+        "signal": "deblocages", "ouvertures": 0, "fermetures": 0,
+        "refus": ["BTC non dimensionnable : stop hors bande"], "nb_refus": 7,
+    }
+    rapport = state.snapshot()["pupitre"]
+    assert rapport["nb_refus"] == 7
+    assert "stop hors bande" in rapport["refus"][0]
+
+
+def test_un_rapport_de_pupitre_en_panne_ne_fait_pas_tomber_la_supervision():
+    """Un écran muet vaut mieux qu'un écran absent.
+
+    La supervision est ce qui reste quand le reste casse ; elle ne doit
+    jamais tomber à cause de ce qu'elle rapporte.
+    """
+    from trading_desk.api.state import DeskState
+    from trading_desk.config import Settings
+    from trading_desk.storage import SqliteStore
+
+    def casse():
+        raise RuntimeError("exchange injoignable")
+
+    state = DeskState(Settings(), SqliteStore(":memory:"))
+    state.rapport_pupitre = casse
+    assert state.snapshot()["pupitre"] == {"erreur": "rapport indisponible"}

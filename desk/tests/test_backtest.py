@@ -20,7 +20,8 @@ from decimal import Decimal
 import pytest
 
 from trading_desk.backtest import (
-    FRICTIONLESS, CostModel, EmaCross, RsiReversion, benchmark_buy_and_hold,
+    FRICTIONLESS, CostModel, EmaCross, RsiContinuation, RsiReversion,
+    benchmark_buy_and_hold,
     compute_metrics, format_report, run_backtest,
 )
 from trading_desk.backtest.engine import _check_exit_levels, _Open
@@ -216,6 +217,65 @@ def test_le_benchmark_suit_le_prix():
     variation = float(bars[-1].close / bars[51].open - 1)
     rendement = float(r.net_pnl_usd / r.initial_equity_usd)
     assert abs(rendement - variation) < 0.005
+
+
+def test_la_continuation_est_le_miroir_exact_de_la_reversion():
+    """Meme structure, sens oppose — et RIEN d'autre de different.
+
+    Toute la campagne hors echantillon repose sur cette propriete. Si
+    `rsi_continuation` gagne la ou `rsi_reversion` perd, on veut pouvoir
+    dire que c'est le SENS qui a change ; il faut donc que ce soit la seule
+    chose qui ait change. Qu'on retouche un jour le stop de l'une sans
+    l'autre, et la comparaison ne mesure plus rien tout en continuant de
+    produire des chiffres — c'est la panne la plus couteuse, parce qu'elle
+    est muette.
+    """
+    bars = synthetic_bars(count=900, seed=31)
+    a, b = RsiReversion(), RsiContinuation()
+    a.prepare(bars)
+    b.prepare(bars)
+
+    entrees = 0
+    for i in range(len(bars)):
+        sa, sb = a.on_bar(i, bars, None), b.on_bar(i, bars, None)
+        if sa.side is None and sb.side is None:
+            continue
+        assert sa.side is not None and sb.side is not None, (
+            f"barre {i} : une seule des deux entre, elles ne se repondent plus")
+        assert sa.side is not sb.side, f"barre {i} : meme sens"
+        entrees += 1
+        # Le stop et la cible sont a la meme distance du prix des deux cotes :
+        # c'est ce qui fait que les deux strategies portent le meme risque.
+        close = bars[i].close
+        assert abs(abs(sa.stop_price - close) - abs(sb.stop_price - close)) \
+            < Decimal("0.01"), f"barre {i} : stops a des distances differentes"
+        if sa.target_price is not None and sb.target_price is not None:
+            assert abs(abs(sa.target_price - close) - abs(sb.target_price - close)) \
+                < Decimal("0.01"), f"barre {i} : cibles a des distances differentes"
+
+    assert entrees >= 5, "trop peu d'entrees pour que le test prouve quoi que ce soit"
+
+
+def test_la_continuation_sort_sur_le_meme_declencheur():
+    """La sortie ne doit pas changer en meme temps que le sens.
+
+    Changer deux choses a la fois rendrait la comparaison muette : on ne
+    saurait plus si l'ecart vient du sens de l'entree ou du moment de la
+    sortie.
+    """
+    bars = synthetic_bars(count=900, seed=31)
+    a, b = RsiReversion(), RsiContinuation()
+    a.prepare(bars)
+    b.prepare(bars)
+    vus = 0
+    for i in range(len(bars)):
+        # la position de l'une est l'opposee de celle de l'autre
+        for cote, oppose in ((Side.LONG, Side.SHORT), (Side.SHORT, Side.LONG)):
+            sa, sb = a.on_bar(i, bars, cote), b.on_bar(i, bars, oppose)
+            assert sa.exit_now == sb.exit_now, (
+                f"barre {i} : l'une sort et pas l'autre")
+            vus += sa.exit_now
+    assert vus >= 5, "aucune sortie observee : le test ne prouve rien"
 
 
 def test_pnl_net_coherent_avec_la_decomposition():
@@ -610,6 +670,53 @@ def test_le_verdict_de_la_grille_dit_ce_qu_on_attendait_du_hasard():
         [{"strategie": "s", "actif": "A", "intervalle": "1d",
           "net_usd": 0.0, "trades": 0, "p": None}])
 
+
+
+def test_la_grille_annonce_combien_d_observations_sont_independantes():
+    """Quatorze cellules sur sept cryptos majeures ne font pas quatorze tests.
+
+    Ce garde-fou a un cout d'apprentissage precis. La grille montrait
+    `rsi_reversion` sous son bras aleatoire sur SES QUATORZE cellules ; un
+    test de signe donnait une chance sur huit mille, et une stratégie
+    inverse en a été tirée. Elle n'a rien donné sur dix-huit actifs que la
+    grille n'avait jamais vus.
+
+    La raison tient en un chiffre : les sept actifs de la grille correlent a
+    0,58 sur leurs rendements quotidiens. Quatorze cellules valent alors
+    moins de deux observations independantes, et le meme constat vaut
+    p = 0,6. Le verdict doit donc porter ce chiffre, sinon la prochaine
+    lecture refera la meme faute — elle est invisible autrement.
+    """
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+    from robustness_grid import independance, rendre_verdict
+
+    cellules = [{"strategie": "s", "actif": a, "intervalle": i,
+                 "net_usd": 1.0, "trades": 10, "p": 0.3, "tirages": 2000}
+                for a in ("BTC", "ETH", "SOL", "BNB", "XRP", "DOGE", "AVAX")
+                for i in ("1d", "4h")]
+
+    mesure = independance(cellules)
+    assert mesure is not None, "les donnees des majeures doivent etre lisibles"
+    rho, neff = mesure
+    assert 0.3 < rho < 0.9, f"correlation invraisemblable entre majeures : {rho}"
+    assert neff < len(cellules) / 3, (
+        f"{len(cellules)} cellules correlees a {rho:.2f} ne peuvent pas valoir "
+        f"{neff:.1f} observations independantes")
+
+    texte = rendre_verdict(cellules)
+    assert "independantes" in texte, "le verdict doit annoncer la taille effective"
+    assert "SIGNE" in texte, "il doit dire quel test devient invalide"
+
+
+def test_un_actif_unique_ne_permet_aucune_mesure_de_dependance():
+    """Sans deux actifs, la correlation n'existe pas — et on ne l'invente pas."""
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
+    from robustness_grid import independance
+    assert independance([{"actif": "BTC", "p": 0.2}]) is None
 
 def test_le_hasard_herite_des_durees_de_detention():
     """Le contrefactuel doit tenir ses positions aussi longtemps qu'elle.

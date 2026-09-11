@@ -115,9 +115,22 @@ class RiskContext(Frozen):
     advisory_size_factor: Decimal = Field(default=Decimal("1"), gt=0, le=1)
 
     def freshest_failure(self) -> FeedHealth | None:
+        """Le premier flux en defaut, ou None.
+
+        Un flux EVENEMENTIEL — des trades — ne compte pas comme en defaut du
+        seul fait de son silence : il n'a pas de cadence a tenir. Il doit en
+        revanche s'etre connecte et avoir livre au moins un message, sinon
+        c'est bien la souscription qui est cassee.
+        """
         for f in self.feeds:
-            if not f.evaluate(self.now_ms).status.is_tradable:
-                return f
+            etat = f.evaluate(self.now_ms).status
+            if etat.is_tradable:
+                continue
+            if not f.cadence_garantie and f.last_message_ms is not None:
+                # Silence apres un premier message : personne n'a echange.
+                # C'est une information de marche, pas une panne.
+                continue
+            return f
         return None
 
 

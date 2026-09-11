@@ -50,6 +50,61 @@ from trading_desk.sentinelle.validation import benjamini_hochberg
 ASSETS = ["BTC", "ETH", "SOL", "BNB", "XRP", "DOGE", "AVAX"]
 INTERVALS = ["1d", "4h"]
 
+def independance(cellules: list[dict]) -> tuple[float, float] | None:
+    """Combien d'observations VRAIMENT independantes la grille contient-elle ?
+
+    La question n'est pas academique, elle a deja coute une hypothese. En
+    lisant que `rsi_reversion` finissait sous son bras aleatoire sur les
+    quatorze cellules, j'ai applique un test de signe — quatorze signes
+    identiques, une chance sur huit mille — et j'en ai tire une strategie.
+    Elle n'a rien donne hors echantillon, et pour cause : les sept actifs de
+    la grille sont des cryptos majeures sur la meme periode. Leurs rendements
+    quotidiens correlent a 0,58 en moyenne. Quatorze cellules valent alors
+    moins de DEUX observations independantes, et le meme constat vaut
+    p = 0,6 — c'est-a-dire rien du tout.
+
+    On rend donc la correlation moyenne et la taille d'echantillon effective
+    `n / (1 + (n-1).rho)`, a cote de tout verdict. Benjamini-Hochberg, lui,
+    reste valide sous dependance positive ; c'est le test de signe qui ne
+    l'etait pas, et c'est lui qui avait servi a conclure.
+    """
+    actifs = sorted({c["actif"] for c in cellules})
+    if len(actifs) < 2:
+        return None
+    series = {}
+    for a in actifs:
+        for interval in ("1d", "4h"):
+            try:
+                bars = load_from_file(f"data/{a}_{interval}_real.json", a, interval)
+            except (DataUnavailable, FileNotFoundError, ValueError):
+                continue
+            series[a] = {b.ts_ms: float(b.close) for b in bars}
+            break
+    if len(series) < 2:
+        return None
+    communs = sorted(set.intersection(*(set(v) for v in series.values())))
+    if len(communs) < 50:
+        return None
+    import math
+    rend = {a: [math.log(series[a][communs[i + 1]] / series[a][communs[i]])
+                for i in range(len(communs) - 1)] for a in series}
+
+    def corr(u, v):
+        n = len(u)
+        mu, mv = sum(u) / n, sum(v) / n
+        du = [x - mu for x in u]
+        dv = [x - mv for x in v]
+        den = math.sqrt(sum(x * x for x in du) * sum(y * y for y in dv))
+        return sum(x * y for x, y in zip(du, dv, strict=True)) / den if den else 0.0
+
+    noms = sorted(rend)
+    cs = [corr(rend[a], rend[b])
+          for i, a in enumerate(noms) for b in noms[i + 1:]]
+    rho = sum(cs) / len(cs)
+    n = len(cellules)
+    return rho, n / (1 + (n - 1) * rho)
+
+
 def ecrire(chemin: Path, cellules: list[dict]) -> None:
     """Ecrire apres CHAQUE cellule, jamais seulement a la fin.
 
@@ -107,6 +162,18 @@ def rendre_verdict(cellules: list[dict], alpha: float = 0.05) -> str:
             "  Le plancher est AU-DESSUS du seuil : a ce nombre de tirages le",
             "  criblage ne PEUT rejeter aucune hypothese. Un zero survivant ne",
             "  mesure ici que la resolution du test. Augmenter --draws.",
+        ]
+    ind = independance(testees)
+    if ind:
+        rho, neff = ind
+        lignes += [
+            f"  correlation moyenne entre actifs       {rho:>9.3f}",
+            f"  observations vraiment independantes    {neff:>9.1f}  (sur "
+            f"{len(testees)} cellules)",
+            "  Benjamini-Hochberg reste valide sous dependance positive. Un",
+            "  test de SIGNE sur ces cellules, lui, ne l'est pas : il les",
+            "  compterait comme independantes et surestimerait sa conclusion",
+            "  de plusieurs ordres de grandeur.",
         ]
     lignes.append("  " + "─" * 68)
 

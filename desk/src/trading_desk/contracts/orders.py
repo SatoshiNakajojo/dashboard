@@ -100,6 +100,12 @@ class Fill(Frozen):
     fee_usd: Decimal = Decimal("0")
     is_maker: bool = False
     ts_ms: int
+    # Le PnL realise par CE fill, tel que l'exchange le calcule. On ne le
+    # recalcule pas : l'exchange connait le prix moyen d'entree de la
+    # position, nous ne l'avons qu'en le reconstruisant, et deux comptes
+    # divergents du PnL du jour sont pires qu'un seul. Un fill d'ouverture
+    # ne realise rien et vaut zero.
+    closed_pnl_usd: Decimal = Decimal("0")
 
     @property
     def notional_usd(self) -> Decimal:

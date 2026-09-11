@@ -1,12 +1,55 @@
 # Trading Desk — Hyperliquid
 
-Desk de trading automatisé multi-agents. **Phases P0, P2, et le P1 hors
-testnet** : ingestion de marché, moteur de risque, supervision, baselines
+Desk de trading automatisé multi-agents. **Phases P0, P2, et la moitié du
+P1** : ingestion de marché, moteur de risque, supervision, baselines
 chiffrées sans IA, et la couche d'exécution — order manager, idempotence,
-réconciliation — validée contre un faux exchange.
+réconciliation.
 
-Aucun connecteur Hyperliquid réel : ce code ne signe rien et n'envoie aucun
-ordre à un vrai exchange.
+**Le mode LIVE reste fermé.** Il n'engagera d'argent réel qu'après un
+aller-retour réussi sur testnet, et c'est un acte délibéré, pas l'oubli
+d'une variable d'environnement.
+
+> **État au 11 septembre 2026 — le desk tourne sur le marché réel.**
+> Douze invariants sur douze au vert contre le testnet Hyperliquid : flux
+> live, réconciliation du compte, prix réels, PnL du jour calculé depuis les
+> exécutions. Aucune clé n'est nécessaire pour cela — l'endpoint
+> d'information rend l'état d'un compte à partir de sa seule adresse
+> publique, donc le desk voit tout sans rien pouvoir signer.
+>
+> **La signature Hyperliquid est validée.** Chaque hash et chaque signature
+> sont comparés octet pour octet à ceux du SDK officiel, sur 24 vecteurs
+> couvrant ordres limite, Ioc, Alo, stops déclencheurs, prises de bénéfice,
+> ordres groupés, annulations par cloid, coffres, expirations et nonce
+> maximal, sur les deux réseaux. Les vecteurs sont figés dans
+> `tests/vecteurs_signature.json` et rejoués à chaque test.
+>
+> **Cette validation a trouvé un vrai défaut.** Nous émettions `r` et `s`
+> sur trente-deux octets pleins, zéros de tête compris, là où
+> l'implémentation de référence émet le minimum : `0x4bce…` contre
+> `0x04bce…`. Même entier, encodage différent — et sur 2 000 signatures les
+> deux formes divergent dans **16,3 %** des cas. Le pire profil de panne
+> possible : cinq ordres sur six passent, le sixième est refusé, avec de
+> l'argent engagé et rien pour reproduire.
+>
+> **Le mode PAPER trade, sur le marché réel.** Chaîne complète vérifiée de
+> bout en bout : journal → pilote → pupitre → moteur de risque →
+> dimensionnement → order manager → simulateur → fills → état du compte.
+> Une position SHORT BTC ouverte depuis une entrée de journal, stop au repos
+> chez l'exchange, notionnel 31 $ pour un levier de 0,03×, douze invariants
+> au vert. Il ne manque que le vrai journal de déblocages.
+>
+> **Le formatage est éprouvé sur tout l'univers de l'exchange** — 212 actifs,
+> de zéro à cinq décimales de taille, prix et tailles vérifiés contre les
+> règles publiées. 127 actifs ont **zéro** décimale de taille quand BTC en a
+> cinq : un test qui ne vérifie que BTC ne prouve rien, c'est aux extrêmes
+> que les règles se cassent. L'instantané est versionné
+> (`tests/meta_hyperliquid.json`) pour que l'épreuve tourne hors réseau.
+>
+> Ce qui reste non validé : l'**écriture**. Les indices d'actifs, la lecture
+> des comptes et le formatage sont confrontés au réel ; aucun ordre n'a
+> jamais été envoyé. Le notionnel minimal, en particulier, vient de la
+> documentation et d'aucun aller-retour — il est nommé et isolé
+> (`NOTIONNEL_MINIMAL_USD`) pour qu'un premier essai puisse le corriger.
 
 > **État au 5 septembre 2026.** Le P2 est franchi sur données réelles. Sur
 > 208 jours de BTC en 1 h, aucune baseline n'a d'edge statistiquement

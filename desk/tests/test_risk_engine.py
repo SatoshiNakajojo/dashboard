@@ -242,3 +242,69 @@ def test_mandat_flat_bloque_toute_entree(healthy_ctx):
     ctx = healthy_ctx.model_copy(update={"mandate": flat})
     assert Invariant.I06_MANDATE_ALIVE in evaluate(ctx, intent, make_cloid(intent)).blocking
     assert flat.bias is Bias.FLAT
+
+
+# --------------------------------------------------------------------------
+#  Deux natures de flux, et les confondre coûte cher
+# --------------------------------------------------------------------------
+
+def test_un_flux_de_trades_silencieux_n_est_pas_une_panne(healthy_ctx):
+    """Silence sur des trades = personne n'a échangé. Pas un défaut.
+
+    Mesuré sur le testnet Hyperliquid, 131 relevés sur 105 s : les carnets
+    tiennent 5,9 s d'écart maximal pour 10 s de budget, les mids 5,5 s pour
+    10 s — confortable. Les trades atteignent **57 s** sur BTC et **65,5 s**
+    sur ETH, pour un budget de 20 s calé sur un actif liquide en mainnet.
+
+    Aucune valeur unique ne peut servir les deux marchés, parce que ce n'est
+    pas le même phénomène qu'on mesure. Un carnet a une cadence garantie ;
+    des trades n'en ont aucune. Les prix du desk viennent des mids et du
+    carnet, qui restent contrôlés : on ne perd pas la protection contre un
+    prix périmé, on retire un faux signal.
+    """
+    vieux = tuple(
+        f.model_copy(update={"last_message_ms": healthy_ctx.now_ms - 65_000,
+                             "cadence_garantie": False})
+        if f.name.startswith("trades:") else f
+        for f in healthy_ctx.feeds)
+    ctx = healthy_ctx.model_copy(update={"feeds": vieux})
+    assert ctx.freshest_failure() is None
+    assert Invariant.I09_FRESH_DATA not in evaluate(ctx).blocking
+
+
+def test_un_flux_de_trades_jamais_reçu_reste_une_panne(healthy_ctx):
+    """L'exemption ne couvre que le silence APRÈS un premier message.
+
+    Sans ce garde, une souscription cassée — jamais confirmée, jamais reçue —
+    passerait pour un marché calme. C'est la différence entre « personne n'a
+    échangé » et « nous n'écoutons rien ».
+    """
+    muets = tuple(
+        f.model_copy(update={"last_message_ms": None, "messages": 0,
+                             "cadence_garantie": False})
+        if f.name.startswith("trades:") else f
+        for f in healthy_ctx.feeds)
+    ctx = healthy_ctx.model_copy(update={"feeds": muets})
+    assert ctx.freshest_failure() is not None
+    assert Invariant.I09_FRESH_DATA in evaluate(ctx).blocking
+
+
+def test_un_carnet_silencieux_reste_une_panne(healthy_ctx):
+    """La cadence garantie ne se négocie pas : c'est la seule chose qui
+    sépare un marché calme d'un socket mort."""
+    vieux = tuple(
+        f.model_copy(update={"last_message_ms": healthy_ctx.now_ms - 65_000})
+        if f.name.startswith("book:") else f
+        for f in healthy_ctx.feeds)
+    ctx = healthy_ctx.model_copy(update={"feeds": vieux})
+    assert ctx.freshest_failure() is not None
+    assert Invariant.I09_FRESH_DATA in evaluate(ctx).blocking
+
+
+def test_les_trades_reels_se_declarent_evenementiels():
+    """Le réglage vit à la souscription, pas dans un test."""
+    from trading_desk.market.hyperliquid_ws import Subscription
+
+    assert Subscription.trades("BTC").feed.cadence_garantie is False
+    assert Subscription.book("BTC").feed.cadence_garantie is True
+    assert Subscription.mids().feed.cadence_garantie is True

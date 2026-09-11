@@ -58,14 +58,20 @@ class Subscription:
 
     __slots__ = ("payload", "feed", "max_age_ms")
 
-    def __init__(self, payload: dict[str, Any], name: str, max_age_ms: int) -> None:
+    def __init__(self, payload: dict[str, Any], name: str, max_age_ms: int,
+                 *, cadence_garantie: bool = True) -> None:
         self.payload = payload
         self.max_age_ms = max_age_ms
-        self.feed = FeedHealth(name=name, max_age_ms=max_age_ms)
+        self.feed = FeedHealth(name=name, max_age_ms=max_age_ms,
+                               cadence_garantie=cadence_garantie)
 
     @classmethod
     def trades(cls, coin: str, max_age_ms: int = 20_000) -> Subscription:
-        return cls({"type": "trades", "coin": coin}, f"trades:{coin}", max_age_ms)
+        # Evenementiel : l'exchange ne pousse que s'il y a eu un echange.
+        # Le seuil reste, parce qu'il sert a AFFICHER un flux endormi ; il ne
+        # fait simplement plus echouer l'invariant de fraicheur.
+        return cls({"type": "trades", "coin": coin}, f"trades:{coin}",
+                   max_age_ms, cadence_garantie=False)
 
     @classmethod
     def book(cls, coin: str, max_age_ms: int = 10_000) -> Subscription:

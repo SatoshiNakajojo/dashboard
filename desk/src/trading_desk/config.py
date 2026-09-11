@@ -110,6 +110,24 @@ class Settings(BaseSettings):
         un desk mal configure doit refuser de se lancer, pas decouvrir le
         probleme avec une position ouverte.
         """
+        if self.mode is DeskMode.TESTNET:
+            # TESTNET signe de vrais ordres. Aucun argent n'est en jeu, mais
+            # tout le reste est reel — et c'est le mode qui doit prouver que
+            # la configuration tient AVANT qu'on parle de LIVE. Le refus est
+            # ici, au demarrage : un desk mal configure doit refuser de se
+            # lancer, pas le decouvrir avec une position ouverte.
+            if not self.testnet:
+                raise ValueError(
+                    "mode TESTNET avec testnet=False : le desk enverrait des "
+                    "ordres sur le mainnet en croyant etre en bac a sable."
+                )
+            if not self.agent_wallet_address:
+                raise ValueError(
+                    "mode TESTNET : agent_wallet_address est obligatoire. "
+                    "Sans elle, la reconciliation lit le compte de personne "
+                    "et l'invariant I01 passerait au vert a tort."
+                )
+
         if self.mode is DeskMode.LIVE:
             if self.testnet:
                 raise ValueError("mode LIVE incompatible avec testnet=True")

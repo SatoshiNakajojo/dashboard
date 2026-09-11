@@ -15,10 +15,19 @@ signe reellement. Le domaine EIP-712 utilise **chainId 1337**, quel que soit
 le reseau — signer avec l'identifiant de chaine d'Arbitrum produit un
 `INVALID_SIGNATURE` sur une requete par ailleurs impeccable.
 
-AVERTISSEMENT — cette implementation n'a PAS ete confrontee a l'exchange. Les
-regles proviennent de la documentation ; la validation par des vecteurs de
-signature du SDK officiel reste a faire avant le premier ordre reel. C'est
-explicitement une tache de la porte P1.
+VALIDATION — chaque hash et chaque signature de ce module sont compares,
+octet pour octet, a ceux du SDK officiel `hyperliquid-python-sdk`, sur des
+vecteurs couvrant les ordres limite, les stops declencheurs, les annulations
+par cloid, les coffres et les expirations, sur les deux reseaux. Les vecteurs
+sont figes dans `tests/vecteurs_signature.json` et rejoues a chaque test ; le
+SDK, quand il est installe, est confronte en plus. Voir
+`tests/test_signature_hyperliquid.py`.
+
+Ce que cette validation etablit et ce qu'elle n'etablit pas : elle prouve que
+nous produisons exactement ce que produit l'implementation de reference, donc
+qu'un ordre refuse ne le sera pas pour cause de signature. Elle ne remplace
+pas un aller-retour reel, qui seul valide le reste de la requete — indices
+d'actifs, arrondis de prix, limites de taille.
 """
 
 from __future__ import annotations
@@ -29,7 +38,13 @@ from typing import Any, Literal
 from ..contracts.common import EntryStyle, Side
 from ..contracts.orders import OrderIntent, OrderPurpose
 from .cloid import make_cloid
-from .hyperliquid_format import AssetMeta, FormatError, format_price, format_size
+from .hyperliquid_format import (
+    NOTIONNEL_MINIMAL_USD,
+    AssetMeta,
+    FormatError,
+    format_price,
+    format_size,
+)
 
 # Le domaine des actions L1. `chainId` vaut 1337 sur mainnet comme sur testnet.
 L1_DOMAIN: dict[str, Any] = {
@@ -116,6 +131,22 @@ def order_to_wire(
         raise FormatError("ordre limite sans prix")
 
     wire["p"] = format_price(price, meta, side=intent.side)
+
+    # Le notionnel minimal. On ne le verifie QUE sur un ordre qui ouvre ou
+    # augmente : un ordre reduce-only ferme une position, et la bloquer parce
+    # qu'elle est petite laisserait un risque ouvert faute d'avoir pu le
+    # solder. Un garde-fou qui empeche de reduire le risque est un defaut,
+    # pas une protection.
+    if not intent.reduce_only:
+        notionnel = Decimal(wire["s"]) * Decimal(wire["p"])
+        if notionnel < NOTIONNEL_MINIMAL_USD:
+            raise FormatError(
+                f"notionnel {notionnel:.2f} USD sous le minimum de "
+                f"{NOTIONNEL_MINIMAL_USD} USD : l'exchange le refuserait, et "
+                "son message ne dirait pas lequel des deux chiffres est en "
+                "cause"
+            )
+
     wire["t"] = {"limit": {"tif": TIF_BY_STYLE[intent.style]}}
     return wire
 
@@ -228,9 +259,25 @@ def sign_l1_action(
         encode_typed_data(full_message=payload), private_key=private_key
     )
 
+    # `to_hex` d'eth_utils, PAS un format a largeur fixe.
+    #
+    # Nous emettions `f"0x{r:064x}"` — trente-deux octets, zeros de tete
+    # compris. Le SDK officiel emet le minimum : `0x4bce…` la ou nous
+    # ecrivions `0x04bce…`. Les deux designent le meme entier, et sur une
+    # mesure a 2000 signatures les deux encodages different dans **16,3 %**
+    # des cas — un chiffre de tete nul dans r ou dans s suffit.
+    #
+    # C'est le pire profil de panne qu'on puisse avoir : si l'exchange
+    # n'accepte que la forme courte, cinq ordres sur six passent et le
+    # sixieme est refuse, avec de l'argent engage et aucun moyen de
+    # reproduire. L'encodage du SDK est celui qui tourne en production chez
+    # tout le monde ; le notre n'avait jamais ete confronte a rien. On adopte
+    # le seul des deux qui soit prouve.
+    from eth_utils import to_hex
+
     return {
-        "r": f"0x{signed.r:064x}",
-        "s": f"0x{signed.s:064x}",
+        "r": to_hex(signed.r),
+        "s": to_hex(signed.s),
         "v": signed.v,
     }
 

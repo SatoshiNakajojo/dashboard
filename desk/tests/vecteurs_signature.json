@@ -1,0 +1,642 @@
+{
+ "source": "hyperliquid-python-sdk",
+ "version": "inconnue",
+ "cle": "0x0123456789012345678901234567890123456789012345678901234567890123",
+ "avertissement": "cle de test publique du SDK, sans fonds, jamais un secret",
+ "vecteurs": [
+  {
+   "nom": "ordre limite Gtc / mainnet",
+   "action": {
+    "type": "order",
+    "grouping": "na",
+    "orders": [
+     {
+      "a": 0,
+      "b": true,
+      "p": "100",
+      "s": "0.1",
+      "r": false,
+      "t": {
+       "limit": {
+        "tif": "Gtc"
+       }
+      }
+     }
+    ]
+   },
+   "nonce": 0,
+   "vault": null,
+   "expires_after_ms": null,
+   "is_mainnet": true,
+   "action_hash": "4c89b9192e47b6c81a6f8e6a6877db691a3c0079e049ec0e178401c7b0eac6b3",
+   "signature": {
+    "r": "0x1c240cbdb0a60f3c4853a968ec1437004a1ea47cf43c4c4993399d2aefe279ac",
+    "s": "0x2747ebdc4dd74371a299c5159be48dc3aa3f359a24f910100a7b1bddf1bf4348",
+    "v": 27
+   }
+  },
+  {
+   "nom": "ordre limite Gtc / testnet",
+   "action": {
+    "type": "order",
+    "grouping": "na",
+    "orders": [
+     {
+      "a": 0,
+      "b": true,
+      "p": "100",
+      "s": "0.1",
+      "r": false,
+      "t": {
+       "limit": {
+        "tif": "Gtc"
+       }
+      }
+     }
+    ]
+   },
+   "nonce": 0,
+   "vault": null,
+   "expires_after_ms": null,
+   "is_mainnet": false,
+   "action_hash": "4c89b9192e47b6c81a6f8e6a6877db691a3c0079e049ec0e178401c7b0eac6b3",
+   "signature": {
+    "r": "0x66908965e4d161780c67f175d595ffa05036dcfb9878c9cb58f1b4860049a01b",
+    "s": "0x615c6d7f73a6ff2a0708606db20d66a780631d2a17e529fd89409ae451ab3aaf",
+    "v": 27
+   }
+  },
+  {
+   "nom": "ordre passif Alo avec cloid / mainnet",
+   "action": {
+    "type": "order",
+    "grouping": "na",
+    "orders": [
+     {
+      "a": 1,
+      "b": false,
+      "p": "3000.5",
+      "s": "2",
+      "r": true,
+      "c": "0x00000000000000000000000000000001",
+      "t": {
+       "limit": {
+        "tif": "Alo"
+       }
+      }
+     }
+    ]
+   },
+   "nonce": 1234567890123,
+   "vault": null,
+   "expires_after_ms": null,
+   "is_mainnet": true,
+   "action_hash": "5ecf8b4d38a9dc856726bc56fd52f16846db4699ee9a5d5db54517e26b3511f8",
+   "signature": {
+    "r": "0xf15d27d4629ca7cfd170f922a91173f094ed0b8f625e392ba84b5a3b3afd15f0",
+    "s": "0x4c83239008229d951a67c4a6bd153697c878356ba03bd637939def62b2d6eb80",
+    "v": 28
+   }
+  },
+  {
+   "nom": "ordre passif Alo avec cloid / testnet",
+   "action": {
+    "type": "order",
+    "grouping": "na",
+    "orders": [
+     {
+      "a": 1,
+      "b": false,
+      "p": "3000.5",
+      "s": "2",
+      "r": true,
+      "c": "0x00000000000000000000000000000001",
+      "t": {
+       "limit": {
+        "tif": "Alo"
+       }
+      }
+     }
+    ]
+   },
+   "nonce": 1234567890123,
+   "vault": null,
+   "expires_after_ms": null,
+   "is_mainnet": false,
+   "action_hash": "5ecf8b4d38a9dc856726bc56fd52f16846db4699ee9a5d5db54517e26b3511f8",
+   "signature": {
+    "r": "0x23248d9cb2d297780403a2d3b2015404bd5b95e82c53bef55cfa3e2025683717",
+    "s": "0x5a6857a6bb8c4d3bdea8723a63b5ba81f45918c35e3bc2ce0c2a15b4e3fb13e6",
+    "v": 27
+   }
+  },
+  {
+   "nom": "ordre Ioc / mainnet",
+   "action": {
+    "type": "order",
+    "grouping": "na",
+    "orders": [
+     {
+      "a": 4,
+      "b": true,
+      "p": "0.00012345",
+      "s": "1000000",
+      "r": false,
+      "t": {
+       "limit": {
+        "tif": "Ioc"
+       }
+      }
+     }
+    ]
+   },
+   "nonce": 1,
+   "vault": null,
+   "expires_after_ms": null,
+   "is_mainnet": true,
+   "action_hash": "b2a4d582261667e203913a24a5d390f0c54c12c7d8e5cbee4a745b701e52351a",
+   "signature": {
+    "r": "0x27bf2523838dfb31ffe2596bfa2585fe9a9d8d0c24f7fa3073e8e462cbeba866",
+    "s": "0x5cd9c3fbc95a25480a6b285a9ed0e6bcde4c8507d975321e3d265377f74614d7",
+    "v": 27
+   }
+  },
+  {
+   "nom": "ordre Ioc / testnet",
+   "action": {
+    "type": "order",
+    "grouping": "na",
+    "orders": [
+     {
+      "a": 4,
+      "b": true,
+      "p": "0.00012345",
+      "s": "1000000",
+      "r": false,
+      "t": {
+       "limit": {
+        "tif": "Ioc"
+       }
+      }
+     }
+    ]
+   },
+   "nonce": 1,
+   "vault": null,
+   "expires_after_ms": null,
+   "is_mainnet": false,
+   "action_hash": "b2a4d582261667e203913a24a5d390f0c54c12c7d8e5cbee4a745b701e52351a",
+   "signature": {
+    "r": "0x28cd5134be0233546eb948c70a40ce167b6576ee15f81c8e64215793b210715e",
+    "s": "0x6bded48d1f1c352fb0a80ada1a698d04987b5e2803bfa89f2e1f8278b4ed8e10",
+    "v": 27
+   }
+  },
+  {
+   "nom": "stop declencheur au marche / mainnet",
+   "action": {
+    "type": "order",
+    "grouping": "na",
+    "orders": [
+     {
+      "a": 0,
+      "b": false,
+      "p": "95000",
+      "s": "0.05",
+      "r": true,
+      "t": {
+       "trigger": {
+        "isMarket": true,
+        "triggerPx": "95000",
+        "tpsl": "sl"
+       }
+      }
+     }
+    ]
+   },
+   "nonce": 99,
+   "vault": null,
+   "expires_after_ms": null,
+   "is_mainnet": true,
+   "action_hash": "01b8fcc410215cbe9de3d5dad7d16057d32d5adf7ba878e99576c4eb3b5a391a",
+   "signature": {
+    "r": "0x4c7b81d2edeac7b6e945976e92ca052723957e4f72f3d9f5bdc333ee2461a1d1",
+    "s": "0x5d33d610fa8511550396697ff97a2bda6a5bc8a0ca5b8dd93f58b9e3f02fdc54",
+    "v": 27
+   }
+  },
+  {
+   "nom": "stop declencheur au marche / testnet",
+   "action": {
+    "type": "order",
+    "grouping": "na",
+    "orders": [
+     {
+      "a": 0,
+      "b": false,
+      "p": "95000",
+      "s": "0.05",
+      "r": true,
+      "t": {
+       "trigger": {
+        "isMarket": true,
+        "triggerPx": "95000",
+        "tpsl": "sl"
+       }
+      }
+     }
+    ]
+   },
+   "nonce": 99,
+   "vault": null,
+   "expires_after_ms": null,
+   "is_mainnet": false,
+   "action_hash": "01b8fcc410215cbe9de3d5dad7d16057d32d5adf7ba878e99576c4eb3b5a391a",
+   "signature": {
+    "r": "0x39ccc7fd583d3915f21bb2065901d45135add6173246163c9838dee0aab2df61",
+    "s": "0x357e4f9d83a18373e5eb68041f055477f5678af09a13bbd9fcc156c1f522eed0",
+    "v": 28
+   }
+  },
+  {
+   "nom": "prise de benefice / mainnet",
+   "action": {
+    "type": "order",
+    "grouping": "na",
+    "orders": [
+     {
+      "a": 0,
+      "b": false,
+      "p": "120000",
+      "s": "0.05",
+      "r": true,
+      "t": {
+       "trigger": {
+        "isMarket": true,
+        "triggerPx": "120000",
+        "tpsl": "tp"
+       }
+      }
+     }
+    ]
+   },
+   "nonce": 100,
+   "vault": null,
+   "expires_after_ms": null,
+   "is_mainnet": true,
+   "action_hash": "05b135bdb71f44ed9873e485628087494aaf3e493104e4d74449aa80a23ce768",
+   "signature": {
+    "r": "0x93f7291f337b83916cf1c93e300b79745afc56b1dcef5b60bd3fec3238dcdbe9",
+    "s": "0x311b4355ac5bcc5bdc0c01530dc76b882e2966ff48d2968030469a1e0fdffae0",
+    "v": 28
+   }
+  },
+  {
+   "nom": "prise de benefice / testnet",
+   "action": {
+    "type": "order",
+    "grouping": "na",
+    "orders": [
+     {
+      "a": 0,
+      "b": false,
+      "p": "120000",
+      "s": "0.05",
+      "r": true,
+      "t": {
+       "trigger": {
+        "isMarket": true,
+        "triggerPx": "120000",
+        "tpsl": "tp"
+       }
+      }
+     }
+    ]
+   },
+   "nonce": 100,
+   "vault": null,
+   "expires_after_ms": null,
+   "is_mainnet": false,
+   "action_hash": "05b135bdb71f44ed9873e485628087494aaf3e493104e4d74449aa80a23ce768",
+   "signature": {
+    "r": "0xab60672d22b723a6ccac8f35ce29ba7289899efa47b6a409282e3afb8f2eda1b",
+    "s": "0x7156367efd807b1ed05a36c90204932ae57383263c06cd5f3630b94ed144d0a7",
+    "v": 27
+   }
+  },
+  {
+   "nom": "deux ordres groupes / mainnet",
+   "action": {
+    "type": "order",
+    "grouping": "normalTpsl",
+    "orders": [
+     {
+      "a": 0,
+      "b": true,
+      "p": "100",
+      "s": "0.1",
+      "r": false,
+      "t": {
+       "limit": {
+        "tif": "Gtc"
+       }
+      }
+     },
+     {
+      "a": 0,
+      "b": false,
+      "p": "90",
+      "s": "0.1",
+      "r": true,
+      "t": {
+       "trigger": {
+        "isMarket": true,
+        "triggerPx": "90",
+        "tpsl": "sl"
+       }
+      }
+     }
+    ]
+   },
+   "nonce": 555,
+   "vault": null,
+   "expires_after_ms": null,
+   "is_mainnet": true,
+   "action_hash": "b295f5b74732e28c39b52a12139d8951c74c87c5d3871ff08b895388b21e7ee3",
+   "signature": {
+    "r": "0x6f5c0ec716781ea60762ddfae0049023b582193acf466ff83658a78300240243",
+    "s": "0x738d08bdbc4b088f4fd678bcb2aa9b68bb7347f4528b0382271420d6076a14eb",
+    "v": 27
+   }
+  },
+  {
+   "nom": "deux ordres groupes / testnet",
+   "action": {
+    "type": "order",
+    "grouping": "normalTpsl",
+    "orders": [
+     {
+      "a": 0,
+      "b": true,
+      "p": "100",
+      "s": "0.1",
+      "r": false,
+      "t": {
+       "limit": {
+        "tif": "Gtc"
+       }
+      }
+     },
+     {
+      "a": 0,
+      "b": false,
+      "p": "90",
+      "s": "0.1",
+      "r": true,
+      "t": {
+       "trigger": {
+        "isMarket": true,
+        "triggerPx": "90",
+        "tpsl": "sl"
+       }
+      }
+     }
+    ]
+   },
+   "nonce": 555,
+   "vault": null,
+   "expires_after_ms": null,
+   "is_mainnet": false,
+   "action_hash": "b295f5b74732e28c39b52a12139d8951c74c87c5d3871ff08b895388b21e7ee3",
+   "signature": {
+    "r": "0x50ecfda3bfe2e05e25af0a343c46e85e95d8ece772e4388947b08f17c0a0c4b7",
+    "s": "0x17726236cd61e7ba464b77d577de04338ce06c90a5ff42a15f912dba0c979e1d",
+    "v": 27
+   }
+  },
+  {
+   "nom": "annulation par cloid / mainnet",
+   "action": {
+    "type": "cancelByCloid",
+    "cancels": [
+     {
+      "asset": 0,
+      "cloid": "0x00000000000000000000000000000001"
+     }
+    ]
+   },
+   "nonce": 7,
+   "vault": null,
+   "expires_after_ms": null,
+   "is_mainnet": true,
+   "action_hash": "f2fad3f3e2df998af842421922abf349d0ae736d0877da3492c4f1373d50508a",
+   "signature": {
+    "r": "0xfee644ac4b08692fe71979c41295c3416702ff081cc63a21ec7e740834bdd4a0",
+    "s": "0x4bceda17fdf2308b636be89493af100fb9a4b2184f8f10533c7ea26079470ae",
+    "v": 28
+   }
+  },
+  {
+   "nom": "annulation par cloid / testnet",
+   "action": {
+    "type": "cancelByCloid",
+    "cancels": [
+     {
+      "asset": 0,
+      "cloid": "0x00000000000000000000000000000001"
+     }
+    ]
+   },
+   "nonce": 7,
+   "vault": null,
+   "expires_after_ms": null,
+   "is_mainnet": false,
+   "action_hash": "f2fad3f3e2df998af842421922abf349d0ae736d0877da3492c4f1373d50508a",
+   "signature": {
+    "r": "0xb9e9e8d3ead4944ef2784502c4077aea6839173951257ae4aca6b14dee17071",
+    "s": "0x402a60d36e6906d105106265fad5d018c1ab6e0e8d5fa18fede9e51dfbdf33cb",
+    "v": 28
+   }
+  },
+  {
+   "nom": "action vide / mainnet",
+   "action": {
+    "type": "order",
+    "grouping": "na",
+    "orders": []
+   },
+   "nonce": 42,
+   "vault": null,
+   "expires_after_ms": null,
+   "is_mainnet": true,
+   "action_hash": "f96609cc11a7e4ff06be8e44ef7a362c7f42f0a924dd2b6c9ee3deae28b821b0",
+   "signature": {
+    "r": "0x22c1db2be1429aa28d224fce70cc36138f2bddc7a35e9d8096ae325c0716686f",
+    "s": "0x1e62e1cb05e386672a20c6f557f105655d515a9252e492aea55ebd9e91ec975c",
+    "v": 27
+   }
+  },
+  {
+   "nom": "action vide / testnet",
+   "action": {
+    "type": "order",
+    "grouping": "na",
+    "orders": []
+   },
+   "nonce": 42,
+   "vault": null,
+   "expires_after_ms": null,
+   "is_mainnet": false,
+   "action_hash": "f96609cc11a7e4ff06be8e44ef7a362c7f42f0a924dd2b6c9ee3deae28b821b0",
+   "signature": {
+    "r": "0xedc6b1c8287b8c0df36ae70f6370d28f775a1a88a73e0da0b621a65ab7a96612",
+    "s": "0x430b9d4798773768d27d433fdaa8f188d4b58a90c1c4f5b082d8c251e2e8bd13",
+    "v": 28
+   }
+  },
+  {
+   "nom": "coffre / mainnet",
+   "action": {
+    "type": "order",
+    "grouping": "na",
+    "orders": []
+   },
+   "nonce": 42,
+   "vault": "0x1719884eb866cb12b2287399b15f7db5e7d775ea",
+   "expires_after_ms": null,
+   "is_mainnet": true,
+   "action_hash": "1cfec8f70010f112a5a68fd3d9a6a11f1e890b2f7877d2f57d2ba596003e2084",
+   "signature": {
+    "r": "0xc5ee7029168c3eadda5eb5e9b2ed60a78158a2c753bea2a10702c31688da3a59",
+    "s": "0x577c9fc735513151242db605dc525497ce2f273bec0e6406244e9ea3b847a24",
+    "v": 27
+   }
+  },
+  {
+   "nom": "coffre / testnet",
+   "action": {
+    "type": "order",
+    "grouping": "na",
+    "orders": []
+   },
+   "nonce": 42,
+   "vault": "0x1719884eb866cb12b2287399b15f7db5e7d775ea",
+   "expires_after_ms": null,
+   "is_mainnet": false,
+   "action_hash": "1cfec8f70010f112a5a68fd3d9a6a11f1e890b2f7877d2f57d2ba596003e2084",
+   "signature": {
+    "r": "0x7cded9c37c2f4d782a47a992dec927e5ca164319501bfd0ea4a36fa8f8de0ac9",
+    "s": "0x1adfa35dd4338532ba54e1e62a21cb79defb7b9bc2eec9cd0f087db7ebcccfb6",
+    "v": 28
+   }
+  },
+  {
+   "nom": "expiration / mainnet",
+   "action": {
+    "type": "order",
+    "grouping": "na",
+    "orders": []
+   },
+   "nonce": 42,
+   "vault": null,
+   "expires_after_ms": 1700000000000,
+   "is_mainnet": true,
+   "action_hash": "9fca64418bc216b5a9e374fff5fe1061ea7d0a3802210a3bd9f4e6747f260af4",
+   "signature": {
+    "r": "0x180b1d11064cafc5f609c690744d270ac1e38df5f68ba0fe560683884af07208",
+    "s": "0x4ef66afe0088bec68dd97632449ae466e7e7de78bfdd8ff7b3ed111944b6d064",
+    "v": 28
+   }
+  },
+  {
+   "nom": "expiration / testnet",
+   "action": {
+    "type": "order",
+    "grouping": "na",
+    "orders": []
+   },
+   "nonce": 42,
+   "vault": null,
+   "expires_after_ms": 1700000000000,
+   "is_mainnet": false,
+   "action_hash": "9fca64418bc216b5a9e374fff5fe1061ea7d0a3802210a3bd9f4e6747f260af4",
+   "signature": {
+    "r": "0x6ab66ea2bcdad17039790224901608dcfd955dae14378ca32781c16cf9f01960",
+    "s": "0x6a794fe5fa414a5a87be0fd14703bddb3d0acad64be4cd2a828da6be7432f951",
+    "v": 28
+   }
+  },
+  {
+   "nom": "coffre et expiration / mainnet",
+   "action": {
+    "type": "order",
+    "grouping": "na",
+    "orders": []
+   },
+   "nonce": 42,
+   "vault": "0x1719884eb866cb12b2287399b15f7db5e7d775ea",
+   "expires_after_ms": 1700000000000,
+   "is_mainnet": true,
+   "action_hash": "8adb9e3380c17f2feb7c022cc0daa044686026e38f2aa4b8ca0b09a32fa384f9",
+   "signature": {
+    "r": "0xfddf52efa41e74d762e65ad8286ce120d72c087f4c8091bef269a70a98fc30ef",
+    "s": "0x654ff355878b7a59fbd526897ac4bc6485cc7193b7ba225273d9856f564d8238",
+    "v": 28
+   }
+  },
+  {
+   "nom": "coffre et expiration / testnet",
+   "action": {
+    "type": "order",
+    "grouping": "na",
+    "orders": []
+   },
+   "nonce": 42,
+   "vault": "0x1719884eb866cb12b2287399b15f7db5e7d775ea",
+   "expires_after_ms": 1700000000000,
+   "is_mainnet": false,
+   "action_hash": "8adb9e3380c17f2feb7c022cc0daa044686026e38f2aa4b8ca0b09a32fa384f9",
+   "signature": {
+    "r": "0xd7e34decec8b0d3828492c588fea22870478a8936e364dde22148cbb86b1868f",
+    "s": "0x55994fd9c00d11ca02118ca54a5ac290bc7e70a5e4a5031c6cb9372265f17142",
+    "v": 28
+   }
+  },
+  {
+   "nom": "nonce maximal / mainnet",
+   "action": {
+    "type": "order",
+    "grouping": "na",
+    "orders": []
+   },
+   "nonce": 18446744073709551615,
+   "vault": null,
+   "expires_after_ms": null,
+   "is_mainnet": true,
+   "action_hash": "90b0c36883c6df032787bd0dd6d67c4257790ab8b1f2557aebc6c8896d73722f",
+   "signature": {
+    "r": "0x30755d76bc13233d226112e90aeb6bf526dd3f5eadd2811d83b608e9212f97b2",
+    "s": "0x525db745d65a478d04f3edc01f08bc0b4b3aed9b0fec86267c58f1365e20da1f",
+    "v": 28
+   }
+  },
+  {
+   "nom": "nonce maximal / testnet",
+   "action": {
+    "type": "order",
+    "grouping": "na",
+    "orders": []
+   },
+   "nonce": 18446744073709551615,
+   "vault": null,
+   "expires_after_ms": null,
+   "is_mainnet": false,
+   "action_hash": "90b0c36883c6df032787bd0dd6d67c4257790ab8b1f2557aebc6c8896d73722f",
+   "signature": {
+    "r": "0x5eee012690f95ce7b1948fdfd796b33b1206e155cc2398852c3f09c36369cf94",
+    "s": "0x46aabaa2b13e1a64cee1ceb7dbf462de6f3e182757749cb228c3b7f29cc0b4f8",
+    "v": 27
+   }
+  }
+ ]
+}

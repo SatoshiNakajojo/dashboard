@@ -283,3 +283,59 @@ def test_annulation_par_cloid():
     action = cancel_action([{"asset": 0, "cloid": "0x" + "a" * 32}])
     assert action["type"] == "cancelByCloid"
     assert len(action["cancels"]) == 1
+
+
+def _intention(taille, prix, *, reduce_only=False, purpose=None):
+    from trading_desk.contracts.common import EntryStyle, Side
+    from trading_desk.contracts.orders import OrderIntent, OrderPurpose
+    return OrderIntent(
+        intent_id="int_test", mandate_id="mdt_test",
+        asset="BTC", side=Side.LONG, size=Decimal(taille),
+        limit_price=Decimal(prix), style=EntryStyle.LIMIT_PASSIVE,
+        reduce_only=reduce_only,
+        purpose=purpose or OrderPurpose.ENTRY,
+    )
+
+
+def test_un_ordre_sous_le_notionnel_minimal_est_refuse_ici():
+    """Mieux vaut un refus expliqué qu'un rejet laconique de l'exchange.
+
+    Le seuil vient de la documentation, pas d'un aller-retour : c'est la
+    seule valeur du module qu'aucun test ne peut confirmer. Elle est donc
+    nommée et isolée, pour qu'un premier aller-retour puisse la corriger.
+    """
+    from trading_desk.execution.hyperliquid_format import (
+        NOTIONNEL_MINIMAL_USD, AssetMeta, FormatError,
+    )
+    from trading_desk.execution.hyperliquid_wire import order_to_wire
+
+    meta = AssetMeta(name="BTC", index=3, sz_decimals=5)
+    with pytest.raises(FormatError, match="notionnel"):
+        order_to_wire(_intention("0.00001", "100000"), meta)   # 1 USD
+
+    assert NOTIONNEL_MINIMAL_USD > 0
+
+
+def test_un_ordre_qui_reduit_le_risque_n_est_jamais_bloque_par_la_taille():
+    """Un garde-fou qui empêche de solder une position est un défaut.
+
+    Bloquer un `reduce_only` parce qu'il est petit laisserait un risque
+    ouvert faute d'avoir pu le fermer — exactement l'inverse de ce que le
+    minimum protège.
+    """
+    from trading_desk.execution.hyperliquid_format import AssetMeta
+    from trading_desk.execution.hyperliquid_wire import order_to_wire
+
+    meta = AssetMeta(name="BTC", index=3, sz_decimals=5)
+    wire = order_to_wire(_intention("0.00001", "100000", reduce_only=True), meta)
+    assert wire["r"] is True
+    assert Decimal(wire["s"]) * Decimal(wire["p"]) < Decimal("10")
+
+
+def test_un_ordre_au_dessus_du_minimum_passe():
+    from trading_desk.execution.hyperliquid_format import AssetMeta
+    from trading_desk.execution.hyperliquid_wire import order_to_wire
+
+    meta = AssetMeta(name="BTC", index=3, sz_decimals=5)
+    wire = order_to_wire(_intention("0.001", "100000"), meta)   # 100 USD
+    assert Decimal(wire["s"]) * Decimal(wire["p"]) >= Decimal("10")
