@@ -332,6 +332,44 @@ async def run_ingestion(state: DeskState, settings: Settings,
             t.cancel()
 
 
+def _verifier_la_bande_de_stop(pilote, limites, settings: Settings) -> None:
+    """Refuser de demarrer si le signal ne peut RIEN passer.
+
+    Le desk a tourne des heures en refusant chaque entree, douze invariants
+    au vert, sans que rien a l'ecran ne le dise autrement que dans une liste
+    de refus que personne ne lisait : « BTC non dimensionnable : stop a
+    1500 bps hors bornes [30, 500] », en boucle.
+
+    C'est la pire forme de panne de ce depot — celle qui a l'air de marcher.
+    Le signal pose une distance de stop ECRITE D'AVANCE ; si elle tombe hors
+    des bornes du deploiement, aucune entree ne passera jamais, et ce n'est
+    pas une situation de marche mais une contradiction de configuration. Une
+    contradiction se signale au demarrage, pas a chaque cycle.
+
+    On ne corrige rien tout seul : elargir la borne en douce reviendrait a
+    laisser le signal redefinir la limite de risque qui le borne.
+    """
+    stop_pct = getattr(pilote, "stop_pct", None)
+    if stop_pct is None:
+        return                       # ce signal ne fixe pas de stop : rien a dire
+    bps = Decimal(str(stop_pct)) * Decimal("10000")
+    if limites.min_stop_distance_bps <= bps <= limites.max_stop_distance_bps:
+        return
+    raise SystemExit(
+        f"\n  Configuration contradictoire : le signal « {pilote.nom} » pose "
+        f"son stop a {bps:.0f} bps,\n  mais le deploiement n'autorise que "
+        f"[{limites.min_stop_distance_bps:.0f}, "
+        f"{limites.max_stop_distance_bps:.0f}] bps.\n\n"
+        "  Aucune entree ne pourrait passer : le desk tournerait en refusant "
+        "tout,\n  douze invariants au vert.\n\n"
+        f"  Ajuster DESK_MAX_STOP_DISTANCE_BPS (actuellement "
+        f"{limites.max_stop_distance_bps:.0f}) ou DESK_MIN_STOP_DISTANCE_BPS.\n"
+        "  Elargir la borne ne change pas le risque par trade : le "
+        "dimensionnement\n  est fonde sur le risque, donc un stop plus large "
+        "donne une position plus petite.\n"
+    )
+
+
 def _verifier_le_port(settings: Settings) -> None:
     """Refuser tot, et lisiblement, si le port est deja pris.
 
@@ -601,6 +639,7 @@ async def main_async(demo: bool) -> None:
                 "echantillon. "
                 "Produire le journal : python scripts/journal_unlocks.py"
             )
+        _verifier_la_bande_de_stop(pilote, state.limits, settings)
         pupitre = Pupitre(state, exchange_pour(state), pilote,
                           univers=tuple(settings.assets))
         # Sans ce branchement, le desk peut refuser toutes ses entrees en
