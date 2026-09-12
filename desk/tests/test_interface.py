@@ -984,6 +984,18 @@ def test_le_declencheur_passe_par_un_message_verifie():
     assert 'hasAttribute("data-verre")' in desk_js
 
 
+def test_la_barre_affiche_la_version_qui_tourne():
+    """La question « avez-vous relancé ? » doit se répondre à l'écran.
+
+    Elle s'est posée à chaque aller-retour de dépannage, et personne ne
+    pouvait y répondre : le fichier sur le disque était à jour, le
+    processus non.
+    """
+    assert 'id="version"' in _panneaux()
+    js = (recherche.RACINE / "src/trading_desk/ui/desk.js").read_text(encoding="utf-8")
+    assert 's.version' in js and '$("version")' in js
+
+
 def test_le_rearmement_ne_ment_pas():
     """`/api/arm` rend les invariants encore en défaut : il faut les dire.
 

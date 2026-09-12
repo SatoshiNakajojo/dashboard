@@ -216,3 +216,37 @@ def test_la_divergence_nomme_l_actif_fautif():
     detail = next(c for c in evaluate(ctx).checks
                   if c.invariant is Invariant.I09_FRESH_DATA).detail
     assert "ETH" in detail, f"l'actif fautif n'est pas nommé : {detail!r}"
+
+
+# --------------------------------------------------------------------------
+#  Savoir quelle version tourne
+# --------------------------------------------------------------------------
+
+def test_l_instantane_porte_la_version_en_memoire():
+    """Sans elle, on cherche un défaut dans du code qui ne tourne pas.
+
+    Un processus Python charge son code au démarrage : un `git pull` ne
+    change rien à un desk déjà lancé, même en installation éditable. Le
+    fichier sur le disque est bien à jour — on l'a vérifié — et pourtant le
+    défaut persiste. Cette ambiguïté a coûté plusieurs allers-retours, sans
+    aucun moyen de trancher entre « la correction est mauvaise » et « la
+    correction ne tourne pas ».
+    """
+    from trading_desk.version import version
+
+    instantane = _etat().snapshot()
+    assert "version" in instantane, "l'instantané ne dit pas quelle version tourne"
+    assert instantane["version"] == version()
+    assert instantane["version"], "une version vide ne renseigne personne"
+
+
+def test_la_version_ne_fait_jamais_echouer_le_demarrage():
+    """Une supervision qui refuse de démarrer faute de numéro de version
+    serait un comble. Hors dépôt git, on rend « inconnue »."""
+    from trading_desk import version as mod
+
+    mod.version.cache_clear()
+    try:
+        assert isinstance(mod.version(), str) and mod.version()
+    finally:
+        mod.version.cache_clear()
