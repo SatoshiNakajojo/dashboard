@@ -32,7 +32,7 @@ from .config import Settings, get_settings
 from .contracts.common import Bias, DeskMode, HaltReason, Regime, now_ms
 from .contracts.mandate import Mandate
 from .contracts.market import BookSnapshot, FeedHealth, FeedStatus, MarkPrice, Trade
-from .market import HyperliquidFeed, Subscription
+from .market import HyperliquidFeed, Subscription, perps_disponibles
 from .storage import SqliteStore
 
 log = logging.getLogger("desk")
@@ -84,6 +84,45 @@ async def run_ingestion(state: DeskState, settings: Settings,
                 univers.append(symbole)
         if attendus:
             log.info("univers du journal : %s", " ".join(sorted(attendus)))
+
+    # FILTRER L'UNIVERS AVANT DE S'ABONNER.
+    #
+    # Un symbole que l'exchange ne connait pas ne fait pas echouer SON flux :
+    # il fait tomber toute la connexion, donc les vingt-et-un autres avec
+    # elle. La boucle de reconnexion rejoue les memes souscriptions, se fait
+    # couper, recommence — toutes les deux secondes, indefiniment, sans
+    # jamais recevoir une seule donnee. Le desk finit en STALE_FEED et
+    # s'arrete tout seul, en affichant une erreur qui ne nomme ni le symbole
+    # ni la cause : « no close frame received or sent ».
+    #
+    # C'est arrive en production le 12 septembre 2026. L'univers vient du
+    # journal, le journal suit les deverrouillages de jetons, et il finit
+    # toujours par contenir un jeton que l'exchange ne liste pas — ou plus.
+    inconnus: list[str] = []
+    try:
+        connus = perps_disponibles(testnet=settings.testnet)
+    except Exception as exc:  # noqa: BLE001
+        # Ne pas empecher le desk de demarrer parce qu'on n'a pas pu
+        # verifier : on garde le comportement d'avant et on le DIT. Se
+        # rabattre sur le socle serait pire — l'univers retrecirait en
+        # silence et le pilote sauterait des positions sans que rien ne
+        # l'explique.
+        log.warning("univers non verifie (%s) — souscription a l'aveugle ; "
+                    "un symbole inconnu couperait tous les flux", exc)
+    else:
+        inconnus = [a for a in univers if a.upper() not in connus]
+        if inconnus:
+            log.error(
+                "RETIRES DE L'UNIVERS, inconnus de l'exchange : %s. "
+                "Ces symboles auraient coupe la connexion et tous les "
+                "autres flux avec. Les positions correspondantes du journal "
+                "ne seront pas suivies.", " ".join(sorted(inconnus)))
+            univers = [a for a in univers if a.upper() in connus]
+
+    # Ce qui a ete retire doit se VOIR, pas seulement s'ecrire dans un log
+    # que personne ne relit. Un univers ampute en silence, c'est le pilote
+    # qui saute des positions sans que l'ecran en dise rien.
+    state.symboles_inconnus = sorted(inconnus)
 
     socle = set(settings.assets)
     feed = HyperliquidFeed(testnet=settings.testnet)

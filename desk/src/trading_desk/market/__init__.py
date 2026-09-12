@@ -3,9 +3,10 @@
 from .budget import BudgetSnapshot, RequestBudget
 from .hyperliquid_ws import (
     MAINNET_WS, TESTNET_WS, HyperliquidFeed, Subscription,
+    perps_disponibles,
 )
 
 __all__ = [
     "MAINNET_WS", "TESTNET_WS", "BudgetSnapshot", "HyperliquidFeed",
-    "RequestBudget", "Subscription",
+    "RequestBudget", "Subscription", "perps_disponibles",
 ]

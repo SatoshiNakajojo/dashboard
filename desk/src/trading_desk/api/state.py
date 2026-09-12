@@ -58,6 +58,11 @@ class DeskState:
         # etat, ce qui evite de faire dependre l'etat du desk de la couche
         # qui trade.
         self.rapport_pupitre = None
+        # Symboles retires de l'univers parce que l'exchange ne les connait
+        # pas. Un univers ampute doit se VOIR : sans ca, le pilote saute des
+        # positions du journal et l'ecran n'en dit rien — la panne muette que
+        # ce depot rencontre a chaque fois qu'une liste retrecit toute seule.
+        self.symboles_inconnus: list[str] = []
 
     # ------------------------------------------------------------ kill switch
 
@@ -151,6 +156,7 @@ class DeskState:
                 "halt_reason": self.halt_reason.value if self.halt_reason else None,
                 "halt_detail": self.halt_detail,
                 "ws_connected": self.ws_connected,
+                "symboles_inconnus": list(self.symboles_inconnus),
                 "healthy": v.approved and not self.halted,
                 "mandate": {
                     "id": m.mandate_id,
