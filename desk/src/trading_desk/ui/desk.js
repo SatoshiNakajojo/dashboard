@@ -120,6 +120,25 @@ async function post(path, body) {
 
 function flash(msg) { $("killNote").textContent = msg; }
 
+/* Le son des boutons, quand ces panneaux sont dans le decor.
+ *
+ * On ne joue rien ici : ces fichiers vivent avec le poste, et les recopier
+ * dans les panneaux ferait deux exemplaires du meme son a tenir a jour. On
+ * publie un message, le poste sonne. Hors decor, personne n'ecoute — et
+ * c'est voulu : la vue sans decor est une vue de lecture, pas un cockpit.
+ */
+function sonnerLeClic() {
+  if (window.parent === window) return;
+  try { window.parent.postMessage({ desk: "clic" }, location.origin); }
+  catch (e) { /* cadre d'une autre origine : rien a faire */ }
+}
+
+document.addEventListener("click", (ev) => {
+  const cible = ev.target.closest(
+    "button, .nav button, .link-btn, a.link-btn");
+  if (cible) sonnerLeClic();
+}, true);
+
 /* ---------- rendu ---------- */
 function render(s) {
   snap = s;
@@ -133,12 +152,29 @@ function render(s) {
   $("mode").className = "pill mode-" + s.mode;
   $("uptime").textContent = "actif " + dur(s.uptime_s * 1000);
   $("dot").className = "dot " + (s.ws_connected ? "on" : "off");
+  /* LA VERSION, ET SURTOUT SON ABSENCE.
+   *
+   * Cette page est relue sur le disque à chaque requête ; le processus
+   * Python, lui, a chargé son code une fois pour toutes au démarrage. Après
+   * un `git pull`, l'écran est donc à jour alors que le desk ne l'est pas —
+   * et il n'y a aucun moyen de s'en apercevoir depuis l'écran.
+   *
+   * Ça a coûté plusieurs allers-retours de dépannage sur un défaut déjà
+   * corrigé. Une pastille à « — » ne dit rien à personne : quand
+   * l'instantané ne porte pas de version, c'est que le desk tourne du code
+   * ANTÉRIEUR à cette page, et il faut le dire en toutes lettres.
+   */
   if (s.version) {
     $("version").textContent = s.version;
     // Un arbre modifié n'est pas une erreur, mais il faut le voir : c'est la
     // différence entre « la correction ne marche pas » et « ce n'est pas la
     // correction qui tourne ».
     $("version").style.color = /\+modifie/.test(s.version) ? "var(--warn)" : "";
+    $("perime").hidden = true;
+  } else {
+    $("version").textContent = "ancien";
+    $("version").style.color = "var(--crit)";
+    $("perime").hidden = false;
   }
 
   /* --- banniere --- */

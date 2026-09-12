@@ -918,3 +918,31 @@ body::before {
  * gauche, et elle sert justement à tout voir d'un coup.
  */
 :root[data-verre]:not([data-vue]) #sec-systemes .panel:has(#feeds) { display: none }
+
+/* Le bandeau « version périmée ».
+ *
+ * Plus voyant que le bandeau hors-ligne, parce qu'il annonce une panne plus
+ * trompeuse : tout a l'air de fonctionner, l'écran est à jour, et seuls les
+ * correctifs du code Python manquent à l'appel. On cherche alors un défaut
+ * dans du code qui ne tourne pas.
+ */
+.perime {
+  position: relative;
+  z-index: 2;
+  background: var(--crit-soft);
+  color: var(--crit);
+  border-bottom: 1px solid var(--crit-line);
+  text-align: center;
+  padding: 9px 16px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.perime[hidden] { display: none }
+.perime b { display: block; letter-spacing: .02em }
+.perime code {
+  font-family: var(--f-mono);
+  font-size: 12px;
+  padding: 1px 5px;
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--crit) 14%, transparent);
+}

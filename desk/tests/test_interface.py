@@ -1000,6 +1000,48 @@ def test_l_ecran_d_attente_couvre_la_sequence_pendant_le_fondu():
         "la séquence est retirée avant le fondu : le flash revient"
 
 
+def test_un_desk_perime_le_dit_en_toutes_lettres():
+    """Une pastille à « — » ne dit rien à personne.
+
+    Cette page est relue sur le disque à chaque requête ; le processus
+    Python a chargé son code une fois, au démarrage. Après un `git pull`,
+    l'écran est donc à jour alors que le desk ne l'est pas, et rien ne
+    permettait de s'en apercevoir. Ça a coûté plusieurs allers-retours de
+    dépannage sur un défaut déjà corrigé.
+    """
+    assert 'id="perime"' in _panneaux()
+    js = (recherche.RACINE / "src/trading_desk/ui/desk.js").read_text(encoding="utf-8")
+    i = js.index("if (s.version)")
+    bloc = js[i:i + 600]
+    assert "else" in bloc and '$("perime").hidden = false' in bloc, \
+        "l'absence de version doit déclencher l'avertissement, pas le silence"
+
+
+def test_les_deux_clics_existent_et_sortent_de_la_meme_source():
+    """Deux sons voisins se lisent comme deux gestes d'un même appareil.
+
+    Celui du menu est dérivé de celui d'ouverture — monté de trois
+    demi-tons et raccourci — plutôt qu'inventé : deux sons étrangers l'un à
+    l'autre se lisent comme un bogue.
+    """
+    base = recherche.RACINE / "src/trading_desk/ui/poste/assets"
+    for nom in ("clic-ouvrir.mp3", "clic-menu.mp3"):
+        chemin = base / nom
+        assert chemin.exists(), f"{nom} manque"
+        assert chemin.stat().st_size > 2_000, f"{nom} suspicieusement petit"
+
+    js = (recherche.RACINE / "src/trading_desk/ui/poste/poste.js") \
+        .read_text(encoding="utf-8")
+    # `cloneNode` : deux clics rapprochés doivent s'entendre deux fois.
+    # Rembobiner un élément unique coupe le premier son pour jouer le
+    # second, ce qui s'entend comme un clic manqué.
+    assert "cloneNode" in js, "un élément unique avale les clics rapprochés"
+    # Muet si la bande son l'est : couper le son du vaisseau et garder les
+    # boutons serait incohérent.
+    i = js.index("function clic(")
+    assert "sonVoulu()" in js[i:i + 300]
+
+
 def test_le_radar_annonce_ce_qu_il_fait():
     """« Market scan in progress », sur une plaque.
 
@@ -1030,8 +1072,11 @@ def test_l_acces_a_l_ecran_de_gauche_est_un_bouton_du_poste():
 
     desk_js = (recherche.RACINE / "src/trading_desk/ui/desk.js") \
         .read_text(encoding="utf-8")
-    assert "postMessage" not in desk_js, \
-        "le câblage par message n'a plus lieu d'être : plus aucun titre n'est cliquable"
+    # Les panneaux publient encore un message — pour le SON des boutons,
+    # qui vit avec le poste. Ce qu'ils ne publient plus, c'est une demande
+    # de transition : elle passe par un bouton du poste.
+    assert "voir-flux" not in desk_js, \
+        "les panneaux demandent encore la transition : elle appartient au poste"
 
 
 def test_le_panneau_des_flux_quitte_le_pfd():
