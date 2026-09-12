@@ -36,6 +36,10 @@ packages = ["src/trading_desk"]
 testpaths = ["tests"]
 pythonpath = ["src"]
 filterwarnings = ["ignore::DeprecationWarning"]
+# `reseau` marque les tests qui interrogent le vrai exchange. Ils sautent
+# d'eux-memes quand il est injoignable ; le marqueur permet de les exclure
+# franchement (`-m "not reseau"`) plutot que de les voir echouer hors ligne.
+markers = ["reseau: interroge l'exchange Hyperliquid (saute si injoignable)"]
 
 [tool.ruff]
 line-length = 96

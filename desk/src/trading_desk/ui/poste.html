@@ -26,8 +26,18 @@
 <body>
 
 <!-- 1. L'accueil -->
+<!-- L'accueil montre LA PREMIERE IMAGE DE LA SEQUENCE : le poste vu en
+     entier, la Terre par les hublots. Meme cadrage que la video, donc le
+     clic ne provoque aucun saut — on part de l'image qu'on regardait.
+     La sequence se termine, elle, sur le decor : les deux raccords sont
+     ainsi exacts par construction, au debut comme a la fin. -->
 <div id="embarquement" role="button" tabindex="0"
      aria-label="Embarquer — lance la séquence d'arrivée au poste">
+  <div class="scene">
+    <img class="decor" src="/ui/poste/assets/accueil.jpg" alt=""
+         draggable="false">
+  </div>
+  <div class="voile"></div>
   <div class="accueil">
     <h1>Welcome on board Boss</h1>
     <div class="trait"></div>

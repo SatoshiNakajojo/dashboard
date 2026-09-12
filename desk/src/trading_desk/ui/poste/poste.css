@@ -14,16 +14,25 @@
   --texte: #cfe3f2;
   --accent: #7fc8ff;
 
-  /* La dalle du PFD, relevee sur le decor (1280x720) : elle occupe
-     320..968 en x et 120..622 en y. Mesuree, pas placee a l'oeil — une
-     dalle mal cadree se voit au premier regard, et se corrige mal apres
-     coup parce qu'on finit par deplacer le decor pour rattraper.
-     Le leger retrait laisse voir le cadre peint : sans lui, le contenu
-     affleure le bord et la dalle cesse de ressembler a un ecran encastre. */
-  --verre-l: 25.9%;
-  --verre-t: 17.6%;
-  --verre-w: 48.8%;
-  --verre-h: 67.8%;
+  /* La dalle du PFD, RELEVEE SUR LE DECOR (1280x720) et non placee a
+     l'oeil. Mesure du 12 septembre 2026, sur la nouvelle sequence : on
+     lit le profil de luminance du canal bleu, colonne par colonne et
+     ligne par ligne, et on prend la transition entre le cadre (quasi
+     noir, valeur ~5) et la dalle (~30). Bornes obtenues, stables de
+     seuil 12 a seuil 18 : x 180..1110, y 28..706.
+
+     Les valeurs ci-dessous sont ces bornes RENTREES d'une douzaine de
+     pixels. Ce retrait laisse voir le cadre peint : sans lui le contenu
+     affleure le bord, et la dalle cesse de ressembler a un ecran
+     encastre pour ressembler a une fenetre collee par-dessus.
+
+     La dalle fait maintenant 70,8 % de la largeur du decor contre 48,8 %
+     avant : la nouvelle sequence se termine bien plus pres de l'ecran.
+     Le desk y gagne environ le double de surface. */
+  --verre-l: 15.0%;
+  --verre-t: 5.8%;
+  --verre-w: 70.8%;
+  --verre-h: 90.3%;
 }
 
 * { box-sizing: border-box }
@@ -67,19 +76,44 @@ html, body {
   position: fixed;
   inset: 0;
   z-index: 30;
-  display: grid;
-  place-items: center;
   cursor: pointer;
-  background:
-    radial-gradient(ellipse 70% 50% at 50% 45%, #0b1220 0%, #05070b 70%),
-    var(--nuit);
+  background: var(--nuit);
   transition: opacity 420ms ease;
   -webkit-tap-highlight-color: transparent;
 }
 #embarquement[hidden] { display: none }
 #embarquement.part { opacity: 0; pointer-events: none }
 
-.accueil { text-align: center; padding: 0 24px }
+/* Le voile.
+ *
+ * Le titre est pose sur le tiers haut de l'image, qui est un champ
+ * d'etoiles — la partie la plus sombre et la plus calme du cadre. Le
+ * centrer l'aurait mis sur le limbe de la Terre, c'est-a-dire sur la seule
+ * zone claire et chargee de l'image : du texte blanc sur un nuage blanc.
+ *
+ * Le voile assombrit quand meme le haut, parce qu'un champ d'etoiles n'est
+ * pas uniforme et qu'une etoile derriere une lettre la casse. Il s'arrete
+ * avant l'horizon pour ne pas ternir la Terre, qui est le sujet. */
+.voile {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    180deg,
+    rgba(3, 6, 11, .78) 0%,
+    rgba(3, 6, 11, .52) 26%,
+    rgba(3, 6, 11, .12) 44%,
+    rgba(3, 6, 11, 0) 56%);
+}
+
+.accueil {
+  position: absolute;
+  top: 15%;
+  left: 0;
+  right: 0;
+  text-align: center;
+  padding: 0 24px;
+}
 
 .accueil h1 {
   margin: 0;

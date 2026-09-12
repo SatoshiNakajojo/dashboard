@@ -39,6 +39,45 @@ log = logging.getLogger(__name__)
 MAINNET_WS = "wss://api.hyperliquid.xyz/ws"
 TESTNET_WS = "wss://api.hyperliquid-testnet.xyz/ws"
 
+MAINNET_INFO = "https://api.hyperliquid.xyz/info"
+TESTNET_INFO = "https://api.hyperliquid-testnet.xyz/info"
+
+
+def perps_disponibles(*, testnet: bool = True, timeout_s: float = 10.0) -> set[str]:
+    """Les perpetuels que l'exchange connait, en majuscules.
+
+    A APPELER AVANT DE S'ABONNER. Une souscription sur un symbole inconnu ne
+    provoque pas une erreur sur ce flux-la : elle fait tomber TOUTE la
+    connexion, donc les vingt-et-un autres flux avec elle.
+
+    Mesure contre le testnet le 12 septembre 2026, un symbole inexistant
+    parmi sept actifs :
+
+        trades          -> connexion coupee en 0,91 s
+        l2Book          -> connexion coupee en 0,66 s
+        activeAssetCtx  -> connexion vivante, mais AUCUNE donnee
+
+    Les deux premiers rendent un `ConnectionClosedError: no close frame
+    received or sent`, qui ne nomme ni le symbole ni la cause. Le troisieme
+    est pire : rien ne casse, le flux est simplement mort en silence.
+
+    Et la boucle de reconnexion rejoue exactement les memes souscriptions,
+    donc le desk se reconnecte et se fait couper indefiniment — toutes les
+    deux secondes, sans jamais rien recevoir.
+
+    On ne renvoie que les perpetuels : c'est ce que ce desk trade, et
+    melanger le spot ferait passer pour valide un symbole sur lequel on ne
+    peut pas prendre de position.
+    """
+    import httpx
+
+    url = TESTNET_INFO if testnet else MAINNET_INFO
+    reponse = httpx.post(url, json={"type": "meta"}, timeout=timeout_s,
+                         headers={"Content-Type": "application/json"})
+    reponse.raise_for_status()
+    univers = (reponse.json() or {}).get("universe") or []
+    return {row["name"].upper() for row in univers if row.get("name")}
+
 PING_INTERVAL_S = 25.0
 MAX_BACKOFF_S = 60.0
 
