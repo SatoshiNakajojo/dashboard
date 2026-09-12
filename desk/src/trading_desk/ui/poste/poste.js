@@ -313,7 +313,58 @@
     if (e.key === "Enter" || e.key === " ") { e.preventDefault(); embarquer(); }
   });
 
-  if (ouvrirDesk) ouvrirDesk.addEventListener("click", ouvrirLeDesk);
+  /* ------------------------------------------------------------------
+     LES CLICS.
+
+     Deux sons, tires du meme enregistrement : l'ouverture du desk, et les
+     boutons du menu — celui-ci monte de trois demi-tons et raccourci. Deux
+     sons voisins se lisent comme deux gestes d'un meme appareil ; deux sons
+     etrangers l'un a l'autre se lisent comme un bogue.
+
+     `cloneNode` a chaque fois plutot qu'un element reutilise : deux clics
+     rapproches doivent s'entendre deux fois. Rembobiner un seul element
+     coupe le premier son pour jouer le second, ce qui donne l'impression
+     d'un clic manque.
+
+     Muet tant que la bande son l'est : quelqu'un qui a coupe le son du
+     vaisseau ne s'attend pas a ce que les boutons, eux, continuent.
+     ------------------------------------------------------------------ */
+  const CLICS = {
+    ouvrir: new Audio("/ui/poste/assets/clic-ouvrir.mp3"),
+    menu: new Audio("/ui/poste/assets/clic-menu.mp3"),
+  };
+  for (const a of Object.values(CLICS)) a.preload = "auto";
+
+  function clic(nom) {
+    if (!sonVoulu()) return;
+    const source = CLICS[nom];
+    if (!source) return;
+    const voix = source.cloneNode();
+    voix.volume = nom === "menu" ? 0.5 : 0.8;
+    const l = voix.play();
+    if (l && typeof l.catch === "function") l.catch(() => { /* pas encore autorise */ });
+  }
+
+  if (ouvrirDesk) {
+    ouvrirDesk.addEventListener("click", () => { clic("ouvrir"); ouvrirLeDesk(); });
+  }
+
+  /* Les boutons du poste sonnent comme le menu : ils appartiennent au meme
+     appareil. Seule l'ouverture du desk a son propre son, parce qu'elle
+     n'arrive qu'une fois. */
+  for (const b of document.querySelectorAll(
+      ".vers-gauche, .retour-pfd, .revoir, .passer")) {
+    b.addEventListener("click", () => clic("menu"));
+  }
+
+  /* Les panneaux vivent dans une iframe : ils ne peuvent pas jouer ce son
+     eux-memes sans embarquer une copie des fichiers et de cette logique.
+     Ils publient donc un message, et le poste sonne — le meme principe que
+     pour le reste : les panneaux restent utilisables seuls. */
+  addEventListener("message", (e) => {
+    if (e.origin !== location.origin) return;
+    if (e.data && e.data.desk === "clic") clic("menu");
+  });
 
   film.addEventListener("ended", arriver);
   film.addEventListener("error", arriver);

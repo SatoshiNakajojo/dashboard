@@ -55,6 +55,16 @@
   <span class="pill" id="version" title="version du code en mémoire">—</span>
 </div>
 
+<!-- Le desk tourne du code plus ancien que cette page.
+     Impossible a deviner autrement : le navigateur relit ces fichiers a
+     chaque requete, le processus Python a charge le sien au demarrage. -->
+<div class="perime" id="perime" hidden>
+  <b>Ce desk tourne une version antérieure à celle affichée ici.</b>
+  Un <code>git pull</code> ne change rien à un processus déjà lancé : les
+  correctifs du code Python ne s'appliqueront qu'après un redémarrage.
+  Arrêtez le desk (<code>Ctrl+C</code>) et relancez-le.
+</div>
+
 <div class="offline" id="offline" hidden>Backend non joignable — dernières valeurs connues, figées.</div>
 
 <div class="wrap">

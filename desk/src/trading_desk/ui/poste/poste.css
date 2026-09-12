@@ -32,10 +32,10 @@
   /* La dalle, posee sur le QUADRILATERE mesure — pas sur un rectangle.
      Voir la note ci-dessus. Ces quatre valeurs decrivent la boite moyenne ;
      l'inclinaison ci-dessous en fait un trapeze. */
-  --verre-l: 14.9%;
-  --verre-t: 0.8%;
-  --verre-w: 70.2%;
-  --verre-h: 96.7%;
+  --verre-l: 14.8%;
+  --verre-t: 0.6%;
+  --verre-w: 70.9%;
+  --verre-h: 97.1%;
 
   /* L'inclinaison.
      Mesure des deux bords de l'ecran radar, en regression robuste sur 114
@@ -71,10 +71,10 @@
      projection en perspective en produit forcement. On deborde donc de
      ~1,5 % de chaque cote — invisible, puisque ce qui depasse tombe sur le
      cadre noir, et suffisant pour que rien du dessous ne reapparaisse. */
-  --verre-g-l: 19.1%;
-  --verre-g-t: 18.4%;
-  --verre-g-w: 40.3%;
-  --verre-g-h: 70.8%;
+  --verre-g-l: 19.8%;
+  --verre-g-t: 19.5%;
+  --verre-g-w: 39.0%;
+  --verre-g-h: 68.5%;
   --profondeur-g: calc(min(100vw, 177.78vh) * 0.68);
   --rot-y-g: -10deg;
   --rot-z-g: 0.6deg;
