@@ -27,7 +27,7 @@ from pydantic import Field
 
 from ..contracts.common import DeskMode, Frozen, HaltReason, Side, now_ms
 from ..contracts.mandate import Mandate
-from ..contracts.market import FeedHealth
+from ..contracts.market import FeedHealth, FeedStatus
 from ..contracts.orders import AccountState, OrderIntent, OrderPurpose
 from .limits import RiskLimits
 
@@ -126,6 +126,25 @@ class RiskContext(Frozen):
             etat = f.evaluate(self.now_ms).status
             if etat.is_tradable:
                 continue
+            if etat is FeedStatus.DISCONNECTED:
+                # UNE RECONNEXION N'EST PAS UNE DONNEE PERIMEE.
+                #
+                # Le transport peut tomber et revenir en quelques centaines
+                # de millisecondes. Traiter la coupure elle-meme comme un
+                # defaut arretait le desk pour un incident de deux secondes,
+                # et il fallait ensuite rearmer a la main — pour une donnee
+                # qui n'avait jamais cesse d'etre fraiche.
+                #
+                # On garde donc le statut DISCONNECTED a l'ecran, parce que
+                # c'est vrai et que l'operateur doit le voir, mais la
+                # FRAICHEUR se juge sur l'age, comme pour n'importe quel
+                # autre flux. La garantie est inchangee : aucune decision
+                # n'est prise sur une donnee plus vieille que `max_age_ms`.
+                # Si la reconnexion traine, l'age finit par depasser le
+                # seuil et le flux echoue — ici, un cran plus bas.
+                age = f.age_ms(self.now_ms)
+                if age is not None and age <= f.max_age_ms:
+                    continue
             if not f.essentiel:
                 # Surveillance : rapporte a l'ecran, jamais bloquant. Le
                 # prix de cet actif vient de `mids`, qui reste essentiel.

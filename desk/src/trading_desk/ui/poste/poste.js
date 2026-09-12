@@ -87,6 +87,31 @@
     }
   }
 
+  /* Revenir a la vue d'ensemble.
+   *
+   * On ne recharge pas la page et on ne rejoue pas la sequence : on remet
+   * simplement l'accueil par-dessus. Le poste reste monte dessous, l'iframe
+   * garde son etat, et repartir est instantane — c'est le meme principe que
+   * l'arrivee, en sens inverse.
+   *
+   * La memoire de session est effacee : on vient de redemander la vue du
+   * debut, donc le clic suivant doit rejouer la sequence entiere. La
+   * conserver ferait passer directement au poste, ce qui donnerait un
+   * bouton qui semble ne rien faire.
+   */
+  const revoir = document.getElementById("revoir");
+  if (revoir) {
+    revoir.addEventListener("click", () => {
+      try { sessionStorage.removeItem(MEMOIRE); } catch (_) { /* privee */ }
+      accueil.hidden = false;
+      // Deux images de battement avant de retirer `part`, sinon le
+      // navigateur peut grouper « afficher » et « rendre opaque » dans le
+      // meme rendu : la transition n'aurait alors pas lieu.
+      requestAnimationFrame(() => requestAnimationFrame(
+        () => accueil.classList.remove("part")));
+    });
+  }
+
   accueil.addEventListener("click", embarquer);
   accueil.addEventListener("keydown", (e) => {
     if (e.key === "Enter" || e.key === " ") { e.preventDefault(); embarquer(); }

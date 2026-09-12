@@ -69,6 +69,7 @@ class EcrivainParquet:
         self.erreurs = 0
         self.lignes_perdues_disque = 0
         self._disque_plein = False
+        self._sequence = 0
 
     # ------------------------------------------------------------------ etat
 
@@ -146,9 +147,31 @@ class EcrivainParquet:
                         lignes: list[dict]) -> None:
         dossier = self.racine / coin / "partiel"
         horodatage = datetime.now(UTC).strftime("%H%M%S%f")[:-3]
-        chemin = dossier / f"{coin}_{flux}_{jour}_{horodatage}.parquet"
+        # LE NUMERO D'ORDRE N'EST PAS DECORATIF.
+        #
+        # L'horodatage s'arrete a la milliseconde. Deux segments du meme
+        # flux vides dans la meme milliseconde portaient donc le MEME nom,
+        # et le `rename` ci-dessous ecrasait le premier sans rien dire :
+        # des lignes de marche disparaissaient, et le seul symptome etait un
+        # fichier journalier plus court que prevu.
+        #
+        # Ce n'est pas theorique : c'est ce qui rendait
+        # `test_le_compactage_fusionne_et_supprime_les_segments` intermittent
+        # — trois segments ecrits d'affilee, douze lignes attendues, huit
+        # obtenues quand la machine allait assez vite.
+        #
+        # Le compteur suffit dans un processus. La boucle qui suit couvre le
+        # cas ou deux processus ecriraient dans le meme dossier : on ne
+        # reutilise jamais un nom qui existe deja.
+        self._sequence += 1
+        base = f"{coin}_{flux}_{jour}_{horodatage}_{self._sequence:04d}"
+        chemin = dossier / f"{base}.parquet"
         try:
             dossier.mkdir(parents=True, exist_ok=True)
+            secours = 0
+            while chemin.exists():
+                secours += 1
+                chemin = dossier / f"{base}-{secours}.parquet"
             table = pa.Table.from_pylist(lignes, schema=SCHEMAS[flux])
             # `.tmp` puis `rename` : le renommage est atomique sur un meme
             # systeme de fichiers, donc un lecteur ne voit jamais un segment
