@@ -129,7 +129,7 @@ def rejouer(mois: list[str], fin: dict, prix: dict, k: int,
         eligibles = sorted(set(fin[precedent]) & set(fin[courant]) & set(prix[courant]))
         if len(eligibles) < 4 * k:
             continue
-        vendus, achetes = choisir(eligibles, fin[precedent], k)
+        vendus, achetes = choisir(eligibles, fin[precedent], k, precedent)
 
         p = (sum(fin[courant][a] for a in vendus)
              - sum(fin[courant][a] for a in achetes)) / (2 * k)
@@ -147,13 +147,13 @@ def rejouer(mois: list[str], fin: dict, prix: dict, k: int,
             "net": portage + cours - frais, "mensuel": mensuel}
 
 
-def par_classement(eligibles, classement, k):
+def par_classement(eligibles, classement, k, _mois=None):
     ordre = sorted(eligibles, key=lambda a: -classement[a])
     return ordre[:k], ordre[-k:]
 
 
 def au_hasard(rng):
-    def choisir(eligibles, _classement, k):
+    def choisir(eligibles, _classement, k, _mois=None):
         tire = rng.sample(eligibles, 2 * k)
         return tire[:k], tire[k:]
     return choisir
