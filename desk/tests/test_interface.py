@@ -848,14 +848,44 @@ def test_les_deux_raccords_sont_declares():
     refusant une image envoyee separement.
     """
     page = _poste()
-    assert "assets/accueil.jpg" in page, "l'accueil n'affiche pas la premiere image"
+    # La vue d'ensemble est devenue une BOUCLE : l'image n'y sert plus que
+    # de `poster`, le temps que la premiere image se decode. Le raccord au
+    # depart ne repose donc plus sur l'egalite des images — l'instant du
+    # clic est quelconque dans la boucle — mais sur le fondu croise : la vue
+    # s'efface par-dessus le zoom, qui joue deja dessous.
+    assert "assets/vue.mp4" in page, "la vue d'ensemble n'est pas la boucle"
     assert "assets/poste.jpg" in page, "le decor n'est pas la derniere image"
 
     base = recherche.RACINE / "src/trading_desk/ui/poste/assets"
-    for nom in ("accueil.jpg", "poste.jpg", "embarquement.mp4", "embarquement.webm"):
+    for nom in ("vue.mp4", "vue.webm", "vue.jpg", "accueil.jpg", "poste.jpg",
+                "embarquement.mp4", "embarquement.webm"):
         chemin = base / nom
         assert chemin.exists(), f"{nom} manquant"
         assert chemin.stat().st_size > 10_000, f"{nom} suspicieusement petit"
+
+
+def test_la_vue_d_ensemble_boucle_sans_saut():
+    """La boucle est muette, et son point de bouclage a ete fondu.
+
+    Sur la source, la derniere image differait de la premiere de 16,3 % :
+    le saut se voyait toutes les quinze secondes. La queue a donc ete
+    fondue sur la tete a l'encodage — 0,6 % apres — ce qui decale le point
+    de depart mais referme la boucle.
+
+    Muette, parce que la bande son du vaisseau tourne deja : deux sources
+    qui se chevauchent sonnent comme une panne.
+    """
+    page = _poste()
+    i = page.index('id="vueGlobale"')
+    balise = page[i - 120:page.index(">", i)]
+    for attendu in ("loop", "muted", "playsinline", "poster="):
+        assert attendu in balise, f"la vue d'ensemble n'est pas {attendu}"
+
+    js = (recherche.RACINE / "src/trading_desk/ui/poste/poste.js") \
+        .read_text(encoding="utf-8")
+    # Elle ne decode que tant qu'on la regarde : une video qui tourne sous
+    # trois autres couches chauffe la machine pour rien.
+    assert "arreterLaVue()" in js and "jouerLaVue()" in js
 
 
 def test_le_titre_precede_la_vue_d_ensemble():

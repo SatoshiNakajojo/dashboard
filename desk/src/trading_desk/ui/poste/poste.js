@@ -86,6 +86,7 @@
   const gauche = document.getElementById("gauche");
   const retourPfd = document.getElementById("retourPfd");
   const revoirBtn = document.getElementById("revoir");
+  const vueGlobale = document.getElementById("vueGlobale");
   const attente = document.getElementById("attente");
   const veille = document.getElementById("veille");
   const ouvrirDesk = document.getElementById("ouvrirDesk");
@@ -176,6 +177,16 @@
     retenir();
   }
 
+  /* La vue d'ensemble tourne en boucle tant qu'on la regarde, et SEULEMENT
+     tant qu'on la regarde : une video qui continue de decoder sous trois
+     autres couches chauffe la machine pour rien. */
+  function jouerLaVue() {
+    if (!vueGlobale) return;
+    const l = vueGlobale.play();
+    if (l && typeof l.catch === "function") l.catch(() => { /* poster affiche */ });
+  }
+  function arreterLaVue() { if (vueGlobale) vueGlobale.pause(); }
+
   let destination = "poste";
 
   function jouer(nom) {
@@ -214,19 +225,27 @@
       return;
     }
 
-    sequence.hidden = true;
+    /* MEME PRINCIPE POUR LE RETOUR A LA VUE D'ENSEMBLE.
+     *
+     * La sequence restait retiree AVANT que l'accueil ne monte : celui-ci
+     * apparaissait donc en fondu depuis le noir, alors que la video de
+     * retour venait justement de s'arreter sur cette vue. On garde la
+     * derniere image affichee dessous, et la boucle prend le relais
+     * par-dessus. */
     if (destination === "accueil") {
       montrer(null);
       accueil.hidden = false;
-      requestAnimationFrame(() => requestAnimationFrame(
-        () => accueil.classList.remove("part")));
-    } else if (destination === "attente") {
-      montrer("attente");
-      entrerEnAttente();
-    } else {
-      montrer(destination);
-      retenir();
+      jouerLaVue();
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        accueil.classList.remove("part");
+        setTimeout(() => { sequence.hidden = true; }, 480);
+      }));
+      return;
     }
+
+    sequence.hidden = true;
+    montrer(destination);
+    retenir();
   }
 
   /* La carte-titre s'efface et decouvre la vue d'ensemble. Deux etapes
@@ -235,6 +254,7 @@
   function devoiler() {
     if (titre.hidden || titre.classList.contains("part")) return;
     demarrerLAmbiance();
+    jouerLaVue();
     titre.classList.add("part");
     setTimeout(() => { titre.hidden = true; }, 460);
   }
@@ -243,7 +263,7 @@
     if (accueil.hidden || accueil.classList.contains("part")) return;
     demarrerLAmbiance();
     accueil.classList.add("part");
-    setTimeout(() => { accueil.hidden = true; }, 460);
+    setTimeout(() => { accueil.hidden = true; arreterLaVue(); }, 460);
     // Codec absent, onglet en arrière-plan, politique d'autoplay : `jouer`
     // retombe sur `arriver`, donc on ne laisse personne devant un rectangle
     // noir. La station d'arrivée est montée avant que la vidéo ne parte.
@@ -452,6 +472,7 @@
   if (deja) {
     titre.hidden = true;
     accueil.hidden = true;
+    arreterLaVue();
     sequence.hidden = true;
     passer.hidden = true;
   }

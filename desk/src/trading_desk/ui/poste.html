@@ -43,9 +43,19 @@
      provoque aucun saut — on part de l'image qu'on regardait. -->
 <div id="embarquement" role="button" tabindex="0"
      aria-label="Rejoindre le poste de pilotage">
+  <!-- La vue d'ensemble est une BOUCLE, plus une photo.
+       Son point de bouclage a ete fondu a l'encodage : la derniere image
+       reprend la premiere a 0,6 % pres, contre 16,3 % sur la source, ou le
+       saut se voyait toutes les quinze secondes.
+       `poster` evite le noir le temps que la premiere image se decode. -->
   <div class="scene">
-    <img class="decor" src="/ui/poste/assets/accueil.jpg" alt=""
-         draggable="false">
+    <video class="decor" id="vueGlobale" playsinline muted loop
+           preload="auto" poster="/ui/poste/assets/vue.jpg">
+      <source src="/ui/poste/assets/vue.mp4"
+              type='video/mp4; codecs="avc1.64001f"'>
+      <source src="/ui/poste/assets/vue.webm"
+              type='video/webm; codecs="vp9"'>
+    </video>
   </div>
   <p class="invite">Cliquez pour rejoindre le poste</p>
 </div>
