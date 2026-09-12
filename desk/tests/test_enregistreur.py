@@ -203,6 +203,30 @@ def _semer(tmp_path, jour: str, n_segments: int, par_segment: int = 4) -> None:
         e.ajouter("trades", "BTC", _lignes_trades(par_segment, ts=base + s * 1000))
 
 
+def test_des_segments_rapproches_ne_s_ecrasent_pas(tmp_path):
+    """Aucune ligne perdue, meme si tout est ecrit dans la meme milliseconde.
+
+    Le nom de segment n'a qu'une resolution de la milliseconde. Sans numero
+    d'ordre, deux vidages rapproches du meme flux portaient le meme nom et
+    le second ecrasait le premier — silencieusement. Le seul symptome etait
+    un fichier journalier plus court que prevu, ce qui se lit comme un
+    marche calme et non comme une perte.
+
+    C'est ce qui rendait le test de compactage ci-dessous intermittent :
+    douze lignes attendues, huit obtenues quand la machine allait vite.
+    """
+    e = EcrivainParquet(tmp_path, max_lignes=2)
+    for i in range(25):
+        e.ajouter("trades", "BTC", _lignes_trades(2, ts=1_757_000_000_000 + i))
+    e.vider_tout()
+
+    segments = list((tmp_path / "BTC" / "partiel").glob("*.parquet"))
+    assert len(segments) == 25, f"{len(segments)} segments au lieu de 25"
+    total = sum(pq.read_table(f).num_rows for f in segments)
+    assert total == 50, f"{total} lignes au lieu de 50 : des segments se sont écrasés"
+    assert e.lignes_ecrites == 50
+
+
 def test_le_compactage_fusionne_et_supprime_les_segments(tmp_path):
     _semer(tmp_path, "2026-09-06", n_segments=3)
     assert len(segments_par_jour(tmp_path)) == 1

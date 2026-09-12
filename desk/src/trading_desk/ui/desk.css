@@ -759,3 +759,82 @@ body::before {
   border-left-width: 3px;
   box-shadow: var(--shadow), inset 0 0 40px -24px var(--accent);
 }
+
+/* ==========================================================================
+   LES BOITES TOMBENT — ce qui restait d'un tableau de bord web
+   ==========================================================================
+
+   La palette et les ornements ne suffisaient pas : la STRUCTURE restait
+   celle d'une page web. Des cartes pleines, cernees d'un trait sur les
+   quatre cotes, empilees les unes sous les autres. Un ecran de bord ne
+   dessine pas de cartes — il pose des donnees sur une vitre, et n'encadre
+   que ce qu'il faut distinguer.
+
+   Ce bloc retire donc les cadres fermes et les fonds opaques. Ce qui
+   separe devient un FILET, ce qui groupe devient une EQUERRE, et le fond
+   redevient la dalle. Les equerres etaient deja la ; sans ce nettoyage
+   elles se superposaient a un cadre complet, ce qui ne se voyait pas.
+*/
+
+/* --- Les panneaux : plus de cadre, un filet sous le titre --- */
+
+.panel { border: 0; background-color: transparent }
+.panel > h2 {
+  background: linear-gradient(90deg,
+    color-mix(in srgb, var(--accent) 10%, transparent), transparent 62%);
+  border-bottom: 1px solid color-mix(in srgb, var(--accent) 26%, transparent);
+}
+/* Les equerres montent d'un cran maintenant qu'aucun cadre ne les double. */
+.panel::before, .panel::after { width: 14px; height: 14px; opacity: .72 }
+
+/* --- Les tuiles : des colonnes separees par un filet, pas des cases --- */
+
+.tiles {
+  gap: 0;
+  border: 0;
+  border-top: 1px solid color-mix(in srgb, var(--accent) 24%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--accent) 24%, transparent);
+  background: color-mix(in srgb, var(--surface) 45%, transparent);
+}
+.tile { background: transparent; border-left: 1px solid var(--line-soft) }
+.tile:first-child { border-left: 0 }
+/* Le filet du haut ne court plus sur toute la tuile : il marque le debut de
+   la colonne, comme une graduation, et laisse respirer le reste. */
+.tile::before { right: auto; width: 22px }
+
+/* --- La banniere d'etat : une zone signalee, pas un encadre --- */
+
+.banner {
+  border: 0;
+  border-left: 2px solid var(--ok);
+  background: linear-gradient(90deg,
+    color-mix(in srgb, var(--surface) 78%, transparent),
+    color-mix(in srgb, var(--surface) 22%, transparent) 76%);
+  box-shadow: none;
+}
+.banner.bad { border-left-color: var(--crit) }
+.banner.warn { border-left-color: var(--warn) }
+
+/* --- L'introduction de secteur : une note de marge --- */
+
+.intro {
+  background: transparent;
+  border: 0;
+  border-left: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
+  color: var(--ink-2);
+}
+
+/* --- Les titres portent la typographie technique du bord --- */
+
+/* Les ecrans du poste n'ont pas une seule ligne en caracteres proportionnels.
+   On ne va pas jusqu'a composer les paragraphes en chasse fixe — de la prose
+   en mono se lit mal, et ces panneaux servent a expliquer — mais tout ce qui
+   ETIQUETTE ou AFFICHE passe en technique. */
+.banner .why b, .secteur h3, .res, .carte h3 {
+  font-family: var(--f-mono);
+  letter-spacing: .02em;
+}
+
+/* --- La barre superieure se fond dans la dalle --- */
+
+.bar { background: color-mix(in srgb, var(--surface) 40%, transparent) }

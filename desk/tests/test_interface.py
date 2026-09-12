@@ -852,6 +852,51 @@ def test_le_titre_d_accueil_ne_couvre_pas_la_terre():
                                             css.index("}", css.index("#embarquement {"))]
 
 
+def test_la_dalle_est_projetee_en_perspective():
+    """L'ecran est vu en contre-plongee : la dalle doit l'etre aussi.
+
+    Mesure des deux bords de l'ecran radar sur `poste.jpg`, en regression
+    robuste (114 et 79 points) : bord gauche x = -0,0411y + 219,1, bord
+    droit x = +0,0547y + 1062,8. Les deux s'ecartent vers le bas — 847 px
+    de large en haut, 911 en bas, soit 7,5 % d'evasement. Une dalle
+    rectangulaire posee sur un ecran trapezoidal se voit immediatement :
+    les bords peints depassent d'un cote et sont recouverts de l'autre.
+
+    `perspective` n'accepte pas de pourcentage. La caler en pixels fixes
+    donnerait une projection juste a une seule taille de fenetre et fausse
+    partout ailleurs, d'ou le calcul sur la largeur reelle de la scene.
+    """
+    css = (recherche.RACINE / "src/trading_desk/ui/poste/poste.css") \
+        .read_text(encoding="utf-8")
+    assert "--profondeur" in css and "--inclinaison" in css
+    assert "min(100vw, 177.78vh)" in css, \
+        "la profondeur ne suit plus la taille de la scene"
+    assert "perspective(var(--profondeur)) rotateX(var(--inclinaison))" in css
+
+    # Le verre ET le reflet subissent la meme projection, par la meme regle.
+    i = css.index(".verre, .reflet {")
+    regle = css[i:css.index("}", i)]
+    assert "transform:" in regle, \
+        "le reflet doit etre projete avec le verre, sinon il glisse dessus"
+
+
+def test_un_bouton_ramene_a_la_vue_d_ensemble():
+    """Le poste est un gros plan : il faut pouvoir en ressortir.
+
+    Le bouton efface la memoire de session. Sans cet effacement, le clic
+    suivant sauterait directement au poste et le bouton aurait l'air de ne
+    rien faire.
+    """
+    assert 'id="revoir"' in _poste()
+    js = (recherche.RACINE / "src/trading_desk/ui/poste/poste.js") \
+        .read_text(encoding="utf-8")
+    i = js.index('getElementById("revoir")')
+    bloc = js[i:i + 900]
+    assert "removeItem(MEMOIRE)" in bloc, \
+        "sans effacer la memoire, le bouton semble ne rien faire"
+    assert "accueil.hidden = false" in bloc
+
+
 def test_le_seuil_du_decor_est_le_meme_des_deux_cotes():
     """Le seuil est écrit deux fois. Ces deux écritures doivent s'accorder.
 

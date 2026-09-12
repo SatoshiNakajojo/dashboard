@@ -29,10 +29,29 @@
      La dalle fait maintenant 70,8 % de la largeur du decor contre 48,8 %
      avant : la nouvelle sequence se termine bien plus pres de l'ecran.
      Le desk y gagne environ le double de surface. */
-  --verre-l: 15.0%;
-  --verre-t: 5.8%;
-  --verre-w: 70.8%;
-  --verre-h: 90.3%;
+  /* La dalle, posee sur le QUADRILATERE mesure — pas sur un rectangle.
+     Voir la note ci-dessus. Ces quatre valeurs decrivent la boite moyenne ;
+     l'inclinaison ci-dessous en fait un trapeze. */
+  --verre-l: 14.9%;
+  --verre-t: 0.8%;
+  --verre-w: 70.2%;
+  --verre-h: 96.7%;
+
+  /* L'inclinaison.
+     Mesure des deux bords de l'ecran radar, en regression robuste sur 114
+     et 79 points : bord gauche x = -0,0411y + 219,1 ; bord droit
+     x = +0,0547y + 1062,8. Les deux s'ecartent vers le bas, donc la dalle
+     est vue EN CONTRE-PLONGEE : 847 px de large en haut, 911 en bas, soit
+     7,5 % d'evasement.
+
+     `perspective` n'accepte pas de pourcentage, ce qui interdit de la caler
+     sur la taille du parent. On la calcule donc a partir de la largeur reelle
+     de la scene — min(100vw, 177.78vh), exactement la regle de `.scene` —
+     pour que le trapeze garde ses proportions a toutes les tailles de
+     fenetre. Une valeur en pixels fixes aurait donne une perspective juste a
+     une seule taille d'ecran, et fausse partout ailleurs. */
+  --profondeur: calc(min(100vw, 177.78vh) * 0.757);
+  --inclinaison: 6deg;
 }
 
 * { box-sizing: border-box }
@@ -214,12 +233,17 @@ html, body {
   /* Une seule source pour le cadrage de la dalle. Les deux regles se
      superposent exactement ; repeter les quatre valeurs, c'est garantir
      qu'un jour l'une sera corrigee et pas l'autre, et que le reflet
-     flottera a cote du verre sans que personne ne comprenne pourquoi. */
+     flottera a cote du verre sans que personne ne comprenne pourquoi.
+
+     L'inclinaison est ici pour la meme raison : le reflet doit subir
+     exactement la meme projection que le verre, sinon il glisse dessus. */
   position: absolute;
   left: var(--verre-l);
   top: var(--verre-t);
   width: var(--verre-w);
   height: var(--verre-h);
+  transform: perspective(var(--profondeur)) rotateX(var(--inclinaison));
+  transform-origin: 50% 50%;
 }
 
 .verre {
@@ -247,6 +271,28 @@ html, body {
 /* Le rappel discret du chemin de retour. Le poste n'a pas de barre de
    navigation : elle casserait l'illusion. Mais une interface sans issue
    visible est une interface ou l'on se sent pris. */
+/* Le bouton de vue d'ensemble. Meme discretion que la sortie : le poste ne
+   doit pas s'entourer d'une barre d'outils, qui casserait l'illusion. */
+.revoir {
+  position: fixed;
+  right: 14px;
+  bottom: 12px;
+  z-index: 12;
+  padding: 6px 12px;
+  border: 1px solid var(--verre-bord);
+  border-radius: 3px;
+  background: rgba(5, 10, 18, .55);
+  color: rgba(207, 227, 242, .62);
+  font: inherit;
+  font-size: 10px;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: color 160ms ease, border-color 160ms ease;
+}
+.revoir:hover { color: #eaf4ff; border-color: var(--accent) }
+.revoir:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px }
+
 .sortie {
   position: fixed;
   left: 14px;
