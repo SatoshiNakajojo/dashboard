@@ -681,6 +681,21 @@ def _panneaux() -> str:
     return (recherche.RACINE / "src/trading_desk/ui/index.html").read_text(encoding="utf-8")
 
 
+def _bloc_verre() -> str:
+    """Le bloc « DANS LE VERRE », borne a la section SUIVANTE.
+
+    Il a d'abord ete pris jusqu'a la fin du fichier. C'etait juste tant
+    qu'il etait dernier ; la premiere section ajoutee apres lui a fait
+    echouer le test d'etancheite sur des regles qui ne le concernaient pas.
+    Une borne implicite « jusqu'a la fin » est une borne qui se trompera le
+    jour ou quelqu'un ecrira en dessous.
+    """
+    css = _desk_css()
+    debut = css.index("DANS LE VERRE")
+    suite = css.find("\n/* ====", debut)
+    return css[debut:] if suite == -1 else css[debut:suite]
+
+
 def test_la_dalle_demande_les_panneaux_en_version_verre():
     """Le poste charge `/panneaux?verre`, pas `/panneaux` tout court."""
     assert "/panneaux?verre" in _poste(), \
@@ -713,10 +728,7 @@ def test_la_mise_en_page_du_verre_ne_deborde_pas_sur_la_vue_sans_decor():
     qui fuirait hors du bloc la rendrait illisible sans que rien ne le dise,
     puisque les deux vues servent le même fichier.
     """
-    css = _desk_css()
-    debut = css.index("DANS LE VERRE")
-    bloc = css[debut:]
-    for ligne in bloc.splitlines():
+    for ligne in _bloc_verre().splitlines():
         ligne = ligne.strip()
         # On ne regarde que les lignes qui ouvrent un sélecteur.
         if not ligne or ligne.startswith(("/*", "*", "}")) or "{" not in ligne:
@@ -741,8 +753,7 @@ def test_les_enfants_de_la_dalle_peuvent_retrecir():
     La grille a la même faiblesse par une autre porte : `1fr` vaut
     `minmax(auto, 1fr)`, dont le minimum est min-content. D'où `minmax(0,1fr)`.
     """
-    css = _desk_css()
-    bloc = css[css.index("DANS LE VERRE"):]
+    bloc = _bloc_verre()
     assert "min-width:0" in bloc, "rien ne permet aux enfants de rétrécir"
     assert "grid-template-columns:minmax(0,1fr) auto" in bloc, \
         "la bannière garde un plancher min-content : le bouton d'arrêt sera coupé"
@@ -762,7 +773,7 @@ def test_la_hauteur_de_la_dalle_est_budgetee():
     Le plancher du secteur ne vaut que parce que ces plafonds existent ;
     seul, il ne ferait que déplacer le débordement d'un cran plus bas.
     """
-    bloc = _desk_css()[_desk_css().index("DANS LE VERRE"):]
+    bloc = _bloc_verre()
     assert "max-height:21vh" in bloc, "la liste des invariants n'est pas plafonnée"
     assert "min-height:26vh" in bloc, "le secteur n'a pas de plancher"
 
@@ -774,7 +785,7 @@ def test_le_bouton_de_theme_disparait_dans_le_verre():
     n'est pas une préférence, c'est un mensonge. Il reste dans la vue sans
     décor, où il décide vraiment.
     """
-    bloc = _desk_css()[_desk_css().index("DANS LE VERRE"):]
+    bloc = _bloc_verre()
     assert ":root[data-verre] #theme { display:none }" in bloc
 
     js = (recherche.RACINE / "src/trading_desk/ui/poste/poste.js") \
@@ -790,12 +801,55 @@ def test_le_titre_de_la_dalle_est_masque_sans_etre_retire():
     d'écran doit continuer à l'annoncer. Il est en revanche redondant à
     l'œil — le cadre autour de la dalle EST le poste.
     """
-    bloc = _desk_css()[_desk_css().index("DANS LE VERRE"):]
+    bloc = _bloc_verre()
     i = bloc.index(":root[data-verre] .bar h1")
     regle = bloc[i:bloc.index("}", i)]
     assert "clip-path" in regle, "le titre doit être rogné, pas caché"
     assert "display:none" not in regle, \
         "display:none retire le titre de l'arbre d'accessibilité"
+
+
+def test_les_deux_raccords_sont_declares():
+    """La sequence part de l'accueil et arrive sur le decor.
+
+    Les deux images ne sont pas choisies : elles sont EXTRAITES de la
+    sequence — la premiere image pour l'accueil, la derniere pour le decor.
+    C'est ce qui rend les deux raccords exacts par construction. Mesure du
+    12 septembre 2026 : 0,00 % d'ecart entre le decor et chacune des huit
+    dernieres images de la video.
+
+    Choisir une autre prise du meme cockpit, si ressemblante soit-elle,
+    ferait sauter le raccord au moment precis ou tout l'effet repose
+    dessus. Le depot a deja tranche ce point une fois, avec les mesures, en
+    refusant une image envoyee separement.
+    """
+    page = _poste()
+    assert "assets/accueil.jpg" in page, "l'accueil n'affiche pas la premiere image"
+    assert "assets/poste.jpg" in page, "le decor n'est pas la derniere image"
+
+    base = recherche.RACINE / "src/trading_desk/ui/poste/assets"
+    for nom in ("accueil.jpg", "poste.jpg", "embarquement.mp4", "embarquement.webm"):
+        chemin = base / nom
+        assert chemin.exists(), f"{nom} manquant"
+        assert chemin.stat().st_size > 10_000, f"{nom} suspicieusement petit"
+
+
+def test_le_titre_d_accueil_ne_couvre_pas_la_terre():
+    """Le titre est pose sur le champ d'etoiles, pas au centre de l'image.
+
+    Centre, il tomberait sur le limbe de la Terre — la seule zone claire et
+    chargee du cadre, donc du texte blanc sur un nuage blanc. Le voile
+    assombrit le haut sans ternir la Terre, qui est le sujet.
+    """
+    css = (recherche.RACINE / "src/trading_desk/ui/poste/poste.css") \
+        .read_text(encoding="utf-8")
+    assert ".voile" in css, "le voile de lisibilite a disparu"
+    i = css.index(".accueil {")
+    regle = css[i:css.index("}", i)]
+    assert "position: absolute" in regle and "top:" in regle, \
+        "l'accueil est revenu a un centrage : le titre retombe sur la Terre"
+    assert "place-items: center" not in css[css.index("#embarquement {"):
+                                            css.index("}", css.index("#embarquement {"))]
 
 
 def test_le_seuil_du_decor_est_le_meme_des_deux_cotes():
