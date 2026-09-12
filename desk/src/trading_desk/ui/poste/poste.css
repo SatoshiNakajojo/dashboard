@@ -418,7 +418,18 @@ html, body {
 #attente {
   position: fixed;
   inset: 0;
-  z-index: 15;                 /* au-dessus du poste, sous les sequences */
+  /* AU-DESSUS DE LA SEQUENCE (20) ET DU BOUTON « PASSER » (21).
+   *
+   * Il etait a 15, donc SOUS la sequence. L'ordre etait alors force :
+   * retirer la video, ce qui decouvrait le desk, puis faire monter l'ecran
+   * d'attente de 0 a 1 par-dessus. Le desk restait donc en clair pendant
+   * toute la demi-seconde du fondu — le flash signale entre le zoom et
+   * l'ecran d'attente.
+   *
+   * Place au-dessus, il se fond sur la DERNIERE IMAGE DU ZOOM, et la
+   * sequence n'est retiree qu'une fois l'attente opaque. Rien du desk
+   * n'apparait entre les deux. */
+  z-index: 22;
   background: var(--nuit);
   opacity: 0;
   transition: opacity 500ms ease;
@@ -434,6 +445,56 @@ html, body {
      donc sur la meme boite, en acceptant de perdre quelques pixels de bord
      — ils tombent sur le cadre peint, pas sur l'ecran. */
   object-fit: cover;
+}
+
+/* L'etiquette de balayage, posee en haut de l'ecran.
+ *
+ * Elle dit ce que le radar est en train de faire pendant qu'on attend.
+ * Placee au-dessus du cercle, dans la bande vide entre le bord de la dalle
+ * et les premieres graduations — la seule zone de cet ecran ou du texte
+ * ajoute ne recouvre rien de ce que la video dessine. */
+.balayage {
+  position: absolute;
+  left: 0; right: 0;
+  top: 3.4%;
+  z-index: 16;
+  margin: 0;
+  text-align: center;
+  pointer-events: none;
+}
+
+/* SUR UNE PLAQUE, pas en toutes lettres sur l'image.
+ *
+ * Pose a nu, le texte tombait sur les graduations du radar : les chiffres
+ * du pourtour traversaient les lettres et plus rien ne se lisait. La bande
+ * libre entre le bord de la dalle et le premier anneau fait une vingtaine
+ * de pixels — trop peu pour y glisser du texte sans fond.
+ *
+ * La plaque n'est pas un pis-aller : c'est la langue de ce poste. Tous ses
+ * libelles sont encadres — « SYSTEM STATUS », « RADAR CONTACT », les
+ * petites boites de chiffres du bas. Le nouveau venu parle comme eux. */
+.balayage span {
+  display: inline-block;
+  padding: 4px 14px 3px;
+  border: 1px solid rgba(140, 205, 255, .42);
+  border-radius: 2px;
+  background: rgba(4, 12, 22, .82);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: .3em;
+  text-transform: uppercase;
+  color: rgba(206, 234, 255, .95);
+  text-shadow: 0 0 18px rgba(110, 195, 255, .7);
+  box-shadow: 0 0 26px -10px rgba(90, 180, 255, .7);
+  animation: scan 2.4s ease-in-out infinite;
+}
+
+/* Le point qui suit le balayage : trois etats, comme un compte a rebours
+   qui ne finit pas. Un texte parfaitement fixe sur une image animee se lit
+   comme une incrustation ; celui-ci respire avec le radar. */
+@keyframes scan {
+  0%, 100% { opacity: .55 }
+  50%      { opacity: 1 }
 }
 
 /* Le bouton d'ouverture, pose sur le radar. */
@@ -536,7 +597,7 @@ html, body {
 .son[aria-pressed="true"] { color: var(--accent); border-color: var(--accent) }
 
 @media (prefers-reduced-motion: reduce) {
-  .ouvrir { animation: none }
+  .ouvrir, .balayage span { animation: none }
   .invite { animation: none; opacity: .8 }
   #attente { transition: none }
 }
