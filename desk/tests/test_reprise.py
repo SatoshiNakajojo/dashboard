@@ -250,3 +250,74 @@ def test_la_version_ne_fait_jamais_echouer_le_demarrage():
         assert isinstance(mod.version(), str) and mod.version()
     finally:
         mod.version.cache_clear()
+
+
+# --------------------------------------------------------------------------
+#  Le quota journalier de mandats
+# --------------------------------------------------------------------------
+
+def test_le_compteur_de_mandats_repasse_a_zero_au_changement_de_jour():
+    """Il s'appelait « aujourd'hui » et comptait « depuis le lancement ».
+
+    Observé en production le 12 septembre 2026, sur un desk actif depuis des
+    heures : « ORDER_RATE_EXCEEDED — 9 mandats aujourd'hui > 8 ». Le desk
+    s'arrêtait DÉFINITIVEMENT : le réarmement échouait aussitôt sur I07, et
+    seul un redémarrage effaçait le compteur — en oubliant du même coup le
+    vrai compte du jour.
+    """
+    etat = _etat()
+    for _ in range(9):
+        etat.set_mandate(Mandate.flat(journal_ref="essai"))
+    assert etat.mandates_today == 9
+    assert Invariant.I07_ORDER_RATE in etat.verdict().blocking
+
+    # Le lendemain.
+    etat._jour_des_mandats = "1999-01-01"
+    assert Invariant.I07_ORDER_RATE not in etat.verdict().blocking, \
+        "le quota ne se libère jamais : le desk reste arrêté pour toujours"
+    assert etat.mandates_today == 0
+
+
+def test_la_bascule_joue_aussi_a_la_lecture():
+    """Un desk arrêté par le quota n'émet plus de mandat.
+
+    Si seule l'écriture basculait, le compteur resterait au-dessus du
+    plafond indéfiniment et le lendemain ne changerait rien — c'est
+    exactement la panne qu'on corrige.
+    """
+    etat = _etat()
+    for _ in range(9):
+        etat.set_mandate(Mandate.flat(journal_ref="essai"))
+    etat._jour_des_mandats = "1999-01-01"
+
+    # `risk_context` est une LECTURE : elle doit suffire à débloquer.
+    ctx = etat.risk_context()
+    assert ctx.mandates_today == 0
+    assert etat.mandates_today == 0
+
+
+def test_une_intention_non_dimensionnable_ne_consomme_pas_le_quota():
+    """Le quota sert à borner les ORDRES, pas les tentatives.
+
+    Le mandat était inscrit avant le dimensionnement : une intention qui ne
+    produisait aucun ordre — la plupart, avec une quinzaine de positions au
+    journal — consommait quand même un mandat. Les huit du jour partaient en
+    refus, puis I07 arrêtait le desk pour la journée.
+
+    La propriété d'audit reste entière : le mandat est toujours inscrit
+    AVANT l'ordre auquel il se rattache. Il ne l'est simplement plus quand
+    il n'y a pas d'ordre.
+    """
+    source = (recherche_chemin() / "src/trading_desk/execution/pupitre.py") \
+        .read_text(encoding="utf-8")
+    i = source.index("def _ouvrir")
+    bloc = source[i:i + 2000]
+    assert bloc.index("taille = size_position") < bloc.index("set_mandate"), \
+        "le mandat est inscrit avant le dimensionnement : le quota part en refus"
+    assert bloc.index("set_mandate") < bloc.index("self.orders.open_position"), \
+        "le mandat doit rester inscrit AVANT l'ordre (propriété d'audit)"
+
+
+def recherche_chemin():
+    from pathlib import Path
+    return Path(__file__).resolve().parent.parent

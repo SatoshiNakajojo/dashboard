@@ -264,10 +264,18 @@ class Pupitre:
     def _ouvrir(self, intention: Intention, compte) -> None:
         mandat = self._mandat(
             Bias.SHORT if intention.side is Side.SHORT else Bias.LONG)
-        # Le mandat est journalise avant d'etre utilise : l'ordre qui suit
-        # doit etre rattachable a une autorisation datee, pas l'inverse.
-        self.state.set_mandate(mandat)
 
+        # ON DIMENSIONNE AVANT D'INSCRIRE LE MANDAT.
+        #
+        # Inscrire d'abord consommait le quota journalier pour une intention
+        # qui ne produisait aucun ordre — et la plupart n'en produisent pas :
+        # un actif non dimensionnable ressort ici meme. Avec une quinzaine de
+        # positions au journal, les huit mandats du jour partaient en refus,
+        # apres quoi I07 arretait le desk pour la journee.
+        #
+        # La propriete d'audit est intacte : le mandat reste inscrit AVANT
+        # l'ordre auquel il se rattache. Il n'est simplement plus inscrit
+        # quand il n'y a pas d'ordre.
         taille = size_position(
             account=compte, mandate=mandat, limits=self.state.limits,
             asset=intention.asset, side=intention.side,
@@ -277,6 +285,8 @@ class Pupitre:
             self.refus.append(
                 f"{intention.asset} non dimensionnable : {taille.binding_constraint}")
             return
+
+        self.state.set_mandate(mandat)
 
         issue = self.orders.open_position(
             mandate=mandat, ctx=self.state.risk_context(),

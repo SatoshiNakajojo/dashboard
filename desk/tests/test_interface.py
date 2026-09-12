@@ -586,7 +586,10 @@ def _poste() -> str:
 def test_la_racine_sert_le_poste_et_son_accueil(client):
     """La page d'arrivée porte l'accueil, et la racine le sert."""
     page = client.get("/").text
-    assert "Welcome on board Boss" in page
+    assert "Welcome onboard Boss" in page
+    # Deux etapes avant la sequence : la carte-titre noire, puis la vue
+    # d'ensemble. C'est ce qui evite de devoiler le poste avant le zoom.
+    assert 'id="titre"' in page, "la carte-titre a disparu"
     assert 'id="embarquement"' in page and 'id="sequence"' in page
 
 
@@ -855,22 +858,24 @@ def test_les_deux_raccords_sont_declares():
         assert chemin.stat().st_size > 10_000, f"{nom} suspicieusement petit"
 
 
-def test_le_titre_d_accueil_ne_couvre_pas_la_terre():
-    """Le titre est pose sur le champ d'etoiles, pas au centre de l'image.
+def test_le_titre_precede_la_vue_d_ensemble():
+    """La carte-titre est NOIRE, et elle vient avant le cockpit.
 
-    Centre, il tomberait sur le limbe de la Terre — la seule zone claire et
-    chargee du cadre, donc du texte blanc sur un nuage blanc. Le voile
-    assombrit le haut sans ternir la Terre, qui est le sujet.
+    Le titre était auparavant posé sur la photo du poste. Arriver
+    directement sur le cockpit dévoile le décor avant le zoom, et le zoom
+    n'a plus rien à révéler — d'où deux étapes, et un fond noir sur la
+    première.
     """
     css = (recherche.RACINE / "src/trading_desk/ui/poste/poste.css") \
         .read_text(encoding="utf-8")
-    assert ".voile" in css, "le voile de lisibilite a disparu"
-    i = css.index(".accueil {")
+    i = css.index("#titre {")
     regle = css[i:css.index("}", i)]
-    assert "position: absolute" in regle and "top:" in regle, \
-        "l'accueil est revenu a un centrage : le titre retombe sur la Terre"
-    assert "place-items: center" not in css[css.index("#embarquement {"):
-                                            css.index("}", css.index("#embarquement {"))]
+    assert "z-index: 40" in regle, "la carte-titre doit couvrir tout le reste"
+    assert "radial-gradient" in regle, "elle doit rester un écran noir"
+
+    page = _poste()
+    assert page.index('id="titre"') < page.index('id="embarquement"'), \
+        "la carte-titre doit être déclarée avant la vue d'ensemble"
 
 
 def test_la_dalle_est_projetee_en_perspective():
@@ -959,29 +964,35 @@ def test_l_ecran_de_gauche_affiche_les_memes_panneaux():
         "le panneau des flux n'est pas isolé"
 
 
-def test_le_declencheur_passe_par_un_message_verifie():
-    """Les panneaux publient, le poste décide — et vérifie l'origine.
+def test_l_acces_a_l_ecran_de_gauche_est_un_bouton_du_poste():
+    """Le titre du panneau ne déclenche plus rien.
 
-    Les panneaux doivent rester utilisables seuls, sans rien savoir de la
-    mise en scène. Et ce port n'écoute que sur `127.0.0.1`, mais une page
-    ouverte dans un autre onglet peut poster vers celui-ci : un message
-    étranger ne doit pas pouvoir piloter le poste.
+    « Flux de données » ne s'affiche plus que sur l'écran de gauche ; l'y
+    rendre cliquable relancerait la transition qui vient de s'achever — un
+    bouton qui ramène là où l'on est déjà. L'aller est donc un bouton du
+    poste, symétrique de « Return to PFD ».
     """
-    poste_js = (recherche.RACINE / "src/trading_desk/ui/poste/poste.js") \
+    page = _poste()
+    assert 'id="versGauche"' in page and 'id="retourPfd"' in page
+
+    js = (recherche.RACINE / "src/trading_desk/ui/poste/poste.js") \
         .read_text(encoding="utf-8")
-    i = poste_js.index('addEventListener("message"')
-    bloc = poste_js[i:i + 400]
-    assert "e.origin !== location.origin" in bloc, \
-        "l'origine du message n'est pas vérifiée"
-    assert '"voir-flux"' in bloc
+    assert 'jouer("versGauche")' in js and 'jouer("versPfd")' in js
 
     desk_js = (recherche.RACINE / "src/trading_desk/ui/desk.js") \
         .read_text(encoding="utf-8")
-    assert 'postMessage({ desk: "voir-flux" }, location.origin)' in desk_js
-    # Hors décor, le titre ne doit rien déclencher : la vue sans décor n'a
-    # pas d'écran de gauche, et un bouton qui ne mène nulle part est pire
-    # qu'une absence de bouton.
-    assert 'hasAttribute("data-verre")' in desk_js
+    assert "postMessage" not in desk_js, \
+        "le câblage par message n'a plus lieu d'être : plus aucun titre n'est cliquable"
+
+
+def test_le_panneau_des_flux_quitte_le_pfd():
+    """Une même mesure à deux endroits finit par ne plus s'afficher pareil.
+
+    Le panneau garde sa place dans la vue sans décor : elle n'a pas d'écran
+    de gauche, et elle sert justement à tout voir d'un coup.
+    """
+    css = _desk_css()
+    assert ':root[data-verre]:not([data-vue]) #sec-systemes .panel:has(#feeds)' in css
 
 
 def test_la_barre_affiche_la_version_qui_tourne():

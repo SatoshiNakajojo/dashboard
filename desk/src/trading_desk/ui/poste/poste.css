@@ -66,10 +66,15 @@
      rapport de 1,10 que la rotation doit reproduire. Le leger basculement
      du cadre (le haut monte vers la droite) est un `rotateZ` a part —
      confondre les deux ferait tourner l'image au lieu de la projeter. */
-  --verre-g-l: 20.61%;
-  --verre-g-t: 20.42%;
-  --verre-g-w: 37.30%;
-  --verre-g-h: 66.81%;
+  /* DEBORD VOLONTAIRE. Cale pile sur les bords mesures, la dalle laissait
+     voir l'ecran peint par-dessous : un pixel d'arrondi suffit, et la
+     projection en perspective en produit forcement. On deborde donc de
+     ~1,5 % de chaque cote — invisible, puisque ce qui depasse tombe sur le
+     cadre noir, et suffisant pour que rien du dessous ne reapparaisse. */
+  --verre-g-l: 19.1%;
+  --verre-g-t: 18.4%;
+  --verre-g-w: 40.3%;
+  --verre-g-h: 70.8%;
   --profondeur-g: calc(min(100vw, 177.78vh) * 0.68);
   --rot-y-g: -10deg;
   --rot-z-g: 0.6deg;
@@ -112,6 +117,24 @@ html, body {
 
 /* --- 1. L'embarquement ------------------------------------------------- */
 
+/* La carte-titre : un ecran noir, et rien d'autre. */
+#titre {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  background:
+    radial-gradient(ellipse 70% 50% at 50% 45%, #0b1220 0%, #05070b 70%),
+    var(--nuit);
+  transition: opacity 420ms ease;
+  -webkit-tap-highlight-color: transparent;
+}
+#titre[hidden] { display: none }
+#titre.part { opacity: 0; pointer-events: none }
+#titre .accueil { position: static }
+
 #embarquement {
   position: fixed;
   inset: 0;
@@ -120,6 +143,21 @@ html, body {
   background: var(--nuit);
   transition: opacity 420ms ease;
   -webkit-tap-highlight-color: transparent;
+}
+
+/* L'invite sur la vue d'ensemble : discrete, en bas, pour ne pas couvrir
+   le poste qu'on vient justement de devoiler. */
+.invite {
+  position: absolute;
+  left: 0; right: 0; bottom: 7%;
+  margin: 0;
+  text-align: center;
+  font-size: 11px;
+  letter-spacing: .32em;
+  text-transform: uppercase;
+  color: rgba(207, 227, 242, .72);
+  text-shadow: 0 2px 18px rgba(0, 0, 0, .9);
+  animation: respire 2.6s ease-in-out infinite;
 }
 #embarquement[hidden] { display: none }
 #embarquement.part { opacity: 0; pointer-events: none }
@@ -372,4 +410,133 @@ html, body {
     rgba(170, 214, 255, .05) 42%,
     rgba(170, 214, 255, .014) 52%,
     rgba(255, 255, 255, 0) 64%);
+}
+
+
+/* --- L'ecran d'attente ------------------------------------------------ */
+
+#attente {
+  position: fixed;
+  inset: 0;
+  z-index: 15;                 /* au-dessus du poste, sous les sequences */
+  background: var(--nuit);
+  opacity: 0;
+  transition: opacity 500ms ease;
+}
+#attente[hidden] { display: none }
+#attente.visible { opacity: 1 }
+
+#veille {
+  display: block;
+  /* `cover` et non `contain` : la video d'attente est en 1200x752 quand le
+     decor est en 16/9. La contenir laisserait deux bandes a des endroits ou
+     la photo n'en a pas, et le raccord sauterait aux yeux. On la recadre
+     donc sur la meme boite, en acceptant de perdre quelques pixels de bord
+     — ils tombent sur le cadre peint, pas sur l'ecran. */
+  object-fit: cover;
+}
+
+/* Le bouton d'ouverture, pose sur le radar. */
+.ouvrir {
+  position: absolute;
+  left: 50%;
+  top: 62%;
+  transform: translate(-50%, -50%);
+  z-index: 16;
+  padding: 13px 30px;
+  border: 1px solid rgba(140, 205, 255, .55);
+  border-radius: 3px;
+  background: rgba(6, 16, 28, .62);
+  color: #dcefff;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: .3em;
+  text-transform: uppercase;
+  cursor: pointer;
+  backdrop-filter: blur(2px);
+  box-shadow: 0 0 34px -8px rgba(90, 180, 255, .5),
+              inset 0 0 22px -12px rgba(140, 205, 255, .9);
+  animation: pulse-ouvrir 2.8s ease-in-out infinite;
+  transition: color 160ms ease, border-color 160ms ease;
+}
+.ouvrir:hover { color: #fff; border-color: rgba(180, 225, 255, .9) }
+.ouvrir:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px }
+
+@keyframes pulse-ouvrir {
+  0%, 100% { box-shadow: 0 0 30px -10px rgba(90, 180, 255, .45),
+                         inset 0 0 20px -14px rgba(140, 205, 255, .8) }
+  50%      { box-shadow: 0 0 46px -6px rgba(120, 200, 255, .72),
+                         inset 0 0 26px -10px rgba(160, 215, 255, 1) }
+}
+
+/* L'acces a l'ecran de gauche, pose sur le bandeau bas du PFD. */
+.vers-gauche {
+  position: absolute;
+  left: 50%;
+  top: 99.2%;
+  transform: translate(-50%, -50%);
+  z-index: 12;
+  padding: 7px 16px;
+  border: 1px solid rgba(140, 205, 255, .4);
+  border-radius: 3px;
+  background: rgba(6, 16, 28, .66);
+  color: rgba(220, 239, 255, .82);
+  font: inherit;
+  font-size: 10px;
+  letter-spacing: .22em;
+  text-transform: uppercase;
+  cursor: pointer;
+  box-shadow: 0 0 24px -10px rgba(90, 180, 255, .55);
+}
+.vers-gauche:hover { color: #fff; border-color: rgba(180, 225, 255, .85) }
+.vers-gauche:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px }
+
+/* Le retour vers le PFD, pose SUR la console de gauche. */
+.retour-pfd {
+  position: absolute;
+  left: 40%;
+  top: 95.5%;
+  transform: translate(-50%, -50%) rotateZ(1.2deg);
+  z-index: 12;
+  padding: 8px 18px;
+  border: 1px solid rgba(140, 205, 255, .45);
+  border-radius: 3px;
+  background: rgba(6, 16, 28, .68);
+  color: rgba(220, 239, 255, .88);
+  font: inherit;
+  font-size: 11px;
+  letter-spacing: .22em;
+  text-transform: uppercase;
+  cursor: pointer;
+  box-shadow: 0 0 26px -10px rgba(90, 180, 255, .6);
+}
+.retour-pfd:hover { color: #fff; border-color: rgba(180, 225, 255, .85) }
+.retour-pfd:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px }
+
+/* Le bouton de son : discret, au bord, parce qu'il appartient au
+   navigateur et non au vaisseau — c'est une preference, pas une commande
+   de bord. */
+.son {
+  position: fixed;
+  right: 14px;
+  top: 12px;
+  z-index: 45;
+  width: 30px; height: 30px;
+  border: 1px solid var(--verre-bord);
+  border-radius: 50%;
+  background: rgba(5, 10, 18, .5);
+  color: rgba(207, 227, 242, .5);
+  font: inherit;
+  font-size: 9px;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.son[aria-pressed="true"] { color: var(--accent); border-color: var(--accent) }
+
+@media (prefers-reduced-motion: reduce) {
+  .ouvrir { animation: none }
+  .invite { animation: none; opacity: .8 }
+  #attente { transition: none }
 }

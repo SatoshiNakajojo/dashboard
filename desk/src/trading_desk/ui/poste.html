@@ -26,23 +26,29 @@
 <body>
 
 <!-- 1. L'accueil -->
-<!-- L'accueil montre LA PREMIERE IMAGE DE LA SEQUENCE : le poste vu en
-     entier, la Terre par les hublots. Meme cadrage que la video, donc le
-     clic ne provoque aucun saut — on part de l'image qu'on regardait.
-     La sequence se termine, elle, sur le decor : les deux raccords sont
-     ainsi exacts par construction, au debut comme a la fin. -->
+<!-- 1. LA CARTE-TITRE. Un ecran noir, rien d'autre.
+     Elle existe pour ne pas devoiler le poste avant qu'on ait embarque :
+     arriver directement sur le cockpit grille l'effet du zoom qui suit. -->
+<div id="titre" role="button" tabindex="0"
+     aria-label="Embarquer — montre le poste de pilotage">
+  <div class="accueil">
+    <h1>Welcome onboard Boss</h1>
+    <div class="trait"></div>
+    <p>Cliquez pour embarquer</p>
+  </div>
+</div>
+
+<!-- 2. LA VUE D'ENSEMBLE : le poste en entier, la Terre par les hublots.
+     C'est la premiere image de la sequence, donc le clic suivant ne
+     provoque aucun saut — on part de l'image qu'on regardait. -->
 <div id="embarquement" role="button" tabindex="0"
-     aria-label="Embarquer — lance la séquence d'arrivée au poste">
+     aria-label="Rejoindre le poste de pilotage">
   <div class="scene">
     <img class="decor" src="/ui/poste/assets/accueil.jpg" alt=""
          draggable="false">
   </div>
-  <div class="voile"></div>
-  <div class="accueil">
-    <h1>Welcome on board Boss</h1>
-    <div class="trait"></div>
-    <p>Cliquez pour embarquer</p>
-  </div>
+  <p class="invite">Cliquez pour rejoindre le poste</p>
+</div>
 </div>
 
 <!-- 2. La sequence.
@@ -66,6 +72,16 @@
 </div>
 <button class="passer" id="passer" type="button" hidden>Passer</button>
 
+<!-- L'ECRAN D'ATTENTE. Le radar tourne pendant qu'on decide d'ouvrir.
+     En boucle et sans son : c'est un ecran de veille, pas une sequence.
+     Il se fond par-dessus le decor plutot que de le remplacer d'un coup —
+     son cadrage n'est pas exactement celui de la photo, et un fondu court
+     rend cet ecart invisible la ou une coupe le soulignerait. -->
+<div id="attente" hidden>
+  <video id="veille" class="scene" playsinline muted loop preload="auto"></video>
+  <button class="ouvrir" id="ouvrirDesk" type="button">Open desk</button>
+</div>
+
 <!-- 3. Le poste. Monte des le depart, SOUS les deux couches ci-dessus :
      on ne le revele pas a la fin, on retire ce qui le couvrait. Un decor
      deja peint ne peut pas manquer son entree — et les panneaux ont le
@@ -77,6 +93,11 @@
     <iframe class="verre" src="/panneaux?verre"
             title="Desk — état, mandat et invariants"></iframe>
     <div class="reflet"></div>
+    <!-- L'acces a l'ecran de gauche. Il remplace le titre « Flux de
+         donnees » du PFD, retire d'ici puisque ce panneau ne s'affiche plus
+         que sur l'ecran de gauche. Sans lui, cet ecran deviendrait
+         inatteignable. -->
+    <button class="vers-gauche" id="versGauche" type="button">Data feed</button>
   </div>
 </div>
 
@@ -91,10 +112,13 @@
     <iframe class="verre-gauche" src="/panneaux?verre&amp;vue=flux"
             title="Collecteur de données — flux"></iframe>
     <div class="reflet-gauche"></div>
+    <!-- Pose DANS la scene, donc sur la console : un bouton au bord de la
+         fenetre appartient au navigateur, pas au vaisseau. -->
+    <button class="retour-pfd" id="retourPfd" type="button">Return to PFD</button>
   </div>
 </div>
 
-<button class="revoir" id="retourPfd" type="button" hidden>Return to PFD</button>
+
 
 <!-- Le retour a la vue d'ensemble. Le poste est un gros plan : une fois
      dedans, on ne voyait plus le vaisseau. Ce bouton redonne la vue du
@@ -105,6 +129,14 @@
 <div class="sortie">
   Desk · <a href="/panneaux">vue sans décor</a>
 </div>
+
+<!-- La bande son du vaisseau. En boucle, discrete, coupable d'un clic.
+     `muted` au depart : sans geste de l'utilisateur, tout navigateur refuse
+     de jouer du son, et une lecture refusee laisse une promesse rejetee qui
+     salit la console. On la demarre au premier clic. -->
+<audio id="ambiance" src="/ui/poste/assets/ambiance.mp3" loop preload="auto"></audio>
+<button class="son" id="son" type="button"
+        aria-pressed="false" title="Son du vaisseau">son</button>
 
 <script src="/ui/poste/poste.js"></script>
 </body>

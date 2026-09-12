@@ -908,3 +908,13 @@ body::before {
 .panel > h2.cliquable:hover { color: var(--accent-ink) }
 .panel > h2.cliquable:hover::after { transform: translateX(3px) }
 .panel > h2.cliquable:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px }
+
+/* « Flux de données » n'appartient plus au PFD.
+ *
+ * Ce panneau a son écran : celui de gauche, où il occupe toute la dalle.
+ * Le laisser aussi dans le PFD, c'était la même mesure à deux endroits —
+ * et deux endroits qui affichent la même chose finissent par ne plus
+ * l'afficher pareil. La vue sans décor le garde : elle n'a pas d'écran de
+ * gauche, et elle sert justement à tout voir d'un coup.
+ */
+:root[data-verre]:not([data-vue]) #sec-systemes .panel:has(#feeds) { display: none }

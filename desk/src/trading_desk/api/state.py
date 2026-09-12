@@ -31,6 +31,13 @@ from ..storage import SqliteStore
 MARGE_RENOUVELLEMENT_MS = 5 * 60 * 1000
 
 
+def _jour_utc() -> str:
+    """La journee de marche courante, en UTC."""
+    from datetime import UTC, datetime
+
+    return datetime.now(UTC).strftime("%Y-%m-%d")
+
+
 class DeskState:
     """Agregateur d'etat, sur pour les threads."""
 
@@ -63,6 +70,18 @@ class DeskState:
 
         self.orders_last_minute = 0
         self.mandates_today = 0
+        # LE JOUR QUE CE COMPTEUR COMPTE.
+        #
+        # Sans lui, `mandates_today` s'appelait « aujourd'hui » mais comptait
+        # « depuis le lancement du processus » : il ne repassait jamais a
+        # zero. Un desk laisse en marche finissait donc par depasser le quota
+        # journalier et s'arretait DEFINITIVEMENT — le rearmement echouait
+        # aussitot sur I07, et seul un redemarrage effacait le compteur, en
+        # oubliant du meme coup le vrai compte du jour.
+        #
+        # Observe en production le 12 septembre 2026 : « 9 mandats
+        # aujourd'hui > 8 » sur un desk actif depuis des heures.
+        self._jour_des_mandats = _jour_utc()
         self.last_prices: dict[str, str] = {}
         # Rempli par `app.py` quand un pupitre existe. La supervision ne
         # connait pas le pupitre ; elle connait une fonction qui rend son
@@ -161,8 +180,22 @@ class DeskState:
             self.reconciled = reconciled
             self.reconciled_at_ms = now_ms()
 
+    def _basculer_le_jour_si_besoin(self) -> None:
+        """Remet le compteur a zero au changement de jour UTC.
+
+        A appeler sous le verrou. UTC et non l'heure locale : les limites du
+        desk sont exprimees par journee de marche, et une bascule qui
+        dependrait du fuseau de la machine ferait sauter le quota a une heure
+        differente selon l'endroit ou tourne le desk.
+        """
+        jour = _jour_utc()
+        if jour != self._jour_des_mandats:
+            self._jour_des_mandats = jour
+            self.mandates_today = 0
+
     def set_mandate(self, mandate: Mandate) -> None:
         with self._lock:
+            self._basculer_le_jour_si_besoin()
             self.mandate = mandate
             self.mandates_today += 1
         self.store.write_mandate(mandate.mandate_id, mandate.model_dump(mode="json"))
@@ -171,6 +204,11 @@ class DeskState:
 
     def risk_context(self) -> RiskContext:
         with self._lock:
+            # La bascule joue AUSSI a la lecture. Un desk arrete par le quota
+            # n'appelle plus `set_mandate` : si seule l'ecriture basculait, le
+            # compteur resterait au-dessus du plafond pour toujours, et le
+            # lendemain ne changerait rien.
+            self._basculer_le_jour_si_besoin()
             age = (
                 now_ms() - self.reconciled_at_ms
                 if self.reconciled_at_ms is not None else None
