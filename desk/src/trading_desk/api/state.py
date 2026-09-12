@@ -16,12 +16,18 @@ from typing import Any
 
 from ..config import Settings
 from ..contracts.common import DeskMode, HaltReason, now_ms
-from ..contracts.mandate import Mandate
+from ..contracts.mandate import Bias, Mandate
 from ..contracts.market import FeedHealth
 from ..contracts.orders import AccountState
 from ..market.budget import RequestBudget
 from ..risk import LABELS, RiskContext, RiskVerdict, evaluate
 from ..storage import SqliteStore
+
+
+# On reconduit le mandat de repos quand il lui reste moins que ca. Large
+# devant la cadence d'evaluation (1 s) et devant la duree d'un mandat FLAT
+# (15 min) : le renouvellement ne peut pas arriver en retard.
+MARGE_RENOUVELLEMENT_MS = 5 * 60 * 1000
 
 
 class DeskState:
@@ -81,11 +87,61 @@ class DeskState:
     def arm(self) -> None:
         """Rearmement manuel. Volontairement sans condition automatique : un
         desk qui se remet en route tout seul apres une perte est un desk qui
-        recommence la meme erreur."""
+        recommence la meme erreur.
+
+        Le mandat FLAT est reemis ici, et c'est indispensable. `halt()` en
+        pose un au moment de l'arret ; si l'operateur rearme plus de quinze
+        minutes plus tard — le cas normal, on ne rearme pas dans la seconde —
+        ce mandat a expire. I06 echoue donc immediatement, le desk se
+        rearrete, et l'ecran affiche « mandat expire » juste apres un
+        rearmement, ce qui est incomprehensible vu de l'exterieur.
+
+        Reemettre un mandat FLAT n'autorise rien : FLAT est l'absence de
+        biais. C'est exactement ce que `halt()` fait deja, donc l'etat
+        « mandat FLAT frais » est deja traite comme le repos sur par ce
+        module.
+        """
         with self._lock:
             self.halted = False
             self.halt_reason = None
             self.halt_detail = ""
+            self.mandate = Mandate.flat(journal_ref="arm")
+
+    def renouveler_le_mandat_de_repos(self) -> bool:
+        """Reconduit le mandat FLAT avant qu'il n'expire. Rend True si fait.
+
+        SANS CECI, LE DESK SE BLOQUE DEFINITIVEMENT, et le chemin est un
+        interblocage franc :
+
+            le mandat de demarrage dure quinze minutes
+              -> il expire
+              -> I06 echoue
+              -> le verdict n'est plus approuve
+              -> le pupitre refuse toutes les entrees
+              -> `_ouvrir()` n'est jamais atteint
+              -> or `_ouvrir()` est LE SEUL endroit qui emet un mandat
+              -> le mandat reste expire. Pour toujours.
+
+        Tout desk reel s'arretait donc au bout d'un quart d'heure, et le
+        rearmement manuel ne pouvait rien y faire.
+
+        ON NE RECONDUIT QUE LE MANDAT FLAT. Prolonger un mandat directionnel
+        reviendrait a etendre une autorisation de trader sans que personne ne
+        l'ait redecidee — c'est precisement ce contre quoi I06 existe. Le
+        pupitre emet le sien, date, a chaque ouverture ; celui-ci n'est qu'un
+        battement de coeur qui dit « le desk est vivant et n'a rien a dire ».
+        """
+        with self._lock:
+            m = self.mandate
+            if m.bias is not Bias.FLAT:
+                return False
+            # On reconduit AVANT l'expiration, pas apres : attendre qu'il
+            # expire, c'est laisser passer un cycle d'evaluation en defaut,
+            # donc un arret automatique entre deux battements.
+            if m.remaining_ms() > MARGE_RENOUVELLEMENT_MS:
+                return False
+            self.mandate = Mandate.flat(journal_ref="repos")
+            return True
 
     # --------------------------------------------------------------- mise a jour
 

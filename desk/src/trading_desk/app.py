@@ -196,6 +196,14 @@ async def run_ingestion(state: DeskState, settings: Settings,
         while True:
             state.set_feeds(feed.feeds, feed.connected)
             state.budget.spend(0)  # rafraichit la fenetre glissante
+            # Le battement de coeur du mandat de repos. Sans lui, le mandat
+            # de demarrage expire au bout d'un quart d'heure et le desk
+            # s'enferme : I06 echoue, le verdict n'est plus approuve, le
+            # pupitre refuse tout, et le seul code qui emet un mandat ne
+            # tourne donc jamais. Voir `DeskState.renouveler_le_mandat_de_
+            # repos`, qui refuse de prolonger un mandat directionnel.
+            if state.renouveler_le_mandat_de_repos():
+                log.info("mandat de repos reconduit")
             state.store.commit()
 
             v = state.verdict()
