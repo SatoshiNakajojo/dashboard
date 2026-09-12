@@ -33,6 +33,7 @@ from .contracts.common import Bias, DeskMode, HaltReason, Regime, now_ms
 from .contracts.mandate import Mandate
 from .contracts.market import BookSnapshot, FeedHealth, FeedStatus, MarkPrice, Trade
 from .market import HyperliquidFeed, Subscription, perps_disponibles
+from .version import version
 from .storage import SqliteStore
 
 log = logging.getLogger("desk")
@@ -651,12 +652,82 @@ async def main_async(demo: bool) -> None:
         store.close()
 
 
+def _diagnostic() -> int:
+    """Decrit le desk EN COURS, en un bloc a recopier.
+
+    Ecrit parce que diagnostiquer a distance revenait a demander une question
+    a la fois — « quel motif ? », « quels flux ? », « avez-vous relance ? » —
+    et qu'une correction fusionnee a persiste plusieurs allers-retours sans
+    qu'on puisse trancher entre « elle est mauvaise » et « elle ne tourne
+    pas ». La version en memoire est donc la PREMIERE ligne.
+
+    N'arrete rien, ne modifie rien : il lit.
+    """
+    import json
+    import urllib.error
+    import urllib.request
+
+    from .config import get_settings
+
+    s = get_settings()
+    base = f"http://{s.api_host}:{s.api_port}"
+    try:
+        with urllib.request.urlopen(base + "/api/snapshot", timeout=10) as r:
+            etat = json.loads(r.read())
+    except (urllib.error.URLError, OSError) as exc:
+        print(f"\n  Aucun desk ne repond sur {base} — {exc}")
+        print("  Le desk n'est pas lance, ou il ecoute sur un autre port.\n")
+        return 1
+
+    lignes = [
+        "",
+        "  ── DIAGNOSTIC DU DESK " + "─" * 46,
+        f"  version en memoire   {etat.get('version', 'inconnue')}",
+        f"  version sur le disque {version()}",
+        f"  mode                 {etat['mode']}"
+        f"{'  (testnet)' if etat.get('testnet') else ''}",
+        f"  actif depuis         {etat['uptime_s']} s",
+        f"  arrete               {etat['halted']}"
+        + (f"  motif {etat['halt_reason']}" if etat.get("halt_reason") else ""),
+    ]
+    if etat.get("halt_detail"):
+        lignes.append(f"  detail               {etat['halt_detail'][:160]}")
+    if etat.get("version") != version():
+        lignes += ["",
+                   "  !! LE CODE EN MEMOIRE N'EST PAS CELUI DU DISQUE.",
+                   "     Un `git pull` ne change rien a un processus deja lance :",
+                   "     arreter le desk (Ctrl+C) et le relancer."]
+
+    bloquants = [c for c in etat.get("checks", []) if not c.get("passed")]
+    lignes += ["", f"  INVARIANTS : {len(bloquants)} en defaut sur {len(etat.get('checks', []))}"]
+    for c in bloquants:
+        lignes.append(f"    {c['id']:<22} {c.get('detail', '')[:90]}")
+
+    flux = etat.get("feeds", [])
+    morts = [f for f in flux if f.get("status") != "LIVE"]
+    lignes += ["", f"  FLUX : {len(flux) - len(morts)} vivants sur {len(flux)}"]
+    for f in morts[:12]:
+        lignes.append(f"    {f['name']:<18} {f['status']:<16} "
+                      f"age {f.get('age_ms')}  msgs {f.get('messages')}")
+    if etat.get("symboles_inconnus"):
+        lignes += ["", "  SYMBOLES RETIRES (inconnus de l'exchange) : "
+                   + " ".join(etat["symboles_inconnus"])]
+    lignes += ["", "  " + "─" * 68, ""]
+    print("\n".join(lignes))
+    return 0
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Trading desk — phase P0")
     parser.add_argument("--demo", action="store_true",
                         help="marche simule, sans reseau ni exchange")
     parser.add_argument("-v", "--verbose", action="store_true")
+    parser.add_argument("--diagnostic", action="store_true",
+                        help="interroge le desk en cours et decrit son etat")
     args = parser.parse_args()
+
+    if args.diagnostic:
+        raise SystemExit(_diagnostic())
 
     logging.basicConfig(
         level=logging.DEBUG if args.verbose else logging.INFO,

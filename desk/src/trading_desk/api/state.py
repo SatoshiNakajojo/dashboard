@@ -18,6 +18,7 @@ from ..config import Settings
 from ..contracts.common import DeskMode, HaltReason, now_ms
 from ..contracts.mandate import Bias, Mandate
 from ..contracts.market import FeedHealth
+from ..version import version
 from ..contracts.orders import AccountState
 from ..market.budget import RequestBudget
 from ..risk import LABELS, RiskContext, RiskVerdict, evaluate
@@ -217,6 +218,9 @@ class DeskState:
                 "halt_reason": self.halt_reason.value if self.halt_reason else None,
                 "halt_detail": self.halt_detail,
                 "ws_connected": self.ws_connected,
+                # La version du code EN MEMOIRE, pas celle du disque :
+                # un `git pull` ne change rien a un processus deja lance.
+                "version": version(),
                 "symboles_inconnus": list(self.symboles_inconnus),
                 "healthy": v.approved and not self.halted,
                 "mandate": {

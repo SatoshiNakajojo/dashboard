@@ -164,6 +164,13 @@ function render(s) {
   $("mode").className = "pill mode-" + s.mode;
   $("uptime").textContent = "actif " + dur(s.uptime_s * 1000);
   $("dot").className = "dot " + (s.ws_connected ? "on" : "off");
+  if (s.version) {
+    $("version").textContent = s.version;
+    // Un arbre modifié n'est pas une erreur, mais il faut le voir : c'est la
+    // différence entre « la correction ne marche pas » et « ce n'est pas la
+    // correction qui tourne ».
+    $("version").style.color = /\+modifie/.test(s.version) ? "var(--warn)" : "";
+  }
 
   /* --- banniere --- */
   const banner = $("banner");
