@@ -32,7 +32,26 @@ class RiskLimits(Frozen):
     # --- risque par trade ---
     risk_per_trade_pct: Decimal = Field(default=Decimal("0.5"), gt=0, le=5)
     min_stop_distance_bps: Decimal = Field(default=Decimal("30"), gt=0)
-    max_stop_distance_bps: Decimal = Field(default=Decimal("500"), gt=0)
+    # 1600 bps, et non 500.
+    #
+    # LE DEFAUT A 500 RENDAIT LE DESK STRUCTURELLEMENT INERTE. La seule
+    # strategie livree — la regle des deverrouillages — pose son stop a 15 %,
+    # soit 1500 bps. Chaque entree etait donc refusee, indefiniment, pendant
+    # que les douze invariants restaient au vert : « BTC non dimensionnable :
+    # stop a 1500 bps hors bornes [30, 500] », 43 fois en deux minutes.
+    #
+    # ELARGIR CETTE BORNE N'AUGMENTE PAS LE RISQUE PAR TRADE. Le
+    # dimensionnement est fonde sur le risque — `size = budget / distance`,
+    # voir `sizing.py` — donc un stop deux fois plus large donne une position
+    # deux fois plus petite, pour la meme perte au stop. Le budget reste
+    # `risk_per_trade_pct` de l'equite, et les plafonds de notionnel et de
+    # levier s'appliquent toujours.
+    #
+    # Ce que cette borne protege vraiment, c'est un stop PROPOSE PAR UN
+    # AGENT : elle empeche un modele de justifier une position enorme par un
+    # « stop large ». Elle n'a jamais eu vocation a interdire une regle
+    # mecanique dont la distance est ecrite d'avance.
+    max_stop_distance_bps: Decimal = Field(default=Decimal("1600"), gt=0)
 
     # --- portefeuille ---
     max_btc_beta_exposure_usd: Decimal = Field(default=Decimal("800"), gt=0)

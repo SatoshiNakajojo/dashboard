@@ -131,7 +131,10 @@ class Settings(BaseSettings):
     # Le plafond absolu reste 5000 bps : c'est le maximum que `StopBand`
     # autorise, et il n'est pas negociable ici.
     min_stop_distance_bps: Decimal = Decimal("30")
-    max_stop_distance_bps: Decimal = Decimal("500")
+    # Voir `risk/limits.py` : 500 refusait toutes les entrees de la seule
+    # strategie livree, qui pose son stop a 1500 bps. Elargir ne change pas
+    # le risque par trade — le dimensionnement est fonde sur le risque.
+    max_stop_distance_bps: Decimal = Decimal("1600")
 
     @field_validator("assets", mode="before")
     @classmethod
