@@ -134,7 +134,7 @@
    * seconde, parce que son cadrage n'est pas exactement celui de la photo
    * et qu'une coupe franche soulignerait cet ecart.
    */
-  function entrerEnAttente() {
+  function entrerEnAttente(unePoisFondu) {
     if (!attente || !attente.hidden) return;
     if (!veille.querySelector("source")) {
       for (const [ext, type] of [["mp4", 'video/mp4; codecs="avc1.64001f"'],
@@ -147,13 +147,19 @@
       veille.load();
     }
     attente.hidden = false;
-    requestAnimationFrame(() => requestAnimationFrame(
-      () => attente.classList.add("visible")));
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      attente.classList.add("visible");
+      // Le delai suit la duree du fondu declaree dans la feuille de style,
+      // avec une marge. Un `transitionend` serait plus juste mais ne se
+      // declenche pas quand l'utilisateur demande moins d'animations — et
+      // la sequence resterait alors affichee pour toujours.
+      if (typeof unePoisFondu === "function") setTimeout(unePoisFondu, 620);
+    }));
     const lecture = veille.play();
     // Un codec absent ne doit pas coincer l'operateur devant un rectangle
     // noir : sans video, on montre le desk tout de suite.
     if (lecture && typeof lecture.catch === "function") {
-      lecture.catch(() => { ouvrirLeDesk(); });
+      lecture.catch(() => { sequence.hidden = true; ouvrirLeDesk(); });
     }
   }
 
@@ -189,9 +195,26 @@
   /* Retirer la séquence. Le poste est déjà dessous, déjà peint. */
   function arriver() {
     if (sequence.hidden) return;
-    sequence.hidden = true;
     passer.hidden = true;
     film.pause();
+
+    /* L'ECRAN D'ATTENTE SE FOND SUR LA DERNIERE IMAGE DU ZOOM.
+     *
+     * On ne retire donc PAS la sequence ici : elle reste affichee, en
+     * pause sur sa derniere image, pendant que l'attente monte par-dessus.
+     * Retirer la video d'abord — ce que faisait la version precedente —
+     * decouvrait le desk, qui restait en clair pendant toute la
+     * demi-seconde du fondu. C'est le flash signale entre le zoom et
+     * l'ecran d'attente.
+     *
+     * La sequence n'est retiree qu'une fois l'attente opaque. */
+    if (destination === "attente") {
+      montrer("attente");
+      entrerEnAttente(() => { sequence.hidden = true; });
+      return;
+    }
+
+    sequence.hidden = true;
     if (destination === "accueil") {
       montrer(null);
       accueil.hidden = false;

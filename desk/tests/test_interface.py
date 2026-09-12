@@ -964,6 +964,55 @@ def test_l_ecran_de_gauche_affiche_les_memes_panneaux():
         "le panneau des flux n'est pas isolé"
 
 
+def test_l_ecran_d_attente_couvre_la_sequence_pendant_le_fondu():
+    """Le desk ne doit apparaître à aucun moment entre le zoom et l'attente.
+
+    L'écran d'attente était en z-index 15, donc SOUS la séquence (20).
+    L'ordre en découlait : retirer la vidéo — ce qui découvrait le desk —
+    puis faire monter l'attente de 0 à 1 par-dessus. Le desk restait donc
+    en clair pendant toute la demi-seconde du fondu. C'est le flash signalé
+    entre la vidéo de zoom et l'écran d'attente.
+
+    Deux conditions, et il faut les deux : la couche au-dessus, ET la
+    séquence retirée seulement après le fondu.
+    """
+    css = (recherche.RACINE / "src/trading_desk/ui/poste/poste.css") \
+        .read_text(encoding="utf-8")
+    def z(selecteur):
+        i = css.index(selecteur + " {")
+        bloc = css[i:css.index("}", i)]
+        j = bloc.index("z-index:")
+        return int(bloc[j + 8:bloc.index(";", j)].strip())
+
+    assert z("#attente") > z("#sequence"), \
+        "l'attente passe sous la séquence : le desk réapparaît pendant le fondu"
+    assert z("#attente") > z("#poste"), "l'attente doit couvrir le poste"
+
+    js = (recherche.RACINE / "src/trading_desk/ui/poste/poste.js") \
+        .read_text(encoding="utf-8")
+    i = js.index('if (destination === "attente")')
+    bloc = js[i:i + 300]
+    assert "entrerEnAttente(" in bloc and "sequence.hidden = true" in bloc, \
+        "la séquence doit être retirée PAR le rappel de fin de fondu"
+    # Et surtout : pas avant.
+    avant = js[js.index("function arriver"):i]
+    assert "sequence.hidden = true" not in avant, \
+        "la séquence est retirée avant le fondu : le flash revient"
+
+
+def test_le_radar_annonce_ce_qu_il_fait():
+    """« Market scan in progress », sur une plaque.
+
+    Posé à nu, le texte tombait sur les graduations du radar : les chiffres
+    du pourtour traversaient les lettres. La plaque n'est pas un pis-aller,
+    c'est la langue du poste — tous ses libellés sont encadrés.
+    """
+    page = _poste()
+    assert "Market scan in progress" in page
+    assert '<p class="balayage"><span>' in page, \
+        "sans la plaque, le texte se perd dans les graduations"
+
+
 def test_l_acces_a_l_ecran_de_gauche_est_un_bouton_du_poste():
     """Le titre du panneau ne déclenche plus rien.
 
