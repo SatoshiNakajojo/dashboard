@@ -349,6 +349,15 @@
      Muet tant que la bande son l'est : quelqu'un qui a coupe le son du
      vaisseau ne s'attend pas a ce que les boutons, eux, continuent.
      ------------------------------------------------------------------ */
+  /* Les volumes. Discrets par construction : ces sons ponctuent un geste,
+     ils ne l'annoncent pas. Le premier reglage — 0,8 et 0,5 — couvrait la
+     bande son a chaque clic, ce qui est exactement l'inverse du but : un
+     retour tactile se remarque quand il manque, pas quand il est la.
+
+     L'ouverture reste un peu au-dessus du menu : elle n'arrive qu'une fois
+     par session, et c'est le seul geste qui change vraiment d'ecran. */
+  const VOLUME = { ouvrir: 0.30, menu: 0.18 };
+
   const CLICS = {
     ouvrir: new Audio("/ui/poste/assets/clic-ouvrir.mp3"),
     menu: new Audio("/ui/poste/assets/clic-menu.mp3"),
@@ -360,7 +369,7 @@
     const source = CLICS[nom];
     if (!source) return;
     const voix = source.cloneNode();
-    voix.volume = nom === "menu" ? 0.5 : 0.8;
+    voix.volume = VOLUME[nom] ?? VOLUME.menu;
     const l = voix.play();
     if (l && typeof l.catch === "function") l.catch(() => { /* pas encore autorise */ });
   }
