@@ -54,6 +54,10 @@ class DeskState:
         self.feeds: tuple[FeedHealth, ...] = ()
         self.clock_drift_ms: int | None = 0
         self.price_divergence_bps: Decimal | None = None
+        # Quel actif porte cette divergence. Sans le nom, le motif
+        # d'arret dit « divergence de prix 94,9 bps » et l'operateur
+        # n'a aucun moyen de savoir ou regarder.
+        self.price_divergence_asset: str | None = None
         self.ws_connected = False
 
         self.orders_last_minute = 0
@@ -183,6 +187,7 @@ class DeskState:
                 feeds=self.feeds,
                 clock_drift_ms=self.clock_drift_ms,
                 price_divergence_bps=self.price_divergence_bps,
+                price_divergence_asset=self.price_divergence_asset,
                 kill_switch_ready=True,  # ce processus expose /api/halt
                 prompt_isolation_enabled=self.settings.prompt_isolation_enabled,
                 signer_is_agent_wallet=bool(self.settings.agent_wallet_address)

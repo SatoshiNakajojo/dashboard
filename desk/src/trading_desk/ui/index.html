@@ -23,8 +23,14 @@
   panneaux seront encastres ailleurs.
 -->
 <script>
-  if (new URLSearchParams(location.search).has("verre")) {
-    document.documentElement.setAttribute("data-verre", "");
+  var q = new URLSearchParams(location.search);
+  if (q.has("verre")) document.documentElement.setAttribute("data-verre", "");
+  // `vue` restreint la page a UN panneau. L'ecran de gauche du poste
+  // n'affiche pas une seconde application : il affiche cette page-ci,
+  // reduite au collecteur de donnees. Pose ici pour la meme raison que
+  // `data-verre` — apres coup, on verrait la page entiere pendant une image.
+  if (q.get("vue")) {
+    document.documentElement.setAttribute("data-vue", q.get("vue"));
   }
 </script>
 </head>
@@ -225,12 +231,6 @@
   </div>
   </section>
 
-  <div class="foot">
-    Ce tableau de bord ne passe <b>aucun ordre</b>. Il peut arrêter le desk, il ne peut pas le faire trader :
-    un tableau de bord qui ouvre une position est un tableau de bord qu'on peut cliquer par erreur.<br>
-    Le kill switch reste joignable même quand tout le reste est en défaut. Ne jamais exposer ce port hors de la machine — passer par un tunnel SSH.<br>
-    Les panneaux de recherche lisent les artefacts présents sur <b>cette</b> machine. Un panneau vide dit lequel manque et quelle commande le produit.
-  </div>
 </div>
 
 <script src="/ui/desk.js"></script>

@@ -52,6 +52,27 @@
      une seule taille d'ecran, et fausse partout ailleurs. */
   --profondeur: calc(min(100vw, 177.78vh) * 0.757);
   --inclinaison: 6deg;
+
+  /* LA DALLE DE GAUCHE — le collecteur de donnees.
+     Cet ecran-la n'est pas vu de face du tout : il est a la droite du
+     cadre et regarde vers nous, donc son bord DROIT est plus proche et
+     plus haut. Mesure sur `gauche.jpg`, quatre bords en regression
+     robuste (91, 79, 64 et 61 points), coins obtenus :
+
+         haut-gauche  (287, 166)     haut-droit  (749, 148)
+         bas-gauche   (283, 604)     bas-droit   (736, 632)
+
+     Le cote droit mesure 504 px de haut contre 458 a gauche : c'est ce
+     rapport de 1,10 que la rotation doit reproduire. Le leger basculement
+     du cadre (le haut monte vers la droite) est un `rotateZ` a part —
+     confondre les deux ferait tourner l'image au lieu de la projeter. */
+  --verre-g-l: 20.61%;
+  --verre-g-t: 20.42%;
+  --verre-g-w: 37.30%;
+  --verre-g-h: 66.81%;
+  --profondeur-g: calc(min(100vw, 177.78vh) * 0.68);
+  --rot-y-g: -10deg;
+  --rot-z-g: 0.6deg;
 }
 
 * { box-sizing: border-box }
@@ -309,4 +330,46 @@ html, body {
 @media (prefers-reduced-motion: reduce) {
   #embarquement, #poste { transition: none }
   .accueil p { animation: none; opacity: .7 }
+}
+
+
+/* --- L'ecran de gauche ---------------------------------------------- */
+
+#gauche {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+}
+#gauche[hidden] { display: none }
+
+.verre-gauche, .reflet-gauche {
+  /* Une seule source pour le cadrage, comme pour le PFD, et pour la meme
+     raison : deux jeux de valeurs finissent toujours par diverger. */
+  position: absolute;
+  left: var(--verre-g-l);
+  top: var(--verre-g-t);
+  width: var(--verre-g-w);
+  height: var(--verre-g-h);
+  transform: perspective(var(--profondeur-g))
+             rotateZ(var(--rot-z-g)) rotateY(var(--rot-y-g));
+  transform-origin: 50% 50%;
+}
+
+.verre-gauche {
+  border: 0;
+  border-radius: 2px;
+  background: #04070a;
+  box-shadow:
+    inset 0 0 0 1px rgba(120, 190, 255, .10),
+    inset 0 0 38px rgba(4, 10, 18, .85);
+}
+
+.reflet-gauche {
+  pointer-events: none;
+  background: linear-gradient(
+    118deg,
+    rgba(255, 255, 255, 0) 30%,
+    rgba(170, 214, 255, .05) 42%,
+    rgba(170, 214, 255, .014) 52%,
+    rgba(255, 255, 255, 0) 64%);
 }

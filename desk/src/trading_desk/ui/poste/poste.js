@@ -48,7 +48,7 @@
 
   const accueil = document.getElementById("embarquement");
   const sequence = document.getElementById("sequence");
-  const video = document.getElementById("film");
+  const film = document.getElementById("film");
   const passer = document.getElementById("passer");
 
   const MEMOIRE = "embarque";
@@ -62,29 +62,100 @@
     try { sessionStorage.setItem(MEMOIRE, "1"); } catch (_) { /* navigation privée */ }
   }
 
+  /* ------------------------------------------------------------------
+     Les transitions.
+
+     Quatre séquences, un seul lecteur. Chacune part d'un décor et arrive
+     sur un autre ; les deux images de raccord sont EXTRAITES des vidéos
+     elles-mêmes, donc les jonctions sont exactes par construction —
+     mesuré à 0,00 % d'écart sur les quatre extrémités.
+
+     `depuis` et `vers` ne servent pas à jouer la vidéo : ils disent quelle
+     couche doit être visible AVANT et APRÈS. C'est ce qui permet de ne
+     jamais révéler un décor qui n'est pas encore peint.
+     ------------------------------------------------------------------ */
+  const TRANSITIONS = {
+    embarquement: { fichier: "embarquement", vers: "poste" },
+    retour:       { fichier: "retour",       vers: "accueil" },
+    versGauche:   { fichier: "vers_gauche",  vers: "gauche" },
+    versPfd:      { fichier: "vers_pfd",     vers: "poste" },
+  };
+
+  const poste = document.getElementById("poste");
+  const gauche = document.getElementById("gauche");
+  const retourPfd = document.getElementById("retourPfd");
+  const revoirBtn = document.getElementById("revoir");
+
+  /* Le codec est déclaré EN ENTIER, pas seulement le conteneur : un
+     navigateur qui lit « video/mp4 » se croit capable et télécharge trois
+     mégaoctets avant de découvrir qu'il n'a pas H.264. Avec le profil et le
+     niveau, il saute le fichier sans rien demander. */
+  function poserSources(fichier) {
+    film.innerHTML = "";
+    const ajouter = (ext, type) => {
+      const src = document.createElement("source");
+      src.src = "/ui/poste/assets/" + fichier + "." + ext;
+      src.type = type;
+      film.appendChild(src);
+    };
+    ajouter("mp4", 'video/mp4; codecs="avc1.64001f, mp4a.40.2"');
+    ajouter("webm", 'video/webm; codecs="vp9, opus"');
+    film.load();
+  }
+
+  /* Quelle station montrer. Une seule est visible à la fois, et le passage
+     se fait par `hidden` — jamais par un retrait du DOM, pour que l'iframe
+     des panneaux garde son état et son flux SSE d'un aller-retour à
+     l'autre. Revenir sur un écran qui recommence à se charger donnerait
+     l'impression d'avoir quitté l'application. */
+  function montrer(station) {
+    poste.hidden = station !== "poste";
+    gauche.hidden = station !== "gauche";
+    retourPfd.hidden = station !== "gauche";
+    if (revoirBtn) revoirBtn.hidden = station !== "poste";
+  }
+
+  let destination = "poste";
+
+  function jouer(nom) {
+    const t = TRANSITIONS[nom];
+    if (!t || !sequence.hidden) return;      // jamais deux à la fois
+    destination = t.vers;
+    // La station d'arrivée est montée SOUS la séquence, avant qu'elle ne
+    // parte : quand la vidéo se retire, le décor est déjà là.
+    if (t.vers !== "accueil") montrer(t.vers);
+    poserSources(t.fichier);
+    sequence.hidden = false;
+    passer.hidden = false;
+    const lecture = film.play();
+    if (lecture && typeof lecture.catch === "function") lecture.catch(arriver);
+  }
+
   /* Retirer la séquence. Le poste est déjà dessous, déjà peint. */
   function arriver() {
     if (sequence.hidden) return;
     sequence.hidden = true;
     passer.hidden = true;
-    video.pause();
-    retenir();
+    film.pause();
+    if (destination === "accueil") {
+      montrer(null);
+      accueil.hidden = false;
+      requestAnimationFrame(() => requestAnimationFrame(
+        () => accueil.classList.remove("part")));
+    } else {
+      montrer(destination);
+      retenir();
+    }
   }
 
   function embarquer() {
     if (accueil.hidden || accueil.classList.contains("part")) return;
     accueil.classList.add("part");
     setTimeout(() => { accueil.hidden = true; }, 460);
-
-    sequence.hidden = false;
-    passer.hidden = false;
-
-    const lecture = video.play();
-    if (lecture && typeof lecture.catch === "function") {
-      // Codec absent, onglet en arrière-plan, politique d'autoplay : on ne
-      // laisse personne devant un rectangle noir. Le poste est dessous.
-      lecture.catch(arriver);
-    }
+    // Codec absent, onglet en arrière-plan, politique d'autoplay : `jouer`
+    // retombe sur `arriver`, donc on ne laisse personne devant un rectangle
+    // noir. La station d'arrivée est montée avant que la vidéo ne parte.
+    jouer("embarquement");
   }
 
   /* Revenir a la vue d'ensemble.
@@ -99,26 +170,47 @@
    * conserver ferait passer directement au poste, ce qui donnerait un
    * bouton qui semble ne rien faire.
    */
-  const revoir = document.getElementById("revoir");
-  if (revoir) {
-    revoir.addEventListener("click", () => {
+  if (revoirBtn) {
+    revoirBtn.addEventListener("click", () => {
+      // La mémoire est effacée AVANT de jouer : on vient de redemander la
+      // vue du début, donc le clic suivant doit rejouer l'embarquement
+      // entier. La conserver ferait passer directement au poste, et le
+      // bouton semblerait ne rien faire.
       try { sessionStorage.removeItem(MEMOIRE); } catch (_) { /* privee */ }
-      accueil.hidden = false;
-      // Deux images de battement avant de retirer `part`, sinon le
-      // navigateur peut grouper « afficher » et « rendre opaque » dans le
-      // meme rendu : la transition n'aurait alors pas lieu.
-      requestAnimationFrame(() => requestAnimationFrame(
-        () => accueil.classList.remove("part")));
+      jouer("retour");
     });
   }
+
+  /* Le retour depuis l'écran de gauche. */
+  if (retourPfd) retourPfd.addEventListener("click", () => jouer("versPfd"));
+
+  /* L'ALLER SE DÉCLENCHE DEPUIS LE PFD, DANS L'IFRAME.
+   *
+   * Le titre « Flux de données » vit dans `/panneaux`, qui est une autre
+   * page — on ne peut pas lui accrocher un écouteur d'ici. Les panneaux
+   * émettent donc un message, et le poste l'écoute. C'est volontairement
+   * la seule chose que les panneaux savent du décor : ils publient un
+   * événement, ils n'appellent pas le poste. Les panneaux restent
+   * utilisables seuls, sans rien connaître de la mise en scène.
+   *
+   * L'origine est vérifiée : ce port n'écoute que sur 127.0.0.1, mais une
+   * page ouverte dans un autre onglet peut poster vers celui-ci, et un
+   * message étranger ne doit pas pouvoir piloter le poste.
+   */
+  addEventListener("message", (e) => {
+    if (e.origin !== location.origin) return;
+    const d = e.data;
+    if (!d || typeof d !== "object") return;
+    if (d.desk === "voir-flux") jouer("versGauche");
+  });
 
   accueil.addEventListener("click", embarquer);
   accueil.addEventListener("keydown", (e) => {
     if (e.key === "Enter" || e.key === " ") { e.preventDefault(); embarquer(); }
   });
 
-  video.addEventListener("ended", arriver);
-  video.addEventListener("error", arriver);
+  film.addEventListener("ended", arriver);
+  film.addEventListener("error", arriver);
   passer.addEventListener("click", arriver);
   addEventListener("keydown", (e) => {
     if (e.key === "Escape" && !sequence.hidden) arriver();
@@ -135,14 +227,16 @@
    * préférence : c'est nous qui devons gagner. Personne ne voit de
    * clignotement, parce que l'iframe se charge derrière l'accueil.
    */
-  const verre = document.querySelector(".verre");
-  if (verre) {
+  // LES DEUX DALLES, pas seulement celle du PFD. L'écran de gauche
+  // s'affichait en clair au premier essai — une page blanche au milieu d'un
+  // poste sombre, et l'illusion tombe d'un coup.
+  for (const dalle of document.querySelectorAll(".verre, .verre-gauche")) {
     const assombrir = () => {
       try {
-        verre.contentDocument.documentElement.setAttribute("data-theme", "dark");
+        dalle.contentDocument.documentElement.setAttribute("data-theme", "dark");
       } catch (_) { /* document pas encore lisible : sans conséquence */ }
     };
-    verre.addEventListener("load", assombrir);
+    dalle.addEventListener("load", assombrir);
     assombrir();
   }
 

@@ -157,10 +157,26 @@ async def run_ingestion(state: DeskState, settings: Settings,
             state.store.write_book(b)
 
     async def on_mark(m: MarkPrice) -> None:
-        if m.oracle is not None and m.oracle > 0:
-            # Recoupement mark / oracle : une divergence anormale signale une
-            # donnee douteuse bien avant qu'elle ne produise un mauvais trade.
+        # LE RECOUPEMENT MARK / ORACLE NE PORTE QUE SUR LE SOCLE.
+        #
+        # Une divergence anormale signale une donnee douteuse avant qu'elle
+        # ne produise un mauvais trade. Mais `price_divergence_bps` est un
+        # SCALAIRE UNIQUE : ecrit par chaque message de contexte, il valait
+        # la divergence du dernier actif a avoir parle, quel qu'il soit.
+        #
+        # L'univers vient du journal et contient des alts peu liquides. Sur
+        # le testnet, 68 perps sur 212 depassent 50 bps et le pire atteint
+        # 279 000. Il suffisait donc qu'un seul d'entre eux publie pour
+        # arreter le desk — sur une donnee qu'il ne trade meme pas, et sans
+        # que le motif nomme l'actif fautif.
+        #
+        # C'est le meme travers que pour les flux, corrige de la meme facon :
+        # un garde-fou qui s'aggrave a mesure qu'on surveille plus punit la
+        # surveillance. On ne retient donc que les actifs du socle, ceux dont
+        # le prix sert vraiment a decider.
+        if m.asset in socle and m.oracle is not None and m.oracle > 0:
             state.price_divergence_bps = abs(m.mark - m.oracle) / m.oracle * Decimal("10000")
+            state.price_divergence_asset = m.asset
         state.store.write_mark(m)
         if pupitre is not None:
             pupitre.on_mark(m)

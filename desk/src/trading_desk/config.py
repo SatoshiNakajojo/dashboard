@@ -212,7 +212,7 @@ class Settings(BaseSettings):
         return self
 
     def risk_limits(self) -> RiskLimits:
-        return RiskLimits(
+        limites = dict(
             max_daily_loss_pct=self.max_daily_loss_pct,
             max_gross_notional_usd=self.max_gross_notional_usd,
             max_position_notional_usd=self.max_position_notional_usd,
@@ -221,6 +221,28 @@ class Settings(BaseSettings):
             min_stop_distance_bps=self.min_stop_distance_bps,
             max_stop_distance_bps=self.max_stop_distance_bps,
         )
+        if self.testnet:
+            limites["max_price_divergence_bps"] = DIVERGENCE_TESTNET_BPS
+        return RiskLimits(**limites)
+
+
+# LA DIVERGENCE MARK / ORACLE N'A PAS LA MEME ECHELLE SUR LES DEUX RESEAUX.
+#
+# Mesure du 12 septembre 2026, sur tout l'univers des perpetuels :
+#
+#                       mediane   p75    BTC    ETH    SOL   > 50 bps
+#     mainnet             7,2    17,7    4,9    4,3    4,3    26 / 234
+#     testnet            16,9   144,1   26,2   96,5   22,1    68 / 212
+#
+# La limite de 50 bps est juste en mainnet — les majeures y tiennent sous
+# 5 bps. Sur le testnet, ETH depasse 50 a lui seul, en permanence : le desk
+# s'arretait en STALE_FEED sans qu'aucun rearmement puisse rien y faire,
+# puisque la cause est structurelle et non transitoire.
+#
+# Ce seuil elargi NE PEUT PAS ATTEINDRE L'ARGENT REEL : le mode LIVE refuse
+# de demarrer avec `testnet=True` (voir la validation plus haut), donc les
+# deux conditions s'excluent par construction.
+DIVERGENCE_TESTNET_BPS = Decimal("250")
 
 
 _settings: Settings | None = None

@@ -620,10 +620,26 @@ def test_la_sequence_offre_deux_encodages(client):
     pas éprouver est un chemin qu'on croit bon. C'est ce qui a laissé passer
     un écran noir au premier essai.
     """
-    page = client.get("/").text
-    assert "embarquement.mp4" in page and "embarquement.webm" in page
-    for nom in ("embarquement.mp4", "embarquement.webm", "poste.jpg"):
-        chemin = recherche.RACINE / "src/trading_desk/ui/poste/assets" / nom
+    # Les sources sont posées par le script, parce qu'une seule balise vidéo
+    # sert les quatre transitions. La règle des deux encodages vaut pour
+    # TOUTES, pas seulement pour l'embarquement : c'est la séquence qu'on
+    # peut le moins éprouver qui cassera.
+    js = (recherche.RACINE / "src/trading_desk/ui/poste/poste.js") \
+        .read_text(encoding="utf-8")
+    assert 'ajouter("mp4"' in js and 'ajouter("webm"' in js, \
+        "le script ne propose plus les deux encodages"
+    assert 'avc1.64001f' in js and 'vp9' in js, \
+        "le codec doit être déclaré en entier, pas seulement le conteneur"
+
+    base = recherche.RACINE / "src/trading_desk/ui/poste/assets"
+    sequences = ("embarquement", "retour", "vers_gauche", "vers_pfd")
+    for nom in sequences:
+        for ext in ("mp4", "webm"):
+            chemin = base / f"{nom}.{ext}"
+            assert chemin.exists(), f"{chemin.name} manque"
+            assert chemin.stat().st_size > 50_000, f"{chemin.name} trop petit"
+    for nom in ("poste.jpg", "accueil.jpg", "gauche.jpg"):
+        chemin = base / nom
         assert chemin.exists(), f"{nom} manque"
         assert chemin.stat().st_size > 50_000, f"{nom} suspicieusement petit"
 
@@ -715,9 +731,14 @@ def test_le_marqueur_du_verre_est_pose_avant_le_premier_rendu():
     assert page.index("data-verre") < tete, \
         "le marqueur est posé après le <head> : la bascule sera visible"
 
+    # `desk.js` a le droit de LIRE le marqueur — il s'en sert pour n'activer
+    # le départ vers l'écran de gauche que dans le décor. Ce qu'il ne doit
+    # pas faire, c'est le POSER : posé après coup, on verrait la mise en
+    # page longue pendant une image.
     js = (recherche.RACINE / "src/trading_desk/ui/desk.js").read_text(encoding="utf-8")
-    assert "data-verre" not in js, \
-        "le marqueur doit être posé par le head, pas par desk.js"
+    for pose in ('setAttribute("data-verre"', "dataset.verre ="):
+        assert pose not in js, \
+            f"le marqueur est posé par desk.js ({pose}) : la bascule sera visible"
 
 
 def test_la_mise_en_page_du_verre_ne_deborde_pas_sur_la_vue_sans_decor():
@@ -890,11 +911,105 @@ def test_un_bouton_ramene_a_la_vue_d_ensemble():
     assert 'id="revoir"' in _poste()
     js = (recherche.RACINE / "src/trading_desk/ui/poste/poste.js") \
         .read_text(encoding="utf-8")
-    i = js.index('getElementById("revoir")')
+    # On vise le GESTIONNAIRE, pas la première mention de l'élément : le
+    # bouton est récupéré bien plus haut, avec les autres stations.
+    i = js.index('revoirBtn.addEventListener("click"')
     bloc = js[i:i + 900]
     assert "removeItem(MEMOIRE)" in bloc, \
-        "sans effacer la memoire, le bouton semble ne rien faire"
-    assert "accueil.hidden = false" in bloc
+        "sans effacer la mémoire, le bouton semble ne rien faire"
+    # Le retour joue la séquence inverse ; c'est `arriver()` qui redonne
+    # l'accueil, une fois la vidéo finie.
+    assert 'jouer("retour")' in bloc, \
+        "le bouton ne lance plus la séquence de retour"
+    assert 'destination === "accueil"' in js and "accueil.hidden = false" in js, \
+        "rien ne redonne l'accueil à la fin de la séquence de retour"
+
+
+def test_les_quatre_transitions_sont_declarees():
+    """Un seul lecteur, quatre séquences, et chacune sait où elle arrive.
+
+    Quatre éléments vidéo distincts auraient voulu dire quatre états à
+    garder synchronisés, dont trois toujours en train de se taire.
+    """
+    js = (recherche.RACINE / "src/trading_desk/ui/poste/poste.js") \
+        .read_text(encoding="utf-8")
+    for nom, fichier in (("embarquement", "embarquement"), ("retour", "retour"),
+                         ("versGauche", "vers_gauche"), ("versPfd", "vers_pfd")):
+        assert nom in js and f'"{fichier}"' in js, f"transition {nom} absente"
+    # La station d'arrivée est montée AVANT que la séquence ne parte : un
+    # décor déjà peint ne peut pas manquer son entrée.
+    assert js.index("montrer(t.vers)") < js.index("sequence.hidden = false"), \
+        "la station d'arrivée doit être montée avant de lancer la vidéo"
+
+
+def test_l_ecran_de_gauche_affiche_les_memes_panneaux():
+    """Pas une seconde application : la même page, en vue `flux`.
+
+    C'est la règle du dépôt. Deux implémentations du même écran finissent
+    toujours par diverger, et c'est celle qu'on regarde le moins qui dérive.
+    """
+    page = _poste()
+    assert 'src="/panneaux?verre&amp;vue=flux"' in page, \
+        "l'écran de gauche ne charge pas les panneaux en vue flux"
+    assert 'id="retourPfd"' in page
+
+    css = _desk_css()
+    assert ':root[data-vue="flux"] #sec-systemes .panel { display: none }' in css
+    assert ':root[data-vue="flux"] #sec-systemes .panel:has(#feeds)' in css, \
+        "le panneau des flux n'est pas isolé"
+
+
+def test_le_declencheur_passe_par_un_message_verifie():
+    """Les panneaux publient, le poste décide — et vérifie l'origine.
+
+    Les panneaux doivent rester utilisables seuls, sans rien savoir de la
+    mise en scène. Et ce port n'écoute que sur `127.0.0.1`, mais une page
+    ouverte dans un autre onglet peut poster vers celui-ci : un message
+    étranger ne doit pas pouvoir piloter le poste.
+    """
+    poste_js = (recherche.RACINE / "src/trading_desk/ui/poste/poste.js") \
+        .read_text(encoding="utf-8")
+    i = poste_js.index('addEventListener("message"')
+    bloc = poste_js[i:i + 400]
+    assert "e.origin !== location.origin" in bloc, \
+        "l'origine du message n'est pas vérifiée"
+    assert '"voir-flux"' in bloc
+
+    desk_js = (recherche.RACINE / "src/trading_desk/ui/desk.js") \
+        .read_text(encoding="utf-8")
+    assert 'postMessage({ desk: "voir-flux" }, location.origin)' in desk_js
+    # Hors décor, le titre ne doit rien déclencher : la vue sans décor n'a
+    # pas d'écran de gauche, et un bouton qui ne mène nulle part est pire
+    # qu'une absence de bouton.
+    assert 'hasAttribute("data-verre")' in desk_js
+
+
+def test_le_rearmement_ne_ment_pas():
+    """`/api/arm` rend les invariants encore en défaut : il faut les dire.
+
+    L'ancienne version affichait « Desk réarmé » dans tous les cas ;
+    l'évaluation suivante rearrêtait le desk une seconde plus tard, avec le
+    même motif. Vu de l'écran, le bouton ne faisait rien et rien ne disait
+    pourquoi.
+    """
+    js = (recherche.RACINE / "src/trading_desk/ui/desk.js") \
+        .read_text(encoding="utf-8")
+    i = js.index('await post("/api/arm")')
+    bloc = js[i:i + 500]
+    assert "blocking" in bloc, "la réponse du réarmement est ignorée"
+    assert "Réarmement sans effet" in bloc
+
+
+def test_l_avertissement_de_pied_de_page_est_retire():
+    """Il occupait un tiers de la dalle pour trois phrases invariantes.
+
+    Ce qu'il affirmait reste vrai et reste VÉRIFIÉ — par
+    `test_le_poste_ne_passe_aucun_ordre`, qui l'éprouve au lieu de
+    l'écrire.
+    """
+    page = _panneaux()
+    assert "ne passe <b>aucun ordre</b>" not in page
+    assert "tunnel SSH" not in page
 
 
 def test_le_seuil_du_decor_est_le_meme_des_deux_cotes():
