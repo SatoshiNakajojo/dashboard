@@ -26,10 +26,10 @@ from decimal import Decimal
 
 from trading_desk.api.state import MARGE_RENOUVELLEMENT_MS, DeskState
 from trading_desk.config import Settings
-from trading_desk.contracts.common import HaltReason, now_ms
+from trading_desk.contracts.common import DeskMode, HaltReason, now_ms
 from trading_desk.contracts.mandate import Bias, Mandate, Regime
 from trading_desk.contracts.market import FeedHealth, FeedStatus
-from trading_desk.risk.engine import Invariant, RiskContext
+from trading_desk.risk.engine import Invariant, RiskContext, evaluate
 from trading_desk.risk.limits import RiskLimits
 from trading_desk.storage import SqliteStore
 
@@ -161,3 +161,58 @@ def test_un_flux_jamais_connecte_echoue_toujours():
     flux = FeedHealth(name="book:BTC", status=FeedStatus.DISCONNECTED,
                       last_message_ms=None, max_age_ms=10_000)
     assert _contexte(flux).freshest_failure() is not None
+
+
+# --------------------------------------------------------------------------
+#  La divergence mark / oracle
+# --------------------------------------------------------------------------
+
+def test_le_seuil_de_divergence_est_elargi_sur_le_testnet():
+    """Mesure du 12 septembre 2026, sur tout l'univers des perpétuels :
+
+                       médiane   p75    BTC    ETH    SOL   > 50 bps
+        mainnet          7,2    17,7    4,9    4,3    4,3    26 / 234
+        testnet         16,9   144,1   26,2   96,5   22,1    68 / 212
+
+    50 bps est juste en mainnet — les majeures y tiennent sous 5. Sur le
+    testnet, ETH dépasse 50 à lui seul, en permanence : le desk s'arrêtait
+    en STALE_FEED sans qu'aucun réarmement puisse rien y faire, la cause
+    étant structurelle et non transitoire.
+    """
+    from trading_desk.config import DIVERGENCE_TESTNET_BPS
+
+    testnet = Settings(testnet=True).risk_limits()
+    assert testnet.max_price_divergence_bps == DIVERGENCE_TESTNET_BPS
+    assert testnet.max_price_divergence_bps > Decimal("100"), \
+        "ETH seul dépasse 96 bps sur le testnet"
+
+
+def test_le_seuil_elargi_ne_peut_pas_atteindre_l_argent_reel():
+    """La garantie tient par construction, pas par vigilance.
+
+    `LIVE` refuse de démarrer avec `testnet=True`. Les deux conditions
+    s'excluent donc : le seuil élargi ne peut pas s'appliquer à un mode qui
+    envoie de vrais ordres.
+    """
+    import pytest
+
+    reel = Settings(testnet=False).risk_limits()
+    assert reel.max_price_divergence_bps == Decimal("50"), \
+        "le seuil du mainnet a bougé : il gouverne l'argent réel"
+
+    with pytest.raises(ValueError, match="LIVE"):
+        Settings(mode=DeskMode.LIVE, testnet=True)
+
+
+def test_la_divergence_nomme_l_actif_fautif():
+    """« divergence de prix 94,9 bps » ne dit pas où regarder."""
+    ctx = RiskContext(
+        mode=DeskMode.SHADOW, limits=RiskLimits(),
+        feeds=(FeedHealth(name="mids", last_message_ms=now_ms()),),
+        clock_drift_ms=0,
+        price_divergence_bps=Decimal("900"),
+        price_divergence_asset="ETH",
+    )
+    detail = next(c for c in evaluate(ctx).checks
+                  if c.invariant is Invariant.I09_FRESH_DATA).detail
+    assert "ETH" in detail, f"l'actif fautif n'est pas nommé : {detail!r}"

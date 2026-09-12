@@ -50,11 +50,36 @@ function esc(s) {
 // Un bouton qui coupe un desk ne doit pas partir sur un clic accidentel, mais
 // il ne doit pas non plus imposer une boite de dialogue : en situation reelle,
 // on veut deux clics rapides au meme endroit.
+/* Le libelle d'un invariant, pour que le motif se lise sans decoder un
+   identifiant. On prend celui que l'instantane porte deja ; a defaut, on
+   retombe sur l'identifiant, qui vaut toujours mieux que rien. */
+function nomLisible(id) {
+  const c = (snap && snap.checks || []).find((x) => x.id === id);
+  return (c && c.label) ? c.label : id;
+}
+
 let armed = false, armTimer = null;
 const killBtn = $("kill");
 
 killBtn.addEventListener("click", async () => {
-  if (snap && snap.halted) { await post("/api/arm"); flash("Desk réarmé."); return; }
+  if (snap && snap.halted) {
+    // NE JAMAIS ANNONCER UN REARMEMENT QU'ON N'A PAS OBTENU.
+    //
+    // `/api/arm` rend la liste des invariants encore en defaut. L'ancienne
+    // version l'ignorait et affichait « Desk réarmé » dans tous les cas ;
+    // l'evaluation suivante rearretait le desk une seconde plus tard, avec
+    // le meme motif qu'avant. Vu de l'ecran, le bouton ne faisait rien, et
+    // rien ne disait pourquoi.
+    const r = await post("/api/arm");
+    const bloquants = (r && r.blocking) || [];
+    if (bloquants.length) {
+      flash("Réarmement sans effet — toujours en défaut : "
+            + bloquants.map(nomLisible).join(", "));
+    } else {
+      flash("Desk réarmé.");
+    }
+    return;
+  }
   if (!armed) {
     armed = true;
     killBtn.classList.add("confirm");
@@ -94,6 +119,37 @@ async function post(path, body) {
 }
 
 function flash(msg) { $("killNote").textContent = msg; }
+
+/* Rendre le titre « Flux de données » cliquable, seulement dans le décor.
+ *
+ * On ne touche pas au poste directement : on publie un message et c'est
+ * lui qui décide. Ces panneaux doivent rester utilisables seuls, sans rien
+ * savoir de la mise en scène qui les entoure.
+ */
+let fluxBranche = false;
+function brancherLeTitreDesFlux() {
+  if (fluxBranche) return;
+  const dansLeVerre = document.documentElement.hasAttribute("data-verre");
+  const dansUnCadre = window.parent !== window;
+  if (!dansLeVerre || !dansUnCadre) return;
+  const panneau = document.getElementById("feeds");
+  const titre = panneau && panneau.parentElement
+    && panneau.parentElement.querySelector("h2");
+  if (!titre) return;
+  fluxBranche = true;
+  titre.classList.add("cliquable");
+  titre.setAttribute("role", "button");
+  titre.setAttribute("tabindex", "0");
+  titre.setAttribute("title", "Voir le collecteur sur l'écran de gauche");
+  const partir = () => {
+    try { window.parent.postMessage({ desk: "voir-flux" }, location.origin); }
+    catch (e) { /* cadre d'une autre origine : on ne fait rien */ }
+  };
+  titre.addEventListener("click", partir);
+  titre.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); partir(); }
+  });
+}
 
 /* ---------- rendu ---------- */
 function render(s) {
@@ -190,6 +246,10 @@ function render(s) {
     + '<div class="track"><div class="fill" style="width:' + pct.toFixed(1) + '%"></div></div></div>';
 
   /* --- flux --- */
+  // Le titre du panneau devient une commande QUAND ON EST DANS LE DECOR.
+  // Hors décor il ne se passe rien : la vue sans décor n'a pas d'écran de
+  // gauche, et un bouton qui ne mène nulle part est pire que pas de bouton.
+  brancherLeTitreDesFlux();
   const stale = s.feeds.filter((f) => f.status !== "LIVE").length;
   $("feedCount").textContent = (s.feeds.length - stale) + "/" + s.feeds.length + " vivants";
   $("feedCount").style.color = stale ? "var(--crit)" : "var(--ok)";

@@ -227,8 +227,7 @@ td.name{font-family:var(--f-ui);font-weight:600}
 .jr pre{font-family:var(--f-mono);font-size:11px;color:var(--ink-2);margin:6px 0 0;
   white-space:pre-wrap;word-break:break-word;max-height:88px;overflow:auto}
 
-.foot{max-width:1240px;margin:26px auto 0;padding:0 20px;
-  font-family:var(--f-mono);font-size:10.5px;color:var(--muted);line-height:1.7}
+
 button:focus-visible,.link-btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .offline{background:var(--warn-soft);color:var(--warn);text-align:center;
   font-family:var(--f-mono);font-size:12px;padding:8px}
@@ -437,6 +436,10 @@ button:focus-visible,.link-btn:focus-visible{outline:2px solid var(--accent);out
 /* --- L'ossature : une colonne fixe, un seul bloc qui defile --- */
 
 :root[data-verre], :root[data-verre] body { height:100%; overflow:hidden }
+/* En vue `flux`, `.wrap` n'a pas de secteur a faire defiler : c'est le
+   panneau lui-meme qui prend la hauteur. Sans ca il se tasse en haut
+   d'une dalle vide, ce qui est la pire facon d'occuper un ecran. */
+:root[data-verre][data-vue="flux"] .wrap > * { flex:1 1 auto; min-height:0 }
 :root[data-verre] body {
   display:flex; flex-direction:column;
   padding-bottom:0; font-size:13px;
@@ -838,3 +841,70 @@ body::before {
 /* --- La barre superieure se fond dans la dalle --- */
 
 .bar { background: color-mix(in srgb, var(--surface) 40%, transparent) }
+
+/* ==========================================================================
+   VUE `flux` — la page reduite au collecteur de donnees
+   ==========================================================================
+
+   L'ecran de gauche du poste affiche CETTE page, pas une seconde
+   application. C'est la meme regle que pour la dalle du PFD, et pour la
+   meme raison : deux implementations du meme ecran finissent toujours par
+   diverger, et c'est celle qu'on regarde le moins qui derive.
+
+   On ne recopie donc rien — on cache tout sauf le panneau voulu. Le
+   secteur qui le contient est force visible : sa visibilite est pilotee
+   par un attribut `hidden` que le script pose, et cette vue n'a pas de
+   navigation pour en changer.
+*/
+
+:root[data-vue="flux"] .bar,
+:root[data-vue="flux"] .banner,
+:root[data-vue="flux"] .tiles,
+:root[data-vue="flux"] .nav,
+:root[data-vue="flux"] .offline { display: none }
+
+:root[data-vue="flux"] .secteur { display: none !important }
+:root[data-vue="flux"] #sec-systemes { display: block !important }
+/* On masque TOUS les panneaux du secteur, a quelque profondeur qu'ils
+   soient — ils sont repartis dans deux colonnes internes — puis on rallume
+   le seul voulu. Viser `.grid > .panel` ne touchait aucun d'entre eux,
+   puisqu'ils sont enfants des colonnes et non de la grille : le secteur
+   s'affichait en entier et c'est « Invariants » qu'on voyait. */
+:root[data-vue="flux"] #sec-systemes .intro,
+:root[data-vue="flux"] #sec-systemes .panel { display: none }
+/* Le panneau « Flux de données », et lui seul. */
+:root[data-vue="flux"] #sec-systemes .panel:has(#feeds) { display: block }
+/* Et la colonne qui ne le contient pas n'a plus lieu d'occuper la grille. */
+:root[data-vue="flux"] #sec-systemes .grid > div:not(:has(#feeds)) { display: none }
+
+:root[data-vue="flux"] .wrap { padding: 10px 12px }
+:root[data-vue="flux"] #sec-systemes .grid { display: block }
+
+/* Le collecteur remplit la dalle : c'est le seul contenu, il n'a aucune
+   raison de se serrer en haut d'un ecran vide. */
+:root[data-vue="flux"] #sec-systemes .panel:has(#feeds) {
+  display: flex; flex-direction: column;
+  height: 100%; min-height: 0;
+}
+:root[data-vue="flux"] #feeds {
+  flex: 1 1 auto; min-height: 0; overflow-y: auto;
+  display: grid; align-content: start; gap: 8px;
+  padding: 10px 14px;
+}
+:root[data-vue="flux"] .feed .nm { font-size: 12px }
+
+/* Un titre de panneau qui commande quelque chose doit le dire. Sans ce
+   signe, « Flux de données » serait un lien invisible — et un lien qu'on
+   ne voit pas est un lien qui n'existe pas. */
+.panel > h2.cliquable { cursor: pointer }
+.panel > h2.cliquable::after {
+  content: "›";
+  margin-left: 2px;
+  font-size: 14px;
+  line-height: 1;
+  color: var(--accent);
+  transition: transform 160ms ease;
+}
+.panel > h2.cliquable:hover { color: var(--accent-ink) }
+.panel > h2.cliquable:hover::after { transform: translateX(3px) }
+.panel > h2.cliquable:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px }

@@ -103,6 +103,7 @@ class RiskContext(Frozen):
     feeds: tuple[FeedHealth, ...] = ()
     clock_drift_ms: int | None = None
     price_divergence_bps: Decimal | None = None
+    price_divergence_asset: str | None = None
 
     # I10 / I11 / I12 : preconditions structurelles, verifiees au demarrage
     # puis reevaluees a chaque cycle du watchdog.
@@ -340,7 +341,9 @@ def _i09(ctx: RiskContext) -> Check:
         ctx.price_divergence_bps > ctx.limits.max_price_divergence_bps
     ):
         return Check(invariant=Invariant.I09_FRESH_DATA, passed=False,
-                     detail=f"divergence de prix {ctx.price_divergence_bps:.1f} bps")
+                     detail=f"divergence de prix {ctx.price_divergence_bps:.1f} bps"
+                            + (f" sur {ctx.price_divergence_asset}"
+                               if ctx.price_divergence_asset else ""))
     return Check(invariant=Invariant.I09_FRESH_DATA, passed=True,
                  detail=f"{len(ctx.feeds)} flux vivants, dérive {ctx.clock_drift_ms} ms")
 

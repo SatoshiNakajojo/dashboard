@@ -57,12 +57,12 @@
      megaoctets avant de decouvrir qu'il n'a pas H.264. Avec le profil et le
      niveau, il saute le fichier sans rien demander. -->
 <div id="sequence" hidden>
-  <video id="film" playsinline preload="auto">
-    <source src="/ui/poste/assets/embarquement.mp4"
-            type='video/mp4; codecs="avc1.64001f, mp4a.40.2"'>
-    <source src="/ui/poste/assets/embarquement.webm"
-            type='video/webm; codecs="vp9, opus"'>
-  </video>
+  <!-- Une seule balise video pour TOUTES les transitions : embarquement,
+       retour a la vue d'ensemble, aller et retour vers l'ecran de gauche.
+       Les sources sont posees par le script au moment de jouer. Quatre
+       elements video distincts auraient voulu dire quatre etats a garder
+       synchronises, et trois d'entre eux toujours en train de se taire. -->
+  <video id="film" playsinline preload="auto"></video>
 </div>
 <button class="passer" id="passer" type="button" hidden>Passer</button>
 
@@ -79,6 +79,22 @@
     <div class="reflet"></div>
   </div>
 </div>
+
+<!-- 4. L'ecran de gauche : le collecteur de donnees du VPS.
+     Monte comme le poste — toujours la, dessous — pour la meme raison :
+     un decor deja peint ne peut pas manquer son entree. Il ne porte pas
+     les memes panneaux mais LA MEME PAGE, en vue `flux`. -->
+<div id="gauche" hidden>
+  <div class="scene">
+    <img class="decor" src="/ui/poste/assets/gauche.jpg"
+         alt="Écran de gauche — collecteur de données" draggable="false">
+    <iframe class="verre-gauche" src="/panneaux?verre&amp;vue=flux"
+            title="Collecteur de données — flux"></iframe>
+    <div class="reflet-gauche"></div>
+  </div>
+</div>
+
+<button class="revoir" id="retourPfd" type="button" hidden>Return to PFD</button>
 
 <!-- Le retour a la vue d'ensemble. Le poste est un gros plan : une fois
      dedans, on ne voyait plus le vaisseau. Ce bouton redonne la vue du
