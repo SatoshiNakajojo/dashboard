@@ -22,7 +22,12 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
 import pytest
-from diagnostic_portage import caracteristiques, pente_et_erreur, un_mois_en_moins
+from diagnostic_portage import (
+    caracteristiques,
+    correlation,
+    pente_et_erreur,
+    un_mois_en_moins,
+)
 from portage_financement import par_classement, par_mois, rejouer
 from portage_relatif import (
     MOIS_MINIMUM_D_HISTORIQUE,
@@ -183,3 +188,27 @@ def test_les_caracteristiques_decrivent_bien_les_actifs():
     for a, d in carac.items():
         assert d["dispersion"] == pytest.approx(0.0, abs=1e-12)
         assert d["financement"] == pytest.approx(f_moy[a] * 28, rel=1e-9)
+
+
+def test_la_correlation_de_rang_resiste_a_ce_qui_emporte_pearson():
+    """Trois actifs extrêmes ont retourné un −0,64 en +0,10 dans ce dossier.
+
+    Le nuage ci-dessous est monotone croissant — Spearman doit valoir 1 —
+    mais un seul point très éloigné suffit à tirer Pearson dans l'autre
+    sens. C'est exactement la configuration qui a failli produire une
+    troisième explication fausse, et la raison pour laquelle les deux
+    mesures doivent s'accorder avant qu'une phrase s'écrive.
+    """
+    from diagnostic_portage import correlation_de_rang
+
+    xs = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 100.0]
+    ys = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 6.5]
+    assert correlation_de_rang(xs, ys) == pytest.approx(1.0), (
+        "un nuage strictement croissant a une corrélation de rang de 1")
+    assert correlation(xs, ys) < 0.8, (
+        "et Pearson, lui, se fait tasser par le point éloigné")
+
+    # Et sur un nuage sans point aberrant, les deux doivent s'accorder.
+    zs = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0]
+    assert correlation([*xs[:6], 7.0], zs) == pytest.approx(1.0)
+    assert correlation_de_rang([*xs[:6], 7.0], zs) == pytest.approx(1.0)

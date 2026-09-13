@@ -220,8 +220,41 @@ systématique ou si un seul mois l'a fabriquée. Les deux lectures sont
 compatibles avec ce qu'on a, et choisir la plus racontable serait refaire,
 en plus discret, l'erreur que cette section corrige.
 
-**Ce que l'épisode apprend sur la méthode.** Deux règles, et j'ai enfreint
-les deux dans la même semaine :
+**Ce qui ferme la famille entière, et pas seulement trois règles.** Les
+trois règles testées rangent toutes les actifs par leur financement, sous
+une forme ou une autre. Une question les précède donc : dans cette
+cross-section, à quoi le financement est-il lié ? Cinquante-trois actifs, et
+les deux corrélations — Pearson, puis Spearman, qui ne se laisse pas
+emporter par deux ou trois actifs extrêmes :
+
+```
+                                  Pearson   Spearman
+bêta ~ financement moyen           +0,099    +0,210
+bêta ~ dispersion du financement   −0,010    −0,073
+financement moyen ~ dispersion     −0,726    −0,728
+```
+
+**Le bêta n'a aucune relation mesurable avec le financement**, ni en niveau
+ni en dispersion, et les deux mesures s'accordent là-dessus. Toutes les
+explications par le bêta tombent ici — y compris les deux miennes.
+
+Ce qui est fortement lié, et sous les deux mesures, c'est le financement
+*moyen* d'un actif et la *dispersion* de son financement : un actif qui paie
+peu — ou qui se fait payer — est un actif dont le financement part dans tous
+les sens. Le quartile au financement le plus bas a une dispersion de 1,40 ;
+celui du haut, 0,47. Ranger les actifs par leur financement, c'est donc
+mettre du côté *acheté* le panier des financements instables, quel que soit
+le raffinement du classement. C'est structurel, mesuré en coupe, et ça ne
+dépend d'aucune pente sur onze points.
+
+Cette mesure a d'ailleurs failli produire une troisième erreur : faite
+d'abord à la va-vite en dehors du script, avec un filtre légèrement
+différent, elle donnait −0,64 pour la première ligne — trois actifs
+extrêmes suffisaient à retourner le signe. C'est en la réécrivant dans le
+script, avec Spearman à côté de Pearson, que l'artefact est apparu.
+
+**Ce que l'épisode apprend sur la méthode.** Trois règles, et j'ai enfreint
+les deux premières dans la même semaine :
 
 1. **Une explication causale est une affirmation, pas un commentaire.** Elle
    se mesure ou elle ne s'écrit pas. Coût ici : l'explication fausse a été
@@ -232,6 +265,11 @@ les deux dans la même semaine :
    (t = −2,9) sur une droite qui n'existe que par une observation. Le
    « laisser-un-mois-de-côté » coûte cinq lignes de code et il aurait évité
    la deuxième version fausse de cette section.
+3. **Une corrélation de moyennes se double d'une corrélation de rang.**
+   Pearson sur des moyennes de financement se fait retourner par trois
+   actifs sur cinquante-trois. Les deux doivent s'accorder avant qu'une
+   phrase s'écrive — et une mesure faite hors du script n'est pas une
+   mesure, c'est un brouillon qu'on finit par citer.
 
 ## Trois tentatives de sauvetage du portage, trois réfutations
 
@@ -319,9 +357,12 @@ permanence les mêmes actifs, du même côté, ce qui n'est plus un portage mais
 une position.
 
 **Le portage de financement en coupe transversale est clos.** Trois règles
-testées, trois réfutations, et une raison qui ne dépend d'aucune pente
+testées, trois réfutations, et deux raisons qui ne dépendent d'aucune pente
 fragile : le rendement de cette stratégie est sa composante persistante, et
-la retirer ne laisse rien.
+la retirer ne laisse rien (+10,73 % → +2,00 %) ; et cette composante
+persistante est indissociable de la dispersion du financement (−0,73 en
+coupe), si bien que tout classement par le financement achète le panier des
+financements instables, quel que soit son raffinement.
 
 ## Méthode : ce qui est acquis
 
@@ -343,6 +384,16 @@ la retirer ne laisse rien.
   été publiée sans mesure, et elle était fausse (corrélation en coupe :
   −0,013). Elle a en plus orienté la tentative de sauvetage suivante, qui a
   donc testé la mauvaise chose.
+- **Une pente sur onze points se retire point par point avant d'expliquer
+  quoi que ce soit.** L'erreur-type n'y suffit pas : le bêta de −0,54 du
+  portage avait t = −2,9 et disparaissait (+0,08) dès qu'on ôtait un seul
+  mois. Cinq lignes de code, et la deuxième explication fausse ne serait
+  jamais partie.
+- **Toute corrélation de moyennes se double d'une corrélation de rang.**
+  Trois actifs sur cinquante-trois ont retourné un −0,64 en +0,10. Si
+  Pearson et Spearman ne s'accordent pas, il n'y a rien à écrire.
+- **Une mesure faite hors du script n'est pas une mesure.** C'est un
+  brouillon — et un brouillon finit par être cité.
 - **Une correction se publie à côté de l'erreur, pas à sa place.** Le
   paragraphe faux est reproduit dans la section qui le corrige. Réécrire
   silencieusement l'histoire d'un résultat, c'est perdre la seule trace de

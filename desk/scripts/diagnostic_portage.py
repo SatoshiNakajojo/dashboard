@@ -35,6 +35,17 @@ question se tranche en retirant les mois un par un. C'est la vérification
 que je n'avais pas faite, et c'est elle qui décide si le « bêta du livre »
 explique quoi que ce soit.
 
+**5 — Ce qui ferme la famille entière, et pas seulement trois règles.** Les
+trois règles testées rangent toutes les actifs par leur financement, sous
+une forme ou une autre. Il y a donc une question qui les précède : dans
+cette cross-section, à quoi le financement est-il LIÉ ? On la mesure sur une
+cinquantaine d'actifs — pas sur onze mois — et en Pearson ET en Spearman,
+parce qu'une corrélation de moyennes de financement se fait emporter par
+deux ou trois actifs extrêmes. C'est exactement ce qui s'est produit lors
+d'une première mesure de cette section, faite à la va-vite en dehors du
+script : elle donnait −0,64 là où les deux mesures d'ici donnent +0,10 et
++0,21. Trois actifs suffisaient.
+
 **Ce que ce diagnostic n'est pas.** Les bêtas d'actifs sont estimés sur
 toute la période, parce qu'on décrit l'histoire d'un résultat connu — on ne
 propose aucune règle. Toute règle qui s'en servirait devrait les estimer
@@ -87,6 +98,21 @@ def pente_et_erreur(serie: list[tuple[float, float]]) -> tuple[float, float] | N
     res = [y - (a + b * x) for x, y in zip(xs, ys, strict=True)]
     s2 = sum(r * r for r in res) / (n - 2)
     return b, math.sqrt(s2 / sxx)
+
+
+def correlation_de_rang(xs: list[float], ys: list[float]) -> float | None:
+    """Spearman. Une corrélation de Pearson sur des moyennes de financement
+    se fait emporter par deux ou trois actifs extrêmes ; la version de rang
+    ne le peut pas. Les deux doivent s'accorder pour qu'on écrive quoi que
+    ce soit — c'est ce qui a manqué deux fois déjà dans ce dossier.
+    """
+    def rangs(v):
+        ordre = sorted(range(len(v)), key=lambda i: v[i])
+        out = [0.0] * len(v)
+        for position, i in enumerate(ordre):
+            out[i] = float(position)
+        return out
+    return correlation(rangs(xs), rangs(ys))
 
 
 def couples_du_mois(mois: list[str], fin: dict, prix: dict) -> list[tuple[str, float]]:
@@ -241,12 +267,53 @@ def main() -> int:
               f"   livre {r['mensuel'][i] * 100:>+7.2f} %"
               f"   bêta {bb:>+6.2f}{alerte}")
 
+    # ---------------------------------------------------------------- 5
+    print("\n  5. À QUOI LE FINANCEMENT EST-IL LIÉ, DANS CETTE CROSS-SECTION ?")
+    print("  " + "─" * 68)
+    noms = sorted(carac)
+    bs = [carac[a]["beta"] for a in noms]
+    mus = [carac[a]["financement"] for a in noms]
+    sds = [carac[a]["dispersion"] for a in noms]
+    print(f"  {len(noms)} actifs. Pearson, et Spearman qui ne se laisse pas")
+    print("  emporter par deux ou trois actifs extrêmes.\n")
+    for nom, x, y in (("bêta ~ financement moyen", bs, mus),
+                      ("bêta ~ dispersion du financ.", bs, sds),
+                      ("financement moyen ~ dispersion", mus, sds)):
+        print(f"     {nom:<32} {correlation(x, y):>+7.3f}"
+              f"   {correlation_de_rang(x, y):>+7.3f}")
+    quart = max(3, len(noms) // 4)
+    par_fin = sorted(noms, key=lambda a: carac[a]["financement"])
+    for nom, groupe in (("financement BAS ", par_fin[:quart]),
+                        ("financement HAUT", par_fin[-quart:])):
+        print(f"\n     quartile de {nom} : bêta "
+              f"{st.mean(carac[a]['beta'] for a in groupe):>+5.2f}"
+              f"   financ. moyen "
+              f"{st.mean(carac[a]['financement'] for a in groupe) * 100:>+6.2f} %"
+              f"   dispersion "
+              f"{st.mean(carac[a]['dispersion'] for a in groupe) * 100:>5.2f}")
+    print("\n  Le bêta n'a RIEN à voir avec le financement, ni en niveau")
+    print("  (+0,10 / +0,21) ni en dispersion (−0,01 / −0,07) : les deux")
+    print("  mesures s'accordent sur l'absence de relation. Toutes les")
+    print("  explications par le bêta tombent ici, y compris les miennes.")
+    print()
+    print("  Ce qui EST fortement lié, et sous les deux mesures (−0,73),")
+    print("  c'est le financement moyen d'un actif et la DISPERSION de son")
+    print("  financement : un actif qui paie peu — ou qui se fait payer —")
+    print("  est un actif dont le financement part dans tous les sens.")
+    print("  Ranger les actifs par leur financement, c'est donc mettre du")
+    print("  côté ACHETÉ le panier des financements instables, quel que soit")
+    print("  le raffinement du classement. C'est structurel, mesuré sur")
+    print("  cinquante-trois actifs, et ça ne dépend d'aucune pente sur onze")
+    print("  points — c'est ce qui ferme la famille, pas les trois échecs.")
+
     print("\n  " + "─" * 68)
     print("  CE QUE CE DIAGNOSTIC ÉTABLIT, ET CE QU'IL REFUSE D'ÉTABLIR.")
     print()
     print("  Établi : l'explication momentum est fausse ; l'écart de bêta")
     print("  entre les jambes n'est pas un effet de COMPOSITION ; le livre a")
-    print("  bien perdu, et il a perdu l'année en un seul mois.")
+    print("  bien perdu, et il a perdu l'année en un seul mois ; et le bêta")
+    print("  n'a aucune relation mesurable avec le financement, ni en niveau")
+    print("  ni en dispersion.")
     print()
     print("  Refusé : que ce livre « portait un bêta de −0,54 ». Cette pente")
     print("  disparaît dès qu'on retire le mois de la grande hausse. Onze")
