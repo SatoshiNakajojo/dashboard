@@ -14,18 +14,22 @@ passent p < 0,05 brut, pour 4,2 attendues par pur hasard.
 **Le portage de financement non plus.** Testé en coupe transversale sur
 soixante actifs et douze mois : le financement est bien encaissé (+13,75 %)
 mais le prix reprend davantage (−17,43 %), et le net est indiscernable du
-hasard (p = 0,53). Le livre porte un bêta de −0,54 au marché. Deux
-tentatives de sauvetage — classement par le résidu de financement, jambes
-appariées en bêta — sont réfutées elles aussi. La piste est close, et sa
-cause est mesurée : les deux jambes n'ont pas le même bêta (+1,93 contre
-+0,82), ce qu'une meilleure sélection ne répare pas.
+hasard (p = 0,53). Trois tentatives de sauvetage — résidu de financement, jambes appariées en bêta,
+classement de chaque actif par rapport à lui-même — sont réfutées elles
+aussi. La piste est close : ce que la règle encaissait venait presque
+entièrement de la part *persistante* du financement (+10,73 % → +2,00 %
+quand on la retranche), et cette part-là ne se capte pas sans détenir
+toujours les mêmes actifs du même côté.
 
-**Une explication publiée ici était fausse**, et sa correction est une
-section à part entière : j'avais attribué l'échec du portage au momentum
-sans le mesurer. La mesure dit l'inverse (corrélation en coupe : −0,013).
+**Deux explications publiées ici étaient fausses**, et leur correction est
+une section à part entière : j'avais attribué l'échec du portage au
+momentum, puis à un bêta de −0,54, sans mesurer le premier ni éprouver le
+second. La corrélation en coupe vaut −0,013, et le bêta disparaît (+0,08)
+dès qu'on retire un seul des onze mois.
 
-C'est un résultat, pas un échec. Il dit où ne pas mettre d'argent — et,
-dans les deux cas, la raison pour laquelle on avait cru le contraire.
+C'est un résultat, pas un échec. Il dit où ne pas mettre d'argent — et il
+dit aussi, deux fois, à quel point il est facile d'écrire une raison plutôt
+que de la mesurer.
 
 ## Le survivant qui n'en était pas un
 
@@ -108,18 +112,16 @@ rotation (p = 0,53) : ce n'est pas le classement qui produit le résultat,
 c'est le simple fait d'être en position.
 
 **Huit mois positifs sur onze, et un net négatif.** C'est le chiffre à
-retenir, parce que c'est exactement la forme qu'a un risque caché. Un seul
-mois porte la perte : août 2026, marché +42,1 %, livre −36,2 %. Le
-diagnostic le dit sans détour — corrélation au marché **−0,70**, bêta
-**−0,54**. Le livre n'est pas neutre, c'est un short déguisé.
-
-La stratégie a « marché » huit mois parce que le marché baissait huit mois ;
+retenir, parce que c'est exactement la forme qu'a un risque caché. **Un seul
+mois porte toute la perte** : août 2026, marché +42,1 %, livre −36,2 %. La
+stratégie a « marché » huit mois parce que le marché baissait huit mois ;
 elle a rendu l'année entière au premier mois de hausse. Un test qui se
 serait arrêté en juillet aurait conclu l'inverse.
 
-Reste à dire *pourquoi* ce livre portait ce bêta. J'ai d'abord donné une
-explication que je n'avais pas mesurée, et elle était fausse — la correction
-est la section suivante, et elle vaut d'être lue avant la suite.
+Reste à dire *pourquoi*. J'ai donné deux explications, la première sans la
+mesurer et la seconde sans l'éprouver ; les deux étaient fausses. La section
+suivante les corrige, et elle vaut d'être lue avant la suite — c'est la
+partie de ce journal qui a coûté le plus cher à écrire.
 
 Deux réserves qui survivent au verdict, et qui joueraient *contre* la
 stratégie si on les levait :
@@ -152,12 +154,13 @@ erreur sans la nommer est la seule façon de la répéter :
 
 C'était une histoire plausible, écrite sans être mesurée, sur un dépôt dont
 c'est précisément la règle de ne pas le faire. `diagnostic_portage.py` fait
-les deux mesures qui manquaient.
+les mesures qui manquaient — et la première version de cette correction a
+reproduit la même faute une seconde fois, ce que la fin de section explique.
 
-**La mesure qui tue l'explication.** Si vendre le financement élevé revenait
-à vendre le momentum, le financement d'un mois et le rendement du même mois
-seraient corrélés positivement en coupe, et de façon répétée. Sur les douze
-mois :
+**La mesure qui tue l'explication momentum.** Si vendre le financement élevé
+revenait à vendre le momentum, le financement d'un mois et le rendement du
+même mois seraient corrélés positivement en coupe, et de façon répétée. Sur
+les douze coupes, chacune d'une cinquantaine d'actifs :
 
 ```
 corrélation en coupe, financement ~ rendement du même mois
@@ -166,82 +169,102 @@ mois où elle est positive     6 / 12
 ```
 
 Une médiane nulle et un signe qui tombe à pile ou face : il n'y a pas de
-relation. Le classement par financement ne classe pas par momentum.
+relation. Le classement par financement ne classe pas par momentum. **Ce
+point-là est solide** — douze cross-sections indépendantes, pas onze points
+dans le temps.
 
-**La vraie cause, et elle est plus simple.** Les actifs qui paient cher ne
-sont pas ceux qui montent, ce sont ceux qui *bougent*. Sur les onze mois
-tenus :
+**Ce que les jambes sont vraiment.** La rivale évidente était que le côté
+vendu soit un panier d'alts à fort bêta et le côté acheté des majeures.
+C'est vérifiable directement, en regardant les actifs sélectionnés :
 
 ```
-bêta du côté VENDU  (financement élevé)   +1,93
-bêta du côté ACHETÉ (financement bas)     +0,82
-écart entre les jambes                    −1,11
-
-moitié de l'écart (notionnel brut 2k)     −0,55
-bêta du LIVRE COMPLET, mesuré à part      −0,54
+                              côté VENDU   côté ACHETÉ
+bêta moyen des membres            +1,00        +0,79
+financement moyen                 +0,66 %      −1,03 %
+dispersion du financement          0,72         1,65
 ```
 
-Le côté vendu est un panier d'alts à fort bêta ; le côté acheté, des
-majeures. Les vendre l'un contre l'autre *à notionnel égal* donne un livre
-court le marché par construction, en hausse comme en baisse.
+L'écart de bêta de *composition* est de −0,22, quand l'écart *réalisé* entre
+les rendements des deux jambes est de −1,11 : la composition en explique
+20 %, pas davantage. **La sélection ne prend pas des actifs plus exposés.**
+Elle prend, du côté acheté, des actifs au financement négatif et très
+dispersé — des actifs que le marché paie pour détenir, c'est-à-dire des
+actifs en difficulté.
 
-Les deux dernières lignes sont le contrôle, et il faut dire pourquoi c'est
-celui-là : β(acheté − vendu) = β(acheté) − β(vendu) est une **identité** des
-moindres carrés dès que les deux régressions partagent la même abscisse.
-Afficher l'écart des jambes et le « bêta du livre » calculé sur la même
-série ne confirmerait rien — ça vérifierait l'arithmétique. Le rapprochement
-qui dit quelque chose est avec la mesure *indépendante* : le bêta du livre
-complet, financement et frais compris, que `portage_financement.py` calcule
-sur sa propre série mensuelle. Il vaut −0,54 là où l'écart des jambes,
-rapporté au notionnel brut 2k, en prédit −0,55. L'exposition du livre vient
-donc *entièrement* de l'écart de bêta entre les paniers, et de rien d'autre.
+**Et maintenant la partie où je me suis trompé une deuxième fois.** J'avais
+d'abord écrit cette correction en désignant un nouveau coupable : « le livre
+portait un bêta de −0,54, par construction ». Ce bêta est estimé sur onze
+points. En voici la vérification que je n'avais pas faite — la pente du
+livre, recalculée en retirant chaque mois :
 
-Le rendement moyen du côté vendu (−0,45 %/mois) est d'ailleurs *supérieur* à
-celui du marché (−2,95 %/mois) sur la période : rien qui ressemble à du
-momentum vendu.
+```
+sans 2025-11   marché −21,92 %   livre  −7,53 %   bêta −0,67
+sans 2026-04   marché  +6,16 %   livre  +5,66 %   bêta −0,58
+   … huit autres mois entre −0,53 et −0,57 …
+sans 2026-08   marché +42,14 %   livre −36,20 %   bêta +0,08   ←
+```
 
-Ce que ça change : l'échec n'était pas un problème de *sélection*, mais de
-*pondération*. C'est une cause qu'on peut essayer de traiter — et les deux
-sections suivantes sont ces essais.
+**Tout le bêta tient à un seul mois.** Retirer août 2026 — le mois de la
+grande hausse — et la pente passe de −0,54 à +0,08, c'est-à-dire à rien, et
+de signe. Le t de Student de −2,9 et l'intervalle [−0,90 ; −0,18] sont
+corrects et sans valeur : ils décrivent une droite qu'une observation à fort
+levier tient à elle seule.
 
-**Ce que l'épisode apprend sur la méthode.** Une explication causale est une
-affirmation, pas un commentaire. Elle se mesure ou elle ne s'écrit pas. Ici
-elle était doublement coûteuse : elle a été publiée, et elle a orienté la
-tentative de sauvetage suivante — qui a testé la mauvaise chose.
+**Ce que ce diagnostic établit :** l'explication momentum est fausse ;
+l'écart de bêta entre les jambes n'est pas un effet de composition ; le
+livre a perdu, et il a perdu l'année entière en un mois.
 
-## Deux tentatives de sauvetage du portage, deux réfutations
+**Ce qu'il refuse d'établir :** que ce livre « portait un bêta ». Onze
+observations mensuelles ne permettent pas de dire si l'exposition était
+systématique ou si un seul mois l'a fabriquée. Les deux lectures sont
+compatibles avec ce qu'on a, et choisir la plus racontable serait refaire,
+en plus discret, l'erreur que cette section corrige.
 
-Les deux règles ci-dessous sont nées du diagnostic d'un échec sur ces mêmes
+**Ce que l'épisode apprend sur la méthode.** Deux règles, et j'ai enfreint
+les deux dans la même semaine :
+
+1. **Une explication causale est une affirmation, pas un commentaire.** Elle
+   se mesure ou elle ne s'écrit pas. Coût ici : l'explication fausse a été
+   publiée, *et* elle a orienté la tentative de sauvetage suivante, qui a
+   donc testé la mauvaise chose.
+2. **Une pente sur onze points n'est pas une cause tant qu'on ne l'a pas
+   retirée mois par mois.** L'erreur-type ne suffit pas : elle était bonne
+   (t = −2,9) sur une droite qui n'existe que par une observation. Le
+   « laisser-un-mois-de-côté » coûte cinq lignes de code et il aurait évité
+   la deuxième version fausse de cette section.
+
+## Trois tentatives de sauvetage du portage, trois réfutations
+
+Les trois règles ci-dessous sont nées du diagnostic d'un échec sur ces mêmes
 données. Elles sont donc dans l'échantillon : un résultat positif n'aurait
-valu que candidature à un test hors échantillon. Les deux sont négatives,
+valu que candidature à un test hors échantillon. Les trois sont négatives,
 et une réfutation dans l'échantillon, elle, suffit.
 
 **1. Classer par le résidu de financement** (`portage_residuel.py`). Née de
 l'explication fausse : si le classement vendait du momentum, il fallait
-retirer du financement la part que le rendement explique et classer par ce
-qui reste. La régression est refaite en coupe chaque mois.
+retirer du financement la part que le rendement du mois explique et classer
+par ce qui reste. La régression est refaite en coupe chaque mois.
 
 ```
-                          TÉMOIN (notionnel égal)   CANDIDAT (résidu)
-financement encaissé              +13,75 %              +12,88 %
-effet des prix                    −17,43 %              −22,45 %
-NET                                −4,58 %              −10,59 %
-bêta au marché                      −0,54                 −0,69
-p (modèle nul)                     0,554                 0,639
+                          TÉMOIN (financement brut)   CANDIDAT (résidu)
+financement encaissé              +13,75 %                +12,88 %
+effet des prix                    −17,43 %                −22,45 %
+NET                                −4,58 %                −10,59 %
+p (modèle nul)                     0,554                   0,639
 ```
 
-Pire que le témoin sur tous les postes, bêta compris. C'est cohérent avec la
-correction ci-dessus : la part « expliquée » qu'on retire est proche de
-rien, et la retirer n'ajoute que du bruit au classement.
+Pire que le témoin sur tous les postes. C'est cohérent avec la correction
+ci-dessus : la part « expliquée » qu'on retire est proche de rien, et la
+retirer n'ajoute que du bruit au classement.
 
-**2. Apparier les jambes en bêta** (`portage_neutre.py`). Née de la vraie
-cause, et c'était la bonne cible : peser chaque jambe à l'inverse de son
-bêta plutôt qu'à notionnel égal. Le bêta est estimé **à chaque
-rebalancement, sur les mois strictement antérieurs** — un bêta calculé sur
-la période entière donnerait une couverture que personne n'aurait pu mettre
-en place, et c'est la façon la plus discrète de fabriquer un résultat. Les
-poids sont bornés à [0,4 ; 2,5] pour que la couverture reste une correction
-et non un pari.
+**2. Apparier les jambes en bêta** (`portage_neutre.py`). Née de la
+deuxième explication — celle dont on sait maintenant qu'elle tenait à un
+seul mois : peser chaque jambe à l'inverse de son bêta plutôt qu'à notionnel
+égal. Le bêta est estimé **à chaque rebalancement, sur les mois strictement
+antérieurs** — un bêta calculé sur la période entière donnerait une
+couverture que personne n'aurait pu mettre en place, et c'est la façon la
+plus discrète de fabriquer un résultat. Les poids sont bornés à [0,4 ; 2,5]
+pour que la couverture reste une correction et non un pari.
 
 ```
                           TÉMOIN (notionnel égal)   CANDIDAT (bêta apparié)
@@ -249,22 +272,56 @@ financement encaissé              +13,75 %              +13,05 %
 effet des prix                    −17,43 %              −15,61 %
 NET                                −4,58 %               −3,46 %
 mois positifs                       8 / 11                6 / 11
-bêta au marché                      −0,54                 −0,44
 p (modèle nul)                     0,554                 0,538
 ```
 
-Le traitement va dans le bon sens et ne suffit pas : le bêta passe de −0,54
-à −0,44, le net reste négatif, et p reste à 0,54. Deux raisons se lisent
-dans les chiffres. D'abord un bêta estimé sur quatre à dix mois est trop
-bruité pour couvrir quoi que ce soit. Ensuite, et c'est le fond : le
-financement encaissé, +13,05 % sur l'année, ne couvre pas l'écart de
-rendement entre un panier d'alts et un panier de majeures. Même parfaitement
-neutralisé, ce portage-là serait un pari sur le *tracking error* entre deux
-paniers, pour 13 % de prime annuelle et 12,5 % de volatilité mensuelle.
+Le net reste négatif et p reste à 0,54. Un bêta estimé sur quatre à dix mois
+est de toute façon trop bruité pour couvrir quoi que ce soit — et, la
+correction ci-dessus l'ayant établi, il n'est même plus sûr qu'il y ait eu
+un bêta à couvrir.
+
+**3. Classer chaque actif par rapport à LUI-MÊME** (`portage_relatif.py`).
+La meilleure des trois idées, et la plus instructive en échouant. Le niveau
+de financement d'un actif est d'abord une *caractéristique persistante* :
+un actif au financement chroniquement négatif se retrouve acheté tous les
+mois, quoi qu'il arrive. On classe donc par l'écart au niveau habituel :
+
+    signal = financement(mois précédent) − moyenne de ses mois antérieurs
+
+La moyenne ne porte que sur les mois strictement antérieurs, ce qui coûte
+les premiers mois : le candidat ne peut jouer qu'à partir de 2026-01, et le
+témoin est rejoué **sur la même fenêtre** — sinon on comparerait deux
+périodes plutôt que deux règles.
+
+```
+                          TÉMOIN (niveau)   CANDIDAT (écart à soi)
+                             8 rebalancements, 2026-01 → 2026-08
+financement encaissé          +10,73 %            +2,00 %
+effet des prix                −22,75 %           −14,82 %
+NET                           −12,64 %           −13,49 %
+mois positifs                   6 / 8               4 / 8
+écart réalisé des jambes        −1,39              −1,16
+p (modèle nul)                  0,692               0,704
+```
+
+La prédiction déclarée avant de mesurer était que l'écart entre les jambes
+se resserrerait nettement. Il passe de −1,39 à −1,16 : **la prédiction est
+réfutée**, et c'est une information sur le mécanisme, pas seulement sur la
+règle.
+
+Mais le chiffre à retenir est ailleurs, et il est robuste — c'est une somme
+sur huit mois, pas une pente : **le financement encaissé s'effondre de
++10,73 % à +2,00 %**. Autrement dit, presque tout ce que ce portage
+encaissait venait de la part *persistante* du financement — le fait qu'un
+actif paie cher en permanence — et non de ses variations. Or la part
+persistante est exactement celle qu'on ne peut pas capter sans détenir en
+permanence les mêmes actifs, du même côté, ce qui n'est plus un portage mais
+une position.
 
 **Le portage de financement en coupe transversale est clos.** Trois règles
-testées, trois réfutations, et une cause identifiée qui n'est pas réparable
-par une meilleure sélection.
+testées, trois réfutations, et une raison qui ne dépend d'aucune pente
+fragile : le rendement de cette stratégie est sa composante persistante, et
+la retirer ne laisse rien.
 
 ## Méthode : ce qui est acquis
 
