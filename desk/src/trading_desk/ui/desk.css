@@ -248,6 +248,40 @@ td.sansobjet{color:var(--muted)}
   border-left-color:var(--muted)}
 .signal.aucun .quoi{color:var(--muted)}
 
+/* ---------------- atelier ---------------- */
+.cases{display:flex;flex-wrap:wrap;gap:6px}
+.case{
+  font-family:var(--f-mono);font-size:11px;padding:4px 8px;border-radius:3px;
+  border:1px solid var(--line);background:var(--surface);cursor:pointer;
+  display:inline-flex;align-items:center;gap:5px;
+}
+.case input{margin:0}
+.case.on{border-color:var(--ok-line);background:var(--ok-soft);color:var(--ok)}
+.param{display:inline-flex;flex-direction:column;gap:2px}
+.param .pn{font-family:var(--f-mono);font-size:9.5px;letter-spacing:.08em;
+  text-transform:uppercase;color:var(--muted)}
+.controles input[type=number]{
+  font-family:var(--f-mono);font-size:12px;padding:6px 8px;width:7.5em;
+  background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:3px;
+}
+.link-btn.fort{border-color:var(--ok-line);background:var(--ok-soft);color:var(--ok);
+  font-weight:700}
+.link-btn[disabled]{opacity:.45;cursor:not-allowed}
+.atNote{font-family:var(--f-mono);font-size:11px;color:var(--muted)}
+.sortie{
+  margin:0;padding:11px 16px;max-height:260px;overflow:auto;
+  font-family:var(--f-mono);font-size:11px;line-height:1.55;white-space:pre-wrap;
+  background:var(--surface-alt,var(--surface));border-top:1px solid var(--line-soft);
+  color:var(--ink);
+}
+/* Une combinaison qui survit à la correction. C'est la SEULE ligne du
+   classement qui mérite d'être regardée en premier — et le classement est
+   trié par rendement, donc elle peut être n'importe où. */
+tr.survit td{background:var(--ok-soft)}
+tr.survit td.name{color:var(--ok);font-weight:700}
+td.params{font-family:var(--f-mono);font-size:10.5px;color:var(--muted);
+  max-width:28ch;overflow-wrap:anywhere}
+
 /* ---------------- journal ---------------- */
 .jr{padding:10px 16px;border-bottom:1px solid var(--line-soft)}
 .jr:last-child{border-bottom:0}

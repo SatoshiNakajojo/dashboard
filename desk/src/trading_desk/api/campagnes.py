@@ -171,7 +171,11 @@ class Lanceur:
             ],
             "en_cours": self.en_cours,
             "cle": self.cle,
-            "titre": CATALOGUE[self.cle].titre if self.cle in CATALOGUE else None,
+            # L'atelier n'est pas dans CATALOGUE : il n'a pas la forme d'une
+            # campagne. Sans ce cas, un essai en cours s'afficherait sans
+            # titre, donc comme un lancement dont on ne sait pas ce qu'il est.
+            "titre": (CATALOGUE[self.cle].titre if self.cle in CATALOGUE
+                      else "Essai d'atelier" if self.cle == "atelier" else None),
             "commande": self.commande,
             "depuis_s": ((maintenant - self.demarre_ms) // 1000
                          if self.demarre_ms and self.en_cours else None),
@@ -193,39 +197,122 @@ class Lanceur:
             if campagne is None:
                 return {"lance": False, "raison": f"campagne inconnue : {cle}"}
 
-            cmd = campagne.ligne(choix)
-            self.cle = cle
-            self.commande = " ".join(shlex.quote(x) for x in cmd)
-            self.demarre_ms = int(time.time() * 1000)
-            self.fini_ms = None
-            self.code = None
-            self.lignes.clear()
-            self.lignes.append(f"$ {self.commande}")
+            return self._demarrer(cle, campagne.ligne(choix))
 
-            env = dict(os.environ)
-            env["PYTHONUNBUFFERED"] = "1"
-            # `src` sur le chemin : les scripts s'en chargent seuls, mais un
-            # environnement ou le paquet n'est pas installe echouerait sinon.
-            env["PYTHONPATH"] = str(RACINE / "src") + os.pathsep + env.get("PYTHONPATH", "")
+    def _demarrer(self, cle: str, cmd: list[str]) -> dict[str, Any]:
+        """Le lancement lui-meme. Appele VERROU DEJA PRIS par les deux voies.
+
+        Une campagne et un essai d'atelier different par ce qu'ils valident,
+        pas par ce qu'ils lancent : meme processus unique, meme groupe de
+        processus dedie, meme sortie bornee, meme journal.
+        """
+        self.cle = cle
+        self.commande = " ".join(shlex.quote(x) for x in cmd)
+        self.demarre_ms = int(time.time() * 1000)
+        self.fini_ms = None
+        self.code = None
+        self.lignes.clear()
+        self.lignes.append(f"$ {self.commande}")
+
+        env = dict(os.environ)
+        env["PYTHONUNBUFFERED"] = "1"
+        # `src` sur le chemin : les scripts s'en chargent seuls, mais un
+        # environnement ou le paquet n'est pas installe echouerait sinon.
+        env["PYTHONPATH"] = str(RACINE / "src") + os.pathsep + env.get("PYTHONPATH", "")
+        try:
+            self._proc = subprocess.Popen(
+                cmd, cwd=str(RACINE), env=env,
+                stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                text=True, bufsize=1,
+                # Groupe de processus dedie : un script qui lance des
+                # enfants doit pouvoir etre arrete AVEC eux.
+                start_new_session=True,
+            )
+        except OSError as exc:
+            self.lignes.append(f"échec du lancement : {exc}")
+            self._proc = None
+            return {"lance": False, "raison": str(exc)}
+
+        self._fil = threading.Thread(target=self._lire, daemon=True)
+        self._fil.start()
+        self.state.store.journal("campagne_lancee",
+                                 {"cle": cle, "commande": self.commande}, None)
+        return {"lance": True, "cle": cle, "commande": self.commande}
+
+    # ------------------------------------------------------------- atelier
+
+    def lancer_atelier(self, choix: dict[str, Any]) -> dict[str, Any]:
+        """Un essai d'atelier, sous les memes regles qu'une campagne.
+
+        Il ne passe PAS par `CATALOGUE` parce qu'il n'a pas la meme forme :
+        une campagne est une cle fixe avec des entiers, un essai porte une
+        strategie, des actifs, des intervalles et des parametres flottants.
+        La barriere est la meme dans l'esprit et plus stricte dans les faits :
+        chaque valeur est verifiee contre le catalogue de l'atelier, qui est
+        lui-meme LU DEPUIS LE CODE — noms de strategies, signatures de leurs
+        constructeurs, fichiers de donnees reellement presents. Rien de ce que
+        le navigateur envoie n'atteint une ligne de commande sans avoir
+        d'abord ete retrouve dans ce catalogue.
+
+        Le refus est le meme aussi, et c'est le point important : jamais
+        pendant que le desk trade. Un essai sature le processeur pendant une
+        dizaine de secondes, et le pupitre en mode PAPER decide sur le carnet
+        de l'instant.
+        """
+        from .. import atelier as ate
+
+        with self._verrou:
+            motif = self.refus()
+            if motif:
+                return {"lance": False, "raison": motif}
+
+            strategie = str(choix.get("strategie", ""))
+            if strategie not in ate.BASELINES:
+                return {"lance": False,
+                        "raison": f"stratégie inconnue : {strategie}"}
+
+            dispo = ate.combinaisons_disponibles()
+            actifs = [a for a in (choix.get("actifs") or []) if a in dispo]
+            if not actifs:
+                return {"lance": False,
+                        "raison": "aucun actif valide : "
+                                  f"{', '.join(sorted(dispo)) or 'aucune donnée'}"}
+            # Un intervalle n'est retenu que s'il existe pour TOUS les actifs
+            # demandes. Le tolerer pour certains produirait un balayage dont
+            # les cellules manquantes ne se verraient nulle part, et un
+            # denominateur qu'on croit connaitre.
+            communs = set.intersection(*(set(dispo[a]) for a in actifs))
+            intervalles = [i for i in (choix.get("intervalles") or []) if i in communs]
+            if not intervalles:
+                return {"lance": False,
+                        "raison": "aucun intervalle commun à ces actifs : "
+                                  f"{', '.join(sorted(communs)) or 'aucun'}"}
+
+            reglables = ate.parametres_reglables(strategie)
+            params = []
+            for nom, valeur in (choix.get("parametres") or {}).items():
+                if nom not in reglables:
+                    continue
+                try:
+                    v = float(valeur)
+                except (TypeError, ValueError):
+                    continue
+                b = reglables[nom]
+                v = max(b["min"], min(b["max"], v))
+                params += ["--param", f"{nom}={round(v) if b['entier'] else v}"]
+
             try:
-                self._proc = subprocess.Popen(
-                    cmd, cwd=str(RACINE), env=env,
-                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                    text=True, bufsize=1,
-                    # Groupe de processus dedie : un script qui lance des
-                    # enfants doit pouvoir etre arrete AVEC eux.
-                    start_new_session=True,
-                )
-            except OSError as exc:
-                self.lignes.append(f"échec du lancement : {exc}")
-                self._proc = None
-                return {"lance": False, "raison": str(exc)}
+                tirages = int(choix.get("tirages", ate.TIRAGES_DEFAUT))
+            except (TypeError, ValueError):
+                tirages = ate.TIRAGES_DEFAUT
+            tirages = max(ate.TIRAGES_MIN, min(ate.TIRAGES_MAX, tirages))
 
-            self._fil = threading.Thread(target=self._lire, daemon=True)
-            self._fil.start()
-            self.state.store.journal("campagne_lancee",
-                                     {"cle": cle, "commande": self.commande}, None)
-            return {"lance": True, "cle": cle, "commande": self.commande}
+            cmd = [sys.executable, str(RACINE / "scripts" / "atelier.py"),
+                   "--strategie", strategie,
+                   "--actifs", *actifs,
+                   "--intervalles", *intervalles,
+                   "--tirages", str(tirages), *params]
+            return self._demarrer("atelier", cmd)
 
     def _lire(self) -> None:
         proc = self._proc

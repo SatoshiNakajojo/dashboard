@@ -163,6 +163,59 @@
     </section>
   </section>
 
+  <!-- ==================== ATELIER ==================== -->
+  <section class="secteur" id="sec-atelier" role="tabpanel" hidden>
+    <div class="intro">
+      Régler une stratégie, choisir des tickers et des échelles de temps,
+      lancer l'essai. <b>C'est aussi, par construction, une machine à
+      fabriquer des faux positifs</b> : essayer cinquante combinaisons et
+      garder la meilleure donne, <b>sur du bruit pur</b>, une meilleure
+      cellule à p ≈ 0,02. Trois choses rendent ce panneau honnête — le
+      registre est en <b>ajout seul</b> (un essai inscrit compte, gagnant ou
+      perdant), la correction porte sur <b>tout le registre</b> et non sur la
+      ligne qu'on regarde, et un essai relancé n'est pas une hypothèse de
+      plus. Le classement par rendement est en bas ; le verdict est au-dessus,
+      et c'est lui qui décide.
+    </div>
+
+    <section class="panel">
+      <h2>Fabriquer un essai <span class="badge" id="atBadge">—</span></h2>
+      <div class="controles" id="atForm">
+        <label for="atStrat">Stratégie</label><select id="atStrat"></select>
+        <label for="atTirages">Tirages</label>
+        <input type="number" id="atTirages" min="200" max="20000" step="100" value="2000">
+      </div>
+      <div class="controles" id="atCibles">
+        <label>Tickers</label><span class="cases" id="atActifs"></span>
+      </div>
+      <div class="controles">
+        <label>Échelles de temps</label><span class="cases" id="atIntervalles"></span>
+      </div>
+      <div class="controles" id="atParams"></div>
+      <div class="controles">
+        <button class="link-btn fort" id="atLancer" type="button">Lancer l'essai</button>
+        <button class="link-btn" id="atArreter" type="button" hidden>Arrêter</button>
+        <span class="atNote" id="atNote"></span>
+      </div>
+      <pre class="sortie" id="atSortie" hidden></pre>
+    </section>
+
+    <section class="panel">
+      <h2>Verdict du registre <span class="badge" id="atVerdictBadge">—</span></h2>
+      <div class="body" id="atVerdict"></div>
+    </section>
+
+    <section class="panel">
+      <h2>Classement des combinaisons</h2>
+      <div class="body tscroll" id="atClassement"></div>
+    </section>
+
+    <section class="panel">
+      <h2>Par stratégie</h2>
+      <div class="body tscroll" id="atStrategies"></div>
+    </section>
+  </section>
+
   <!-- ==================== CONSOMMATION ==================== -->
   <section class="secteur" id="sec-consommation" role="tabpanel" hidden>
     <div class="intro">

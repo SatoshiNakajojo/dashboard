@@ -70,6 +70,24 @@ def _echantillonner(courbe, bars) -> list[dict[str, Any]]:
     return points
 
 
+class AtelierRequest(BaseModel):
+    """Ce que le formulaire de l'atelier a le droit de demander.
+
+    Rien de tout cela n'est fait confiance : `Lanceur.lancer_atelier` verifie
+    chaque valeur contre le catalogue de l'atelier — lui-meme lu depuis le
+    code et depuis les fichiers de donnees reellement presents — avant qu'une
+    ligne de commande soit construite. Ce modele ne fait que borner la TAILLE
+    de ce qui entre, pour qu'une charge absurde soit rejetee avant d'atteindre
+    la validation.
+    """
+
+    strategie: str = ""
+    actifs: list[str] = []
+    intervalles: list[str] = []
+    parametres: dict[str, float] = {}
+    tirages: int = 2000
+
+
 class CampagneRequest(BaseModel):
     """Ce que le navigateur a le droit de demander.
 
@@ -283,6 +301,17 @@ def create_app(state: DeskState) -> FastAPI:
     @app.post("/api/campagnes/lancer")
     def campagnes_lancer(req: CampagneRequest) -> dict[str, Any]:
         return lanceur.lancer(req.cle, req.parametres)
+
+    @app.post("/api/atelier/lancer")
+    def atelier_lancer(req: AtelierRequest) -> dict[str, Any]:
+        """Lancer un essai d'atelier. Aucun ordre n'est passe, ici non plus.
+
+        L'essai tourne dans un processus a part, un seul a la fois, et il est
+        REFUSE tant que le desk trade : il sature le processeur une dizaine de
+        secondes, et le pupitre en mode PAPER decide sur le carnet de
+        l'instant. Le meme refus que pour une campagne, pour la meme raison.
+        """
+        return lanceur.lancer_atelier(req.model_dump())
 
     @app.post("/api/campagnes/arreter")
     def campagnes_arreter() -> dict[str, Any]:

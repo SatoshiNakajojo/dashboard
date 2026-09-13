@@ -406,6 +406,88 @@ def _mediane(valeurs: list[float]) -> float | None:
     return v[n // 2] if n % 2 else (v[n // 2 - 1] + v[n // 2]) / 2
 
 
+# ----------------------------------------------------------------- atelier
+
+def atelier(registre: Path | None = None) -> dict[str, Any]:
+    """Le registre des essais, crible et classe.
+
+    **Le classement par rendement est la partie dangereuse de cet ecran**, et
+    il est donc encadre par les deux chiffres qui le rendent lisible : combien
+    de combinaisons ont ete essayees, et combien survivent a la correction.
+    Sans eux, « la meilleure de cinquante » se lit comme « une strategie a
+    p = 0,02 » — et ce depot a deja paye cette lecon a quatre-vingt-quatre
+    cellules.
+
+    **La correction porte sur TOUT le registre**, pas sur la ligne qu'on
+    regarde. Corriger une cellule sur elle-meme sous-estime le nombre
+    d'hypotheses testees, donc le nombre de faux positifs attendus.
+
+    **Un essai repete n'est pas une hypothese de plus.** Le moteur est
+    deterministe ; on ne garde donc qu'une ligne par signature, la plus
+    recente, et le denominateur compte les signatures.
+    """
+    from .. import atelier as ate
+
+    chemin = registre or ate.REGISTRE
+    rel = str(chemin.relative_to(RACINE)) if chemin.is_relative_to(RACINE) else str(chemin)
+    brut = ate.lire(chemin)
+    if not brut:
+        return {
+            "disponible": False, "fichier": rel,
+            "raison": f"{rel} absent — aucun essai n'a encore ete inscrit",
+            "commande": ("python scripts/atelier.py --strategie ema_cross "
+                         "--actifs BTC --intervalles 1d"),
+            "catalogue": ate.catalogue(),
+            "essais": 0, "combinaisons": 0, "classement": [],
+            "par_strategie": [], "criblage": {},
+        }
+
+    lignes = ate.dernier_par_signature(brut)
+    crible = _criblage(lignes, "p")
+    survivants = {c["signature"] for c in crible.get("survivants", [])}
+
+    classement = sorted(
+        ({**c, "survit_bh": c["signature"] in survivants} for c in lignes),
+        # Le rendement d'abord — c'est ce qu'on vient regarder — mais la
+        # colonne BH est a cote, et un survivant remonte a rang egal.
+        key=lambda c: (-(c.get("net_usd") or 0.0),),
+    )
+
+    par_strategie: dict[str, dict[str, Any]] = {}
+    for c in lignes:
+        d = par_strategie.setdefault(c["strategie"], {
+            "nom": c["strategie"], "combinaisons": 0, "gagnantes": 0,
+            "nets": [], "p_min": None, "survivants": 0})
+        d["combinaisons"] += 1
+        d["gagnantes"] += 1 if (c.get("net_usd") or 0) > 0 else 0
+        d["nets"].append(float(c.get("net_usd") or 0.0))
+        if isinstance(c.get("p"), (int, float)):
+            d["p_min"] = c["p"] if d["p_min"] is None else min(d["p_min"], c["p"])
+        d["survivants"] += 1 if c["signature"] in survivants else 0
+    for d in par_strategie.values():
+        d["net_median"] = _mediane(d.pop("nets"))
+
+    return {
+        "disponible": True,
+        "fichier": rel,
+        "date": datetime.fromtimestamp(chemin.stat().st_mtime, UTC)
+                        .strftime("%Y-%m-%d %H:%M UTC"),
+        "catalogue": ate.catalogue(),
+        # Les deux denominateurs. `essais` compte les lancements, dont les
+        # repetitions ; `combinaisons` compte les hypotheses. Afficher le
+        # premier seul gonflerait la severite apparente du criblage, le
+        # second seul cacherait qu'on a relance dix fois la meme cellule.
+        "essais": len(brut),
+        "combinaisons": len(lignes),
+        "repetitions": len(brut) - len(lignes),
+        "criblage": crible,
+        "classement": classement[:200],
+        "par_strategie": sorted(par_strategie.values(),
+                                key=lambda d: (-d["survivants"],
+                                               d["p_min"] if d["p_min"] is not None else 1)),
+    }
+
+
 # -------------------------------------------------------------- navigation
 
 def navigation(chemin: Path | None = None) -> dict[str, Any]:
@@ -896,6 +978,7 @@ def tout(store: Any = None, racine_collecte: Path | str | None = None) -> dict[s
     return {
         "campagnes": camp,
         "strategies": strategies(),
+        "atelier": atelier(),
         "telemetrie": tel,
         "navigation": nav,
         "consommation": conso,

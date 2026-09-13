@@ -339,6 +339,7 @@ const SECTEURS = [
   ["telemetrie",   "Télémétrie"],
   ["navigation",   "Navigation"],
   ["soufflerie",   "Soufflerie"],
+  ["atelier",      "Atelier"],
   ["consommation", "Consommation"],
   ["vols",         "Vols"],
   ["systemes",     "Systèmes"],
@@ -418,6 +419,7 @@ function rendreRecherche(d) {
   rendreNavigation(d.navigation);
   rendreCampagnes(d.campagnes);
   rendreInventaire(d.strategies);
+  rendreAtelier(d.atelier);
   rendreConsommation(d.consommation);
   rendreVols(d.vols);
   preparerSelecteurs(d.strategies);
@@ -684,6 +686,243 @@ function rendreInventaire(inv) {
     : '<div class="empty">Aucune stratégie.</div>';
 }
 
+/* ---------- ATELIER ---------- */
+/* Le formulaire vient du CATALOGUE, jamais d'une liste écrite ici : ajouter
+   une stratégie au code doit la faire apparaître sans toucher à cette page,
+   et un formulaire incomplet ressemble à un formulaire complet. */
+let atCat = null;
+let atChoix = { strategie: null, actifs: new Set(), intervalles: new Set(), params: {} };
+
+function cases(id, valeurs, choisis, onToggle) {
+  $(id).innerHTML = valeurs.map((v) =>
+    '<label class="case' + (choisis.has(v) ? " on" : "") + '">'
+    + '<input type="checkbox" data-v="' + esc(v) + '"' + (choisis.has(v) ? " checked" : "")
+    + '>' + esc(v) + "</label>").join("");
+  $(id).onclick = (ev) => {
+    const b = ev.target.closest("input[type=checkbox]");
+    if (!b) return;
+    onToggle(b.dataset.v, b.checked);
+  };
+}
+
+function atIntervallesCommuns() {
+  /* Un intervalle n'est proposé que s'il existe pour TOUS les tickers cochés.
+     En proposer un qui manque à l'un d'eux produirait un balayage dont les
+     cellules absentes ne se verraient nulle part — et un dénominateur qu'on
+     croit connaître. */
+  const d = (atCat && atCat.donnees) || {};
+  const actifs = [...atChoix.actifs];
+  if (!actifs.length) return [];
+  return actifs.map((a) => d[a] || [])
+    .reduce((acc, cur) => acc.filter((x) => cur.includes(x)));
+}
+
+function rendreFormulaireAtelier(cat) {
+  const premier = !atCat;
+  atCat = cat;
+  const noms = Object.keys(cat.strategies || {});
+  if (premier) {
+    atChoix.strategie = noms[0] || null;
+    // BTC par défaut, comme partout ailleurs dans cette page : c'est l'actif
+    // sur lequel toutes les campagnes du dépôt ont été lues. Le premier par
+    // ordre alphabétique serait APE, dont personne n'a la référence en tête.
+    const dispos = Object.keys(cat.donnees || {});
+    atChoix.actifs = new Set(dispos.includes("BTC") ? ["BTC"] : dispos.slice(0, 1));
+  }
+  $("atStrat").innerHTML = noms.map((n) =>
+    '<option value="' + esc(n) + '"' + (n === atChoix.strategie ? " selected" : "")
+    + ">" + esc(n) + "</option>").join("");
+
+  cases("atActifs", Object.keys(cat.donnees || {}), atChoix.actifs, (v, on) => {
+    if (on) atChoix.actifs.add(v); else atChoix.actifs.delete(v);
+    rendreCiblesAtelier();
+  });
+  rendreCiblesAtelier();
+  rendreParamsAtelier();
+}
+
+function rendreCiblesAtelier() {
+  const communs = atIntervallesCommuns();
+  for (const i of [...atChoix.intervalles]) if (!communs.includes(i)) atChoix.intervalles.delete(i);
+  // 1d par défaut : c'est l'échelle des campagnes du dépôt, et la moins
+  // coûteuse à essayer. Le premier de la liste serait 15m, dont un balayage
+  // occupe la machine sans que personne l'ait demandé.
+  if (!atChoix.intervalles.size && communs.length) {
+    atChoix.intervalles.add(communs.includes("1d") ? "1d" : communs[0]);
+  }
+  cases("atIntervalles", communs, atChoix.intervalles, (v, on) => {
+    if (on) atChoix.intervalles.add(v); else atChoix.intervalles.delete(v);
+    rendreCiblesAtelier();
+  });
+  const n = atChoix.actifs.size * atChoix.intervalles.size;
+  $("atBadge").textContent = n + " cellule" + (n > 1 ? "s" : "") + " à essayer";
+  $("atBadge").style.color = n > 6 ? "var(--crit)" : "var(--muted)";
+}
+
+function rendreParamsAtelier() {
+  const s = (atCat.strategies || {})[atChoix.strategie];
+  if (!s) { $("atParams").innerHTML = ""; return; }
+  atChoix.params = {};
+  $("atParams").innerHTML = "<label>Paramètres</label>" + Object.entries(s.parametres).map(
+    ([nom, b]) => '<span class="param"><span class="pn">' + esc(nom) + "</span>"
+      + '<input type="number" data-p="' + esc(nom) + '" value="' + b.defaut
+      + '" min="' + b.min + '" max="' + b.max + '" step="' + (b.entier ? 1 : 0.1)
+      + '" title="' + esc(nom + " — défaut " + b.defaut + ", de " + b.min + " à " + b.max) + '"></span>'
+  ).join("");
+  $("atParams").oninput = (ev) => {
+    const i = ev.target.closest("input[data-p]");
+    if (i) atChoix.params[i.dataset.p] = Number(i.value);
+  };
+}
+
+function rendreAtelier(a) {
+  a = a || {};
+  if (a.catalogue) rendreFormulaireAtelier(a.catalogue);
+
+  const c = a.criblage || {};
+  if (!a.disponible) {
+    $("atVerdictBadge").textContent = "aucun essai";
+    $("atVerdictBadge").style.color = "var(--muted)";
+    $("atVerdict").innerHTML = '<div class="empty">' + esc(a.raison || "")
+      + (a.commande ? "<br><code>" + esc(a.commande) + "</code>" : "") + "</div>";
+    $("atClassement").innerHTML = '<div class="empty">Rien au registre.</div>';
+    $("atStrategies").innerHTML = "";
+    return;
+  }
+
+  $("atVerdictBadge").textContent = a.combinaisons + " combinaison(s)"
+    + (a.repetitions ? " · " + a.repetitions + " relance(s)" : "");
+  $("atVerdictBadge").style.color = c.nb_survivants ? "var(--ok)" : "var(--muted)";
+
+  /* Les trois chiffres, et le troisième décide. Le deuxième est celui qu'on
+     oublie : combien de cellules on ATTENDAIT à p < 0,05 sans aucun signal. */
+  $("atVerdict").innerHTML = '<div class="chiffres">'
+    + chiffre("Combinaisons testées", c.testees)
+    + chiffre("p &lt; 0,05 brut", c.bruts)
+    + chiffre("attendues par hasard", c.attendues === undefined ? "—" : Number(c.attendues).toFixed(1))
+    + chiffre("survivantes après BH", c.nb_survivants,
+              c.nb_survivants ? "var(--ok)" : "var(--crit)")
+    + chiffre("plancher de p", c.plancher === undefined ? "—" : Number(c.plancher).toFixed(6))
+    + chiffre("seuil BH au rang 1", c.seuil_rang1 === undefined ? "—" : Number(c.seuil_rang1).toFixed(6))
+    + "</div>"
+    + '<div class="verdict' + (c.nb_survivants ? "" : " bloc") + '"><span class="gros">'
+    + (c.nb_survivants
+      ? c.nb_survivants + " combinaison(s) survivent à la correction"
+      : "Aucune combinaison ne survit à la correction")
+    + "</span>"
+    + (c.nb_survivants
+      ? "Un survivant ici reste dans l'échantillon : il vaut candidature à un "
+        + "test hors échantillon, jamais conclusion."
+      : "Les " + (c.bruts || 0) + " cellule(s) à p < 0,05 sont compatibles avec le "
+        + "bruit de " + (c.testees || 0) + " tests simultanés.")
+    + (c.resolution ? " " + esc(c.resolution) : "")
+    + "</div>";
+
+  const l = a.classement || [];
+  $("atClassement").innerHTML = l.length
+    ? "<table><thead><tr><th>Stratégie</th><th>Ticker</th><th>TF</th>"
+      + "<th>Paramètres</th><th>Net</th><th>Trades</th><th>Hasard</th>"
+      + "<th>p</th><th>BH</th></tr></thead><tbody>"
+      + l.map((x) =>
+        "<tr" + (x.survit_bh ? " class='survit'" : "") + ">"
+        + "<td class='name'>" + esc(x.strategie) + "</td>"
+        + "<td>" + esc(x.actif) + "</td><td>" + esc(x.intervalle) + "</td>"
+        + "<td class='params'>" + esc(Object.entries(x.parametres || {})
+            .map(([k, v]) => k + "=" + v).join(" ")) + "</td>"
+        + "<td style='color:" + (Number(x.net_usd) >= 0 ? "var(--ok)" : "var(--crit)") + "'>"
+        + usd(x.net_usd) + "</td>"
+        + "<td>" + x.trades + "</td>"
+        + "<td class='sansobjet'>" + usd(x.hasard_moyen) + "</td>"
+        + "<td>" + (x.p === null || x.p === undefined
+          ? "<span class='tag ko' title='" + esc(x.raison_sans_p || "") + "'>sans p</span>"
+          : num(x.p, 4)) + "</td>"
+        + "<td><span class='tag " + (x.survit_bh ? "ok'>survit" : "ko'>non") + "</span></td>"
+        + "</tr>").join("")
+      + "</tbody></table>"
+    : '<div class="empty">Rien au registre.</div>';
+
+  const ps = a.par_strategie || [];
+  $("atStrategies").innerHTML = ps.length
+    ? "<table><thead><tr><th>Stratégie</th><th>Combinaisons</th><th>Gagnantes</th>"
+      + "<th>Net médian</th><th>p min</th><th>Survivantes BH</th></tr></thead><tbody>"
+      + ps.map((x) =>
+        "<tr><td class='name'>" + esc(x.nom) + "</td>"
+        + "<td>" + x.combinaisons + "</td><td>" + x.gagnantes + "</td>"
+        + "<td style='color:" + (Number(x.net_median) >= 0 ? "var(--ok)" : "var(--crit)") + "'>"
+        + usd(x.net_median) + "</td>"
+        + "<td>" + num(x.p_min, 4) + "</td>"
+        + "<td" + (x.survivants ? " style='color:var(--ok)'" : "") + ">"
+        + x.survivants + "</td></tr>").join("")
+      + "</tbody></table>"
+    : "";
+}
+
+/* --- lancement d'un essai ---
+   L'essai tourne dans un processus à part, un seul à la fois, et il est
+   REFUSÉ tant que le desk trade : il sature le processeur une dizaine de
+   secondes, et le pupitre en mode PAPER décide sur le carnet de l'instant.
+   Le refus vient du serveur — la page ne décide pas toute seule qu'elle a le
+   droit, elle affiche la raison qu'on lui donne. */
+let atSuivi = null;
+
+function atDire(texte, mauvais) {
+  $("atNote").textContent = texte || "";
+  $("atNote").style.color = mauvais ? "var(--crit)" : "var(--muted)";
+}
+
+async function atSuivre() {
+  let etat = null;
+  try {
+    const r = await fetch("/api/campagnes");
+    etat = await r.json();
+  } catch (e) { return; }
+
+  const nous = etat.cle === "atelier";
+  $("atSortie").hidden = !nous || !(etat.lignes || []).length;
+  if (nous) $("atSortie").textContent = (etat.lignes || []).join("\n");
+  $("atArreter").hidden = !(nous && etat.en_cours);
+  $("atLancer").disabled = !!etat.en_cours;
+
+  if (etat.en_cours) {
+    atDire(nous
+      ? "essai en cours — " + (etat.depuis_s || 0) + " s"
+      : "occupé : « " + (etat.titre || etat.cle) + " » tourne");
+    return;
+  }
+  if (atSuivi) {
+    clearInterval(atSuivi);
+    atSuivi = null;
+    atDire(nous && etat.code === 0
+      ? "terminé en " + (etat.duree_s || 0) + " s — registre mis à jour"
+      : nous ? "terminé, code " + etat.code : "");
+    chargerRecherche();
+  } else if (etat.refus) {
+    atDire(etat.refus, true);
+  }
+}
+
+async function atLancer() {
+  if (!atChoix.strategie || !atChoix.actifs.size || !atChoix.intervalles.size) {
+    atDire("choisir une stratégie, au moins un ticker et une échelle", true);
+    return;
+  }
+  atDire("lancement…");
+  const rep = await post("/api/atelier/lancer", {
+    strategie: atChoix.strategie,
+    actifs: [...atChoix.actifs],
+    intervalles: [...atChoix.intervalles],
+    parametres: atChoix.params,
+    tirages: Number($("atTirages").value) || 2000,
+  });
+  if (!rep) return;
+  if (!rep.lance) { atDire(rep.raison || "refusé", true); return; }
+  $("atSortie").hidden = false;
+  $("atSortie").textContent = "$ " + (rep.commande || "");
+  if (atSuivi) clearInterval(atSuivi);
+  atSuivi = setInterval(atSuivre, 1500);
+  atSuivre();
+}
+
 /* ---------- CONSOMMATION ---------- */
 function rendreConsommation(c) {
   c = c || {};
@@ -910,7 +1149,11 @@ function histogramme(seaux, seuil) {
 /* ---------- courbe stratégie contre HODL ---------- */
 function preparerSelecteurs(inv) {
   inv = inv || {};
-  const strats = (inv.strategies || []).map((s) => s.nom);
+  // La règle déployée est dans l'inventaire mais PAS dans ce sélecteur : la
+  // courbe d'équité rejoue un backtest de bougies, et une règle
+  // événementielle n'en a pas. L'offrir ici produisait un « backtest en
+  // cours… » qui ne finissait jamais.
+  const strats = (inv.strategies || []).filter((s) => !s.deployee).map((s) => s.nom);
   const actifs = inv.actifs && inv.actifs.length ? inv.actifs : ["BTC"];
   const ivs = inv.intervalles && inv.intervalles.length ? inv.intervalles : ["1d"];
   const opts = (xs) => xs.map((x) => '<option value="' + esc(x) + '">' + esc(x) + "</option>").join("");
@@ -1039,8 +1282,25 @@ try {
 } catch (e) { /* stockage indisponible : on ouvre sur le pre-vol */ }
 montrer(secteurInitial);
 
+/* Les commandes de l'atelier. Liées une fois, ici, comme le reste : les
+   contenus du formulaire sont reconstruits à chaque chargement du catalogue,
+   mais ces trois boutons ne le sont pas. */
+$("atStrat").addEventListener("change", (ev) => {
+  atChoix.strategie = ev.target.value;
+  rendreParamsAtelier();
+});
+$("atLancer").addEventListener("click", atLancer);
+$("atArreter").addEventListener("click", async () => {
+  await post("/api/campagnes/arreter", {});
+  atSuivre();
+});
+
 chargerRecherche();
 setInterval(chargerRecherche, 60000);
+/* Un essai lancé depuis une autre fenêtre — ou avant un rechargement de
+   page — doit se voir ici aussi. Sans ce premier appel, le bouton resterait
+   actif et un second lancement se ferait refuser sans qu'on sache pourquoi. */
+atSuivre();
 
 // Surface publique. Volontairement minuscule : tout ce qui depasse d'ici
 // serait une seconde implementation de la meme chose.

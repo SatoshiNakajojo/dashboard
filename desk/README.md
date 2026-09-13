@@ -1957,7 +1957,7 @@ payante et une structure devinée : propre, testé, entièrement faux.
 
 ---
 
-## Le poste de pilotage — sept secteurs, et la règle qui les gouverne
+## Le poste de pilotage — huit secteurs, et la règle qui les gouverne
 
 `python -m trading_desk` sert l'interface sur `127.0.0.1:8787`. Elle ne passe
 **aucun ordre** : elle peut arrêter le desk, elle ne peut pas le faire trader.
@@ -1974,7 +1974,8 @@ commande qui le produit. Un vide qui ne s'explique pas finit par être lu comme
 | **PRÉ-VOL** | la liste de vérifications, et ce qui bloque le décollage |
 | **TÉLÉMÉTRIE** | la collecte Parquet : fichiers, flux, dernier battement |
 | **NAVIGATION** | le journal hors échantillon des déblocages |
-| **SOUFFLERIE** | les campagnes de validation, et les courbes contre HODL |
+| **SOUFFLERIE** | les campagnes de validation, l'inventaire des stratégies, les courbes contre HODL |
+| **ATELIER** | fabriquer une stratégie, l'essayer, et le registre de tout ce qui a été essayé |
 | **CONSOMMATION** | coût par décision, qualité de schéma, distribution des scores |
 | **VOLS** | mandats, exécutions, P&L réalisé |
 | **SYSTÈMES** | invariants, mandat, flux, budget, positions, journal |
@@ -1983,6 +1984,61 @@ commande qui le produit. Un vide qui ne s'explique pas finit par être lu comme
 pourquoi il n'y en a pas. Chaque ligne est verte, orange ou rouge, et la
 différence entre les deux dernières est celle qui compte — une attente se
 résout avec du temps, un blocage demande une décision.
+
+### La règle branchée se voit, et elle est la seule en rouge
+
+Un bandeau sous la bannière dit **quelle règle décide** : nom, fenêtre, bande
+de déblocage, durée, stop. Rien ne le disait, et douze invariants verts avec
+zéro position ont exactement la même allure qu'on ait « une règle qui n'a rien
+à faire aujourd'hui » ou « aucune règle branchée ». Le bandeau reste, en gris,
+quand il n'y en a pas : c'est alors la cause directe des zéros du reste de
+l'écran.
+
+La même règle figure en tête de l'**inventaire des stratégies**, en rouge, et
+le rouge n'y veut dire qu'une chose : c'est la seule ligne du tableau qui
+puisse faire passer un ordre. Trois colonnes y valent « — » plutôt que zéro —
+net médian en dollars, cellules gagnantes, cellules pires que le hasard : un
+zéro se lirait « n'a rien gagné » là où il faut lire « se mesure en points de
+base par événement ».
+
+### L'ATELIER — et pourquoi c'est le panneau le plus dangereux du dépôt
+
+Régler une stratégie, cocher des tickers et des échelles de temps, lancer
+l'essai, voir le classement. C'est ce qu'on veut, et **c'est par construction
+une machine à fabriquer des faux positifs** : essayer cinquante combinaisons
+et garder la meilleure donne, sur du bruit pur, une meilleure cellule à
+p ≈ 0,02. Elle aura l'air excellente. Ce dépôt a déjà payé la leçon à
+quatre-vingt-quatre cellules.
+
+Trois propriétés le rendent honnête, et aucune n'est optionnelle.
+
+**Le registre est en ajout seul** (`data/registre_atelier.jsonl`). Un essai
+inscrit compte, gagnant ou perdant — même règle que le journal des déblocages,
+et pour la même raison : le nombre d'essais tentés est la seule donnée qui
+rende le meilleur d'entre eux interprétable.
+
+**La correction porte sur tout le registre**, jamais sur la ligne qu'on
+regarde. Corriger une cellule sur elle-même sous-estime le nombre d'hypothèses
+testées, donc le nombre de faux positifs attendus.
+
+**Un essai relancé n'est pas une hypothèse de plus.** Le moteur est
+déterministe ; le criblage compte les signatures distinctes et garde le
+résultat le plus récent de chacune. Les deux dénominateurs sont affichés :
+combien de lancements, combien d'hypothèses.
+
+Le panneau montre donc le verdict **au-dessus** du classement. L'ordre est le
+sujet : un classement par rendement placé avant le verdict se lit comme un
+palmarès ; placé après, il se lit comme ce qu'il est.
+
+```bash
+python scripts/atelier.py --catalogue
+python scripts/atelier.py --strategie ema_cross --actifs BTC ETH SOL \
+    --intervalles 1d 4h --param fast=10 --param slow=40
+```
+
+Ce que l'atelier ne fait pas : brancher quoi que ce soit. Le passage d'un
+essai à une règle déployée demande un test **hors** échantillon et une
+décision humaine.
 
 ### Trois choses que cette interface refuse de faire
 
