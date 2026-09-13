@@ -126,6 +126,69 @@ besoin :
     --racine /var/lib/desk/enregistrement
 ```
 
+## Le rituel hebdomadaire des déblocages — à ne plus lancer à la main
+
+Deux choses tournent sur le VPS, et elles n'ont ni la même nature ni la même
+cadence. La confusion entre les deux est la raison d'être de cette section.
+
+**L'enregistreur tourne en continu et n'a rien à relancer.** `Restart=always`
+et `systemctl enable` suffisent : il redémarre tout seul après une panne,
+après un `reboot`, après une mise à jour. S'il est « à relancer chaque
+semaine », c'est un symptôme — vérifiez d'abord `systemctl is-enabled
+enregistreur` et `journalctl -u enregistreur --since '7 days ago' | tail`.
+
+**Le rituel des déblocages, lui, est bien hebdomadaire** — et c'est la seule
+chose qui l'était. Trois étapes qui allaient à la main :
+
+```bash
+python3 scripts/fetch_unlocks.py          # le calendrier
+python3 scripts/journal_unlocks.py        # inscrire les fenêtres à venir
+python3 scripts/journal_unlocks.py --resoudre   # relever les closes
+```
+
+`scripts/rituel_hebdomadaire.py` les enchaîne, et un timer systemd le
+déclenche :
+
+```bash
+sudo cp deploy/rituel-deblocages.{service,timer} /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now rituel-deblocages.timer
+
+systemctl list-timers rituel-deblocages.timer   # la prochaine échéance
+journalctl -u rituel-deblocages -n 80           # ce qu'a fait la dernière
+sudo systemctl start rituel-deblocages.service  # forcer une exécution
+```
+
+### Les trois décisions qui font que ça marche sans surveillance
+
+**`Persistent=true` dans le timer.** C'est la ligne qui rend le rituel
+oubliable. Sans elle, une semaine où le VPS était éteint est une semaine
+perdue, et *rien ne le dit*. Avec elle, systemd rattrape l'exécution manquée
+au démarrage suivant.
+
+**Le service ne se relance pas tout seul.** Pas de `Restart=` : un `oneshot`
+qui échoue doit **rester** en échec. Un service qui se relance efface la
+trace de la panne, et `systemctl status` afficherait « actif » sur une
+collecte qui n'a rien collecté depuis un mois.
+
+**On s'arrête à la première panne, et on n'inscrit rien.** Si le calendrier
+ne se télécharge pas, `data/unlocks.json` garde sa version de la semaine
+dernière. Inscrire depuis là produirait des positions calculées sur des dates
+qui ont pu bouger — et **le journal est en ajout seul**, une inscription
+fautive ne se retire pas. Mieux vaut une semaine manquante, visible dans
+`list-timers`, qu'une position invérifiable.
+
+Relancer le rituel ne duplique rien : la clé d'unicité d'une inscription est
+(version, jeton, date de déblocage). Un rattrapage après un mois d'arrêt est
+sans danger.
+
+### Ce que le rituel demande au réseau
+
+`defillama-datasets.llama.fi` (le miroir statique, gratuit et sans quota),
+`api.coingecko.com` et `api.hyperliquid.xyz`. Si le VPS est derrière un
+filtrage sortant, ce sont les trois hôtes à autoriser — et c'est aussi
+pourquoi ce rituel ne peut pas tourner depuis n'importe quelle machine.
+
 ## Rapatriement pour analyse
 
 ```bash

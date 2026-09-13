@@ -646,6 +646,23 @@ async def main_async(demo: bool) -> None:
         # affichant « aucun blocage » : les invariants disent si le desk a le
         # DROIT d'agir, pas s'il agit.
         state.rapport_pupitre = pupitre.resume
+        # La regle branchee, pour l'ecran. Les parametres sont LUS depuis le
+        # module de la regle, jamais recopies : une prose et un code qui
+        # divergent, c'est le code qui trade.
+        from .sentinelle import triggers as _tg
+        state.signal = {
+            "nom": pilote.nom,
+            "fenetre": f"J-{_tg.DEBLOCAGE_AVANCE_J} → J-1",
+            "duree_j": _tg.DEBLOCAGE_DUREE_J,
+            "part_min": _tg.DEBLOCAGE_PART_MIN,
+            "part_max": _tg.DEBLOCAGE_PART_MAX,
+            "stop_pct": float(pilote.stop_pct),
+            "journal": str(settings.paper_journal),
+            # Le stop n'est PAS une composante validee de l'edge : c'est un
+            # garde-fou operationnel, et le dire sur l'ecran evite de lire le
+            # resultat live comme celui du backtest.
+            "stop_valide": False,
+        }
         _annoncer_le_programme(pilote, settings)
         # Le pilote a besoin des derniers prix pour poser un niveau d'entree.
         # On lui donne la MEME table que la supervision, par reference : deux

@@ -216,6 +216,37 @@ td.name{font-family:var(--f-ui);font-weight:600}
 .tag{font-family:var(--f-mono);font-size:9.5px;letter-spacing:.09em;padding:2px 6px;border-radius:2px}
 .tag.ok{background:var(--ok-soft);color:var(--ok)}
 .tag.ko{background:var(--crit-soft);color:var(--crit)}
+/* La regle branchee sur le desk. EN ROUGE, et le rouge veut dire une seule
+   chose ici : c'est la seule ligne du tableau qui puisse faire passer un
+   ordre. Les autres sont des mesures ; celle-ci est une decision. */
+.tag.live{background:var(--crit);color:#fff}
+tr.deployee{background:var(--crit-soft);border-left:4px solid var(--crit)}
+tr.deployee td{border-top:1px solid var(--crit-line);border-bottom:1px solid var(--crit-line)}
+tr.deployee td.name{color:var(--crit)}
+.sousnom{font-family:var(--f-ui);font-weight:400;font-size:11.5px;
+  color:var(--muted);max-width:34ch;line-height:1.4;margin-top:2px}
+.sousnom.regle{font-family:var(--f-mono);font-size:10.5px;color:var(--crit)}
+.sousnom.manque code{font-size:10px;word-break:break-all}
+/* Une case sans objet n'est pas une case a zero. */
+td.sansobjet{color:var(--muted)}
+
+/* ---------------- le signal branché ---------------- */
+.signal{
+  display:flex; flex-wrap:wrap; gap:8px 18px; align-items:baseline;
+  margin:0 0 14px; padding:10px 14px; border-radius:4px;
+  background:var(--crit-soft); border:1px solid var(--crit-line);
+  border-left:5px solid var(--crit);
+}
+.signal .quoi{font-family:var(--f-mono);font-size:10px;letter-spacing:.12em;
+  text-transform:uppercase;color:var(--crit);font-weight:700}
+.signal .regle{font-family:var(--f-mono);font-size:12px;color:var(--fg)}
+.signal .note{font-family:var(--f-ui);font-size:11.5px;color:var(--muted);
+  flex-basis:100%;line-height:1.45}
+/* Aucune règle branchée : le bandeau reste, en gris. Un bandeau qui
+   disparaît ferait chercher ailleurs la cause des zéros de l'écran. */
+.signal.aucun{background:var(--bg-soft,transparent);border-color:var(--line-soft);
+  border-left-color:var(--muted)}
+.signal.aucun .quoi{color:var(--muted)}
 
 /* ---------------- journal ---------------- */
 .jr{padding:10px 16px;border-bottom:1px solid var(--line-soft)}

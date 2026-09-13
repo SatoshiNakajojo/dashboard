@@ -204,6 +204,9 @@ function render(s) {
     if (!armed) { killBtn.className = "kill"; killBtn.textContent = "Tout arrêter"; }
   }
 
+  /* --- le signal branché --- */
+  rendreSignal(s.signal, s.mode);
+
   /* --- tuiles --- */
   const a = s.account;
   const pnl = a && a.day_pnl_usd !== null && a.day_pnl_usd !== undefined ? Number(a.day_pnl_usd) : null;
@@ -589,10 +592,72 @@ function rendreCampagnes(cs) {
   }).join("");
 }
 
+function rendreSignal(sig, mode) {
+  const el = $("signal");
+  el.hidden = false;
+  if (!sig) {
+    el.className = "signal aucun";
+    el.innerHTML = "<span class='quoi'>aucune règle branchée</span>"
+      + "<span class='regle'>mode " + esc(mode || "—") + "</span>"
+      + "<span class='note'>Le desk ne peut ouvrir aucune position : c'est la "
+      + "cause directe des zéros du reste de l'écran, et pas une panne. "
+      + "Le signal se branche en mode PAPER ou TESTNET.</span>";
+    return;
+  }
+  const pct = (x) => (x === null || x === undefined ? "—" : (x * 100).toFixed(0) + " %");
+  el.className = "signal";
+  el.innerHTML = "<span class='quoi'>règle branchée</span>"
+    + "<span class='regle'>" + esc(sig.nom) + " · " + esc(sig.fenetre)
+    + " · déblocage de " + pct(sig.part_min) + " à " + pct(sig.part_max)
+    + " de l'offre · " + esc(String(sig.duree_j)) + " j de détention"
+    + " · stop " + pct(sig.stop_pct) + "</span>"
+    + "<span class='note'>Le seul edge directionnel mesuré du dépôt, et la "
+    + "seule chose ici qui puisse faire passer un ordre. Elle ne trade que "
+    + "ce que <code>" + esc(sig.journal) + "</code> contient déjà : une "
+    + "position calculée à la volée ne serait pas hors échantillon."
+    + (sig.stop_valide === false
+      ? " Le stop, lui, <b>n'est pas une composante validée</b> de l'edge — "
+        + "c'est un garde-fou opérationnel, et il rend le résultat live "
+        + "légèrement différent du backtest."
+      : "")
+    + "</span>";
+}
+
 function chiffre(k, v, couleur) {
   return "<div><span class='k'>" + k + "</span><span class='v'"
     + (couleur ? " style='color:" + couleur + "'" : "") + ">"
     + (v === null || v === undefined ? "—" : esc(v)) + "</span></div>";
+}
+
+function celluleOuTiret(v, rendu) {
+  return (v === null || v === undefined)
+    ? "<td class='sansobjet' title='sans objet pour une règle événementielle'>—</td>"
+    : rendu(v);
+}
+
+function ligneDeployee(s) {
+  const r = s.regle || {};
+  const pct = (x) => (x === null || x === undefined ? "—" : (x * 100).toFixed(0) + " %");
+  return "<tr class='deployee'><td class='name'>" + esc(s.nom)
+    + " <span class='tag live'>branchée sur le desk</span>"
+    + "<div class='sousnom'>" + esc(s.resume || "") + "</div>"
+    + "<div class='sousnom regle'>fenêtre " + esc(r.fenetre || "—")
+    + " · déblocage de " + pct(r.part_min) + " à " + pct(r.part_max)
+    + " de l'offre · " + esc(String(r.duree_j ?? "—")) + " jours de détention</div>"
+    + (s.jamais_testee
+      ? "<div class='sousnom manque'>" + esc(s.raison || "artefact absent")
+        + "<br><code>" + esc(s.commande || "") + "</code></div>"
+      : "")
+    + "</td>"
+    + "<td>" + (s.jamais_testee
+      ? "<span class='tag ko'>non validée ici</span>"
+      : s.cellules + " tests poolés") + "</td>"
+    + "<td class='sansobjet' title='sans objet'>—</td>"
+    + "<td class='sansobjet' title='se mesure en bps par événement'>—</td>"
+    + "<td>" + num(s.p_min, 4) + "</td>"
+    + "<td class='sansobjet' title='sans objet'>—</td>"
+    + "<td><span class='tag " + (s.survit_bh ? "ok'>" + s.survivants_fenetre_deployee
+        + "/" + s.survivants + " sur sa fenêtre" : "ko'>non") + "</span></td></tr>";
 }
 
 function rendreInventaire(inv) {
@@ -602,18 +667,18 @@ function rendreInventaire(inv) {
     ? "<table><thead><tr><th>Stratégie</th><th>Cellules</th><th>Gagnantes</th>"
       + "<th>Net médian</th><th>p min</th><th>Pires que hasard</th><th>BH</th>"
       + "</tr></thead><tbody>"
-      + lignes.map((s) =>
+      + lignes.map((s) => s.deployee ? ligneDeployee(s) :
         "<tr><td class='name'>" + esc(s.nom)
-        + "<div style='font-family:var(--f-ui);font-weight:400;font-size:11.5px;"
-        + "color:var(--muted);max-width:34ch;line-height:1.4;margin-top:2px'>"
+        + "<div class='sousnom'>"
         + esc(s.resume || "") + "</div></td>"
         + "<td>" + (s.jamais_testee ? "<span class='tag ko'>jamais testée</span>" : s.cellules) + "</td>"
-        + "<td>" + s.gagnantes + "</td>"
-        + "<td style='color:" + (Number(s.net_median) >= 0 ? "var(--ok)" : "var(--crit)") + "'>"
-        + usd(s.net_median) + "</td>"
+        + celluleOuTiret(s.gagnantes, (v) => "<td>" + v + "</td>")
+        + celluleOuTiret(s.net_median, (v) =>
+          "<td style='color:" + (Number(v) >= 0 ? "var(--ok)" : "var(--crit)") + "'>"
+          + usd(v) + "</td>")
         + "<td>" + num(s.p_min, 4) + "</td>"
-        + "<td" + (s.pires_que_hasard ? " style='color:var(--crit)'" : "") + ">"
-        + s.pires_que_hasard + "</td>"
+        + celluleOuTiret(s.pires_que_hasard, (v) =>
+          "<td" + (v ? " style='color:var(--crit)'" : "") + ">" + v + "</td>")
         + "<td><span class='tag " + (s.survit_bh ? "ok'>survit" : "ko'>non") + "</span></td></tr>").join("")
       + "</tbody></table>"
     : '<div class="empty">Aucune stratégie.</div>';

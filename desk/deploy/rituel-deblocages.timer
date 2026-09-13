@@ -1,0 +1,27 @@
+# /etc/systemd/system/rituel-deblocages.timer
+#
+#   sudo cp deploy/rituel-deblocages.{service,timer} /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now rituel-deblocages.timer
+#   systemctl list-timers rituel-deblocages.timer     # verifier
+#
+[Unit]
+Description=Declenche le rituel hebdomadaire des deblocages
+Documentation=https://github.com/SatoshiNakajojo/dashboard
+
+[Timer]
+# Lundi 06:00 UTC. La regle inscrit les fenetres des trente prochains jours :
+# la date exacte n'a aucune importance, seule la REGULARITE en a.
+OnCalendar=Mon *-*-* 06:00:00 UTC
+
+# LA ligne qui rend le rituel oubliable. Sans elle, une semaine ou le VPS
+# etait eteint est une semaine perdue, et rien ne le dit. Avec elle, systemd
+# rattrape l'execution manquee au demarrage suivant.
+Persistent=true
+
+# Le miroir DefiLlama est gratuit. Ne pas taper a 06:00:00 pile avec tous les
+# autres ; une demi-heure de dispersion ne coute rien ici.
+RandomizedDelaySec=1800
+
+[Install]
+WantedBy=timers.target

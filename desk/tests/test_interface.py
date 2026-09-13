@@ -338,11 +338,67 @@ def test_la_checklist_distingue_attente_et_blocage():
 
 
 def test_l_inventaire_des_strategies_vient_du_code():
-    """Une strategie ajoutee au code apparait sans qu'on touche a l'interface."""
+    """Une strategie ajoutee au code apparait sans qu'on touche a l'interface.
+
+    L'inventaire contient exactement les baselines PLUS la regle deployee.
+    Cette derniere n'est pas dans `BASELINES` et ne peut pas y entrer : ce
+    n'est pas une strategie de bougies rejouee sur une grille, c'est une
+    regle evenementielle. Elle n'en etait pas moins la seule regle validee
+    du depot, et elle etait absente du panneau qui liste les strategies.
+    """
     from trading_desk.backtest.strategies import BASELINES
 
     inv = recherche.strategies()
-    assert {s["nom"] for s in inv["strategies"]} == set(BASELINES)
+    noms = [s["nom"] for s in inv["strategies"]]
+    assert set(noms) == set(BASELINES) | {"deblocages"}
+    assert len(noms) == len(set(noms)), "aucun doublon"
+
+
+def test_la_regle_deployee_est_en_tete_et_se_signale_comme_telle():
+    """Elle ne concourt pas dans la meme categorie que les autres.
+
+    La trier avec elles la ferait glisser au milieu d'une liste ou rien ne
+    dirait qu'elle est la seule a pouvoir faire passer un ordre.
+    """
+    premiere = recherche.strategies()["strategies"][0]
+    assert premiere["nom"] == "deblocages"
+    assert premiere["deployee"] is True
+    assert not any(s.get("deployee") for s in
+                   recherche.strategies()["strategies"][1:])
+
+
+def test_les_colonnes_de_grille_valent_None_pour_la_regle_deployee():
+    """Un zero se lirait « n'a rien gagne » la ou il faut lire « ne se mesure
+    pas en dollars de grille mais en points de base par evenement »."""
+    ligne = recherche.regle_deployee()
+    for colonne in ("gagnantes", "net_median", "pires_que_hasard"):
+        assert ligne[colonne] is None, colonne
+
+
+def test_les_parametres_de_la_regle_viennent_des_constantes_pas_d_une_copie():
+    """Ce qui s'affiche doit etre ce qui s'applique.
+
+    Une prose recopiee peut mentir apres une modification du code ; c'est
+    exactement le mode de panne que ce depot cherche a rendre impossible.
+    """
+    from trading_desk.sentinelle import triggers as tg
+
+    r = recherche.regle_deployee()["regle"]
+    assert r["part_min"] == tg.DEBLOCAGE_PART_MIN
+    assert r["part_max"] == tg.DEBLOCAGE_PART_MAX
+    assert r["duree_j"] == tg.DEBLOCAGE_DUREE_J
+    assert r["fenetre"] == f"J-{tg.DEBLOCAGE_AVANCE_J} → J-1"
+
+
+def test_l_etiquette_de_fenetre_est_celle_que_l_artefact_inscrit():
+    """LE piege de cette ligne.
+
+    Le criblage poole nomme ses fenetres `anticipation_J-7_J-1`. Si la ligne
+    deployee construisait une autre etiquette, elle annoncerait « aucun
+    survivant sur ma fenetre » en comparant deux chaines differentes — un
+    faux negatif qui ressemble a une mesure.
+    """
+    assert recherche.regle_deployee()["regle"]["etiquette"] == "anticipation_J-7_J-1"
 
 
 # --------------------------------------------------------------------------
@@ -1221,3 +1277,116 @@ def test_le_poste_ne_passe_aucun_ordre(client):
     """La règle du dépôt vaut aussi sous le décor."""
     page = client.get("/").text
     assert "/api/order" not in page and "/api/trade" not in page
+
+
+def test_la_ligne_deployee_compte_les_survivants_de_SA_fenetre(tmp_path, monkeypatch):
+    """Quatre survivants au total ne valent pas quatre survivants pour la règle.
+
+    Le criblage poolé teste quatre fenêtres. Une ligne qui afficherait « 4
+    survivants » sans dire combien tombent sur la fenêtre effectivement
+    déployée laisserait croire que la règle branchée est validée sur quatre
+    horizons, alors qu'elle n'en trade qu'un — et que les trois autres
+    pourraient parfaitement être ceux qui survivent.
+    """
+    faux = tmp_path / "baselines"
+    faux.mkdir()
+    (faux / "unlocks.json").write_text(json.dumps({
+        "hypothese": "un deblocage fait baisser le prix (sens = -1)",
+        "tirages": 2000, "alpha": 0.05,
+        "poolage": [
+            # Deux survivants, dont UN SEUL sur la fenêtre déployée.
+            {"tranche": "toutes", "fenetre": "anticipation_J-7_J-1",
+             "evenements": 852, "observe_bps": 236.0, "hasard_bps": 74.6,
+             "p": 0.0010, "tirages": 2000},
+            {"tranche": "2-5 %", "fenetre": "impact_J_J+1",
+             "evenements": 400, "observe_bps": 180.0, "hasard_bps": 60.0,
+             "p": 0.0015, "tirages": 2000},
+            *[{"tranche": "x", "fenetre": f"f{i}", "evenements": 300,
+               "observe_bps": 0.0, "hasard_bps": 0.0, "p": 0.5,
+               "tirages": 2000} for i in range(14)],
+        ],
+    }), encoding="utf-8")
+    monkeypatch.setattr(recherche, "BASELINES", faux)
+    recherche._cache.clear()
+
+    ligne = recherche.regle_deployee()
+    assert ligne["survit_bh"] is True
+    assert ligne["survivants"] == 2
+    assert ligne["survivants_fenetre_deployee"] == 1
+    assert ligne["cellules"] == 16
+    assert ligne["p_min"] == 0.001
+    assert not ligne["jamais_testee"]
+
+
+def test_la_ligne_deployee_dit_son_artefact_absent_plutot_que_de_disparaitre(
+        tmp_path, monkeypatch):
+    """Un artefact absent est une information, pas une panne.
+
+    Le fichier de validation vit sur la machine qui lance la campagne. Une
+    ligne qui disparaîtrait ferait lire « pas de règle déployée » là où il
+    faut lire « la règle est déployée, sa validation n'est pas sur cette
+    machine » — et la commande qui la produit doit être là.
+    """
+    faux = tmp_path / "baselines"
+    faux.mkdir()
+    monkeypatch.setattr(recherche, "BASELINES", faux)
+    recherche._cache.clear()
+
+    ligne = recherche.regle_deployee()
+    assert ligne["nom"] == "deblocages"
+    assert ligne["jamais_testee"] is True
+    assert ligne["disponible"] is False
+    assert "absent" in ligne["raison"]
+    assert "valider_unlocks.py" in ligne["commande"]
+
+
+# --------------------------------------------------------------------------
+#  La règle branchée doit se voir sur le desk lui-même, pas seulement
+#  dans la soufflerie
+# --------------------------------------------------------------------------
+
+def _ui(nom: str) -> str:
+    from trading_desk.api import server
+    return (server.UI_DIR / nom).read_text(encoding="utf-8")
+
+
+def test_le_desk_reserve_une_place_au_signal_branche():
+    """Le bandeau existe dans la page, et le script le remplit.
+
+    Sans lui, rien sur l'écran principal ne disait QUELLE règle décide — on
+    voyait douze invariants verts et zéro position, sans pouvoir distinguer
+    « la règle n'a rien à faire aujourd'hui » de « aucune règle n'est
+    branchée ».
+    """
+    assert 'id="signal"' in _ui("index.html")
+    assert "rendreSignal(" in _ui("desk.js")
+
+
+def test_le_bandeau_du_signal_reste_quand_aucune_regle_n_est_branchee():
+    """Un bandeau qui disparaît ferait chercher ailleurs la cause des zéros.
+
+    Le cas se produit pour de vrai : en mode SHADOW ou en démo, aucun pilote
+    n'est branché, et c'est l'explication directe de l'écran vide.
+    """
+    js = _ui("desk.js")
+    assert "signal aucun" in js
+    assert "aucune règle branchée" in js
+    assert ".signal.aucun" in _ui("desk.css")
+
+
+def test_le_signal_est_dans_l_instantane_et_vaut_None_sans_pilote():
+    """`None` est une valeur, pas un oubli : elle dit « rien n'est branché »."""
+    from trading_desk.api.state import DeskState
+    from trading_desk.config import Settings
+
+    instantane = DeskState(Settings(), SqliteStore(":memory:")).snapshot()
+    assert "signal" in instantane
+    assert instantane["signal"] is None
+
+
+def test_l_ecran_dit_que_le_stop_n_est_pas_valide():
+    """Le stop à 15 % est un garde-fou opérationnel, pas une composante
+    mesurée de l'edge. Il rend le résultat live différent du backtest, et un
+    écran qui ne le dit pas laisse comparer deux choses différentes."""
+    assert "stop_valide" in _ui("desk.js")
+    assert "garde-fou opérationnel" in _ui("desk.js")

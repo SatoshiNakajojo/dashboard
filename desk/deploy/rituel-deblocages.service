@@ -1,0 +1,45 @@
+# /etc/systemd/system/rituel-deblocages.service
+#
+# Ce service ne tourne pas en continu : il est declenche par
+# rituel-deblocages.timer. Voir deploy/README.md.
+#
+[Unit]
+Description=Rituel hebdomadaire des deblocages (calendrier, journal, releve)
+Documentation=https://github.com/SatoshiNakajojo/dashboard
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=desk
+Group=desk
+WorkingDirectory=/opt/desk/src/desk
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/opt/desk/.venv/bin/python scripts/rituel_hebdomadaire.py
+
+# Le miroir DefiLlama peut etre lent. Une heure de marge, puis on abandonne
+# la semaine plutot que de laisser un processus pendu jusqu'au suivant.
+TimeoutStartSec=3600
+
+# Pas de Restart : un oneshot qui echoue doit RESTER en echec. Un service qui
+# se relance tout seul efface la trace de la panne, et `systemctl status`
+# dirait « actif » sur une collecte qui n'a rien collecte depuis un mois.
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+# Le rituel n'ecrit que dans data/ du depot.
+ReadWritePaths=/opt/desk/src/desk/data
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryMax=1G
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=rituel-deblocages
+
+[Install]
+WantedBy=multi-user.target

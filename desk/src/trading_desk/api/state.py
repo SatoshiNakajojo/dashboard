@@ -59,6 +59,13 @@ class DeskState:
         self.reconciled_at_ms: int | None = None
         self.day_realized_pnl_usd: Decimal | None = None
 
+        # LA regle branchee, decrite pour l'ecran. `None` tant qu'aucune ne
+        # l'est — et c'est une information : un desk sans signal ne peut rien
+        # ouvrir, ce qui explique a lui seul tous les zeros des autres
+        # panneaux. Une interface qui n'afficherait rien dans ce cas
+        # laisserait chercher la cause ailleurs.
+        self.signal: dict[str, Any] | None = None
+
         self.feeds: tuple[FeedHealth, ...] = ()
         self.clock_drift_ms: int | None = 0
         self.price_divergence_bps: Decimal | None = None
@@ -260,6 +267,7 @@ class DeskState:
                 # un `git pull` ne change rien a un processus deja lance.
                 "version": version(),
                 "symboles_inconnus": list(self.symboles_inconnus),
+                "signal": self.signal,
                 "healthy": v.approved and not self.halted,
                 "mandate": {
                     "id": m.mandate_id,

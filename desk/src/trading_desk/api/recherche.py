@@ -314,9 +314,88 @@ def strategies() -> dict[str, Any]:
             "jamais_testee": not miennes,
         })
     lignes.sort(key=lambda x: (not x["survit_bh"], x["p_min"] if x["p_min"] is not None else 1))
+    # La regle deployee EN TETE, et jamais melangee au tri : elle ne concourt
+    # pas dans la meme categorie — les autres sont des strategies de bougies
+    # rejouees sur une grille, elle est une regle evenementielle branchee sur
+    # le desk. La trier avec les autres la ferait glisser au milieu d'une
+    # liste ou rien ne dirait qu'elle est la seule a passer des ordres.
+    lignes.insert(0, regle_deployee())
     return {**meta, "strategies": lignes, "criblage": crible,
             "actifs": sorted({c["actif"] for c in cellules if "actif" in c}),
             "intervalles": sorted({c["intervalle"] for c in cellules if "intervalle" in c})}
+
+
+def regle_deployee() -> dict[str, Any]:
+    """La regle des deblocages, decrite comme ce qu'elle est : la seule branchee.
+
+    Elle n'est pas dans `BASELINES` et ne peut pas y entrer : ce n'est pas une
+    strategie de bougies qu'on rejoue sur une grille actif x intervalle, c'est
+    une regle EVENEMENTIELLE dont le declencheur est un calendrier. Jusqu'ici
+    elle etait donc absente de l'inventaire — la seule regle validee du depot,
+    invisible dans le panneau qui liste les strategies.
+
+    **Ses chiffres ne sont pas recopies.** Les parametres viennent de
+    `sentinelle.triggers`, donc ce qui s'affiche est ce qui s'applique ; le
+    verdict vient du test poole de `baselines/unlocks.json`. Une prose et un
+    code qui divergent, c'est le code qui a raison, et l'ecran doit le montrer.
+
+    **Trois colonnes de l'inventaire ne s'appliquent pas**, et elles valent
+    `None` plutot que zero : le net median en dollars, les cellules gagnantes
+    et le compte de cellules pires que le hasard sont des notions de grille.
+    Mettre un zero la ou la question ne se pose pas ferait lire « n'a rien
+    gagne » la ou il faut lire « mesure en points de base par evenement ».
+    """
+    from ..sentinelle import triggers as tg
+
+    contenu, meta = _lire_json(BASELINES / "unlocks.json")
+    poole = contenu.get("poolage") if isinstance(contenu, dict) else None
+    crible = _criblage(poole, "p") if isinstance(poole, list) and poole else {}
+
+    # La fenetre deployee, reconstruite depuis les constantes de la regle et
+    # sous l'etiquette exacte que `valider_unlocks.py` inscrit dans son
+    # artefact (`FENETRES`) : un evenement place a J-avance et mesure sur
+    # `duree` jours se termine a J(-avance + duree). Sans cette
+    # correspondance, la ligne dirait « aucun survivant sur ma fenetre »
+    # alors qu'elle comparerait deux etiquettes differentes — le genre de
+    # faux negatif qu'on ne remarque jamais, parce qu'il ressemble a une
+    # mesure.
+    entree_j = -tg.DEBLOCAGE_AVANCE_J
+    sortie_j = entree_j + tg.DEBLOCAGE_DUREE_J
+    fenetre = f"anticipation_J{entree_j}_J{sortie_j}"
+    survivants = crible.get("survivants", []) or []
+    a_nous = [c for c in survivants if c.get("fenetre") == fenetre]
+
+    ligne = {
+        "nom": "deblocages",
+        "resume": ("règle événementielle : vendre à découvert avant un "
+                   "déblocage de jetons, adossé à BTC"),
+        "deployee": True,
+        "regle": {
+            "fenetre": f"J{entree_j} → J{sortie_j}",
+            "etiquette": fenetre,
+            "duree_j": tg.DEBLOCAGE_DUREE_J,
+            "part_min": tg.DEBLOCAGE_PART_MIN,
+            "part_max": tg.DEBLOCAGE_PART_MAX,
+        },
+        # Les colonnes de grille, laissees vides a dessein.
+        "cellules": len(poole) if isinstance(poole, list) else 0,
+        "gagnantes": None,
+        "net_median": None,
+        "pires_que_hasard": None,
+        "p_min": crible.get("p_min"),
+        "survit_bh": bool(survivants),
+        "jamais_testee": not poole,
+        "survivants": len(survivants),
+        "survivants_fenetre_deployee": len(a_nous),
+        **meta,
+    }
+    if not poole:
+        ligne["raison"] = meta.get(
+            "raison", "baselines/unlocks.json ne porte pas de test poolé")
+        ligne["commande"] = ("python scripts/valider_unlocks.py --unlocks "
+                             "data/unlocks.json --tirages 2000 "
+                             "--out baselines/unlocks.json")
+    return ligne
 
 
 def _mediane(valeurs: list[float]) -> float | None:
