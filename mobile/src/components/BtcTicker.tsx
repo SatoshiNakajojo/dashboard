@@ -1,6 +1,7 @@
 import { Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 
+import { BitcoinGlyph } from '@/components/ui/BitcoinGlyph';
 import { Micro } from '@/components/ui/Micro';
 import { useBtcSpot } from '@/hooks/useBtcMarket';
 import { formatInteger, formatPercent, formatUsd } from '@/lib/format';
@@ -28,7 +29,7 @@ export function BtcTicker() {
         end={{ x: 1, y: 1 }}
         style={{ width: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center' }}
       >
-        <Text style={{ fontFamily: f.serif, fontSize: 13, color: c.onGold }}>₿</Text>
+        <BitcoinGlyph size={13} />
       </LinearGradient>
 
       <Text style={{ fontFamily: f.monoMed, fontSize: 14, letterSpacing: -0.14, color: c.ivory }}>

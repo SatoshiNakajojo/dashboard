@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { View } from 'react-native';
 import { Stack, useRouter, useSegments } from 'expo-router';
+import Head from 'expo-router/head';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -63,6 +64,11 @@ export default function RootLayout() {
       <SafeAreaProvider>
         <View className="flex-1 bg-ink">
           <StatusBar style="light" />
+          {/* `expo-router/head` pilote le <title> de la build web ; sur mobile
+              natif il ne rend rien. */}
+          <Head>
+            <title>Satoshi Social Club</title>
+          </Head>
           <AuthGate />
           <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: c.ink } }}>
             <Stack.Screen name="(tabs)" />

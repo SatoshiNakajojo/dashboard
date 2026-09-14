@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 
-import { OracleGraph, type OracleCurve } from '@/components/OracleGraph';
+import { OracleCanvas } from '@/components/OracleCanvas';
+import type { OracleCurve } from '@/components/OracleGraph';
 import { ScreenShell } from '@/components/ScreenShell';
 import { TimeLockCard } from '@/components/TimeLockCard';
 import { Avatar } from '@/components/ui/Avatar';
@@ -83,7 +84,7 @@ export default function OracleScreen() {
             </View>
           </View>
 
-          <OracleGraph
+          <OracleCanvas
             btcSeries={history.points}
             todayIndex={history.today}
             curves={curves}

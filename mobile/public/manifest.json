@@ -1,0 +1,18 @@
+{
+  "name": "Satoshi Social Club",
+  "short_name": "Satoshi Club",
+  "description": "Le club — Crypto Nights, calls d'investissement et prédictions BTC.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0A0806",
+  "theme_color": "#0A0806",
+  "lang": "fr",
+  "categories": ["finance", "social"],
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

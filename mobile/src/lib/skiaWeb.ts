@@ -28,6 +28,23 @@ function subscribe(listener: () => void): () => void {
 
 const getSnapshot = () => ready;
 
+/**
+ * Où trouver `canvaskit.wasm`.
+ *
+ * L'app est publiée sous un sous-chemin (`/dashboard/club/`) : une URL absolue
+ * en `/canvaskit.wasm` tomberait à la racine du domaine. On la résout donc
+ * relativement au document — ce qui marche aussi bien à la racine que sous un
+ * sous-chemin, et en développement.
+ */
+function assetUrl(file: string): string {
+  if (typeof document === 'undefined') return `/${file}`;
+
+  const base = process.env.EXPO_BASE_URL ?? '';
+  if (base) return `${base.replace(/\/$/, '')}/${file}`;
+
+  return new URL(file, document.baseURI).href;
+}
+
 /** Charge CanvasKit sur le web. Idempotent, et ne rejette jamais. */
 export async function loadSkia(): Promise<void> {
   if (ready || started) return;
@@ -35,7 +52,7 @@ export async function loadSkia(): Promise<void> {
 
   try {
     const { LoadSkiaWeb } = await import('@shopify/react-native-skia/lib/module/web');
-    await LoadSkiaWeb({ locateFile: (file: string) => `/${file}` });
+    await LoadSkiaWeb({ locateFile: assetUrl });
     ready = true;
   } catch {
     // L'onglet Oracle affichera « graphique indisponible » ; le reste de l'app

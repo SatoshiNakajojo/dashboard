@@ -34,7 +34,6 @@ import {
   y as priceToY,
   type Point,
 } from '@/lib/chart';
-import { useSkiaReady } from '@/lib/skiaWeb';
 import { a, c, f } from '@/theme/tokens';
 import type { MarketPoint } from '@/types/domain';
 
@@ -97,7 +96,6 @@ export function OracleGraph({
   onPointsChange,
 }: OracleGraphProps) {
   const [width, setWidth] = useState(0);
-  const skiaReady = useSkiaReady();
   const scale = width > 0 ? width / W : 0;
   const height = scale * H;
 
@@ -172,9 +170,9 @@ export function OracleGraph({
     [btcSeries],
   );
 
-  const btcPath = useSkPath(toSvgPath(btcPoints), skiaReady);
-  const btcArea = useSkPath(toAreaPath(btcPoints), skiaReady);
-  const myPath = useSkPath(points.length > 1 ? toSvgPath(points) : '', skiaReady);
+  const btcPath = useSkPath(toSvgPath(btcPoints));
+  const btcArea = useSkPath(toAreaPath(btcPoints));
+  const myPath = useSkPath(points.length > 1 ? toSvgPath(points) : '');
 
   const gridPath = useSkPath(
     useMemo(
@@ -185,7 +183,6 @@ export function OracleGraph({
         }).join(' '),
       [],
     ),
-    skiaReady,
   );
 
   const todayPath = useSkPath(
@@ -193,7 +190,6 @@ export function OracleGraph({
       const tx = dayToX(todayIndex).toFixed(1);
       return `M ${tx} ${PAD.t} L ${tx} ${BASELINE_Y}`;
     }, [todayIndex]),
-    skiaReady,
   );
 
   const last = btcPoints[btcPoints.length - 1];
@@ -206,7 +202,7 @@ export function OracleGraph({
         className="border-t border-b border-border"
         style={{ height: height || undefined, minHeight: height ? undefined : 200 }}
       >
-        {scale > 0 && skiaReady ? (
+        {scale > 0 ? (
           <GestureDetector gesture={gesture}>
             <View
               accessibilityRole="adjustable"
@@ -227,7 +223,7 @@ export function OracleGraph({
                   {/* 4 — courbes des autres membres, sous la courbe réelle */}
                   {showOthers
                     ? curves.map((curve) => (
-                        <MemberCurve key={curve.id} curve={curve} ready={skiaReady} />
+                        <MemberCurve key={curve.id} curve={curve} />
                       ))
                     : null}
 
@@ -315,26 +311,6 @@ export function OracleGraph({
               )}
             </View>
           </GestureDetector>
-        ) : scale > 0 ? (
-          <View style={{ width, height }}>
-            <AxisLabels scale={scale} />
-            <View
-              pointerEvents="none"
-              style={{
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                right: 0,
-                bottom: 0,
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <Text style={{ fontFamily: f.serifItalic, fontSize: 15, color: c.sepia }}>
-                Graphique indisponible sur cette plateforme
-              </Text>
-            </View>
-          </View>
         ) : null}
       </View>
     </View>
@@ -343,8 +319,8 @@ export function OracleGraph({
 
 // ---------------------------------------------------------------------------
 
-function MemberCurve({ curve, ready }: { curve: OracleCurve; ready: boolean }) {
-  const path = useSkPath(curve.points.length > 1 ? toSvgPath(curve.points) : '', ready);
+function MemberCurve({ curve }: { curve: OracleCurve }) {
+  const path = useSkPath(curve.points.length > 1 ? toSvgPath(curve.points) : '');
   if (!path) return null;
 
   return (
@@ -407,19 +383,17 @@ function AxisLabels({ scale }: { scale: number }) {
   );
 }
 
-/**
- * Compile une chaîne SVG en `SkPath`, mémoïsée.
- *
- * `null` si la chaîne est vide ou si le moteur n'est pas encore là : sur le
- * web, CanvasKit arrive de façon asynchrone et `useSkiaReady` provoque le
- * nouveau rendu au moment du passage.
- */
-function useSkPath(d: string, ready: boolean): SkPath | null {
-  return useMemo(
-    () => (d && ready && Skia?.Path ? Skia.Path.MakeFromSVGString(d) : null),
-    [d, ready],
-  );
+/** Compile une chaîne SVG en `SkPath`, mémoïsée. `null` si la chaîne est vide. */
+function useSkPath(d: string): SkPath | null {
+  return useMemo(() => (d ? Skia.Path.MakeFromSVGString(d) : null), [d]);
 }
 
 /** Ré-exporté pour les tests et les écrans : la règle de capture du tracé. */
 export { MIN_X_STEP };
+
+/**
+ * Export par défaut pour `React.lazy` — voir `OracleCanvas.tsx`. Le module ne
+ * doit être évalué qu'une fois CanvasKit chargé, sans quoi `Skia` se lie à une
+ * API non initialisée et lève au premier tracé.
+ */
+export default OracleGraph;

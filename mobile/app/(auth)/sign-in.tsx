@@ -3,6 +3,7 @@ import { KeyboardAvoidingView, Platform, Pressable, Text, TextInput, View } from
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { BitcoinGlyph } from '@/components/ui/BitcoinGlyph';
 import { Micro } from '@/components/ui/Micro';
 import { useAuth, useProfileBootstrap } from '@/features/auth/useAuth';
 import { useSession } from '@/hooks/useSession';
@@ -54,7 +55,7 @@ export default function SignInScreen() {
               justifyContent: 'center',
             }}
           >
-            <Text style={{ fontFamily: f.serif, fontSize: 24, color: c.onGold }}>₿</Text>
+            <BitcoinGlyph size={24} />
           </LinearGradient>
 
           <Micro style={{ marginTop: 20 }}>Satoshi Social Club</Micro>
