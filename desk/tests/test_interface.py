@@ -616,7 +616,7 @@ def test_le_snapshot_annonce_le_catalogue_et_le_refus(client):
     pourquoi. Un refus découvert après coup ressemble à une panne."""
     d = client.get("/api/campagnes").json()
     assert {c["cle"] for c in d["catalogue"]} == {
-        "grille", "declencheurs", "deblocages", "journal"}
+        "grille", "declencheurs", "deblocages", "cotations", "journal"}
     for c in d["catalogue"]:
         assert c["quoi"] and c["duree"], f"{c['cle']} n'annonce pas sa question"
     assert d["en_cours"] is False and d["refus"] is None

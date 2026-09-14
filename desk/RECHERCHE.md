@@ -27,8 +27,15 @@ momentum, puis à un bêta de −0,54, sans mesurer le premier ni éprouver le
 second. La corrélation en coupe vaut −0,013, et le bêta disparaît (+0,08)
 dès qu'on retire un seul des onze mois.
 
+**La cotation d'un perpétuel non plus.** Testée sur un univers de 234
+perpétuels reconstitué sans biais du survivant — délistés compris, ce que
+l'API permet et que personne n'avait vérifié. Une cellule survivait à
+Benjamini-Hochberg ; elle ne survit pas au modèle nul qui respecte les
+grappes calendaires. Ce n'était pas la cotation qui payait, c'était la classe
+d'actifs.
+
 C'est un résultat, pas un échec. Il dit où ne pas mettre d'argent — et il
-dit aussi, deux fois, à quel point il est facile d'écrire une raison plutôt
+dit aussi, trois fois, à quel point il est facile d'écrire une raison plutôt
 que de la mesurer.
 
 ## Le survivant qui n'en était pas un
@@ -364,6 +371,126 @@ persistante est indissociable de la dispersion du financement (−0,73 en
 coupe), si bien que tout classement par le financement achète le panier des
 financements instables, quel que soit son raffinement.
 
+## La cotation d'un perpétuel : réfutée, et par le contrôle que j'avais cassé
+
+Après le portage, la piste suivante devait être un **événement daté** — la
+seule forme qui ait jamais survécu ici. Les déblocages en sont un ; la
+cotation d'un perpétuel en est un autre, et il a l'avantage d'être
+entièrement mesurable sur l'API Hyperliquid, la seule que cette machine
+atteigne.
+
+**L'hypothèse, écrite avant d'avoir regardé le moindre rendement.** Une
+cotation attire un flux acheteur — l'attention, le levier disponible dès la
+première minute, et l'absence de position à liquider donc de vendeur naturel.
+Si ce flux décroît, les semaines qui suivent sont négatives. Deux fenêtres
+fixées d'avance (J+1 → J+7 et J+1 → J+30), trois tranches d'amplitude du
+premier jour, `sens = -1`.
+
+### Ce que cette étude apporte au dépôt, quel que soit son verdict
+
+**Un univers sans biais du survivant, pour la première fois.** `RECHERCHE.md`
+portait la réserve depuis le portage : « l'univers est choisi par le volume
+d'aujourd'hui ; ceux qui sont morts pendant l'année sont absents ». Il se
+trouve que l'API la lève : `meta` publie **234 perpétuels dont 56 marqués
+`isDelisted`**, et `candleSnapshot` sert leur historique complet jusqu'à leur
+dernier jour. MATIC répond de 2020-10-22 à 2024-09-09, RNDR de 2023-02-03 à
+2024-07-21. `scripts/fetch_cotations.py` reconstitue donc l'univers **tel
+qu'il était**, et non tel qu'il a survécu. C'est un acquis durable, et il
+sert au-delà de cette étude.
+
+**Un tiers des bougies de cotation ne sont pas négociables.** L'exchange
+publie des bougies avant que quoi que ce soit ne s'échange : prix de marque,
+volume nul. Sur 154 cotations retenues, **49 — 32 % — ont un volume nul le
+jour même**. Le cas limite est PANDORA : +3 823 % sur sept jours, zéro
+échange sur huit. À lui seul, il déplaçait la moyenne des 154 événements de
+vingt-cinq points de pourcentage. Toute étude bâtie sur ces bougies sans
+filtre mesure des prix de marque, pas des exécutions — et la première version
+de celle-ci en faisait partie.
+
+### Le résultat, après filtre de négociabilité
+
+105 cotations depuis le 1ᵉʳ juillet 2023, dont 26 depuis délistées.
+
+```
+fenêtre     tranche      n     net BTC    hasard   médiane  gagn.    p
+J+1_J+7     < 15 %      27      +144,1     +95,3    +666,9   63 %   0,4901
+J+1_J+7     15-30 %     25    −1 413,1    +101,6    +305,0   52 %   0,9959
+J+1_J+7     > 30 %      53      +494,2      +9,9  +1 336,7   68 %   0,0715
+J+1_J+30    < 15 %      27    −1 316,5    +456,6  +1 340,7   70 %   0,9859
+J+1_J+30    15-30 %     25    −2 095,3    +541,0     +53,5   52 %   0,9874
+J+1_J+30    > 30 %      53    +1 967,2     +82,0  +3 703,2   77 %   ≤ 0,00005
+J+1_J+30    toutes     105      +155,6    +280,9  +2 480,4   70 %   0,6489
+```
+
+Une cellule survit à Benjamini-Hochberg sur huit : vendre à découvert, un
+mois durant, les perpétuels dont le premier jour a une amplitude supérieure à
+30 %. Aucun des 20 000 tirages ne fait aussi bien. La sensibilité au seuil est
+même monotone et spectaculaire — +665 bps à 15 %, +1 967 à 30 %, +4 099 à
+50 %, avec 92 % de gagnants.
+
+**Et elle ne tient pas.**
+
+### Le contrôle qui décide, et l'erreur que j'ai failli publier
+
+Les déblocages ont appris qu'un modèle nul tirant une date **indépendante par
+événement** suppose que N événements sont N observations. Les cotations
+arrivent en grappes — on cote quand le marché est chaud — donc elles ne le
+sont pas. Il faut un nul **par bloc** : un seul décalage appliqué à toutes
+les dates, qui préserve la structure calendaire.
+
+La première version de ce contrôle rendait p = 0,15 et semblait tuer l'effet.
+Elle était inerte. Le décalage commun est borné par le plus court historique
+du lot, et un seul actif jeune — JELLY, 55 jours — écrasait la plage à
+**[0, 25] jours**. Chaque tirage « au hasard » recouvrait donc la fenêtre
+observée : le nul mesurait l'observation elle-même. J'ai failli publier une
+réfutation obtenue par un contrôle qui ne contrôlait rien, ce qui ressemble
+exactement à un contrôle réussi.
+
+Corrigé — exiger cent jours de marge, ce qui coûte deux événements sur
+cinquante-trois et rend une plage de 1 à 115 jours :
+
+```
+                  observé     nul       p
+nul indépendant  +1 967,2    +51,4    0,0002    (53 événements)
+nul PAR BLOC     +1 863,1   +808,6    0,1642    (51 événements, décalages 1→115 j)
+```
+
+**Le nul par bloc rend +808 bps.** Autrement dit : vendre ces mêmes actifs sur
+n'importe quelle fenêtre de trente jours de leurs premiers mois rapportait
+déjà +808 bps nets de BTC. La cotation en ajoute mille de plus, et cet écart
+tombe au seizième centile des décalages possibles.
+
+Ce n'est donc pas un effet de cotation. C'est un **penchant de facteur** : les
+jetons dont le premier jour est violent — les memecoins, en clair — ont
+sous-performé BTC pendant toute la période, presque quelle que soit la date.
+Vendre cette classe d'actifs aurait rapporté ; ce n'est pas la cotation qui
+rapporte.
+
+Et le dépôt sait exactement comment finit ce genre de position : c'est celle
+du portage de financement, qui affichait huit mois positifs sur onze et a
+rendu l'année entière au premier mois de hausse.
+
+### Ce que le contrôle par bloc ne peut PAS dire
+
+Il n'y a que 115 décalages distincts. Sa résolution est donc bornée autour de
+0,009 : il ne pourra jamais confirmer fortement, seulement ne pas rejeter.
+Ici il ne rejette pas, et l'observation tombe au seizième centile — loin de
+tout seuil. L'hypothèse n'est pas établie, et c'est tout ce qu'on peut en
+dire. Prétendre l'inverse demanderait plus d'histoire que l'exchange n'en a.
+
+### Les quatre autres contrôles, pour mémoire
+
+Ils tiennent tous, et c'est précisément ce qui rend le cinquième instructif :
+un effet peut passer le jackknife, la coupe temporelle et la séparation
+délistés/cotés, et n'être malgré tout qu'une exposition de classe.
+
+| contrôle | verdict |
+| --- | --- |
+| jackknife par actif | tient — pire exclusion p = 0,0050 |
+| coupe temporelle | tient des deux côtés (0,068 / 0,0002) |
+| délistés contre encore cotés | tient des deux côtés (0,0014 / 0,0052) |
+| **nul par bloc** | **ne tient pas — p = 0,164** |
+
 ## Méthode : ce qui est acquis
 
 - **Le plancher de p** est inscrit dans chaque fichier de campagne. Sans
@@ -394,6 +521,17 @@ financements instables, quel que soit son raffinement.
   Pearson et Spearman ne s'accordent pas, il n'y a rien à écrire.
 - **Une mesure faite hors du script n'est pas une mesure.** C'est un
   brouillon — et un brouillon finit par être cité.
+- **Un contrôle dont on ne connaît pas l'amplitude ne contrôle rien.** Le nul
+  par bloc des cotations avait une plage de décalage de [0, 25] jours,
+  écrasée par un seul actif jeune : chaque tirage recouvrait l'observation.
+  Il rendait un p élevé, ce qui ressemble exactement à un contrôle réussi.
+  Tout modèle nul rapporte désormais la plage sur laquelle il a tiré, et se
+  tait plutôt que de rendre un p sur trois observations.
+- **Une bougie n'est pas une exécution.** Un tiers des cotations Hyperliquid
+  ont un volume nul le jour même — prix de marque, rien d'échangé. Un seul
+  de ces faux rendements déplaçait une moyenne de vingt-cinq points de
+  pourcentage. Tout ce qui se mesure sur des prix doit d'abord vérifier
+  qu'ils étaient négociables.
 - **Une correction se publie à côté de l'erreur, pas à sa place.** Le
   paragraphe faux est reproduit dans la section qui le corrige. Réécrire
   silencieusement l'histoire d'un résultat, c'est perdre la seule trace de
@@ -416,6 +554,17 @@ financements instables, quel que soit son raffinement.
   mesurer *avant* de regarder le net. Le portage affichait huit mois
   positifs sur onze ; c'est son bêta de −0,54, pas son total, qui disait ce
   qu'elle était.
+- **La cotation d'un perpétuel est testée et réfutée** (ci-dessus). Elle
+  laisse un acquis qui vaut plus que son verdict : un univers de 234
+  perpétuels **sans biais du survivant**, délistés compris, que l'API permet
+  de reconstituer et que personne n'avait vérifié. Toute étude en coupe de ce
+  dépôt peut désormais s'en servir.
+- **Le penchant de facteur est le piège récurrent de ce dépôt.** Le portage
+  vendait des alts volatils contre des majeures ; les cotations violentes
+  sont des memecoins. Dans les deux cas une exposition de classe se déguise
+  en edge événementiel, et dans les deux cas c'est le nul qui respecte la
+  dépendance — par bloc, ou par bêta — qui la démasque. Toute règle en coupe
+  doit passer ce test AVANT qu'on regarde son rendement.
 - **La règle des déblocages reste la seule qui ait passé la barre** (852
   événements, J−7 → J−1 à +236 bps contre +75 pour le hasard, p = 0,0010
   après Benjamini–Hochberg, dose-réponse monotone). L'étendre demande des

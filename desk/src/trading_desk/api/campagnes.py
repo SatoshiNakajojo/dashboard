@@ -110,6 +110,16 @@ CATALOGUE: dict[str, Campagne] = {
             parametres={"tirages": (2000, 100, 5000)},
         ),
         Campagne(
+            "cotations", "Cotations de perpétuels",
+            "La cotation d'un perpétuel est-elle un événement tradable ? "
+            "Sur un univers SANS biais du survivant — les 56 délistés "
+            "servent encore leur historique.",
+            "valider_cotations.py",
+            args=("--out", "baselines/cotations.json"),
+            duree="5 à 20 min",
+            parametres={"tirages": (2000, 500, 20000)},
+        ),
+        Campagne(
             "journal", "Journal hors échantillon",
             "Inscrit les déblocages dont la fenêtre s'ouvre. À lancer une "
             "fois par semaine — c'est la validation qui compte vraiment.",

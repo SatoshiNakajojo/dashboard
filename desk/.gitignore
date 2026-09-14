@@ -8,3 +8,11 @@ venv/
 *.db-wal
 *.db-shm
 .env
+
+# L'univers des perpetuels, delistes compris (20 Mo). Regenerable en deux
+# minutes par `python scripts/fetch_cotations.py`, et c'est une COLLECTE, pas
+# une reference figee : les fichiers `*_real.json` sont versionnes parce que
+# les backtests publies doivent rester rejouables a l'identique, celui-ci est
+# rebati depuis l'API a chaque fois qu'on en a besoin. Le resultat de l'etude,
+# lui, est versionne : baselines/cotations.json.
+data/cotations.json

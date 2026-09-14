@@ -583,6 +583,13 @@ function rendreCampagnes(cs) {
       + chiffre("survivantes", c.nb_survivants,
                 c.nb_survivants ? "var(--ok)" : "var(--muted)")
       + "</div>"
+      /* Une campagne réfutée par un contrôle affiche zéro survivant — mais
+         un zéro nu se lit « rien trouvé » alors qu'il faut lire « quelque
+         chose a été trouvé PUIS réfuté, et voici par quoi ». */
+      + (c.refute_par_controle
+        ? '<div class="res doute"><b>Réfutée par un contrôle.</b> '
+          + esc(c.raison_refutation || "") + "</div>"
+        : "")
       + '<div class="res ' + cls + '">' + esc(c.resolution || "") + "</div>"
       + (c.nb_survivants
         ? '<div class="cmd">' + c.survivants.slice(0, 4).map((x) =>

@@ -219,6 +219,15 @@ _CAMPAGNES = (
     # N'afficher que le second annoncerait la mort du seul edge directionnel
     # du depot. N'afficher que le premier cacherait que le criblage par jeton
     # ne trouve rien. Les deux, dans cet ordre.
+    # L'artefact porte `p_net` : le rendement net de BTC, qui est celui sur
+    # lequel l'hypothese a ete declaree. Lire `p` — le brut — repondrait a une
+    # autre question que celle qui a ete posee.
+    (("cotations.json", "cellules"), "Cotations de perpétuels", "p_net",
+     "direction",
+     "la cotation d'un perpétuel est-elle suivie d'une baisse — univers "
+     "sans biais du survivant",
+     "python scripts/valider_cotations.py --tirages 20000 "
+     "--out baselines/cotations.json"),
     (("unlocks.json", "poolage"), "Déblocages — test poolé", "p", "direction",
      "tous les jetons ensemble : le marché vend-il AVANT la date "
      "(J-7 → J-1, sens court)",
@@ -267,6 +276,22 @@ def campagnes() -> list[dict[str, Any]]:
 
         if isinstance(contenu, list) and contenu:
             entree.update(_criblage(contenu, champ))
+            # Une campagne voyage avec ses controles. Un criblage ne les
+            # connait pas : il compte des cellules et rend des survivants.
+            # Si un controle a refute l'effet, un « 1 survivant » affiche
+            # seul serait un mensonge par omission — et il ferait passer la
+            # ligne « edge » du pre-vol au vert.
+            brut, _ = _lire_json(BASELINES / fichier)
+            ctrl = brut.get("controles") if isinstance(brut, dict) else None
+            if isinstance(ctrl, dict) and ctrl.get("verdict") == "refute":
+                entree.update({
+                    "refute_par_controle": True,
+                    "raison_refutation": ctrl.get("raison", "contrôle non passé"),
+                    # Les survivants restent visibles — les effacer cacherait
+                    # ce qui a ete mesure — mais ils ne comptent plus comme
+                    # edge, et c'est le compte qui pilote le pre-vol.
+                    "nb_survivants": 0,
+                })
         elif contenu is not None:
             entree.update({"disponible": False,
                            "raison": f"{meta['fichier']} ne contient pas de cellules"})
