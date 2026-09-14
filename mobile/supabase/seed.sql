@@ -94,6 +94,24 @@ values
   ('44444444-4444-4444-8444-000000000005', '11111111-1111-4111-8111-000000000003', '$WIF',  'DEGEN',     1.84,     0.71760, 104169.00,  1100, 'Aucune thèse. Pur degen. Assumé jusqu’au bout.',                                       'dogwifcoin', now() - interval '5 days')
 on conflict (id) do nothing;
 
+-- --- Positions closes des saisons précédentes -------------------------------
+--
+-- Ce ne sont pas des lignes de classement à part : les deux tableaux sortent de
+-- `splitLeaderboards()` appliqué aux mêmes `tickers`. Sans ces positions, le
+-- Hall of Fame serait vide — aucun call en cours n'atteint +50 %.
+--
+-- `$WIF` n'y figure pas : le -61 % du Rekt Board est le call du fil ci-dessus.
+
+insert into public.tickers
+  (id, user_id, symbol, asset_class, entry_price, current_price, entry_btc_price, size_usd, thesis, coingecko_id, created_at)
+values
+  ('44444444-4444-4444-8444-000000000101', '11111111-1111-4111-8111-000000000006', '$BTC', 'BTC', 61000, 119560.00000, 61000.00, null, 'Le seul actif que je garde dix ans. DCA hebdomadaire, jamais de levier, cold storage.', 'bitcoin', now() - interval '420 days'),
+  ('44444444-4444-4444-8444-000000000102', '11111111-1111-4111-8111-000000000002', '$NVDA', 'ACTION', 88.4, 153.81600, 91030.70, null, 'Les pelles de la ruée vers l’or. Je sors quand les hyperscalers arrêtent de commander.', null, now() - interval '300 days'),
+  ('44444444-4444-4444-8444-000000000103', '11111111-1111-4111-8111-000000000001', '$MSTR', 'ACTION', 252, 410.76000, 88272.45, null, 'Levier propre sur BTC via le bilan. Tant que la trésorerie achète, je tiens.', null, now() - interval '280 days'),
+  ('44444444-4444-4444-8444-000000000104', '11111111-1111-4111-8111-000000000005', '$ETHW', 'ALT', 4.2, 2.18400, 111610.15, null, 'La fork que personne n’a gardée. J’ai oublié de vendre.', 'ethereum-pow-iou', now() - interval '260 days'),
+  ('44444444-4444-4444-8444-000000000105', '11111111-1111-4111-8111-000000000004', '$GME', 'ACTION', 28.9, 22.54200, 103859.45, null, 'Nostalgie 2021. Ce n’était pas un investissement, c’était un souvenir.', null, now() - interval '190 days')
+on conflict (id) do nothing;
+
 insert into public.ticker_votes (ticker_id, user_id, side) values
   ('44444444-4444-4444-8444-000000000001', '11111111-1111-4111-8111-000000000001', 'bull'),
   ('44444444-4444-4444-8444-000000000001', '11111111-1111-4111-8111-000000000002', 'bull'),

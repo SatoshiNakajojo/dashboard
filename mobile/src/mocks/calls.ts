@@ -26,8 +26,8 @@ const DAY = 24 * HOUR;
  */
 const ago = (ms: number) => new Date(Date.now() - ms).toISOString();
 
-/** Calls du fil « Le Bag » — DONNEES_FICTIVES §Calls. */
-export const MOCK_TICKERS: Ticker[] = [
+/** Calls en cours — DONNEES_FICTIVES §Calls. Les cinq cartes du fil. */
+export const MOCK_CURRENT_TICKERS: Ticker[] = [
   {
     id: '44444444-4444-4444-8444-000000000001',
     userId: MEMBERS.lea!.id,
@@ -100,41 +100,74 @@ export const MOCK_TICKERS: Ticker[] = [
  * design est sur-souscrite. Le seed Supabase, lui, reste à un vote par membre.
  */
 export const MOCK_VOTES: Record<string, { bull: number; bear: number }> = {
-  [MOCK_TICKERS[0]!.id]: { bull: 7, bear: 0 },
-  [MOCK_TICKERS[1]!.id]: { bull: 5, bear: 2 },
-  [MOCK_TICKERS[2]!.id]: { bull: 4, bear: 3 },
-  [MOCK_TICKERS[3]!.id]: { bull: 3, bear: 4 },
-  [MOCK_TICKERS[4]!.id]: { bull: 1, bear: 7 },
+  [MOCK_CURRENT_TICKERS[0]!.id]: { bull: 7, bear: 0 },
+  [MOCK_CURRENT_TICKERS[1]!.id]: { bull: 5, bear: 2 },
+  [MOCK_CURRENT_TICKERS[2]!.id]: { bull: 4, bear: 3 },
+  [MOCK_CURRENT_TICKERS[3]!.id]: { bull: 3, bear: 4 },
+  [MOCK_CURRENT_TICKERS[4]!.id]: { bull: 1, bear: 7 },
 };
 
 /** Vote de l'utilisateur courant, par identifiant de call. */
 export const MOCK_MY_VOTES: Record<string, Vote> = {
-  [MOCK_TICKERS[0]!.id]: 'bull',
-  [MOCK_TICKERS[4]!.id]: 'bear',
+  [MOCK_CURRENT_TICKERS[0]!.id]: 'bull',
+  [MOCK_CURRENT_TICKERS[4]!.id]: 'bear',
 };
 
 /**
- * Classements de la saison — DONNEES_FICTIVES §Hall of Fame / §Rekt Board.
+ * Positions closes des saisons précédentes.
  *
- * Ce sont des positions closes d'anciennes saisons, pas les calls du fil :
- * elles ne se déduisent donc pas de `MOCK_TICKERS`. En production, la même
- * liste vient de `tickers` filtré par saison et trié par `splitLeaderboards`.
+ * Ce sont de vrais `tickers`, pas une liste de classement à part : les deux
+ * tableaux sortent de `splitLeaderboards()` appliqué au même jeu de calls.
+ * Sans elles, le Hall of Fame serait vide — aucun call du fil courant
+ * n'atteint +50 % — et on ne verrait jamais l'écran tel qu'il est conçu.
+ *
+ * Les perfs visées sont celles de DONNEES_FICTIVES §Hall of Fame / §Rekt Board.
  */
-export interface LeaderboardEntry {
-  memberId: string;
+/**
+ * `$WIF` n'y figure pas : le `-61 %` du Rekt Board **est** le call du fil.
+ * L'inscrire ici le classerait deux fois.
+ */
+const HISTORY: {
+  key: keyof typeof MEMBERS;
   symbol: string;
-  percent: number;
-  note: string;
-}
-
-export const MOCK_FAME: LeaderboardEntry[] = [
-  { memberId: MEMBERS.lea!.id, symbol: '$BTC', percent: 96, note: 'DCA 2 ans · 0,84 ₿' },
-  { memberId: MEMBERS.alex!.id, symbol: '$NVDA', percent: 74, note: '+31 % vs ₿' },
-  { memberId: MEMBERS.john!.id, symbol: '$MSTR', percent: 63, note: '+19 % vs ₿' },
+  assetClass: Ticker['assetClass'];
+  entry: number;
+  perf: number;
+  /** Perf vs ₿ affichée en sous-ligne. `null` pour un call BTC. */
+  vs: number | null;
+  ageDays: number;
+}[] = [
+  { key: 'lea', symbol: '$BTC', assetClass: 'BTC', entry: 61_000, perf: 96, vs: null, ageDays: 420 },
+  { key: 'alex', symbol: '$NVDA', assetClass: 'ACTION', entry: 88.4, perf: 74, vs: 31, ageDays: 300 },
+  { key: 'john', symbol: '$MSTR', assetClass: 'ACTION', entry: 252, perf: 63, vs: 19, ageDays: 280 },
+  { key: 'rayan', symbol: '$ETHW', assetClass: 'ALT', entry: 4.2, perf: -48, vs: -52, ageDays: 260 },
+  { key: 'sofia', symbol: '$GME', assetClass: 'ACTION', entry: 28.9, perf: -22, vs: -33, ageDays: 190 },
 ];
 
-export const MOCK_REKT: LeaderboardEntry[] = [
-  { memberId: MEMBERS.marco!.id, symbol: '$WIF', percent: -61, note: '-66 % vs ₿' },
-  { memberId: MEMBERS.rayan!.id, symbol: '$ETHW', percent: -48, note: 'fork oubliée' },
-  { memberId: MEMBERS.sofia!.id, symbol: '$GME', percent: -22, note: 'nostalgie 2021' },
-];
+const THESES: Record<string, string> = {
+  $BTC: 'Le seul actif que je garde dix ans. DCA hebdomadaire, jamais de levier, cold storage.',
+  $NVDA: 'Les pelles de la ruée vers l’or. Je sors quand les hyperscalers arrêtent de commander.',
+  $MSTR: 'Levier propre sur BTC via le bilan. Tant que la trésorerie achète, je tiens.',
+  $ETHW: 'La fork que personne n’a gardée. J’ai oublié de vendre.',
+  $GME: 'Nostalgie 2021. Ce n’était pas un investissement, c’était un souvenir.',
+};
+
+const HISTORY_TICKERS: Ticker[] = HISTORY.map((entry, index) => ({
+  id: `44444444-4444-4444-8444-${String(100 + index).padStart(12, '0')}`,
+  userId: MEMBERS[entry.key]!.id,
+  symbol: entry.symbol,
+  assetClass: entry.assetClass,
+  entryPrice: entry.entry,
+  currentPrice: priceFromPerf(entry.entry, entry.perf),
+  entryBtcPrice: entry.vs === null ? entry.entry : btcEntryFromVs(entry.perf, entry.vs),
+  sizeUsd: null,
+  thesis: THESES[entry.symbol] ?? '',
+  createdAt: ago(entry.ageDays * DAY),
+}));
+
+/**
+ * Le fil du Bag : les cinq calls en cours, suivis des positions historiques.
+ * Le fil est trié par date, donc l'historique arrive naturellement en fin de
+ * liste sans traitement particulier.
+ */
+export const MOCK_TICKERS: Ticker[] = [...MOCK_CURRENT_TICKERS, ...HISTORY_TICKERS];

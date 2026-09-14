@@ -53,7 +53,7 @@
     "lint": "eslint .",
     "format": "prettier --write \"**/*.{ts,tsx,js,json,md,sql}\"",
     "canvaskit": "node -e \"require('fs').mkdirSync('public',{recursive:true});require('fs').copyFileSync(require.resolve('canvaskit-wasm/bin/full/canvaskit.wasm'),'public/canvaskit.wasm')\"",
-    "test": "node --experimental-strip-types --test \"src/**/__tests__/*.test.ts\""
+    "test": "node --experimental-strip-types --import ./scripts/register-alias.mjs --test \"src/**/__tests__/*.test.ts\""
   },
   "private": true
 }

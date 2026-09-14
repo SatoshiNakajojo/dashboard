@@ -130,6 +130,48 @@ export async function fetchBlockHeight(signal?: AbortSignal): Promise<number | n
   }
 }
 
+interface SearchResponse {
+  coins?: { id: string; symbol: string; market_cap_rank: number | null }[];
+}
+
+/**
+ * Résout un ticker (`$ETH`) vers un identifiant CoinGecko (`ethereum`).
+ *
+ * Renvoie `null` quand l'actif n'y est pas coté — le cas normal pour une action
+ * ou un ETF. Le call est alors publié sans identifiant, et son prix courant
+ * devra être saisi à la main jusqu'à ce qu'un second fournisseur soit branché.
+ *
+ * Le classement par capitalisation départage les homonymes : `$SOL` doit donner
+ * Solana, pas un jeton obscur portant le même symbole.
+ */
+export async function resolveCoingeckoId(
+  symbol: string,
+  signal?: AbortSignal,
+): Promise<string | null> {
+  const clean = symbol.replace(/^\$/, '').trim().toLowerCase();
+  if (!clean) return null;
+
+  try {
+    const result = await withCache(`coingecko.resolve.${clean}`, 30 * 86_400_000, async () => {
+      const payload = await getJson<SearchResponse>(url('/search', { query: clean }), {
+        signal,
+        attempts: 2,
+      });
+      const exact = (payload.coins ?? []).filter((coin) => coin.symbol.toLowerCase() === clean);
+      if (exact.length === 0) return { id: null };
+
+      exact.sort(
+        (a, b) => (a.market_cap_rank ?? Number.MAX_SAFE_INTEGER) - (b.market_cap_rank ?? Number.MAX_SAFE_INTEGER),
+      );
+      return { id: exact[0]!.id };
+    });
+    return result.value.id;
+  } catch {
+    // Une résolution ratée ne doit pas empêcher de publier un call.
+    return null;
+  }
+}
+
 /**
  * Index du jour courant dans la fenêtre de 90 jours.
  * Dérivé de l'historique quand il est disponible, sinon du mock.

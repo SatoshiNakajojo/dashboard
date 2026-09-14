@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { Modal, Pressable, Text, TextInput, View } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -28,27 +28,52 @@ export interface ComposerSheetProps {
   visible: boolean;
   /** Cours spot, pour pré-remplir le prix d'entrée. */
   spotPrice: number;
+  /** Écriture en cours : le bouton se verrouille et annonce l'attente. */
+  publishing?: boolean;
   onClose: () => void;
-  onPublish: (draft: CallDraft) => void;
+  /** Résout `true` si le call est parti ; la sheet ne se ferme qu'alors. */
+  onPublish: (draft: CallDraft) => Promise<boolean> | boolean;
 }
 
 /** Limite dure de la thèse — la même que la contrainte `tickers.thesis`. */
 const THESIS_MAX = 140;
 
 /** Bottom sheet « Poster un call ». */
-export function ComposerSheet({ visible, spotPrice, onClose, onPublish }: ComposerSheetProps) {
+export function ComposerSheet({
+  visible,
+  spotPrice,
+  publishing = false,
+  onClose,
+  onPublish,
+}: ComposerSheetProps) {
   const [assetClass, setAssetClass] = useState<AssetClass>('BTC');
   const [symbol, setSymbol] = useState('$BTC');
   const [entry, setEntry] = useState('');
   const [thesis, setThesis] = useState('');
 
-  const entryPrice = useMemo(() => {
+  /** Le prix saisi, ou le spot à défaut. Trop court pour mériter un `useMemo`. */
+  const entryPrice = (() => {
     const parsed = Number(entry.replace(/[^\d.,]/g, '').replace(',', '.'));
     return Number.isFinite(parsed) && parsed > 0 ? parsed : spotPrice;
-  }, [entry, spotPrice]);
+  })();
 
+  const reset = () => {
+    setAssetClass('BTC');
+    setSymbol('$BTC');
+    setEntry('');
+    setThesis('');
+  };
+
+  const submit = async () => {
+    const sent = await onPublish({ assetClass, symbol, entryPrice, thesis: thesis.trim() });
+    // Sur échec, on garde la saisie : le membre ne doit pas réécrire sa thèse.
+    if (sent) reset();
+  };
+
+  // Le motif est celui de la contrainte `tickers_symbol_check` : refuser ici
+  // ce que la base refusera de toute façon, mais avec un retour immédiat.
   const symbolValid = /^\$[A-Z0-9.\-]{1,10}$/.test(symbol);
-  const canPublish = symbolValid && thesis.trim().length > 0 && entryPrice > 0;
+  const canPublish = symbolValid && thesis.trim().length > 0 && entryPrice > 0 && !publishing;
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
@@ -205,8 +230,9 @@ export function ComposerSheet({ visible, spotPrice, onClose, onPublish }: Compos
 
           <Pressable
             accessibilityRole="button"
+            accessibilityState={{ disabled: !canPublish, busy: publishing }}
             disabled={!canPublish}
-            onPress={() => onPublish({ assetClass, symbol, entryPrice, thesis: thesis.trim() })}
+            onPress={() => void submit()}
             style={{ opacity: canPublish ? 1 : 0.45 }}
           >
             <LinearGradient
@@ -223,7 +249,7 @@ export function ComposerSheet({ visible, spotPrice, onClose, onPublish }: Compos
                   color: c.onGold,
                 }}
               >
-                PUBLIER AU CLUB
+                {publishing ? 'PUBLICATION…' : 'PUBLIER AU CLUB'}
               </Text>
             </LinearGradient>
           </Pressable>

@@ -1,19 +1,52 @@
 /**
  * Règles métier de performance — README §7.3.
  *
- * Deux référentiels, toujours affichés côte à côte :
+ * Deux référentiels, toujours affichés côte à côte sur une carte de call :
  *   • la perf en dollars, `(current - entry) / entry` ;
- *   • la perf **vs ₿**, seule retenue pour le Hall of Fame.
+ *   • la perf **vs ₿**, qui est celle qui compte au club.
  *
- * Seuils du design validé : Hall of Fame ≥ +50 % vs ₿, Rekt Board ≤ −20 % en
- * dollars. Ils sont exportés — le libellé à l'écran les lit ici, de sorte que
- * texte et logique ne puissent pas diverger.
+ * ## Le référentiel du classement : un conflit du dossier de design
+ *
+ * Les trois sources ne disent pas la même chose :
+ *
+ * | Source | Ce qu'elle dit |
+ * |---|---|
+ * | Prototype v1 | `CALLS ≥ +50 %` — le dollar |
+ * | Prototype v2 | `≥ +50 % VS ₿` |
+ * | Fixtures des deux | `$NVDA +74 %` avec `+31 % vs ₿`, `$MSTR +63 %` avec `+19 % vs ₿` |
+ *
+ * Les **données tranchent** : à +31 % et +19 % vs ₿, ces deux lignes n'auraient
+ * rien à faire dans un Hall of Fame mesuré vs ₿. Elles passent le seuil en
+ * dollars. C'est donc le dollar qui est implémenté, comme dans la v1.
+ *
+ * Basculer sur l'autre lecture est un mot à changer — `REFERENCE` ci-dessous —
+ * et le libellé à l'écran suit, puisqu'il est dérivé d'ici. C'est exactement ce
+ * qu'exige le README §7.3 : texte et logique ne peuvent pas diverger.
  */
 
 import type { CallView } from '@/types/domain';
 
-export const HALL_OF_FAME_THRESHOLD_VS_BTC = 50;
-export const REKT_THRESHOLD_USD = -20;
+export type LeaderboardReference = 'usd' | 'vsBtc';
+
+/**
+ * **Le seul endroit à toucher pour changer la règle de classement.**
+ * Le libellé à l'écran en est dérivé : il ne peut pas mentir sur le calcul.
+ */
+export const LEADERBOARD: {
+  reference: LeaderboardReference;
+  fameThreshold: number;
+  rektThresholdUsd: number;
+} = {
+  reference: 'usd',
+  fameThreshold: 50,
+  rektThresholdUsd: -20,
+};
+
+/** Qualificatif affiché à droite du titre « HALL OF FAME ». */
+export const HALL_OF_FAME_LABEL =
+  LEADERBOARD.reference === 'vsBtc'
+    ? `≥ +${LEADERBOARD.fameThreshold} % VS ₿`
+    : `CALLS ≥ +${LEADERBOARD.fameThreshold} %`;
 
 /** Perf en %, ou `null` si le prix courant est indisponible (mode HORS LIGNE). */
 export function performancePercent(
@@ -47,11 +80,23 @@ export function vsBitcoinPercent(
 }
 
 /**
+ * Score retenu pour le Hall of Fame.
+ *
+ * Un call BTC n'a jamais de perf vs ₿ — il *est* le référentiel — et retombe
+ * donc toujours sur sa perf en dollars, quel que soit `REFERENCE`.
+ */
+export function fameScore(call: CallView): number | null {
+  if (LEADERBOARD.reference === 'usd') return call.performancePercent;
+  return call.vsBtcPercent ?? call.performancePercent;
+}
+
+/**
  * Sépare les calls en Hall of Fame et Rekt Board.
  *
- * Le classement se juge contre Bitcoin ; un call BTC n'a pas de perf vs ₿ (il
- * *est* le référentiel) et entre au Hall of Fame sur sa perf en dollars.
- * Un call peut n'appartenir à aucun des deux : c'est le cas ordinaire.
+ * Un call peut n'appartenir à aucun des deux : c'est le cas ordinaire, et
+ * c'est pourquoi les deux tableaux ont un état vide qui n'est pas une erreur.
+ * Un call sans prix courant n'est classé nulle part — on ne le compte pas à
+ * zéro, ce qui le ferait passer pour une position neutre.
  */
 export function splitLeaderboards(calls: readonly CallView[]): {
   fame: CallView[];
@@ -61,19 +106,18 @@ export function splitLeaderboards(calls: readonly CallView[]): {
   const rekt: CallView[] = [];
 
   for (const call of calls) {
-    const score = call.vsBtcPercent ?? call.performancePercent;
-    if (score !== null && score >= HALL_OF_FAME_THRESHOLD_VS_BTC) {
+    const score = fameScore(call);
+    if (score !== null && score >= LEADERBOARD.fameThreshold) {
       fame.push(call);
     } else if (
       call.performancePercent !== null &&
-      call.performancePercent <= REKT_THRESHOLD_USD
+      call.performancePercent <= LEADERBOARD.rektThresholdUsd
     ) {
       rekt.push(call);
     }
   }
 
-  const score = (call: CallView) => call.vsBtcPercent ?? call.performancePercent ?? 0;
-  fame.sort((a, b) => score(b) - score(a));
+  fame.sort((a, b) => (fameScore(b) ?? 0) - (fameScore(a) ?? 0));
   rekt.sort((a, b) => (a.performancePercent ?? 0) - (b.performancePercent ?? 0));
 
   return { fame, rekt };

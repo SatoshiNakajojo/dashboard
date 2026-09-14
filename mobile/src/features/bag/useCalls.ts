@@ -1,10 +1,18 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { useBtcSpot } from '@/hooks/useBtcMarket';
+import { resolveCoingeckoId } from '@/lib/coingecko';
 import { performancePercent, vsBitcoinPercent } from '@/lib/performance';
-import { describeError, supabase } from '@/lib/supabase';
-import { MOCK_MY_VOTES, MOCK_TICKERS, MOCK_VOTES } from '@/mocks/calls';
+import { describeError } from '@/lib/supabase';
 import type { CallView, Member, Ticker, Vote } from '@/types/domain';
+import { getCallsSource, type CallDraftInput, type VoteRow } from './source';
+
+export interface PublishInput {
+  assetClass: CallDraftInput['assetClass'];
+  symbol: string;
+  entryPrice: number;
+  thesis: string;
+}
 
 export interface CallsState {
   calls: CallView[];
@@ -12,12 +20,22 @@ export interface CallsState {
   error: string | null;
   /** Un seul vote par membre et par call ; re-tap = annulation. */
   vote: (tickerId: string, side: Vote) => void;
+  /** Publie un call. Résout l'erreur en `false` plutôt que de lever. */
+  publish: (input: PublishInput) => Promise<boolean>;
+  /** Publication en cours — le bouton du composer s'en sert. */
+  publishing: boolean;
 }
 
 interface VoteTally {
   bull: number;
   bear: number;
 }
+
+const UNKNOWN_MEMBER: Omit<Member, 'id'> = {
+  displayName: 'Membre',
+  initials: '··',
+  color: '#8C7F68',
+};
 
 /**
  * Fil des calls, avec les perfs recalculées à chaque rafraîchissement du spot.
@@ -26,154 +44,147 @@ interface VoteTally {
  * ici parce que la perf **vs ₿** dépend du cours BTC courant, qui n'est pas en
  * base. Les deux chemins utilisent la même fonction, `performancePercent`.
  */
-export function useCalls(currentUserId: string | null, membersById: Map<string, Member>): CallsState {
+export function useCalls(
+  currentUserId: string | null,
+  membersById: Map<string, Member>,
+): CallsState {
   const { spot } = useBtcSpot();
+  const source = useMemo(() => getCallsSource(), []);
 
-  const [tickers, setTickers] = useState<Ticker[]>(supabase ? [] : MOCK_TICKERS);
-  const [tallies, setTallies] = useState<Record<string, VoteTally>>(supabase ? {} : MOCK_VOTES);
-  /** Ce que le serveur sait de mon vote — sert à corriger le total affiché. */
-  const [serverVotes, setServerVotes] = useState<Record<string, Vote>>(
-    supabase ? {} : MOCK_MY_VOTES,
-  );
-  /** Mon vote à l'écran, éventuellement en avance sur le serveur. */
-  const [myVotes, setMyVotes] = useState<Record<string, Vote>>(supabase ? {} : MOCK_MY_VOTES);
-  const [loading, setLoading] = useState(Boolean(supabase));
+  const [tickers, setTickers] = useState<Ticker[]>([]);
+  const [votes, setVotes] = useState<VoteRow[]>([]);
+  const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [publishing, setPublishing] = useState(false);
+  /** Mon vote à l'écran, éventuellement en avance sur le serveur. */
+  const [pendingVote, setPendingVote] = useState<Record<string, Vote | null>>({});
+
+  // --- Chargement ----------------------------------------------------------
 
   useEffect(() => {
-    const client = supabase;
-    if (!client) return;
-
     const controller = new AbortController();
+    let active = true;
 
-    (async () => {
-      const [callsResult, votesResult] = await Promise.all([
-        client
-          .from('tickers')
-          .select(
-            'id, user_id, symbol, asset_class, entry_price, current_price, entry_btc_price, size_usd, thesis, created_at',
-          )
-          .order('created_at', { ascending: false })
-          .abortSignal(controller.signal),
-        client.from('ticker_votes').select('ticker_id, user_id, side').abortSignal(controller.signal),
-      ]);
+    Promise.all([source.list(controller.signal), source.listVotes(controller.signal)])
+      .then(([rows, voteRows]) => {
+        if (!active || controller.signal.aborted) return;
+        setTickers(rows);
+        setVotes(voteRows);
+        setError(null);
+        setLoaded(true);
+      })
+      .catch((cause: unknown) => {
+        if (!active || controller.signal.aborted) return;
+        setError(describeError(cause));
+        setLoaded(true);
+      });
 
-      if (controller.signal.aborted) return;
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, [source]);
 
-      if (callsResult.error) {
-        setError(describeError(callsResult.error));
-        setLoading(false);
-        return;
-      }
+  // --- Votes ---------------------------------------------------------------
 
-      setTickers(
-        (callsResult.data ?? []).map((row) => ({
-          id: row.id,
-          userId: row.user_id,
-          symbol: row.symbol,
-          assetClass: row.asset_class,
-          entryPrice: Number(row.entry_price),
-          currentPrice: row.current_price === null ? null : Number(row.current_price),
-          entryBtcPrice: row.entry_btc_price === null ? null : Number(row.entry_btc_price),
-          sizeUsd: row.size_usd === null ? null : Number(row.size_usd),
-          thesis: row.thesis,
-          createdAt: row.created_at,
-        })),
-      );
-
-      const nextTallies: Record<string, VoteTally> = {};
-      const nextMine: Record<string, Vote> = {};
-      for (const row of votesResult.data ?? []) {
-        const tally = nextTallies[row.ticker_id] ?? { bull: 0, bear: 0 };
-        tally[row.side] += 1;
-        nextTallies[row.ticker_id] = tally;
-        if (row.user_id === currentUserId) nextMine[row.ticker_id] = row.side;
-      }
-      setTallies(nextTallies);
-      setServerVotes(nextMine);
-      setMyVotes(nextMine);
-      setLoading(false);
-    })();
-
-    return () => controller.abort();
-  }, [currentUserId]);
+  const serverVote = useCallback(
+    (tickerId: string): Vote | null =>
+      votes.find((v) => v.tickerId === tickerId && v.userId === currentUserId)?.side ?? null,
+    [votes, currentUserId],
+  );
 
   const vote = useCallback(
     (tickerId: string, side: Vote) => {
       if (!currentUserId) return;
 
-      const previous = myVotes[tickerId];
-      const next = previous === side ? undefined : side;
+      const current = tickerId in pendingVote ? pendingVote[tickerId]! : serverVote(tickerId);
+      const next = current === side ? null : side;
 
-      setMyVotes((current) => {
-        const copy = { ...current };
-        if (next) copy[tickerId] = next;
-        else delete copy[tickerId];
-        return copy;
-      });
+      setPendingVote((state) => ({ ...state, [tickerId]: next }));
 
-      const client = supabase;
-      if (!client) return;
-
-      const revert = () => {
-        setMyVotes((current) => {
-          const copy = { ...current };
-          if (previous) copy[tickerId] = previous;
-          else delete copy[tickerId];
-          return copy;
-        });
-      };
-
-      const write = next
-        ? client
-            .from('ticker_votes')
-            .upsert(
-              { ticker_id: tickerId, user_id: currentUserId, side: next },
-              { onConflict: 'ticker_id,user_id' },
-            )
-        : client
-            .from('ticker_votes')
-            .delete()
-            .eq('ticker_id', tickerId)
-            .eq('user_id', currentUserId);
-
-      void write.then(({ error: cause }) => {
-        if (cause) {
-          revert();
+      source
+        .setVote(tickerId, currentUserId, next)
+        .then(() => {
+          // On aligne la vérité serveur, puis on retire la surcouche : sans cet
+          // ordre, le compteur clignote le temps d'un rendu.
+          setVotes((rows) => {
+            const without = rows.filter(
+              (v) => !(v.tickerId === tickerId && v.userId === currentUserId),
+            );
+            return next ? [...without, { tickerId, userId: currentUserId, side: next }] : without;
+          });
+          setPendingVote((state) => {
+            const copy = { ...state };
+            delete copy[tickerId];
+            return copy;
+          });
+        })
+        .catch((cause: unknown) => {
+          setPendingVote((state) => {
+            const copy = { ...state };
+            delete copy[tickerId];
+            return copy;
+          });
           setError(describeError(cause));
-          return;
-        }
-        // Le serveur a pris le vote : on aligne le total de référence, sinon
-        // le prochain rendu compterait ma voix deux fois.
-        setTallies((current) => {
-          const tally = current[tickerId] ?? { bull: 0, bear: 0 };
-          const updated = { ...tally };
-          if (previous) updated[previous] = Math.max(0, updated[previous] - 1);
-          if (next) updated[next] += 1;
-          return { ...current, [tickerId]: updated };
         });
-        setServerVotes((current) => {
-          const copy = { ...current };
-          if (next) copy[tickerId] = next;
-          else delete copy[tickerId];
-          return copy;
-        });
-      });
     },
-    [currentUserId, myVotes],
+    [currentUserId, pendingVote, serverVote, source],
   );
+
+  // --- Publication ---------------------------------------------------------
+
+  const publish = useCallback(
+    async (input: PublishInput): Promise<boolean> => {
+      if (!currentUserId || publishing) return false;
+      setPublishing(true);
+
+      try {
+        // La résolution CoinGecko est facultative : une action ou un ETF n'y
+        // est pas coté, et le call se publie quand même.
+        const coingeckoId = await resolveCoingeckoId(input.symbol);
+
+        const ticker = await source.publish(
+          { ...input, btcSpot: spot.usd, coingeckoId },
+          currentUserId,
+        );
+
+        setTickers((rows) => [ticker, ...rows]);
+        setError(null);
+        return true;
+      } catch (cause) {
+        setError(describeError(cause));
+        return false;
+      } finally {
+        setPublishing(false);
+      }
+    },
+    [currentUserId, publishing, source, spot.usd],
+  );
+
+  // --- Projection d'affichage ----------------------------------------------
+
+  const tallies = useMemo(() => {
+    const out: Record<string, VoteTally> = {};
+    for (const row of votes) {
+      const tally = out[row.tickerId] ?? { bull: 0, bear: 0 };
+      tally[row.side] += 1;
+      out[row.tickerId] = tally;
+    }
+    return out;
+  }, [votes]);
 
   const calls = useMemo<CallView[]>(
     () =>
       tickers.map((ticker) => {
         const tally = tallies[ticker.id] ?? { bull: 0, bear: 0 };
-        const mine = myVotes[ticker.id] ?? null;
-        const author = membersById.get(ticker.userId);
+        const confirmed = votes.find(
+          (v) => v.tickerId === ticker.id && v.userId === currentUserId,
+        )?.side ?? null;
+        const mine = ticker.id in pendingVote ? pendingVote[ticker.id]! : confirmed;
 
-        // Le total serveur inclut déjà ma voix. Tant que l'écriture est en
-        // vol, on corrige l'écart entre ce que le serveur sait et ce que je
-        // viens de taper — sans jamais compter ma voix deux fois.
-        const confirmed = serverVotes[ticker.id] ?? null;
+        // Le total serveur inclut déjà ma voix. Tant que l'écriture est en vol,
+        // on corrige l'écart entre ce que le serveur sait et ce que je viens de
+        // taper — sans jamais compter ma voix deux fois.
         const displayed = { bull: tally.bull, bear: tally.bear };
         if (confirmed !== mine) {
           if (confirmed) displayed[confirmed] = Math.max(0, displayed[confirmed] - 1);
@@ -182,13 +193,9 @@ export function useCalls(currentUserId: string | null, membersById: Map<string, 
 
         return {
           ...ticker,
-          author: author ?? {
-            id: ticker.userId,
-            displayName: 'Membre',
-            initials: '··',
-            color: '#8C7F68',
-          },
+          author: membersById.get(ticker.userId) ?? { id: ticker.userId, ...UNKNOWN_MEMBER },
           performancePercent: performancePercent(ticker.entryPrice, ticker.currentPrice),
+          // Un call BTC est le référentiel : il n'a pas de perf vs ₿.
           vsBtcPercent:
             ticker.assetClass === 'BTC'
               ? null
@@ -203,8 +210,8 @@ export function useCalls(currentUserId: string | null, membersById: Map<string, 
           myVote: mine,
         };
       }),
-    [tickers, tallies, myVotes, serverVotes, membersById, spot.usd],
+    [tickers, tallies, votes, pendingVote, currentUserId, membersById, spot.usd],
   );
 
-  return { calls, loading, error, vote };
+  return { calls, loading: !loaded, error, vote, publish, publishing };
 }

@@ -11,14 +11,16 @@ import { useCalls } from '@/features/bag/useCalls';
 import { useBtcSpot } from '@/hooks/useBtcMarket';
 import { useMembers } from '@/hooks/useMembers';
 import { useSession } from '@/hooks/useSession';
-import { MOCK_FAME, MOCK_REKT } from '@/mocks/calls';
 import {
-  HALL_OF_FAME_THRESHOLD_VS_BTC,
+  HALL_OF_FAME_LABEL,
+  LEADERBOARD,
   rektFace,
   romanRank,
+  splitLeaderboards,
 } from '@/lib/performance';
+import { formatPercent } from '@/lib/format';
 import { a, c, f, radius } from '@/theme/tokens';
-import type { Member } from '@/types/domain';
+import type { CallView } from '@/types/domain';
 
 type BagView = 'bag' | 'rekt';
 
@@ -27,7 +29,7 @@ export default function BagScreen() {
   const { userId } = useSession();
   const { byId } = useMembers();
   const { spot } = useBtcSpot();
-  const { calls, loading, error, vote } = useCalls(userId, byId);
+  const { calls, loading, error, vote, publish, publishing } = useCalls(userId, byId);
 
   const [view, setView] = useState<BagView>('bag');
   const [composerOpen, setComposerOpen] = useState(false);
@@ -35,11 +37,12 @@ export default function BagScreen() {
   const me = userId ? (byId.get(userId) ?? null) : null;
   const isBag = view === 'bag';
 
-  const publish = (draft: CallDraft) => {
-    // L'écriture réelle passe par `tickers` ; le composer se referme dans tous
-    // les cas, la carte apparaîtra au prochain chargement du fil.
-    void draft;
-    setComposerOpen(false);
+  const handlePublish = async (draft: CallDraft) => {
+    const sent = await publish(draft);
+    // La sheet ne se referme que si le call est parti : sur échec, la saisie
+    // reste à l'écran avec le message d'erreur.
+    if (sent) setComposerOpen(false);
+    return sent;
   };
 
   return (
@@ -72,7 +75,7 @@ export default function BagScreen() {
             )}
           </View>
         ) : (
-          <Leaderboards membersById={byId} />
+          <Leaderboards calls={calls} loading={loading} />
         )}
       </ScreenShell>
 
@@ -82,8 +85,9 @@ export default function BagScreen() {
       <ComposerSheet
         visible={composerOpen}
         spotPrice={spot.usd}
+        publishing={publishing}
         onClose={() => setComposerOpen(false)}
-        onPublish={publish}
+        onPublish={handlePublish}
       />
     </>
   );
@@ -117,8 +121,10 @@ function ViewTab({
   );
 }
 
-function Leaderboards({ membersById }: { membersById: Map<string, Member> }) {
-  const fallback: Member = { id: '', displayName: 'Membre', initials: '··', color: c.sepia };
+function Leaderboards({ calls, loading }: { calls: CallView[]; loading: boolean }) {
+  // Les deux tableaux sortent du même jeu de calls : ce sont les seuils qui les
+  // séparent, pas deux sources de données (`src/lib/performance.ts`).
+  const { fame, rekt } = splitLeaderboards(calls);
 
   return (
     <View style={{ gap: 26 }}>
@@ -127,19 +133,32 @@ function Leaderboards({ membersById }: { membersById: Map<string, Member> }) {
           label="HALL OF FAME"
           labelColor={c.goldMuted}
           gradientFrom={a.fameRule}
-          hint={`≥ +${HALL_OF_FAME_THRESHOLD_VS_BTC} % VS ₿`}
+          hint={HALL_OF_FAME_LABEL}
         />
-        {MOCK_FAME.map((entry, index) => (
-          <LeaderboardRow
-            key={`${entry.memberId}-${entry.symbol}`}
-            marker={romanRank(index)}
-            member={membersById.get(entry.memberId) ?? fallback}
-            symbol={entry.symbol}
-            note={entry.note}
-            percent={entry.percent}
-            variant="fame"
+        {fame.length === 0 ? (
+          <BoardEmpty
+            loading={loading}
+            message={
+              LEADERBOARD.reference === 'vsBtc'
+                ? `Personne n’a encore battu ₿ de ${LEADERBOARD.fameThreshold} %`
+                : `Aucun call à +${LEADERBOARD.fameThreshold} % cette saison`
+            }
           />
-        ))}
+        ) : (
+          fame.map((call, index) => (
+            <LeaderboardRow
+              key={call.id}
+              marker={romanRank(index)}
+              member={call.author}
+              symbol={call.symbol}
+              note={boardNote(call)}
+              // Le grand chiffre est toujours la perf en dollars, comme dans le
+              // design ; la perf vs ₿ vit dans la sous-ligne.
+              percent={call.performancePercent ?? 0}
+              variant="fame"
+            />
+          ))
+        )}
       </View>
 
       <View>
@@ -149,17 +168,21 @@ function Leaderboards({ membersById }: { membersById: Map<string, Member> }) {
           gradientFrom={a.rektRule}
           hint="R.I.P."
         />
-        {MOCK_REKT.map((entry, index) => (
-          <LeaderboardRow
-            key={`${entry.memberId}-${entry.symbol}`}
-            marker={rektFace(index)}
-            member={membersById.get(entry.memberId) ?? fallback}
-            symbol={entry.symbol}
-            note={entry.note}
-            percent={entry.percent}
-            variant="rekt"
-          />
-        ))}
+        {rekt.length === 0 ? (
+          <BoardEmpty loading={loading} message="Personne n’est rekt ce mois-ci" />
+        ) : (
+          rekt.map((call, index) => (
+            <LeaderboardRow
+              key={call.id}
+              marker={rektFace(index)}
+              member={call.author}
+              symbol={call.symbol}
+              note={boardNote(call)}
+              percent={call.performancePercent ?? 0}
+              variant="rekt"
+            />
+          ))
+        )}
 
         <View
           style={{
@@ -179,6 +202,28 @@ function Leaderboards({ membersById }: { membersById: Map<string, Member> }) {
         </View>
       </View>
     </View>
+  );
+}
+
+/** Sous-ligne d'un classement : la perf vs ₿, ou la thèse à défaut. */
+function boardNote(call: CallView): string {
+  if (call.vsBtcPercent !== null) return `${formatPercent(call.vsBtcPercent, 0)} vs ₿`;
+  if (call.assetClass === 'BTC') return 'le référentiel';
+  return 'cours indisponible';
+}
+
+function BoardEmpty({ loading, message }: { loading: boolean; message: string }) {
+  return (
+    <Text
+      style={{
+        fontFamily: f.serifItalic,
+        fontSize: 15,
+        color: c.sepia,
+        paddingVertical: 22,
+      }}
+    >
+      {loading ? '…' : message}
+    </Text>
   );
 }
 

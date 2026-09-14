@@ -31,7 +31,7 @@ import {
   formatUsd,
 } from '../format.ts';
 import {
-  HALL_OF_FAME_THRESHOLD_VS_BTC,
+  LEADERBOARD,
   desaturate,
   performancePercent,
   rektFace,
@@ -179,7 +179,7 @@ describe('performances', () => {
 });
 
 describe('classements', () => {
-  const call = (id: string, perf: number, vs: number | null, cls = 'ALT') =>
+  const call = (id: string, perf: number | null, vs: number | null, cls = 'ALT') =>
     ({
       id,
       assetClass: cls,
@@ -187,15 +187,40 @@ describe('classements', () => {
       vsBtcPercent: vs,
     }) as never;
 
-  it('sépare sur le seuil vs ₿ pour la gloire, en dollars pour le Rekt', () => {
-    const { fame, rekt } = splitLeaderboards([
-      call('gloire', 20, 96),
-      call('milieu', 12, -2.5),
-      call('rekt', -61, -66.4),
-      call('juste-sous', 10, HALL_OF_FAME_THRESHOLD_VS_BTC - 0.1),
+  /** Score du référentiel actif — les tests suivent `REFERENCE`, pas l'inverse. */
+  const scored = (value: number) =>
+    LEADERBOARD.reference === 'usd' ? call('x', value, 0) : call('x', 0, value);
+
+  it('classe au-dessus du seuil et ignore juste en dessous', () => {
+    const above = { ...(scored(LEADERBOARD.fameThreshold) as object), id: 'pile' } as never;
+    const below = { ...(scored(LEADERBOARD.fameThreshold - 0.1) as object), id: 'sous' } as never;
+    const { fame } = splitLeaderboards([above, below]);
+    assert.deepEqual(fame.map((c) => c.id), ['pile'], 'le seuil est inclusif');
+  });
+
+  it('reproduit le Hall of Fame du design', () => {
+    // Les trois lignes des fixtures : +96 %, +74 % (+31 % vs ₿), +63 % (+19 % vs ₿).
+    const { fame } = splitLeaderboards([
+      call('btc', 96, null, 'BTC'),
+      call('nvda', 74, 31),
+      call('mstr', 63, 19),
+      call('eth', 21.8, 6.9),
     ]);
-    assert.deepEqual(fame.map((c) => c.id), ['gloire']);
-    assert.deepEqual(rekt.map((c) => c.id), ['rekt']);
+    assert.deepEqual(
+      fame.map((c) => c.id),
+      ['btc', 'nvda', 'mstr'],
+      'les trois lignes du design, et elles seules',
+    );
+  });
+
+  it('envoie au Rekt Board sur la perf en dollars', () => {
+    const { rekt } = splitLeaderboards([
+      call('wif', -61, -66.4),
+      call('ethw', -48, -50),
+      call('gme', -22, -30),
+      call('ok', -19.9, -25),
+    ]);
+    assert.deepEqual(rekt.map((c) => c.id), ['wif', 'ethw', 'gme']);
   });
 
   it('juge un call BTC sur sa perf en dollars — il est le référentiel', () => {
@@ -203,19 +228,8 @@ describe('classements', () => {
     assert.deepEqual(fame.map((c) => c.id), ['btc']);
   });
 
-  it('trie la gloire par le haut et le Rekt par le bas', () => {
-    const { fame, rekt } = splitLeaderboards([
-      call('a', 10, 60),
-      call('b', 10, 90),
-      call('c', -30, -40),
-      call('d', -70, -80),
-    ]);
-    assert.deepEqual(fame.map((c) => c.id), ['b', 'a']);
-    assert.deepEqual(rekt.map((c) => c.id), ['d', 'c']);
-  });
-
   it('ignore un call sans prix courant plutôt que de le classer à zéro', () => {
-    const { fame, rekt } = splitLeaderboards([call('inconnu', null as never, null)]);
+    const { fame, rekt } = splitLeaderboards([call('inconnu', null, null)]);
     assert.equal(fame.length, 0);
     assert.equal(rekt.length, 0);
   });
