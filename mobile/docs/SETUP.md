@@ -138,7 +138,9 @@ npm test          # règles pures, via le lanceur de tests de Node
 ```
 
 `npm test` s'appuie sur `node --experimental-strip-types` : pas de Jest, pas de
-transpilation — ces fonctions n'ont besoin d'aucun environnement de rendu.
+transpilation — ces fonctions n'ont besoin d'aucun environnement de rendu. Un
+crochet de résolution (`scripts/alias-loader.mjs`) apprend à Node l'alias `@/`,
+ce qui rend les fixtures testables sans les recopier.
 
 ---
 
@@ -184,3 +186,24 @@ Avec la CLI Supabase, c'est plus court :
 npx supabase init && npx supabase start
 npx supabase db reset      # applique migrations + seed.sql
 ```
+
+---
+
+## Connexion
+
+Le club est fermé : `signInWithOtp` est appelé avec `shouldCreateUser: false`,
+donc seules les adresses déjà présentes dans `auth.users` reçoivent un code.
+Pour ajouter un membre, créer l'utilisateur côté Supabase (tableau de bord ou
+`auth.admin.createUser`) ; sa ligne `profiles` sera créée par l'app à sa
+première connexion, avec la première couleur libre de la palette.
+
+Sans variables Supabase, la garde de route ne s'active pas et l'app démarre
+directement sur les mocks.
+
+---
+
+## Rafraîchissement des prix
+
+La fonction Edge `refresh-prices` et sa planification `pg_cron` sont décrites
+dans `supabase/functions/README.md`. Elle est le seul écrivain légitime de
+`tickers.current_price`.

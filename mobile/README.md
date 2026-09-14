@@ -37,6 +37,7 @@ Schéma et politiques RLS : **[supabase/README.md](supabase/README.md)**.
 
 ```
 app/                    routes expo-router (tab bar entièrement personnalisée)
+  (auth)/               porte du club — code à usage unique, amorçage du profil
 src/
   components/           composants de présentation — ne connaissent aucun backend
   features/<domaine>/   source de données + hook métier
@@ -44,7 +45,7 @@ src/
   lib/                  géométrie du graphique, formatage FR, HTTP, cache, règles de perf
   mocks/                fixtures du design, mêmes UUID que le seed Supabase
   theme/                jetons — miroir TypeScript de tailwind.config.js
-supabase/               migrations, seed, tests de schéma
+supabase/               migrations, seed, tests de schéma, fonction Edge
 ```
 
 ### La règle qui structure tout
@@ -93,11 +94,17 @@ de 4 unités — et borné dans le repère.
 
 ## Ce qui a été vérifié
 
-- `npm run typecheck`, `npm run lint`, `npm test` — propres (28 tests).
-- **Règles pures** (`src/lib/__tests__/logic.test.ts`) : bornes et inversibilité
-  du repère, monotonie du tracé, écart à la courbe réelle, espaces insécables
-  du formatage français, perf vs ₿ comme ratio et non soustraction, seuils et
-  tri des deux classements.
+- `npm run typecheck`, `npm run lint`, `npm test` — propres (57 tests).
+- **Règles pures** : bornes et inversibilité du repère, monotonie du tracé,
+  écart à la courbe réelle, espaces insécables du formatage français, perf vs ₿
+  comme ratio et non soustraction, seuils et tri des deux classements.
+- **Fidélité des fixtures** : les cinq cartes du fil et les six lignes des
+  classements sont *calculées* et comparées à `DONNEES_FICTIVES.md`. Retoucher
+  un prix d'entrée fait échouer un test, pas une relecture de capture d'écran.
+- **Amorçage d'un profil** : initiales (`Jean-Marc Dupont` → `JD`, pas `JM`) et
+  unicité des couleurs sur un club de sept.
+- **Plan de rafraîchissement** : on n'efface jamais un prix connu, on ne
+  réécrit jamais un prix inchangé.
 - **Schéma** : migration appliquée à un PostgreSQL 16 réel, réexécutée pour
   l'idempotence, puis `supabase/tests/schema_test.sql` — 12 assertions passent.
   Le seed reproduit exactement les pourcentages du design (`+14,9 %`, `+12,4 %`,
@@ -107,6 +114,9 @@ de 4 unités — et borné dans le repère.
   ligne de potluck libre (2 libres → 1, compteur `4 / 6` → `5 / 6`), libération
   au re-tap, ligne d'un autre membre inerte. Tracé de l'Oracle au doigt,
   verrouillage, passage en lecture seule, `FIGÉ · HASH 8F2A`, écarts colorés.
+  Publication d'un `$SOL` (10 cartes → 11). Avec Supabase configuré : la garde
+  mène à la porte, l'adresse invalide est refusée, la panne réseau se lit
+  « Connexion indisponible » et non en trace technique.
 
 ---
 
@@ -154,16 +164,21 @@ La suppression est ciblée sur deux lignes et justifiée sur place.
 
 ## Ce qui reste à faire
 
-- **Actions et ETF.** CoinGecko ne couvre pas `$MSTR`, `$NVDA`, `$IBIT`, `$GME`.
-  Il faut un second fournisseur (Finnhub, Alpha Vantage, Twelve Data) ou une
-  saisie manuelle du cours par le membre. À trancher avant d'ouvrir le Bag à de
-  vraies positions ; `tickers.coingecko_id` est déjà nullable pour ça.
-- **Publication d'un call.** Le composer valide et se ferme ; l'écriture dans
-  `tickers` n'est pas branchée.
-- **Authentification.** Le schéma et les politiques l'attendent (`auth.uid()`),
-  il manque l'écran.
-- **Rafraîchissement des prix.** Une tâche planifiée doit mettre à jour
-  `tickers.current_price` ; aujourd'hui seul le spot BTC est vivant.
-- **Classements réels.** `splitLeaderboards()` est écrit et couvert par les
-  tests, mais les deux tableaux affichent encore les fixtures de saison du
-  design plutôt que les calls de la base.
+**Un seul point demande un arbitrage** : CoinGecko ne couvre pas `$MSTR`,
+`$NVDA`, `$IBIT`, `$GME`. Il faut soit un second fournisseur (Finnhub, Alpha
+Vantage, Twelve Data), soit une saisie manuelle du cours par le membre. Tout
+est prêt pour les deux : `tickers.coingecko_id` est nullable, la fonction Edge
+ignore proprement ce qu'elle ne sait pas coter, et `tickers_freeze` laisse
+passer une écriture sur `current_price` seulement.
+
+Le reste est du confort, pas du blocage :
+
+- **Autocomplétion du ticker** dans le composer. `resolveCoingeckoId()` existe
+  et tourne à la publication ; il manque la liste déroulante pendant la saisie.
+- **Taille de position.** La colonne existe et les cartes l'affichent, mais le
+  composer ne la collecte pas — le design ne lui donne pas de champ.
+- **Saison de l'Oracle** figée à `2026-S3` dans `src/mocks/oracle.ts` ; en
+  production elle devrait venir d'une table `seasons`.
+- **Sous-ligne des classements.** Le design y met de la prose
+  (« DCA 2 ans · 0,84 ₿ ») ; faute de colonne pour ça, elle est dérivée
+  (« +31 % vs ₿ »), ce qui recouvre quatre des six lignes du design.

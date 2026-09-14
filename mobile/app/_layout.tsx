@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { View } from 'react-native';
-import { Stack } from 'expo-router';
+import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -22,6 +22,9 @@ import {
 } from '@expo-google-fonts/jetbrains-mono';
 
 import { loadSkia } from '@/lib/skiaWeb';
+import { useProfileBootstrap } from '@/features/auth/useAuth';
+import { useSession } from '@/hooks/useSession';
+import { isSupabaseConfigured } from '@/lib/supabase';
 import { c } from '@/theme/tokens';
 import '../global.css';
 
@@ -60,11 +63,49 @@ export default function RootLayout() {
       <SafeAreaProvider>
         <View className="flex-1 bg-ink">
           <StatusBar style="light" />
+          <AuthGate />
           <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: c.ink } }}>
             <Stack.Screen name="(tabs)" />
+            <Stack.Screen name="(auth)/sign-in" />
           </Stack>
         </View>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );
+}
+
+/**
+ * Garde de route.
+ *
+ * Sans backend configuré, elle ne fait rien : l'app démarre sur les mocks et
+ * personne ne se connecte. Avec Supabase, deux conditions mènent à la porte —
+ * pas de session, ou une session sans ligne `profiles`, car `is_member()`
+ * refuse tout dans ce second cas.
+ *
+ * Elle ne rend rien : une redirection n'a pas d'apparence.
+ */
+function AuthGate() {
+  const router = useRouter();
+  const segments = useSegments();
+  const { userId, loading } = useSession();
+  const profile = useProfileBootstrap(userId);
+
+  const onSignIn = segments[0] === '(auth)';
+
+  useEffect(() => {
+    if (!isSupabaseConfigured) return;
+    // On ne redirige pas tant qu'on ignore l'état : sinon l'écran de connexion
+    // clignoterait à chaque démarrage d'un membre déjà identifié.
+    if (loading || profile.checking) return;
+
+    const needsDoor = !userId || profile.needsProfile;
+
+    if (needsDoor && !onSignIn) {
+      router.replace('/(auth)/sign-in');
+    } else if (!needsDoor && onSignIn) {
+      router.replace('/');
+    }
+  }, [loading, onSignIn, profile.checking, profile.needsProfile, router, userId]);
+
+  return null;
 }

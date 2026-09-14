@@ -1,0 +1,11 @@
+{
+  "imports": {
+    "@supabase/supabase-js": "jsr:@supabase/supabase-js@2"
+  },
+  "compilerOptions": {
+    "lib": ["deno.window", "deno.ns"],
+    "strict": true
+  },
+  "lint": { "rules": { "tags": ["recommended"] } },
+  "fmt": { "singleQuote": true, "lineWidth": 96 }
+}
