@@ -1,0 +1,586 @@
+# Base de connaissances du desk
+
+Documents de référence fournis par le porteur du projet, archivés ici parce
+que Google Drive est refusé par la politique réseau de l'environnement de
+développement et que ces documents doivent vivre avec le code qu'ils décrivent.
+
+`00-manifeste-indexation-rag.md` est l'index maître : il recense ~24 documents
+et les associe à une phase, un agent destinataire et des tags d'interrogation.
+**Vingt-cinq documents sont présents** — le corpus annoncé est complet — le reste est
+annoncé comme suivant.
+
+| document | testable avec l'outillage actuel ? |
+|---|---|
+| `analyse-graphique-candlesticks.md` | **Oui, immédiatement.** Les figures sont formalisées en conditions logiques sur OHLC, et le dépôt a 14 jeux de données réels plus la grille de robustesse. Les taux de réussite annoncés (H&S ~72,3 %, double bottom ~65,8 %) sont des hypothèses à passer au modèle nul, pas des acquis. |
+| `analyse-graphique-detection.md` | Oui — `argrelextrema`, Savitzky-Golay et K-Means ne demandent que de l'OHLC. Attention au filtre SG : il est **non causal**, il lisse en regardant des barres futures. Utilisé tel quel dans un backtest, il fabrique une fuite de futur. |
+| `analyse-graphique-hft-ofi-vpin.md` | **Non, pas encore.** OFI exige le carnet niveau 1 tick par tick, VPIN exige les trades individuels. `candleSnapshot` ne donne que de l'OHLCV : ces métriques ne sont pas backtestables sur l'historique disponible, elles ne peuvent être validées qu'en avant, en paper trading. |
+| `architecture-web-trading-desk.md` | Sans objet — c'est une cible d'infrastructure, pas une hypothèse. Voir la note de séquencement ci-dessous. |
+
+## Note de séquencement
+
+L'architecture décrite (Redis Streams, QuestDB, React/Vite, Prometheus) est
+cohérente et correspond à un desk de production. Le dépôt en est loin :
+SQLite, une page HTML unique, pas de Redis.
+
+Ce n'est pas un retard à rattraper en priorité. À ce jour, **aucune stratégie
+du dépôt ne démontre d'edge** : la grille de robustesse donne une cellule
+survivante sur cinquante-six, et le modèle nul a déjà invalidé deux résultats
+positifs apparents. Construire QuestDB et un dashboard React avant qu'un edge
+existe, c'est bâtir la salle des machines d'un navire dont on ignore s'il
+flotte.
+
+L'ordre qui protège le projet est : **un edge mesuré → l'infrastructure qui
+l'exploite**, et non l'inverse.
+
+
+## Deuxième lot : risque, processus, conformité
+
+Une grande partie de ces documents décrit des choses que le dépôt **fait
+déjà**. Les douze invariants du moteur de risque recoupent presque un pour un
+le tableau des coupe-circuits :
+
+| document | invariant existant |
+|---|---|
+| Perte de flux WebSocket | `I09_FRESH_DATA` |
+| Drawdown journalier de l'équipe | `I03_DAILY_LOSS` |
+| Coupure d'urgence / cancel-all | `I10_KILL_SWITCH` |
+| Agent wallet sans droit de retrait | `I12_SIGNER_ISOLATION` |
+| « la vérité de l'échange prévaut » | `I01_RECONCILED` |
+| Écart de prix local vs échange | `price_divergence_bps` |
+
+Non couvert à ce jour : le coupe-circuit de **latence** (> 150 ms → lecture
+seule) et le **haircut de levier du week-end**.
+
+### Order netting : le dépôt est structurellement à l'abri
+
+Le document décrit des agents indépendants soumettant des ordres opposés, d'où
+un risque de wash trading. Le graphe du dépôt n'émet **qu'un seul mandat** par
+cycle, et `max_concurrent_positions=1` : deux ordres contraires ne peuvent pas
+coexister. Le risque décrit n'existe pas dans cette architecture — et si un
+jour plusieurs mandats coexistent, c'est *à ce moment-là* qu'il faudra le
+moteur de netting, pas avant.
+
+### TCA / Almgren-Chriss : juste, mais hors d'échelle ici
+
+Almgren-Chriss résout l'arbitrage entre impact de marché et risque de dérive
+pour des **ordres parents qui déplacent le carnet**. Le desk dimensionne des
+positions de 44 à 500 $ de notionnel sur des perpétuels dont le carnet se
+compte en millions. À cette taille, l'impact est nul et le fractionnement
+optimal n'a rien à optimiser.
+
+L'**Implementation Shortfall**, lui, redeviendra utile au P5 : il mesure si
+les exécutions réelles correspondent aux hypothèses de `backtest/costs.py`.
+C'est une mesure de validation, pas un algorithme d'exécution.
+
+### Risque de week-end : l'assèchement est réel, la prescription ne l'est pas
+
+Seule affirmation chiffrée et falsifiable du lot. Testée par
+`scripts/weekend_effect.py` sur 7 actifs, en 4 h et en 1 j :
+
+| | 4 h | 1 j |
+|---|---:|---:|
+| volume | **−43 %** | **−40 %** |
+| amplitude médiane | −27 % | −26 % |
+| amplitude p95 | −21 % | −16 % |
+| amplitude p99 | −19 % | −18 % |
+
+**L'assèchement de liquidité est confirmé** — −43 % de volume, dans la
+fourchette de 40 à 70 % annoncée.
+
+**Les mèches de liquidation ne le sont pas.** L'amplitude baisse aussi, et
+elle baisse jusque dans les queues, sur les sept actifs et aux deux échelles
+de temps (une seule exception : DOGE au p99 en daily, +14 %). Le week-end
+n'est pas plus violent : il est plus calme.
+
+La règle qui en découle — « élargir les stops à 3,5× ATR au lieu de 2× » —
+relâcherait donc la protection pendant la période la plus calme. Pire : si
+l'ATR est calculé sur une fenêtre glissante mêlant semaine et week-end, un
+multiplicateur de 3,5 s'applique à des barres 27 % plus étroites, et le risque
+porté augmente sans contrepartie.
+
+*Portée de ce test* : perpétuels Hyperliquid, 833 jours en 4 h et six ans en
+1 j. Le volume approxime la profondeur du carnet, imparfaitement. Le mécanisme
+décrit dans le document reste plausible — un carnet mince se pousse plus
+facilement — mais il ne se traduit pas en mouvements réalisés plus larges sur
+cette place et cette période.
+
+
+## Troisième lot : ML, risque et cahier des charges
+
+### Le critère de Kelly, appliqué aux chiffres réellement mesurés
+
+`autre-risk-management.md` prescrit **deux** choses. Confrontées aux trades
+que ce dépôt produit réellement (7 actifs, daily), elles se contredisent d'un
+facteur sept. `scripts/kelly_sur_mesure.py` le montre :
+
+| stratégie | trades | p | R | f\* | quarter-Kelly | DD après 8 pertes |
+|---|---:|---:|---:|---:|---:|---|
+| `ema_cross` | 217 | 0,410 | 1,63 | +0,047 | +0,012 | 9 % |
+| `rsi_reversion` | 511 | 0,440 | 0,79 | **−0,265** | — | **ne pas trader** |
+| `turtle_breakout` | 195 | 0,369 | 8,90 | +0,298 | **+0,075** | **46 %** |
+| `tsmom` | 987 | 0,342 | 5,72 | +0,227 | **+0,057** | **37 %** |
+
+Le même document plafonne le risque crypto à **0,5–1 % par trade** et définit
+la « zone de mort mathématique » au-delà de 30 % de perte. Or son propre
+quarter-Kelly prescrit ici 5,7 à 7,5 % — et à ce taux, une série de huit
+pertes coûte 37 à 46 %. Ces stratégies perdent 63 à 66 % de leurs trades :
+sur 500 trades, une telle série est **quasi certaine**.
+
+**Kelly n'a pas tort.** Il est exact si `p` et `R` sont les vraies valeurs.
+Ils sont ici estimés *in-sample*, sur des stratégies dont le modèle nul dit
+qu'elles ne battent pas des entrées aléatoires. Le document nomme d'ailleurs
+ce danger — « si p ou R sont surestimés en raison d'un historique trop court,
+la mise de Kelly devient surévaluée ». Sa parade, le quarter-Kelly, ne suffit
+pas : **le quart d'un edge fantôme reste un edge fantôme.**
+
+Deux choses valent d'être retenues :
+
+- **Kelly rejette correctement `rsi_reversion`** (f\* = −0,265). C'est la
+  seule partie du critère qui protège sans hypothèse, et elle rejoint le
+  verdict indépendant du modèle nul. Deux méthodes convergent.
+- **Le plafond dur doit primer sur Kelly**, pas l'inverse. Le dépôt est à
+  0,5 % — l'extrémité conservatrice de la fourchette du document — et il est
+  sûr précisément parce qu'il ne fait confiance à aucun edge estimé.
+
+### Une tension avec l'architecture du dépôt
+
+Le cahier des charges veut que le Desk Manager dimensionne via un consensus
+pondéré `w_TA·S_TA + w_FA·S_FA + w_SA·S_SA`, avec des poids que le Cold
+Analyst fait évoluer (*Authority Feedback Loop*).
+
+Le dépôt interdit structurellement ce chemin : `I05_NO_LLM_WIDENING` borne
+les facteurs consultatifs à `]0, 1]` et les applique par `min()`. **Un agent
+ne peut que resserrer, jamais élargir.** Faire dépendre la taille d'un score
+d'agent rouvrirait exactement la porte que cet invariant ferme.
+
+Un dimensionnement par Kelly calculé sur des statistiques *mesurées en code*
+resterait compatible ; un dimensionnement pondéré par des scores d'agents ne
+l'est pas.
+
+### HMM et DRL : la question préalable n'est pas résolue
+
+La détection de régimes par HMM et l'allocation par DRL supposent toutes deux
+qu'il existe quelque chose à commuter ou à allouer. À ce jour, la grille de
+robustesse donne **une cellule survivante sur cinquante-six**. Un moteur de
+commutation entre une stratégie de tendance et une stratégie de range n'a de
+valeur que si au moins l'une des deux a un edge dans son régime — ce qui
+reste à établir. `rsi_reversion`, la candidate naturelle du régime *range*,
+est significativement pire que le hasard dans six cellules.
+
+
+## Quatrième lot : le document méthodologique, et ce qu'il me reproche
+
+`indicateurs-strategies-validation-robustesse.md` est le plus important du
+corpus pour ce dépôt : c'est la grille de validation que tout le reste doit
+franchir. Confrontée au travail fait cette session, elle valide trois choses
+et en reproche quatre.
+
+### Ce qui était déjà fait
+
+| exigence | état |
+|---|---|
+| Correction pour tests multiples | Benjamini-Hochberg sur 56 cellules — plus strict que le `1-(1-α)^N` du document |
+| Look-ahead bias | `donchian` exclut la bougie courante ; le filtre Savitzky-Golay du doc voisin est signalé comme non causal |
+| Slippage et commissions | `backtest/costs.py`, frais + funding + slippage dès le premier run |
+
+### Ce qui manquait — dont une faute de ma part
+
+**Biais de survie.** J'ai bâti la grille sur sept actifs qui existent
+*aujourd'hui* sur Hyperliquid. L'API en liste 233, dont **56 marqués
+délistés** (MATIC, RNDR, FTM, FXS, UNIBOT…). Les actifs morts pendant la
+période sont absents de mes chiffres. C'est le biais que le document nomme,
+et je l'ai introduit sans le voir.
+
+**Walk-Forward Analysis et WFE**, **Monte-Carlo par permutation** : non faits.
+Le document en fait des critères de rejet (WFE < 50 %, P(DD > 30 %) > 5 %).
+
+### Sensibilité des paramètres : le test que j'ai fait, et son résultat
+
+`scripts/sensibilite_parametres.py`. Le document : « ne choisissez jamais le
+pic absolu ; choisissez le centre de gravité du plateau le plus large ».
+
+**`tsmom` sur BTC 1 j — le seul survivant de Benjamini-Hochberg :**
+
+| lookback (j) | 7 | 14 | 21 | 28 | 35 | 42 | 49 | 56 |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| p | 0,096 | **0,012** | **0,032** | **0,002** | **0,002** | **0,002** | **0,014** | **0,002** |
+
+**7 valeurs sur 8 sous le seuil — un plateau.** C'est le premier résultat de
+cette session qui survit à un test conçu pour le tuer.
+
+**`turtle_breakout` sur BTC 1 j**, pour comparaison : 3 sur 7, avec une
+décroissance monotone (p passe de 0,012 à 0,609 quand `entry_period` va de 20
+à 100). Ni plateau, ni pic isolé — cohérent avec son échec à la grille.
+
+**Ce que ce plateau ne prouve pas.** Il élimine l'explication « un paramètre
+bien tombé ». Il ne dit rien du hors-échantillon, il porte sur **un seul
+actif** — le survivant par excellence — et les frères pré-enregistrés sont
+plus faibles (ETH p = 0,047, XRP p = 0,077). Il reste WFO, Monte-Carlo, et un
+jeu d'actifs incluant les délistés avant d'en faire quoi que ce soit.
+
+### Les quatre autres documents
+
+- **`indicateurs-techniques-maths.md`** : le dépôt implémente déjà EMA, RSI de
+  Wilder, MACD, ATR avec ces formules exactes. Manquent ADX, Bollinger et la
+  détection de divergences.
+- **`macro-momentum-crypto-onchain.md`** : funding, open interest, MVRV,
+  liquidations — aucune de ces séries n'est dans le dépôt. `costs.py` traite
+  le funding comme une constante, ce que le README signale déjà comme une
+  limite.
+- **`macro-momentum-intraday-vs-swing`** : l'exposant de Hurst et le profil en
+  U sont mesurables sur les données existantes. Le profil en U est spécifique
+  aux actions ; l'horloge de funding est mesurable en crypto.
+- **`macro-momentum-equity-narratives.md`** : hors périmètre — le dépôt ne
+  traite que des perpétuels crypto.
+
+
+## Cinquième lot : la règle de régime, testée
+
+`regles-trading-phases-marche.md` fait de l'ADX le commutateur central du
+desk : au-delà de 25 on suit la tendance, en dessous de 20 on revient à la
+moyenne. C'est une règle opérationnelle chiffrée, donc testable — et elle
+offrait une porte de sortie à `rsi_reversion`, que deux méthodes
+indépendantes condamnent. **Peut-être n'était-elle mauvaise que parce qu'elle
+tournait dans le mauvais régime.**
+
+ADX et DMI ont été implémentés (`features/indicators.py`, lissage de Wilder,
+formules du document). Distribution sur BTC 1 j : 56 % du temps en tendance,
+23 % en range, 21 % dans la zone morte 20-25.
+
+### Le filtre ne sauve pas le retour à la moyenne
+
+| | net (7 actifs) | trades | écart |
+|---|---:|---:|---|
+| `rsi_reversion` brut | −506,01 | 511 | |
+| `rsi_reversion` + ADX < 20 | −46,63 | 66 | **+459 $** |
+
+La perte chute de 91 % — mais **le nombre de trades chute de 87 %**. Par
+trade, l'amélioration n'est que de **28 %** (−0,99 → −0,71 $). L'essentiel du
+gain vient de *ne pas trader*, pas d'un meilleur signal.
+
+Et le modèle nul tranche : filtrée, la stratégie ne bat toujours le hasard
+nulle part.
+
+| actif | BTC | ETH | SOL | BNB | XRP | DOGE | AVAX |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| p | 0,988 | 0,970 | 0,349 | 0,106 | 0,206 | 0,874 | 0,691 |
+
+BTC, ETH et DOGE restent **significativement pires que le hasard**. Le filtre
+réduit les dégâts sans corriger le signal — et il ne laisse que 6 à 17 trades
+par actif, trop peu pour conclure dans un sens comme dans l'autre.
+
+### Et il dégrade le suivi de tendance
+
+| | brut | + ADX > 25 | écart |
+|---|---:|---:|---:|
+| `turtle_breakout` | +3 343,27 | +2 899,61 | **−443,66 $** |
+| `tsmom` | +2 512,95 | +1 911,20 | **−601,75 $** |
+
+La prescription du document coûte 440 à 600 $ sur ces données. L'ADX a besoin
+d'environ `2 × period` barres avant de produire une valeur, et sa nature
+retardée lui fait manquer précisément les débuts de tendance — là où le suivi
+de tendance gagne son argent.
+
+### Les quatre autres documents
+
+- **`macro-momentum-microstructure-execution-mev.md`** : VWAP/TWAP, MEV,
+  routage convexe. Même remarque que pour Almgren-Chriss — à 44-500 $ de
+  notionnel sur des perpétuels, il n'y a ni impact à diluer ni sandwich à
+  craindre. Hyperliquid est un carnet d'ordres on-chain, pas un AMM : le
+  routage fractionné entre pools ne s'y applique pas.
+- **`sourcing-donnees-temps-reel.md`** : CoinGlass V4, FRED. Ces flux
+  rendraient testables funding, OI et liquidations — les seules séries que le
+  dépôt ne peut pas produire seul, et que `costs.py` traite aujourd'hui comme
+  une constante.
+- **`macro-momentum-nlp-sentiment-finbert.md`** : VADER + FinBERT. Le dépôt
+  a déjà `agents/isolation.py` pour traiter le contenu externe comme donnée
+  et non comme instruction (invariant `I11_PROMPT_ISOLATION`) — c'est la
+  moitié sécurité du problème. La moitié signal reste à mesurer.
+- **`manuel-analyse-fondamentale.pdf`** : archivé, hors périmètre immédiat —
+  le dépôt ne traite que des perpétuels crypto.
+
+
+## Sixième lot : le pairs trading, et le défaut inscrit dans son propre code
+
+Trois des cinq documents étaient des doublons. Deux étaient nouveaux.
+
+### `sourcing-hyperliquid-agent-key.md` — un piège que le dépôt évite déjà
+
+Le document signale un échec silencieux : interroger l'Info API avec l'adresse
+de **l'agent** plutôt que celle du **master wallet** renvoie un dictionnaire
+vide, sans lever d'erreur. Vérifié — `hyperliquid_client.py` utilise
+`self.account_address` (le master) pour `clearinghouseState`,
+`frontendOpenOrders` et les fills, séparément de la clé de signature. Le piège
+est déjà refermé.
+
+### `strategies-arbitrage-statistique-cointegration.md` — la seule idée neuve
+
+Le pairs trading est structurellement différent de tout ce qui a été testé :
+le retour à la moyenne porte sur un **spread**, pas sur un prix. Le retour à la
+moyenne sur prix est un perdant établi ici ; celui sur spread est une autre
+hypothèse, et elle méritait d'être testée.
+
+Engle-Granger implémenté en Python pur (`scripts/cointegration.py`) — ni
+numpy, ni scipy, ni statsmodels, que le dépôt n'embarque pas. Valeurs
+critiques de MacKinnon, et non celles d'un ADF ordinaire : le document le
+signale à juste titre, l'estimation OLS préalable biaise le test vers la
+stationnarité.
+
+**En plein échantillon, le résultat semblait bon :**
+
+| paire | t (ADF) | verdict |
+|---|---:|---|
+| ETH/SOL | −4,098 | co-intégrée (1 %) |
+| DOGE/SOL | −3,572 | co-intégrée (5 %) |
+| BNB/SOL | −3,457 | co-intégrée (5 %) |
+| DOGE/ETH | −3,411 | co-intégrée (5 %) |
+| ETH/XRP | −3,404 | co-intégrée (5 %) |
+
+**5 paires sur 21, contre 1,1 attendues par hasard.**
+
+### Le défaut est dans le code du document
+
+`test_pair()` ajuste le bêta de couverture par OLS sur **toute** la série,
+puis `generate_signals()` trade sur cette même période — en la qualifiant de
+« backtest itératif sans biais d'anticipation ». Le ratio de couverture
+connaît le futur. C'est la même faute que le filtre Savitzky-Golay du document
+d'analyse graphique, et elle est ici invisible parce qu'elle est enfouie dans
+une étape de calibrage.
+
+**Le test qui décide** : bêta calibré sur la première moitié, résidus testés
+sur la seconde.
+
+| paire | t plein | t hors échantillon | tient ? |
+|---|---:|---:|---|
+| ETH/SOL | −4,098 | **−1,367** | non |
+| DOGE/SOL | −3,572 | **−0,359** | non |
+| BNB/SOL | −3,457 | **−1,203** | non |
+| DOGE/ETH | −3,411 | **−1,535** | non |
+| ETH/XRP | −3,404 | **−0,482** | non |
+
+**Zéro sur cinq.** Les t s'effondrent bien en deçà du seuil de −3,34. Les
+co-intégrations mesurées en plein échantillon étaient un artefact — et sur
+sept actifs qui ont tous monté ensemble pendant six ans, une relation de long
+terme apparente est exactement ce qu'on doit s'attendre à trouver par
+construction.
+
+La vérification hors échantillon est désormais le comportement **par défaut**
+du script ; `--in-sample-only` permet de la sauter, ce qui est déconseillé.
+
+
+## Septième lot : le funding, enfin mesuré
+
+Le corpus est complet — 33 fichiers.
+
+`strategies-funding-rate-arbitrage.md` et
+`strategies-funding-bleed-short-interest-carry.md` pointent vers la **seule
+série que le dépôt ne pouvait pas produire seul** : le taux de financement.
+`backtest/costs.py` le traitait comme une constante, et son propre docstring
+signalait la limite — « le funding réel oscille, change de signe, et rémunère
+parfois les longs ». Tant que l'API était refusée, c'était la seule option.
+
+`scripts/fetch_funding.py` récupère désormais l'historique horaire. Un an,
+quatre actifs, 8 760 points chacun :
+
+| actif | médiane bps/h | moyenne bps/h | heures négatives | annualisé |
+|---|---:|---:|---:|---:|
+| BTC | 0,1250 | 0,0691 | 19 % | 6,0 % |
+| ETH | 0,1250 | 0,0710 | 17 % | 6,2 % |
+| SOL | 0,0649 | 0,0008 | **36 %** | 0,1 % |
+| DOGE | 0,1239 | 0,0614 | 25 % | 5,4 % |
+| **modèle du dépôt** | **0,1250** | 0,1250 | 0 % | 10,9 % |
+
+**La constante du dépôt est exactement la médiane de BTC et ETH** — elle n'a
+rien d'arbitraire. Mais elle vaut le **double de la moyenne**, parce que le
+funding est négatif 17 à 36 % du temps : les longs sont régulièrement payés,
+et une constante positive ne peut pas représenter ça.
+
+Le modèle surestime donc le coût de portage d'environ 80 % sur BTC et ETH.
+**Le sens de l'erreur importe** : il rend les baselines *plus* difficiles à
+battre, pas moins. Une baseline trop facile validerait un desk qui ne vaut
+rien ; celle-ci penche dans le bon sens.
+
+### L'arbitrage de financement ne passe pas son propre seuil
+
+Le document fixe la viabilité à **APY net > 15 %**, avec ses propres frais
+(4 jambes taker à 0,035 %, portage 5 %) :
+
+| actif | APY brut | APY net | viable ? |
+|---|---:|---:|---|
+| BTC | 6,05 % | 0,91 % | non |
+| ETH | 6,22 % | 1,08 % | non |
+| SOL | 0,07 % | **−5,07 %** | non |
+| DOGE | 5,38 % | 0,24 % | non |
+
+Aucun actif n'atteint le seuil du document. Et ce calcul est **optimiste** :
+il suppose de capter la moyenne, alors qu'un arbitragiste subit aussi les
+17 à 36 % d'heures à funding négatif, pendant lesquelles il *paie* au lieu
+d'encaisser.
+
+### Les trois autres documents
+
+- **`strategies-pinescript-v5.md`** : la stratégie de référence (EMA 200 +
+  croisement 21/50 + RSI > 50, stop 2×ATR, TP 3,5×ATR, stop à l'équilibre à
+  1,5×ATR). **Mesurée depuis** — voir « Les hybrides » plus bas. Mon
+  classement initial (« elle appartient à la famille `ema_cross` ») était un
+  raisonnement, pas une mesure, et il était faux sur deux points : le stop à
+  l'équilibre n'existait dans aucune baseline et le moteur ne savait pas
+  l'exprimer, et le filtre EMA 200 + RSI n'appartient pas à la famille du
+  croisement.
+- **`strategies-optimisation-portefeuille-black-litterman.md`** : Black-Litterman
+  injecte les opinions des agents dans l'allocation via le vecteur Q. Même
+  tension qu'avec le cahier des charges — `I05_NO_LLM_WIDENING` interdit qu'un
+  avis d'agent augmente une exposition. HRP, en revanche, n'utilise que la
+  matrice de covariance et resterait compatible.
+- **`strategies-uniswap-v3-donnees-alternatives.md`** : hors périmètre. Le
+  dépôt trade des perpétuels sur un carnet d'ordres on-chain, pas de la
+  liquidité concentrée sur AMM.
+
+
+## Dernier document : un KPI chiffré, et le Monte-Carlo qui manquait
+
+`structure-equipe-trading.md` est organisationnel, mais il porte un critère
+vérifiable : le Risk Manager doit maintenir la **probabilité de ruine sous
+0,01 %**. Combiné au critère de rejet du document de robustesse — *P(DD > 30 %)
+≤ 5 % sur 10 000 itérations* — il désignait le seul test de validation que je
+n'avais pas fait.
+
+### La formule de ruine du manuel de risque ne peut pas y répondre
+
+`P = ((1 − Edge)/(1 + Edge))^C` avec `Edge = p·R − (1−p)` est dérivée pour des
+paris à cote égale, où l'avantage reste dans `[−1, 1]`. Dès que le ratio
+gain/perte est grand — `turtle_breakout` a R = 8,9 — l'Edge dépasse 1, la base
+devient **négative**, et l'élever à une puissance n'a plus de sens.
+
+Le tableau d'asymétrie des pertes du même document reste juste. C'est sa
+généralisation du risque de ruine qui ne l'est pas.
+
+### Le Monte-Carlo par permutation, lui, répond
+
+`scripts/monte_carlo_ruine.py` — 10 000 permutations des trades réels, ce qui
+détruit leur ordre chronologique et pose la question que la courbe historique
+ne pose pas : *que se passerait-il si la série noire tombait d'un bloc ?*
+
+Détail relevé au passage : **la perte médiane vaut −1,27 R, pas −1 R.** Le
+budget de risque est dépassé de 27 % — gaps d'ouverture, frais et slippage
+s'ajoutent au stop. Un « 0,5 % par trade » coûte en réalité 0,64 %.
+
+| risque/trade | `ema_cross` | `turtle_breakout` | `tsmom` | `rsi_reversion` |
+|---|---|---|---|---|
+| **0,5 %** (dépôt) | accepté | accepté | accepté | **rejet** |
+| **1 %** (plafond du doc) | accepté | accepté | accepté | **rejet** |
+| **7,46 %** (quarter-Kelly) | **rejet** | **rejet** | **rejet** | **rejet** |
+
+Au dimensionnement que le quarter-Kelly prescrivait sur ces mêmes données,
+**P(ruine) atteint 99,99 % pour `turtle_breakout`** et 100 % pour
+`rsi_reversion`. Les deux prescriptions du même document — plafond dur et
+quarter-Kelly — ne divergent pas seulement d'un facteur sept : l'une est
+survivable, l'autre est une ruine quasi certaine.
+
+Et `rsi_reversion` échoue à **100 %** dès 0,5 %, avec un drawdown médian de
+40,7 %. C'est la **quatrième méthode indépendante** à la condamner, après le
+modèle nul, le critère de Kelly et le filtre de régime.
+
+
+## Le biais de survie, mesuré — et ma préoccupation n'est pas confirmée
+
+J'avais signalé comme une faute d'avoir bâti la grille sur sept actifs qui
+existent aujourd'hui, alors que 56 des 233 listés sont marqués délistés. Le
+diagnostic était juste ; la conclusion que j'en tirais ne l'est pas.
+
+Six actifs délistés récupérés (MATIC, RNDR, FTM, FXS, UNIBOT, CYBER) — leur
+historique s'arrête à leur radiation, ce qu'il fallait. Leurs séries sont bien
+plus courtes (380 à 1 572 barres contre ~2 200), donc la comparaison par actif
+est trompeuse. Normalisée par barre de marché :
+
+| stratégie | survivants | délistés | écart |
+|---|---:|---:|---:|
+| `ema_cross` | +4,81 | +4,50 | −6 % |
+| `rsi_reversion` | −32,92 | −31,30 | +5 % |
+| `turtle_breakout` | +217,53 | **+356,61** | **+64 %** |
+| `tsmom` | +163,51 | +148,60 | −9 % |
+
+**Aucune dégradation systématique.** Le suivi de tendance fait même nettement
+mieux sur les actifs morts — ce qui se comprend : un actif qui finit radié a
+souvent connu une chute prolongée, et une stratégie qui suit la tendance dans
+les deux sens la capture.
+
+Réserve : six actifs, et seulement ceux dont Hyperliquid sert encore
+l'historique. Un jeton effondré en quelques jours puis retiré ne figure
+probablement pas ici. Le biais existe donc peut-être encore, mais il n'a pas
+l'ampleur ni le signe que je supposais.
+
+
+---
+
+## Les hybrides : mélanger des familles ne crée pas d'edge non plus
+
+Cinq familles avaient été testées séparément — tendance, retour à la moyenne,
+TSMOM, arbitrage statistique, positionnement/funding — sans qu'aucune ne se
+distingue du hasard. Restait la question posée ensuite : **et en les
+mélangeant ?**
+
+Deux hybrides, choisis pour être des mélanges réels et non des filtres.
+
+### `trend_follower_atr` — l'empilement du Pine Script
+
+Quatre briques de trois familles : filtre de régime EMA 200 (tendance),
+déclencheur croisement 21/50 (tendance), confirmation RSI > 50 (momentum),
+stop 2×ATR / cible 3,5×ATR / seuil à l'équilibre 1,5×ATR (volatilité). Long
+seulement, comme son Pine Script.
+
+Le seuil à l'équilibre a demandé une modification du moteur : sur une
+position ouverte, il n'honorait que `exit_now` et ignorait `stop_price`. Un
+stop ne peut désormais que **se rapprocher du prix** — jamais s'en éloigner.
+
+| | 1d | 4h |
+|---|---|---|
+| cellules positives | 5 / 7 | 3 / 7 |
+| p < 0,05 | 0 | 2 (SOL, BNB) |
+| **p > 0,95 (pire que le hasard)** | **2** (BNB, DOGE) | 0 |
+| trades par cellule | 4 à 15 | 16 à 27 |
+
+**Le nombre de trades est le chiffre à lire en premier.** Quatre trades sur
+2 183 jours, c'est un échantillon dont aucun test ne peut rien conclure — ni
+dans un sens ni dans l'autre. Le triple filtre plus le long-seulement rendent
+cette stratégie *intestable* sur cette période, ce qui n'est pas la même
+chose que « sans edge ».
+
+### `regime_switch` — commuter, pas filtrer
+
+C'est la distinction qui justifiait de l'écrire. Un **filtre** ne fait que
+retirer des trades : mesuré plus haut, `rsi_reversion + ADX < 20` réduit la
+perte de 91 % mais le nombre de trades de 87 %, et l'essentiel du gain venait
+de *ne pas trader*. Un **commutateur** remplace un signal par un autre :
+tendance quand l'ADX ≥ 25, retour à la moyenne quand l'ADX ≤ 20, rien entre
+les deux. La thèse testée est celle des forums — chaque famille saigne dans le
+régime de l'autre, donc leur combinaison doit battre les deux prises seules.
+
+Une cellule sur 14 à p < 0,05 (AVAX 1d, p = 0,040), pour 0,7 attendue par
+hasard. Aucune ne survit à la correction.
+
+**Le commutateur ne bat pas ses composantes.** Il fait 15 à 47 trades par
+cellule là où `rsi_reversion` seule en fait 64 à 162 : il coupe surtout du
+volume. Et sa réserve était posée d'avance — l'ADX met environ `2 × period`
+barres à se former et son retard lui fait manquer les débuts de tendance ;
+il coûtait déjà 440 à 600 $ en filtre. Un échec ici peut venir du
+classificateur autant que de la thèse.
+
+### Le verdict, corrigé sur l'ensemble des hypothèses
+
+La correction doit porter sur **toutes** les cellules ensemble. Corriger la
+grille d'une stratégie nouvellement ajoutée toute seule sous-estimerait le
+nombre d'hypothèses testées, donc le nombre de faux positifs attendus.
+
+```
+  84 cellules (6 stratégies × 7 actifs × 2 intervalles)
+  p < 0,05 brut                            16
+  attendues par pur hasard à 5 %          4,2
+  survivantes après Benjamini-Hochberg      0
+```
+
+Seize cellules « significatives » sur 84 tests, quand le bruit seul en produit
+4,2 — et aucune ne survit. **Mélanger les familles ne fait pas apparaître
+d'edge là où chacune n'en avait pas.** Le seul signal constant reste dans
+l'autre sens : `rsi_reversion` est significativement *pire* que le hasard sur
+6 cellules, `trend_follower_atr` sur 2.

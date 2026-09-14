@@ -1,0 +1,156 @@
+[
+ {
+  "actif": "BTC",
+  "intervalle": "1d",
+  "strategie": "regime_switch",
+  "net_usd": -9.57183974474573,
+  "trades": 18,
+  "rejets": 0,
+  "p": 0.6716,
+  "percentile": 33.0,
+  "hasard_moyen": 0.58
+ },
+ {
+  "actif": "ETH",
+  "intervalle": "1d",
+  "strategie": "regime_switch",
+  "net_usd": -25.101765377942442,
+  "trades": 21,
+  "rejets": 0,
+  "p": 0.8259,
+  "percentile": 17.5,
+  "hasard_moyen": -2.64
+ },
+ {
+  "actif": "SOL",
+  "intervalle": "1d",
+  "strategie": "regime_switch",
+  "net_usd": 1.1784049494032292,
+  "trades": 23,
+  "rejets": 0,
+  "p": 0.3881,
+  "percentile": 61.5,
+  "hasard_moyen": -3.84
+ },
+ {
+  "actif": "BNB",
+  "intervalle": "1d",
+  "strategie": "regime_switch",
+  "net_usd": 13.705426299687497,
+  "trades": 16,
+  "rejets": 1,
+  "p": 0.2388,
+  "percentile": 76.5,
+  "hasard_moyen": -1.24
+ },
+ {
+  "actif": "XRP",
+  "intervalle": "1d",
+  "strategie": "regime_switch",
+  "net_usd": -9.232211806374597,
+  "trades": 18,
+  "rejets": 1,
+  "p": 0.6368,
+  "percentile": 36.5,
+  "hasard_moyen": -2.27
+ },
+ {
+  "actif": "DOGE",
+  "intervalle": "1d",
+  "strategie": "regime_switch",
+  "net_usd": 0.20030424675308983,
+  "trades": 32,
+  "rejets": 0,
+  "p": 0.3731,
+  "percentile": 63.0,
+  "hasard_moyen": -7.06
+ },
+ {
+  "actif": "AVAX",
+  "intervalle": "1d",
+  "strategie": "regime_switch",
+  "net_usd": 32.05805797855693,
+  "trades": 15,
+  "rejets": 0,
+  "p": 0.0398,
+  "percentile": 96.5,
+  "hasard_moyen": -0.34
+ },
+ {
+  "actif": "BTC",
+  "intervalle": "4h",
+  "strategie": "regime_switch",
+  "net_usd": 24.08374226176771,
+  "trades": 35,
+  "rejets": 0,
+  "p": 0.1692,
+  "percentile": 83.5,
+  "hasard_moyen": -4.51
+ },
+ {
+  "actif": "ETH",
+  "intervalle": "4h",
+  "strategie": "regime_switch",
+  "net_usd": 6.205456252264856,
+  "trades": 41,
+  "rejets": 0,
+  "p": 0.4179,
+  "percentile": 58.5,
+  "hasard_moyen": -0.03
+ },
+ {
+  "actif": "SOL",
+  "intervalle": "4h",
+  "strategie": "regime_switch",
+  "net_usd": 6.261297531410564,
+  "trades": 35,
+  "rejets": 0,
+  "p": 0.3582,
+  "percentile": 64.5,
+  "hasard_moyen": -3.33
+ },
+ {
+  "actif": "BNB",
+  "intervalle": "4h",
+  "strategie": "regime_switch",
+  "net_usd": 25.0478836906649,
+  "trades": 39,
+  "rejets": 0,
+  "p": 0.1294,
+  "percentile": 87.5,
+  "hasard_moyen": -6.86
+ },
+ {
+  "actif": "XRP",
+  "intervalle": "4h",
+  "strategie": "regime_switch",
+  "net_usd": 25.272993601965936,
+  "trades": 40,
+  "rejets": 0,
+  "p": 0.1592,
+  "percentile": 84.5,
+  "hasard_moyen": -2.47
+ },
+ {
+  "actif": "DOGE",
+  "intervalle": "4h",
+  "strategie": "regime_switch",
+  "net_usd": -30.104412319233145,
+  "trades": 35,
+  "rejets": 0,
+  "p": 0.8308,
+  "percentile": 17.0,
+  "hasard_moyen": -5.38
+ },
+ {
+  "actif": "AVAX",
+  "intervalle": "4h",
+  "strategie": "regime_switch",
+  "net_usd": -35.43504982497821,
+  "trades": 47,
+  "rejets": 0,
+  "p": 0.8706,
+  "percentile": 13.0,
+  "hasard_moyen": -3.66
+ }
+]

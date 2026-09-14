@@ -1,0 +1,56 @@
+# Socle du VPS. En local, rien de tout cela n'est necessaire : le desk tourne
+# sur SQLite (`python -m trading_desk --demo`).
+#
+# Aucun port n'est publie sur 0.0.0.0. Les services ne sont joignables que
+# depuis la machine hote — pour y acceder a distance, tunnel SSH.
+
+services:
+  postgres:
+    image: timescale/timescaledb:latest-pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: desk
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?definir POSTGRES_PASSWORD}
+      POSTGRES_DB: desk
+    ports: ["127.0.0.1:5432:5432"]
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./sql:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U desk"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    # appendonly : le compteur de nonce ne doit pas reculer apres un redemarrage,
+    # sous peine de rejets INVALID_NONCE opaques (angle mort A-04).
+    command: redis-server --appendonly yes
+    ports: ["127.0.0.1:6379:6379"]
+    volumes: [redisdata:/data]
+
+  prometheus:
+    image: prom/prometheus:latest
+    restart: unless-stopped
+    ports: ["127.0.0.1:9090:9090"]
+    volumes:
+      - ./ops/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - promdata:/prometheus
+
+  grafana:
+    image: grafana/grafana:latest
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD:?definir GRAFANA_PASSWORD}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    ports: ["127.0.0.1:3000:3000"]
+    volumes: [grafanadata:/var/lib/grafana]
+    depends_on: [prometheus]
+
+volumes:
+  pgdata:
+  redisdata:
+  promdata:
+  grafanadata:

@@ -1,0 +1,603 @@
+/* Poste de pilotage — embarquement, sequence, decor.
+ *
+ * REGLE UNIQUE DE CE FICHIER : la video et le decor doivent occuper
+ * EXACTEMENT la meme boite. La sequence se termine sur l'image qui sert de
+ * decor ; si les deux ne sont pas cadrees pareil, le raccord saute a l'oeil
+ * et tout l'effet tombe. C'est pour ca que `.scene` existe et que la video
+ * comme le decor la portent — pas deux regles qui se ressemblent, une seule
+ * classe partagee.
+ */
+
+:root {
+  --nuit: #05070b;
+  --verre-bord: rgba(120, 190, 255, .18);
+  --texte: #cfe3f2;
+  --accent: #7fc8ff;
+
+  /* La dalle du PFD, RELEVEE SUR LE DECOR (1280x720) et non placee a
+     l'oeil. Mesure du 12 septembre 2026, sur la nouvelle sequence : on
+     lit le profil de luminance du canal bleu, colonne par colonne et
+     ligne par ligne, et on prend la transition entre le cadre (quasi
+     noir, valeur ~5) et la dalle (~30). Bornes obtenues, stables de
+     seuil 12 a seuil 18 : x 180..1110, y 28..706.
+
+     Les valeurs ci-dessous sont ces bornes RENTREES d'une douzaine de
+     pixels. Ce retrait laisse voir le cadre peint : sans lui le contenu
+     affleure le bord, et la dalle cesse de ressembler a un ecran
+     encastre pour ressembler a une fenetre collee par-dessus.
+
+     La dalle fait maintenant 70,8 % de la largeur du decor contre 48,8 %
+     avant : la nouvelle sequence se termine bien plus pres de l'ecran.
+     Le desk y gagne environ le double de surface. */
+  /* La dalle, posee sur le QUADRILATERE mesure — pas sur un rectangle.
+     Voir la note ci-dessus. Ces quatre valeurs decrivent la boite moyenne ;
+     l'inclinaison ci-dessous en fait un trapeze. */
+  --verre-l: 14.8%;
+  --verre-t: 0.6%;
+  --verre-w: 70.9%;
+  --verre-h: 97.1%;
+
+  /* L'inclinaison.
+     Mesure des deux bords de l'ecran radar, en regression robuste sur 114
+     et 79 points : bord gauche x = -0,0411y + 219,1 ; bord droit
+     x = +0,0547y + 1062,8. Les deux s'ecartent vers le bas, donc la dalle
+     est vue EN CONTRE-PLONGEE : 847 px de large en haut, 911 en bas, soit
+     7,5 % d'evasement.
+
+     `perspective` n'accepte pas de pourcentage, ce qui interdit de la caler
+     sur la taille du parent. On la calcule donc a partir de la largeur reelle
+     de la scene — min(100vw, 177.78vh), exactement la regle de `.scene` —
+     pour que le trapeze garde ses proportions a toutes les tailles de
+     fenetre. Une valeur en pixels fixes aurait donne une perspective juste a
+     une seule taille d'ecran, et fausse partout ailleurs. */
+  --profondeur: calc(min(100vw, 177.78vh) * 0.757);
+  --inclinaison: 6deg;
+
+  /* LA DALLE DE GAUCHE — le collecteur de donnees.
+     Cet ecran-la n'est pas vu de face du tout : il est a la droite du
+     cadre et regarde vers nous, donc son bord DROIT est plus proche et
+     plus haut. Mesure sur `gauche.jpg`, quatre bords en regression
+     robuste (91, 79, 64 et 61 points), coins obtenus :
+
+         haut-gauche  (287, 166)     haut-droit  (749, 148)
+         bas-gauche   (283, 604)     bas-droit   (736, 632)
+
+     Le cote droit mesure 504 px de haut contre 458 a gauche : c'est ce
+     rapport de 1,10 que la rotation doit reproduire. Le leger basculement
+     du cadre (le haut monte vers la droite) est un `rotateZ` a part —
+     confondre les deux ferait tourner l'image au lieu de la projeter. */
+  /* DEBORD VOLONTAIRE. Cale pile sur les bords mesures, la dalle laissait
+     voir l'ecran peint par-dessous : un pixel d'arrondi suffit, et la
+     projection en perspective en produit forcement. On deborde donc de
+     ~1,5 % de chaque cote — invisible, puisque ce qui depasse tombe sur le
+     cadre noir, et suffisant pour que rien du dessous ne reapparaisse. */
+  --verre-g-l: 19.8%;
+  --verre-g-t: 19.5%;
+  --verre-g-w: 39.0%;
+  --verre-g-h: 68.5%;
+  --profondeur-g: calc(min(100vw, 177.78vh) * 0.68);
+  --rot-y-g: -10deg;
+  --rot-z-g: 0.6deg;
+}
+
+* { box-sizing: border-box }
+
+/* Le fond derriere le decor.
+ *
+ * La photo est en 16/9 et `object-fit: contain` : sur une fenetre 16/10 ou
+ * 5/4 il reste une bande en haut et une en bas. Un aplat unique laissait
+ * une couture visible en haut, parce que le bord haut de la photo n'est pas
+ * de la meme valeur que son bord bas — mesures sur l'image : rgb(9,12,17)
+ * en haut, rgb(5,5,7) en bas. Le degrade reprend ces deux valeurs, et les
+ * bandes cessent d'etre des bandes pour devenir la penombre de la piece.
+ *
+ * On garde `contain` plutot que `cover` : recadrer remplirait la fenetre,
+ * mais sur un ecran haut (5/4) la dalle se retrouverait partiellement hors
+ * champ — on perdrait l'instrument pour gagner un bord. */
+html, body {
+  height: 100%;
+  margin: 0;
+  background: linear-gradient(180deg, #090c11 0%, #05070b 50%, #050507 100%);
+  color: var(--texte);
+  font: 14px/1.5 "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+  overflow: hidden;
+}
+
+/* La boite commune. 16/9, centree, jamais plus grande que la fenetre :
+   c'est le cadrage de la video, donc celui du decor. */
+.scene {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  aspect-ratio: 16 / 9;
+  max-width: 100vw;
+  max-height: 100vh;
+  width: 100%;
+}
+
+/* --- 1. L'embarquement ------------------------------------------------- */
+
+/* La carte-titre : un ecran noir, et rien d'autre. */
+#titre {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  background:
+    radial-gradient(ellipse 70% 50% at 50% 45%, #0b1220 0%, #05070b 70%),
+    var(--nuit);
+  transition: opacity 420ms ease;
+  -webkit-tap-highlight-color: transparent;
+}
+#titre[hidden] { display: none }
+#titre.part { opacity: 0; pointer-events: none }
+#titre .accueil { position: static }
+
+#embarquement {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  cursor: pointer;
+  background: var(--nuit);
+  transition: opacity 420ms ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* L'invite sur la vue d'ensemble : discrete, en bas, pour ne pas couvrir
+   le poste qu'on vient justement de devoiler. */
+.invite {
+  position: absolute;
+  left: 0; right: 0; bottom: 7%;
+  margin: 0;
+  text-align: center;
+  font-size: 11px;
+  letter-spacing: .32em;
+  text-transform: uppercase;
+  color: rgba(207, 227, 242, .72);
+  text-shadow: 0 2px 18px rgba(0, 0, 0, .9);
+  animation: respire 2.6s ease-in-out infinite;
+}
+#embarquement[hidden] { display: none }
+#embarquement.part { opacity: 0; pointer-events: none }
+
+/* Le voile.
+ *
+ * Le titre est pose sur le tiers haut de l'image, qui est un champ
+ * d'etoiles — la partie la plus sombre et la plus calme du cadre. Le
+ * centrer l'aurait mis sur le limbe de la Terre, c'est-a-dire sur la seule
+ * zone claire et chargee de l'image : du texte blanc sur un nuage blanc.
+ *
+ * Le voile assombrit quand meme le haut, parce qu'un champ d'etoiles n'est
+ * pas uniforme et qu'une etoile derriere une lettre la casse. Il s'arrete
+ * avant l'horizon pour ne pas ternir la Terre, qui est le sujet. */
+.voile {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(
+    180deg,
+    rgba(3, 6, 11, .78) 0%,
+    rgba(3, 6, 11, .52) 26%,
+    rgba(3, 6, 11, .12) 44%,
+    rgba(3, 6, 11, 0) 56%);
+}
+
+.accueil {
+  position: absolute;
+  top: 15%;
+  left: 0;
+  right: 0;
+  text-align: center;
+  padding: 0 24px;
+}
+
+.accueil h1 {
+  margin: 0;
+  font-size: clamp(22px, 4.6vw, 54px);
+  font-weight: 500;
+  letter-spacing: .22em;
+  text-transform: uppercase;
+  color: #eaf4ff;
+  text-shadow: 0 0 26px rgba(127, 200, 255, .34);
+}
+
+.accueil .trait {
+  width: min(62vw, 420px);
+  height: 1px;
+  margin: 22px auto;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  opacity: .6;
+}
+
+.accueil p {
+  margin: 0;
+  font-size: 12px;
+  letter-spacing: .34em;
+  text-transform: uppercase;
+  color: rgba(207, 227, 242, .55);
+  animation: respire 2.6s ease-in-out infinite;
+}
+
+@keyframes respire { 0%, 100% { opacity: .35 } 50% { opacity: .9 } }
+
+/* --- 2. La sequence ---------------------------------------------------- */
+
+#sequence {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  background: var(--nuit);
+}
+#sequence[hidden] { display: none }
+
+#sequence video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;      /* le meme cadrage que `.scene` */
+}
+
+.passer[hidden] { display: none }
+.passer {
+  position: fixed;
+  right: 18px;
+  bottom: 16px;
+  z-index: 21;
+  padding: 7px 14px;
+  border: 1px solid var(--verre-bord);
+  border-radius: 3px;
+  background: rgba(5, 10, 18, .6);
+  color: rgba(207, 227, 242, .7);
+  font: inherit;
+  font-size: 11px;
+  letter-spacing: .18em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.passer:hover { color: #eaf4ff; border-color: var(--accent) }
+
+/* --- 3. Le poste ------------------------------------------------------- */
+
+/* Toujours visible, toujours dessous. Pas d'apparition a orchestrer :
+   c'est le fond de la page, les autres couches passent par-dessus. */
+#poste {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+}
+
+.decor {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+/* Le verre du PFD.
+ *
+ * Releve sur le decor (1280x720) : la dalle occupe 320..968 en x et
+ * 120..622 en y, soit les pourcentages ci-dessous. Mesure et non placee a
+ * l'oeil — une dalle mal cadree se voit au premier regard et se corrige mal
+ * apres coup, parce qu'on finit par deplacer le decor pour rattraper.
+ *
+ * Le leger retrait interieur laisse voir le cadre peint : sans lui, le
+ * contenu affleure le bord et la dalle cesse de ressembler a un ecran
+ * encastre pour ressembler a une fenetre collee.
+ */
+.verre, .reflet {
+  /* Une seule source pour le cadrage de la dalle. Les deux regles se
+     superposent exactement ; repeter les quatre valeurs, c'est garantir
+     qu'un jour l'une sera corrigee et pas l'autre, et que le reflet
+     flottera a cote du verre sans que personne ne comprenne pourquoi.
+
+     L'inclinaison est ici pour la meme raison : le reflet doit subir
+     exactement la meme projection que le verre, sinon il glisse dessus. */
+  position: absolute;
+  left: var(--verre-l);
+  top: var(--verre-t);
+  width: var(--verre-w);
+  height: var(--verre-h);
+  transform: perspective(var(--profondeur)) rotateX(var(--inclinaison));
+  transform-origin: 50% 50%;
+}
+
+.verre {
+  border: 0;
+  border-radius: 2px;
+  background: #04070a;
+  box-shadow:
+    inset 0 0 0 1px rgba(120, 190, 255, .10),
+    inset 0 0 38px rgba(4, 10, 18, .85);
+}
+
+/* Le reflet du verre : une bande diagonale tres discrete, par-dessus le
+   contenu. Elle ne doit jamais gener la lecture — c'est un rappel de
+   surface, pas un effet. */
+.reflet {
+  pointer-events: none;
+  background: linear-gradient(
+    104deg,
+    rgba(255, 255, 255, 0) 34%,
+    rgba(170, 214, 255, .045) 44%,
+    rgba(170, 214, 255, .012) 52%,
+    rgba(255, 255, 255, 0) 62%);
+}
+
+/* Le rappel discret du chemin de retour. Le poste n'a pas de barre de
+   navigation : elle casserait l'illusion. Mais une interface sans issue
+   visible est une interface ou l'on se sent pris. */
+/* Le bouton de vue d'ensemble. Meme discretion que la sortie : le poste ne
+   doit pas s'entourer d'une barre d'outils, qui casserait l'illusion. */
+.revoir {
+  position: fixed;
+  right: 14px;
+  bottom: 12px;
+  z-index: 12;
+  padding: 6px 12px;
+  border: 1px solid var(--verre-bord);
+  border-radius: 3px;
+  background: rgba(5, 10, 18, .55);
+  color: rgba(207, 227, 242, .62);
+  font: inherit;
+  font-size: 10px;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: color 160ms ease, border-color 160ms ease;
+}
+.revoir:hover { color: #eaf4ff; border-color: var(--accent) }
+.revoir:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px }
+
+.sortie {
+  position: fixed;
+  left: 14px;
+  bottom: 12px;
+  z-index: 12;
+  font-size: 10px;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: rgba(207, 227, 242, .28);
+}
+.sortie a { color: rgba(127, 200, 255, .55); text-decoration: none }
+.sortie a:hover { color: var(--accent) }
+
+@media (prefers-reduced-motion: reduce) {
+  #embarquement, #poste { transition: none }
+  .accueil p { animation: none; opacity: .7 }
+}
+
+
+/* --- L'ecran de gauche ---------------------------------------------- */
+
+#gauche {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+}
+#gauche[hidden] { display: none }
+
+.verre-gauche, .reflet-gauche {
+  /* Une seule source pour le cadrage, comme pour le PFD, et pour la meme
+     raison : deux jeux de valeurs finissent toujours par diverger. */
+  position: absolute;
+  left: var(--verre-g-l);
+  top: var(--verre-g-t);
+  width: var(--verre-g-w);
+  height: var(--verre-g-h);
+  transform: perspective(var(--profondeur-g))
+             rotateZ(var(--rot-z-g)) rotateY(var(--rot-y-g));
+  transform-origin: 50% 50%;
+}
+
+.verre-gauche {
+  border: 0;
+  border-radius: 2px;
+  background: #04070a;
+  box-shadow:
+    inset 0 0 0 1px rgba(120, 190, 255, .10),
+    inset 0 0 38px rgba(4, 10, 18, .85);
+}
+
+.reflet-gauche {
+  pointer-events: none;
+  background: linear-gradient(
+    118deg,
+    rgba(255, 255, 255, 0) 30%,
+    rgba(170, 214, 255, .05) 42%,
+    rgba(170, 214, 255, .014) 52%,
+    rgba(255, 255, 255, 0) 64%);
+}
+
+
+/* --- L'ecran d'attente ------------------------------------------------ */
+
+#attente {
+  position: fixed;
+  inset: 0;
+  /* AU-DESSUS DE LA SEQUENCE (20) ET DU BOUTON « PASSER » (21).
+   *
+   * Il etait a 15, donc SOUS la sequence. L'ordre etait alors force :
+   * retirer la video, ce qui decouvrait le desk, puis faire monter l'ecran
+   * d'attente de 0 a 1 par-dessus. Le desk restait donc en clair pendant
+   * toute la demi-seconde du fondu — le flash signale entre le zoom et
+   * l'ecran d'attente.
+   *
+   * Place au-dessus, il se fond sur la DERNIERE IMAGE DU ZOOM, et la
+   * sequence n'est retiree qu'une fois l'attente opaque. Rien du desk
+   * n'apparait entre les deux. */
+  z-index: 22;
+  background: var(--nuit);
+  opacity: 0;
+  transition: opacity 500ms ease;
+}
+#attente[hidden] { display: none }
+#attente.visible { opacity: 1 }
+
+#veille {
+  display: block;
+  /* `cover` et non `contain` : la video d'attente est en 1200x752 quand le
+     decor est en 16/9. La contenir laisserait deux bandes a des endroits ou
+     la photo n'en a pas, et le raccord sauterait aux yeux. On la recadre
+     donc sur la meme boite, en acceptant de perdre quelques pixels de bord
+     — ils tombent sur le cadre peint, pas sur l'ecran. */
+  object-fit: cover;
+}
+
+/* L'etiquette de balayage, posee en haut de l'ecran.
+ *
+ * Elle dit ce que le radar est en train de faire pendant qu'on attend.
+ * Placee au-dessus du cercle, dans la bande vide entre le bord de la dalle
+ * et les premieres graduations — la seule zone de cet ecran ou du texte
+ * ajoute ne recouvre rien de ce que la video dessine. */
+.balayage {
+  position: absolute;
+  left: 0; right: 0;
+  top: 3.4%;
+  z-index: 16;
+  margin: 0;
+  text-align: center;
+  pointer-events: none;
+}
+
+/* SUR UNE PLAQUE, pas en toutes lettres sur l'image.
+ *
+ * Pose a nu, le texte tombait sur les graduations du radar : les chiffres
+ * du pourtour traversaient les lettres et plus rien ne se lisait. La bande
+ * libre entre le bord de la dalle et le premier anneau fait une vingtaine
+ * de pixels — trop peu pour y glisser du texte sans fond.
+ *
+ * La plaque n'est pas un pis-aller : c'est la langue de ce poste. Tous ses
+ * libelles sont encadres — « SYSTEM STATUS », « RADAR CONTACT », les
+ * petites boites de chiffres du bas. Le nouveau venu parle comme eux. */
+.balayage span {
+  display: inline-block;
+  padding: 4px 14px 3px;
+  border: 1px solid rgba(140, 205, 255, .42);
+  border-radius: 2px;
+  background: rgba(4, 12, 22, .82);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: .3em;
+  text-transform: uppercase;
+  color: rgba(206, 234, 255, .95);
+  text-shadow: 0 0 18px rgba(110, 195, 255, .7);
+  box-shadow: 0 0 26px -10px rgba(90, 180, 255, .7);
+  animation: scan 2.4s ease-in-out infinite;
+}
+
+/* Le point qui suit le balayage : trois etats, comme un compte a rebours
+   qui ne finit pas. Un texte parfaitement fixe sur une image animee se lit
+   comme une incrustation ; celui-ci respire avec le radar. */
+@keyframes scan {
+  0%, 100% { opacity: .55 }
+  50%      { opacity: 1 }
+}
+
+/* Le bouton d'ouverture, pose sur le radar. */
+.ouvrir {
+  position: absolute;
+  left: 50%;
+  top: 62%;
+  transform: translate(-50%, -50%);
+  z-index: 16;
+  padding: 13px 30px;
+  border: 1px solid rgba(140, 205, 255, .55);
+  border-radius: 3px;
+  background: rgba(6, 16, 28, .62);
+  color: #dcefff;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: .3em;
+  text-transform: uppercase;
+  cursor: pointer;
+  backdrop-filter: blur(2px);
+  box-shadow: 0 0 34px -8px rgba(90, 180, 255, .5),
+              inset 0 0 22px -12px rgba(140, 205, 255, .9);
+  animation: pulse-ouvrir 2.8s ease-in-out infinite;
+  transition: color 160ms ease, border-color 160ms ease;
+}
+.ouvrir:hover { color: #fff; border-color: rgba(180, 225, 255, .9) }
+.ouvrir:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px }
+
+@keyframes pulse-ouvrir {
+  0%, 100% { box-shadow: 0 0 30px -10px rgba(90, 180, 255, .45),
+                         inset 0 0 20px -14px rgba(140, 205, 255, .8) }
+  50%      { box-shadow: 0 0 46px -6px rgba(120, 200, 255, .72),
+                         inset 0 0 26px -10px rgba(160, 215, 255, 1) }
+}
+
+/* L'acces a l'ecran de gauche, pose sur le bandeau bas du PFD. */
+.vers-gauche {
+  position: absolute;
+  left: 50%;
+  top: 99.2%;
+  transform: translate(-50%, -50%);
+  z-index: 12;
+  padding: 7px 16px;
+  border: 1px solid rgba(140, 205, 255, .4);
+  border-radius: 3px;
+  background: rgba(6, 16, 28, .66);
+  color: rgba(220, 239, 255, .82);
+  font: inherit;
+  font-size: 10px;
+  letter-spacing: .22em;
+  text-transform: uppercase;
+  cursor: pointer;
+  box-shadow: 0 0 24px -10px rgba(90, 180, 255, .55);
+}
+.vers-gauche:hover { color: #fff; border-color: rgba(180, 225, 255, .85) }
+.vers-gauche:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px }
+
+/* Le retour vers le PFD, pose SUR la console de gauche. */
+.retour-pfd {
+  position: absolute;
+  left: 40%;
+  top: 95.5%;
+  transform: translate(-50%, -50%) rotateZ(1.2deg);
+  z-index: 12;
+  padding: 8px 18px;
+  border: 1px solid rgba(140, 205, 255, .45);
+  border-radius: 3px;
+  background: rgba(6, 16, 28, .68);
+  color: rgba(220, 239, 255, .88);
+  font: inherit;
+  font-size: 11px;
+  letter-spacing: .22em;
+  text-transform: uppercase;
+  cursor: pointer;
+  box-shadow: 0 0 26px -10px rgba(90, 180, 255, .6);
+}
+.retour-pfd:hover { color: #fff; border-color: rgba(180, 225, 255, .85) }
+.retour-pfd:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px }
+
+/* Le bouton de son : discret, au bord, parce qu'il appartient au
+   navigateur et non au vaisseau — c'est une preference, pas une commande
+   de bord. */
+.son {
+  position: fixed;
+  right: 14px;
+  top: 12px;
+  z-index: 45;
+  width: 30px; height: 30px;
+  border: 1px solid var(--verre-bord);
+  border-radius: 50%;
+  background: rgba(5, 10, 18, .5);
+  color: rgba(207, 227, 242, .5);
+  font: inherit;
+  font-size: 9px;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.son[aria-pressed="true"] { color: var(--accent); border-color: var(--accent) }
+
+@media (prefers-reduced-motion: reduce) {
+  .ouvrir, .balayage span { animation: none }
+  .invite { animation: none; opacity: .8 }
+  #attente { transition: none }
+}

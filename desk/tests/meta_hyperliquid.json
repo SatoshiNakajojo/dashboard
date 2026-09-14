@@ -1,0 +1,1277 @@
+{
+ "reseau": "testnet",
+ "actifs": {
+  "0G": {
+   "index": 189,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 3
+  },
+  "2Z": {
+   "index": 192,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 3
+  },
+  "AAVE": {
+   "index": 21,
+   "sz_decimals": 2,
+   "is_spot": false,
+   "max_leverage": 10
+  },
+  "ACE": {
+   "index": 77,
+   "sz_decimals": 2,
+   "is_spot": false,
+   "max_leverage": 10
+  },
+  "ADA": {
+   "index": 45,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 10
+  },
+  "AERO": {
+   "index": 198,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 3
+  },
+  "AI": {
+   "index": 94,
+   "sz_decimals": 1,
+   "is_spot": false,
+   "max_leverage": 10
+  },
+  "AI16Z": {
+   "index": 143,
+   "sz_decimals": 1,
+   "is_spot": false,
+   "max_leverage": 5
+  },
+  "AIXBT": {
+   "index": 142,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 5
+  },
+  "ALGO": {
+   "index": 131,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 5
+  },
+  "ALT": {
+   "index": 88,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 10
+  },
+  "ANIME": {
+   "index": 151,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 12
+  },
+  "APE": {
+   "index": 10,
+   "sz_decimals": 1,
+   "is_spot": false,
+   "max_leverage": 5
+  },
+  "APEX": {
+   "index": 191,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 3
+  },
+  "APT": {
+   "index": 1,
+   "sz_decimals": 2,
+   "is_spot": false,
+   "max_leverage": 3
+  },
+  "AR": {
+   "index": 97,
+   "sz_decimals": 2,
+   "is_spot": false,
+   "max_leverage": 10
+  },
+  "ARB": {
+   "index": 13,
+   "sz_decimals": 1,
+   "is_spot": false,
+   "max_leverage": 10
+  },
+  "ASTER": {
+   "index": 186,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 5
+  },
+  "ATOM": {
+   "index": 2,
+   "sz_decimals": 2,
+   "is_spot": false,
+   "max_leverage": 10
+  },
+  "AVAX": {
+   "index": 7,
+   "sz_decimals": 2,
+   "is_spot": false,
+   "max_leverage": 10
+  },
+  "AVNT": {
+   "index": 187,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 5
+  },
+  "AXL": {
+   "index": 49,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 3
+  },
+  "AXS": {
+   "index": 203,
+   "sz_decimals": 1,
+   "is_spot": false,
+   "max_leverage": 5
+  },
+  "AZTEC": {
+   "index": 206,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 3
+  },
+  "BABY": {
+   "index": 167,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 5
+  },
+  "BADGER": {
+   "index": 57,
+   "sz_decimals": 1,
+   "is_spot": false,
+   "max_leverage": 10
+  },
+  "BANANA": {
+   "index": 34,
+   "sz_decimals": 1,
+   "is_spot": false,
+   "max_leverage": 3
+  },
+  "BERA": {
+   "index": 157,
+   "sz_decimals": 1,
+   "is_spot": false,
+   "max_leverage": 5
+  },
+  "BIGTIME": {
+   "index": 38,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 3
+  },
+  "BIO": {
+   "index": 145,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 5
+  },
+  "BLAST": {
+   "index": 111,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 3
+  },
+  "BLUR": {
+   "index": 41,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 10
+  },
+  "BLZ": {
+   "index": 33,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 5
+  },
+  "BNB": {
+   "index": 6,
+   "sz_decimals": 3,
+   "is_spot": false,
+   "max_leverage": 10
+  },
+  "BRETT": {
+   "index": 109,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 5
+  },
+  "BSV": {
+   "index": 43,
+   "sz_decimals": 2,
+   "is_spot": false,
+   "max_leverage": 10
+  },
+  "BTC": {
+   "index": 3,
+   "sz_decimals": 5,
+   "is_spot": false,
+   "max_leverage": 40
+  },
+  "CAKE": {
+   "index": 79,
+   "sz_decimals": 1,
+   "is_spot": false,
+   "max_leverage": 10
+  },
+  "CANTO": {
+   "index": 37,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 3
+  },
+  "CASHCAT": {
+   "index": 209,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 3
+  },
+  "CATI": {
+   "index": 117,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 5
+  },
+  "CC": {
+   "index": 197,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 3
+  },
+  "CELO": {
+   "index": 118,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 5
+  },
+  "CHILLGUY": {
+   "index": 129,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 3
+  },
+  "CHIP": {
+   "index": 207,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 3
+  },
+  "CHZ": {
+   "index": 163,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 5
+  },
+  "COMP": {
+   "index": 18,
+   "sz_decimals": 2,
+   "is_spot": false,
+   "max_leverage": 5
+  },
+  "DASH": {
+   "index": 204,
+   "sz_decimals": 2,
+   "is_spot": false,
+   "max_leverage": 5
+  },
+  "DOGE": {
+   "index": 173,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 10
+  },
+  "DOOD": {
+   "index": 172,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 3
+  },
+  "DYDX": {
+   "index": 9,
+   "sz_decimals": 1,
+   "is_spot": false,
+   "max_leverage": 20
+  },
+  "DYM": {
+   "index": 90,
+   "sz_decimals": 1,
+   "is_spot": false,
+   "max_leverage": 10
+  },
+  "EIGEN": {
+   "index": 104,
+   "sz_decimals": 2,
+   "is_spot": false,
+   "max_leverage": 5
+  },
+  "ENS": {
+   "index": 81,
+   "sz_decimals": 2,
+   "is_spot": false,
+   "max_leverage": 10
+  },
+  "ETC": {
+   "index": 82,
+   "sz_decimals": 2,
+   "is_spot": false,
+   "max_leverage": 10
+  },
+  "ETH": {
+   "index": 4,
+   "sz_decimals": 4,
+   "is_spot": false,
+   "max_leverage": 25
+  },
+  "FARTCOIN": {
+   "index": 141,
+   "sz_decimals": 1,
+   "is_spot": false,
+   "max_leverage": 10
+  },
+  "FET": {
+   "index": 52,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 10
+  },
+  "FIL": {
+   "index": 60,
+   "sz_decimals": 1,
+   "is_spot": false,
+   "max_leverage": 10
+  },
+  "FOGO": {
+   "index": 200,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 3
+  },
+  "FRIEND": {
+   "index": 31,
+   "sz_decimals": 1,
+   "is_spot": false,
+   "max_leverage": 3
+  },
+  "FTM": {
+   "index": 28,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 3
+  },
+  "FTT": {
+   "index": 35,
+   "sz_decimals": 1,
+   "is_spot": false,
+   "max_leverage": 3
+  },
+  "FXS": {
+   "index": 19,
+   "sz_decimals": 1,
+   "is_spot": false,
+   "max_leverage": 3
+  },
+  "GALA": {
+   "index": 73,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 10
+  },
+  "GAS": {
+   "index": 48,
+   "sz_decimals": 1,
+   "is_spot": false,
+   "max_leverage": 10
+  },
+  "GMT": {
+   "index": 8,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 2
+  },
+  "GOAT": {
+   "index": 123,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 5
+  },
+  "GRAM": {
+   "index": 208,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 5
+  },
+  "GRASS": {
+   "index": 126,
+   "sz_decimals": 1,
+   "is_spot": false,
+   "max_leverage": 3
+  },
+  "GRIFFAIN": {
+   "index": 147,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 3
+  },
+  "HBAR": {
+   "index": 101,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 5
+  },
+  "HEMI": {
+   "index": 190,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 3
+  },
+  "HMSTR": {
+   "index": 119,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 5
+  },
+  "HPOS": {
+   "index": 16,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 50
+  },
+  "HYPE": {
+   "index": 135,
+   "sz_decimals": 2,
+   "is_spot": false,
+   "max_leverage": 10
+  },
+  "HYPER": {
+   "index": 169,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 3
+  },
+  "ICP": {
+   "index": 132,
+   "sz_decimals": 2,
+   "is_spot": false,
+   "max_leverage": 10
+  },
+  "ILV": {
+   "index": 64,
+   "sz_decimals": 2,
+   "is_spot": false,
+   "max_leverage": 10
+  },
+  "IMX": {
+   "index": 66,
+   "sz_decimals": 1,
+   "is_spot": false,
+   "max_leverage": 10
+  },
+  "INIT": {
+   "index": 171,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 3
+  },
+  "INJ": {
+   "index": 26,
+   "sz_decimals": 1,
+   "is_spot": false,
+   "max_leverage": 10
+  },
+  "IO": {
+   "index": 108,
+   "sz_decimals": 1,
+   "is_spot": false,
+   "max_leverage": 5
+  },
+  "IOTA": {
+   "index": 133,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 5
+  },
+  "IP": {
+   "index": 160,
+   "sz_decimals": 1,
+   "is_spot": false,
+   "max_leverage": 3
+  },
+  "JELLY": {
+   "index": 156,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 3
+  },
+  "JELLYJELLY": {
+   "index": 155,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 3
+  },
+  "JOE": {
+   "index": 72,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 10
+  },
+  "JTO": {
+   "index": 76,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 10
+  },
+  "JUP": {
+   "index": 71,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 50
+  },
+  "KAITO": {
+   "index": 162,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 5
+  },
+  "KAS": {
+   "index": 40,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 5
+  },
+  "KBONK": {
+   "index": 67,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 5
+  },
+  "KDOGS": {
+   "index": 115,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 5
+  },
+  "KLUNC": {
+   "index": 75,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 10
+  },
+  "KNEIRO": {
+   "index": 122,
+   "sz_decimals": 1,
+   "is_spot": false,
+   "max_leverage": 5
+  },
+  "KPEPE": {
+   "index": 12,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 10
+  },
+  "KSHIB": {
+   "index": 29,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 10
+  },
+  "LAUNCHCOIN": {
+   "index": 174,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 3
+  },
+  "LAYER": {
+   "index": 159,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 3
+  },
+  "LDO": {
+   "index": 24,
+   "sz_decimals": 1,
+   "is_spot": false,
+   "max_leverage": 5
+  },
+  "LINEA": {
+   "index": 184,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 3
+  },
+  "LISTA": {
+   "index": 112,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 5
+  },
+  "LIT": {
+   "index": 201,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 5
+  },
+  "MANTA": {
+   "index": 84,
+   "sz_decimals": 1,
+   "is_spot": false,
+   "max_leverage": 10
+  },
+  "MATIC": {
+   "index": 5,
+   "sz_decimals": 1,
+   "is_spot": false,
+   "max_leverage": 50
+  },
+  "MAV": {
+   "index": 65,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 5
+  },
+  "MAVIA": {
+   "index": 91,
+   "sz_decimals": 1,
+   "is_spot": false,
+   "max_leverage": 5
+  },
+  "ME": {
+   "index": 136,
+   "sz_decimals": 1,
+   "is_spot": false,
+   "max_leverage": 3
+  },
+  "MEGA": {
+   "index": 196,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 3
+  },
+  "MELANIA": {
+   "index": 152,
+   "sz_decimals": 1,
+   "is_spot": false,
+   "max_leverage": 3
+  },
+  "MEME": {
+   "index": 55,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 10
+  },
+  "MERL": {
+   "index": 100,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 5
+  },
+  "MET": {
+   "index": 195,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 3
+  },
+  "MEW": {
+   "index": 113,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 5
+  },
+  "MINA": {
+   "index": 46,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 10
+  },
+  "MKR": {
+   "index": 20,
+   "sz_decimals": 4,
+   "is_spot": false,
+   "max_leverage": 10
+  },
+  "MON": {
+   "index": 194,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 5
+  },
+  "MOODENG": {
+   "index": 124,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 3
+  },
+  "MORPHO": {
+   "index": 149,
+   "sz_decimals": 1,
+   "is_spot": false,
+   "max_leverage": 5
+  },
+  "MOVE": {
+   "index": 137,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 10
+  },
+  "NEAR": {
+   "index": 54,
+   "sz_decimals": 1,
+   "is_spot": false,
+   "max_leverage": 20
+  },
+  "NEIROETH": {
+   "index": 121,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 5
+  },
+  "NEO": {
+   "index": 58,
+   "sz_decimals": 2,
+   "is_spot": false,
+   "max_leverage": 20
+  },
+  "NFTI": {
+   "index": 68,
+   "sz_decimals": 1,
+   "is_spot": false,
+   "max_leverage": 3
+  },
+  "NIL": {
+   "index": 164,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 5
+  },
+  "NOT": {
+   "index": 106,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 5
+  },
+  "NTRN": {
+   "index": 39,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 5
+  },
+  "NXPC": {
+   "index": 175,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 3
+  },
+  "OM": {
+   "index": 161,
+   "sz_decimals": 1,
+   "is_spot": false,
+   "max_leverage": 5
+  },
+  "OMNI": {
+   "index": 103,
+   "sz_decimals": 2,
+   "is_spot": false,
+   "max_leverage": 5
+  },
+  "ONDO": {
+   "index": 87,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 10
+  },
+  "OP": {
+   "index": 11,
+   "sz_decimals": 1,
+   "is_spot": false,
+   "max_leverage": 50
+  },
+  "ORDI": {
+   "index": 56,
+   "sz_decimals": 2,
+   "is_spot": false,
+   "max_leverage": 10
+  },
+  "OX": {
+   "index": 30,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 3
+  },
+  "PANDORA": {
+   "index": 93,
+   "sz_decimals": 5,
+   "is_spot": false,
+   "max_leverage": 3
+  },
+  "PAXG": {
+   "index": 165,
+   "sz_decimals": 3,
+   "is_spot": false,
+   "max_leverage": 10
+  },
+  "PENDLE": {
+   "index": 50,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 10
+  },
+  "PENGU": {
+   "index": 139,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 5
+  },
+  "PEOPLE": {
+   "index": 80,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 10
+  },
+  "PIXEL": {
+   "index": 96,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 5
+  },
+  "PNUT": {
+   "index": 127,
+   "sz_decimals": 1,
+   "is_spot": false,
+   "max_leverage": 5
+  },
+  "POL": {
+   "index": 116,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 10
+  },
+  "POLYX": {
+   "index": 47,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 10
+  },
+  "PONS": {
+   "index": 210,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 3
+  },
+  "POPCAT": {
+   "index": 102,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 5
+  },
+  "PROMPT": {
+   "index": 166,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 3
+  },
+  "PROVE": {
+   "index": 180,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 3
+  },
+  "PUMP": {
+   "index": 179,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 10
+  },
+  "PURR": {
+   "index": 125,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 3
+  },
+  "PYTH": {
+   "index": 61,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 10
+  },
+  "RENDER": {
+   "index": 114,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 5
+  },
+  "REQ": {
+   "index": 86,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 5
+  },
+  "RESOLV": {
+   "index": 177,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 3
+  },
+  "REZ": {
+   "index": 105,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 5
+  },
+  "RLB": {
+   "index": 14,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 50
+  },
+  "RNDR": {
+   "index": 23,
+   "sz_decimals": 1,
+   "is_spot": false,
+   "max_leverage": 20
+  },
+  "RSR": {
+   "index": 74,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 5
+  },
+  "RUNE": {
+   "index": 62,
+   "sz_decimals": 1,
+   "is_spot": false,
+   "max_leverage": 10
+  },
+  "S": {
+   "index": 148,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 5
+  },
+  "SAGA": {
+   "index": 99,
+   "sz_decimals": 1,
+   "is_spot": false,
+   "max_leverage": 3
+  },
+  "SAND": {
+   "index": 130,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 5
+  },
+  "SCR": {
+   "index": 120,
+   "sz_decimals": 1,
+   "is_spot": false,
+   "max_leverage": 3
+  },
+  "SKR": {
+   "index": 205,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 3
+  },
+  "SKY": {
+   "index": 185,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 3
+  },
+  "SNX": {
+   "index": 22,
+   "sz_decimals": 1,
+   "is_spot": false,
+   "max_leverage": 10
+  },
+  "SOL": {
+   "index": 0,
+   "sz_decimals": 2,
+   "is_spot": false,
+   "max_leverage": 10
+  },
+  "SOPH": {
+   "index": 176,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 3
+  },
+  "SPX": {
+   "index": 146,
+   "sz_decimals": 1,
+   "is_spot": false,
+   "max_leverage": 5
+  },
+  "STABLE": {
+   "index": 199,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 3
+  },
+  "STBL": {
+   "index": 188,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 3
+  },
+  "STG": {
+   "index": 51,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 10
+  },
+  "STRAX": {
+   "index": 53,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 10
+  },
+  "STX": {
+   "index": 27,
+   "sz_decimals": 1,
+   "is_spot": false,
+   "max_leverage": 10
+  },
+  "SUI": {
+   "index": 25,
+   "sz_decimals": 1,
+   "is_spot": false,
+   "max_leverage": 10
+  },
+  "SUPER": {
+   "index": 69,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 10
+  },
+  "SUSHI": {
+   "index": 63,
+   "sz_decimals": 1,
+   "is_spot": false,
+   "max_leverage": 10
+  },
+  "SYRUP": {
+   "index": 178,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 3
+  },
+  "TAO": {
+   "index": 95,
+   "sz_decimals": 3,
+   "is_spot": false,
+   "max_leverage": 10
+  },
+  "TIA": {
+   "index": 42,
+   "sz_decimals": 1,
+   "is_spot": false,
+   "max_leverage": 10
+  },
+  "TNSR": {
+   "index": 98,
+   "sz_decimals": 1,
+   "is_spot": false,
+   "max_leverage": 5
+  },
+  "TON": {
+   "index": 44,
+   "sz_decimals": 1,
+   "is_spot": false,
+   "max_leverage": 10
+  },
+  "TRB": {
+   "index": 36,
+   "sz_decimals": 2,
+   "is_spot": false,
+   "max_leverage": 5
+  },
+  "TRUMP": {
+   "index": 150,
+   "sz_decimals": 1,
+   "is_spot": false,
+   "max_leverage": 10
+  },
+  "TST": {
+   "index": 158,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 3
+  },
+  "TURBO": {
+   "index": 107,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 5
+  },
+  "UMA": {
+   "index": 85,
+   "sz_decimals": 1,
+   "is_spot": false,
+   "max_leverage": 10
+  },
+  "UNIBOT": {
+   "index": 17,
+   "sz_decimals": 2,
+   "is_spot": false,
+   "max_leverage": 2
+  },
+  "USELESS": {
+   "index": 211,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 5
+  },
+  "USTC": {
+   "index": 70,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 10
+  },
+  "USUAL": {
+   "index": 140,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 5
+  },
+  "VET": {
+   "index": 134,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 5
+  },
+  "VINE": {
+   "index": 153,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 3
+  },
+  "VIRTUAL": {
+   "index": 138,
+   "sz_decimals": 1,
+   "is_spot": false,
+   "max_leverage": 5
+  },
+  "VVV": {
+   "index": 154,
+   "sz_decimals": 2,
+   "is_spot": false,
+   "max_leverage": 3
+  },
+  "W": {
+   "index": 92,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 3
+  },
+  "WCT": {
+   "index": 168,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 3
+  },
+  "WIF": {
+   "index": 78,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 5
+  },
+  "WLD": {
+   "index": 15,
+   "sz_decimals": 1,
+   "is_spot": false,
+   "max_leverage": 10
+  },
+  "WLFI": {
+   "index": 183,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 5
+  },
+  "XAI": {
+   "index": 83,
+   "sz_decimals": 1,
+   "is_spot": false,
+   "max_leverage": 10
+  },
+  "XLM": {
+   "index": 128,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 5
+  },
+  "XMR": {
+   "index": 202,
+   "sz_decimals": 2,
+   "is_spot": false,
+   "max_leverage": 5
+  },
+  "XPL": {
+   "index": 182,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 10
+  },
+  "YZY": {
+   "index": 181,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 3
+  },
+  "ZEC": {
+   "index": 193,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 3
+  },
+  "ZEN": {
+   "index": 59,
+   "sz_decimals": 2,
+   "is_spot": false,
+   "max_leverage": 10
+  },
+  "ZEREBRO": {
+   "index": 144,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 5
+  },
+  "ZETA": {
+   "index": 89,
+   "sz_decimals": 1,
+   "is_spot": false,
+   "max_leverage": 10
+  },
+  "ZK": {
+   "index": 110,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 3
+  },
+  "ZORA": {
+   "index": 170,
+   "sz_decimals": 0,
+   "is_spot": false,
+   "max_leverage": 3
+  },
+  "ZRO": {
+   "index": 32,
+   "sz_decimals": 1,
+   "is_spot": false,
+   "max_leverage": 10
+  }
+ }
+}

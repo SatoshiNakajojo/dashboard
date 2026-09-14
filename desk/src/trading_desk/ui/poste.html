@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="fr" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Desk — Poste de pilotage</title>
+<link rel="stylesheet" href="/ui/poste/poste.css">
+</head>
+
+<!--
+  Le poste de pilotage.
+
+  Trois etats : l'accueil, la sequence d'embarquement, le poste. Le decor
+  est l'IMAGE SUR LAQUELLE LA SEQUENCE SE TERMINE — pas une autre prise du
+  meme cockpit. C'est ce qui rend le raccord invisible, et aucune image
+  choisie separement ne le garantirait.
+
+  Les panneaux du desk sont charges tels quels depuis `/panneaux`, dans une
+  iframe posee sur la dalle. Ce n'est pas de la paresse : l'ancien poste
+  recopiait tout le balisage de l'application dans sa propre page, et cette
+  seconde copie devait etre tenue synchronisee a la main. Deux
+  implementations du meme ecran finissent toujours par diverger, et c'est
+  celle qu'on regarde le moins qui derive.
+-->
+
+<body>
+
+<!-- 1. L'accueil -->
+<!-- 1. LA CARTE-TITRE. Un ecran noir, rien d'autre.
+     Elle existe pour ne pas devoiler le poste avant qu'on ait embarque :
+     arriver directement sur le cockpit grille l'effet du zoom qui suit. -->
+<div id="titre" role="button" tabindex="0"
+     aria-label="Embarquer — montre le poste de pilotage">
+  <div class="accueil">
+    <h1>Welcome onboard Boss</h1>
+    <div class="trait"></div>
+    <p>Cliquez pour embarquer</p>
+  </div>
+</div>
+
+<!-- 2. LA VUE D'ENSEMBLE : le poste en entier, la Terre par les hublots.
+     C'est la premiere image de la sequence, donc le clic suivant ne
+     provoque aucun saut — on part de l'image qu'on regardait. -->
+<div id="embarquement" role="button" tabindex="0"
+     aria-label="Rejoindre le poste de pilotage">
+  <!-- La vue d'ensemble est une BOUCLE, plus une photo.
+       Son point de bouclage a ete fondu a l'encodage : la derniere image
+       reprend la premiere a 0,6 % pres, contre 16,3 % sur la source, ou le
+       saut se voyait toutes les quinze secondes.
+       `poster` evite le noir le temps que la premiere image se decode. -->
+  <div class="scene">
+    <video class="decor" id="vueGlobale" playsinline muted loop
+           preload="auto" poster="/ui/poste/assets/vue.jpg">
+      <source src="/ui/poste/assets/vue.mp4"
+              type='video/mp4; codecs="avc1.64001f"'>
+      <source src="/ui/poste/assets/vue.webm"
+              type='video/webm; codecs="vp9"'>
+    </video>
+  </div>
+  <p class="invite">Cliquez pour rejoindre le poste</p>
+</div>
+</div>
+
+<!-- 2. La sequence.
+     Deux encodages : H.264 pour Safari et les navigateurs de bureau, VP9
+     pour ceux qui sont construits sans codec proprietaire — dont le
+     Chromium de test. Sans le second, la sequence ne pouvait meme pas etre
+     verifiee ici, et un chemin qu'on ne peut pas eprouver est un chemin
+     qu'on croit bon.
+
+     Le codec est declare EN ENTIER, pas seulement le conteneur : un
+     navigateur qui lit « video/mp4 » se croit capable et telecharge trois
+     megaoctets avant de decouvrir qu'il n'a pas H.264. Avec le profil et le
+     niveau, il saute le fichier sans rien demander. -->
+<div id="sequence" hidden>
+  <!-- Une seule balise video pour TOUTES les transitions : embarquement,
+       retour a la vue d'ensemble, aller et retour vers l'ecran de gauche.
+       Les sources sont posees par le script au moment de jouer. Quatre
+       elements video distincts auraient voulu dire quatre etats a garder
+       synchronises, et trois d'entre eux toujours en train de se taire. -->
+  <video id="film" playsinline preload="auto"></video>
+</div>
+<button class="passer" id="passer" type="button" hidden>Passer</button>
+
+<!-- L'ECRAN D'ATTENTE. Le radar tourne pendant qu'on decide d'ouvrir.
+     En boucle et sans son : c'est un ecran de veille, pas une sequence.
+     Il se fond par-dessus le decor plutot que de le remplacer d'un coup —
+     son cadrage n'est pas exactement celui de la photo, et un fondu court
+     rend cet ecart invisible la ou une coupe le soulignerait. -->
+<div id="attente" hidden>
+  <video id="veille" class="scene" playsinline muted loop preload="auto"></video>
+  <p class="balayage"><span>Market scan in progress</span></p>
+  <button class="ouvrir" id="ouvrirDesk" type="button">Open desk</button>
+</div>
+
+<!-- 3. Le poste. Monte des le depart, SOUS les deux couches ci-dessus :
+     on ne le revele pas a la fin, on retire ce qui le couvrait. Un decor
+     deja peint ne peut pas manquer son entree — et les panneaux ont le
+     temps de se charger pendant l'accueil. -->
+<div id="poste">
+  <div class="scene">
+    <img class="decor" src="/ui/poste/assets/poste.jpg"
+         alt="Poste de pilotage" draggable="false">
+    <iframe class="verre" src="/panneaux?verre"
+            title="Desk — état, mandat et invariants"></iframe>
+    <div class="reflet"></div>
+    <!-- L'acces a l'ecran de gauche. Il remplace le titre « Flux de
+         donnees » du PFD, retire d'ici puisque ce panneau ne s'affiche plus
+         que sur l'ecran de gauche. Sans lui, cet ecran deviendrait
+         inatteignable. -->
+    <button class="vers-gauche" id="versGauche" type="button">Data feed</button>
+  </div>
+</div>
+
+<!-- 4. L'ecran de gauche : le collecteur de donnees du VPS.
+     Monte comme le poste — toujours la, dessous — pour la meme raison :
+     un decor deja peint ne peut pas manquer son entree. Il ne porte pas
+     les memes panneaux mais LA MEME PAGE, en vue `flux`. -->
+<div id="gauche" hidden>
+  <div class="scene">
+    <img class="decor" src="/ui/poste/assets/gauche.jpg"
+         alt="Écran de gauche — collecteur de données" draggable="false">
+    <iframe class="verre-gauche" src="/panneaux?verre&amp;vue=flux"
+            title="Collecteur de données — flux"></iframe>
+    <div class="reflet-gauche"></div>
+    <!-- Pose DANS la scene, donc sur la console : un bouton au bord de la
+         fenetre appartient au navigateur, pas au vaisseau. -->
+    <button class="retour-pfd" id="retourPfd" type="button">Return to PFD</button>
+  </div>
+</div>
+
+
+
+<!-- Le retour a la vue d'ensemble. Le poste est un gros plan : une fois
+     dedans, on ne voyait plus le vaisseau. Ce bouton redonne la vue du
+     debut sans recharger la page. -->
+<button class="revoir" id="revoir" type="button"
+        title="Revoir le poste en entier">Vue d'ensemble</button>
+
+<div class="sortie">
+  Desk · <a href="/panneaux">vue sans décor</a>
+</div>
+
+<!-- La bande son du vaisseau. En boucle, discrete, coupable d'un clic.
+     `muted` au depart : sans geste de l'utilisateur, tout navigateur refuse
+     de jouer du son, et une lecture refusee laisse une promesse rejetee qui
+     salit la console. On la demarre au premier clic. -->
+<audio id="ambiance" src="/ui/poste/assets/ambiance.mp3" loop preload="auto"></audio>
+<button class="son" id="son" type="button"
+        aria-pressed="false" title="Son du vaisseau">son</button>
+
+<script src="/ui/poste/poste.js"></script>
+</body>
+</html>
