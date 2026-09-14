@@ -42,7 +42,7 @@ src/
   components/           composants de présentation — ne connaissent aucun backend
   features/<domaine>/   source de données + hook métier
   hooks/                session, annuaire du club, marché BTC
-  lib/                  géométrie du graphique, formatage FR, HTTP, cache, règles de perf
+  lib/                  géométrie du graphique, formatage FR, HTTP, cache, cotations, règles de perf
   mocks/                fixtures du design, mêmes UUID que le seed Supabase
   theme/                jetons — miroir TypeScript de tailwind.config.js
 supabase/               migrations, seed, tests de schéma, fonction Edge
@@ -162,19 +162,46 @@ La suppression est ciblée sur deux lignes et justifiée sur place.
 
 ---
 
+## Deux fournisseurs de cours
+
+| Classe d'actif | Fournisseur |
+|---|---|
+| `BTC`, `ALT`, `DEGEN` | CoinGecko |
+| `ACTION`, `ETF` | **Yahoo Finance** — la source du dashboard JCGI |
+
+Le routage est une fonction pure (`src/lib/quotes.ts`), pas une suite de `if`
+répartis dans les appelants. La contrainte `tickers_one_quote_source` interdit
+qu'une ligne porte les deux identifiants : un actif a un fournisseur, pas deux
+rafraîchisseurs qui se disputent sa ligne.
+
+Le parseur de réponse Yahoo est **partagé** entre l'app et la fonction Edge
+(`supabase/functions/_shared/yahooParse.ts`) : un prix lu à l'écran et un prix
+écrit en base sortent du même code.
+
+Deux différences assumées avec le dashboard :
+
+- **Pas de proxy CORS.** Le dashboard passe par `allorigins` / `corsproxy.io`
+  parce que c'est une page de navigateur. Une app React Native n'a pas de
+  politique d'origine, et la fonction Edge est un serveur : tous deux appellent
+  Yahoo directement, sans tiers dans le chemin des données. Seule la build web
+  y perd la suggestion de prix du composer — les cours, eux, viennent de la base.
+- **Les devises sortent de `meta.currency`**, pas d'une liste codée en dur. Le
+  dashboard déclare un `EUR_YAHOO_TICKERS_SET` qu'il n'utilise nulle part ;
+  lire la devise déclarée évite d'avoir à tenir cette liste. Londres cote en
+  pence (`GBp`) : l'oublier multiplierait une position par cent.
+
+---
+
 ## Ce qui reste à faire
 
-**Un seul point demande un arbitrage** : CoinGecko ne couvre pas `$MSTR`,
-`$NVDA`, `$IBIT`, `$GME`. Il faut soit un second fournisseur (Finnhub, Alpha
-Vantage, Twelve Data), soit une saisie manuelle du cours par le membre. Tout
-est prêt pour les deux : `tickers.coingecko_id` est nullable, la fonction Edge
-ignore proprement ce qu'elle ne sait pas coter, et `tickers_freeze` laisse
-passer une écriture sur `current_price` seulement.
+Rien ne bloque. Ce qui suit est du confort :
 
-Le reste est du confort, pas du blocage :
-
-- **Autocomplétion du ticker** dans le composer. `resolveCoingeckoId()` existe
-  et tourne à la publication ; il manque la liste déroulante pendant la saisie.
+- **Autocomplétion du ticker** dans le composer. `resolveCoingeckoId()` et
+  `fetchStockQuote()` existent et tournent déjà à la saisie et à la
+  publication ; il manque la liste déroulante.
+- **Places de cotation.** Le composer ne demande pas la place, donc un titre
+  européen est publié sans suffixe Yahoo et devra être corrigé en base
+  (`AI` → `AI.PA`). La table des suffixes est écrite et testée.
 - **Taille de position.** La colonne existe et les cartes l'affichent, mais le
   composer ne la collecte pas — le design ne lui donne pas de champ.
 - **Saison de l'Oracle** figée à `2026-S3` dans `src/mocks/oracle.ts` ; en

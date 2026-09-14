@@ -54,6 +54,8 @@ export interface Ticker {
   entryBtcPrice: number | null;
   sizeUsd: number | null;
   thesis: string;
+  /** Dernier rafraîchissement réussi du cours. `null` si jamais rafraîchi. */
+  priceUpdatedAt: string | null;
   createdAt: string;
 }
 

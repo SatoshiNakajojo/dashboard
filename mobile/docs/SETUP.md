@@ -206,4 +206,10 @@ directement sur les mocks.
 
 La fonction Edge `refresh-prices` et sa planification `pg_cron` sont décrites
 dans `supabase/functions/README.md`. Elle est le seul écrivain légitime de
-`tickers.current_price`.
+`tickers.current_price`, et interroge deux fournisseurs : CoinGecko pour les
+cryptos, **Yahoo Finance** pour les actions et ETF — la même source que le
+dashboard JCGI.
+
+Aucune clé n'est nécessaire pour Yahoo. Il refuse en revanche les requêtes sans
+`User-Agent` crédible : c'est la cause la plus fréquente d'un 403 autrement
+inexplicable.

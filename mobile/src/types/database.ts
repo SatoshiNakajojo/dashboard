@@ -55,6 +55,7 @@ export type TickerRow = {
   size_usd: number | null;
   thesis: string;
   coingecko_id: string | null;
+  yahoo_symbol: string | null;
   price_updated_at: string | null;
   created_at: string;
   /** Colonne générée : jamais écrite par le client. */

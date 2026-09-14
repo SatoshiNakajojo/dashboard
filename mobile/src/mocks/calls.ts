@@ -39,6 +39,7 @@ export const MOCK_CURRENT_TICKERS: Ticker[] = [
     sizeUsd: 12_500,
     thesis:
       'Le seul actif que je garde dix ans. DCA hebdomadaire, jamais de levier, cold storage.',
+    priceUpdatedAt: ago(0),
     createdAt: ago(2 * HOUR),
   },
   {
@@ -51,6 +52,7 @@ export const MOCK_CURRENT_TICKERS: Ticker[] = [
     entryBtcPrice: btcEntryFromVs(12.4, -2.5),
     sizeUsd: 9_000,
     thesis: 'Levier propre sur BTC via le bilan. Tant que la trésorerie achète, je tiens.',
+    priceUpdatedAt: ago(0),
     createdAt: ago(DAY),
   },
   {
@@ -63,6 +65,7 @@ export const MOCK_CURRENT_TICKERS: Ticker[] = [
     entryBtcPrice: btcEntryFromVs(21.8, 6.9),
     sizeUsd: 4_200,
     thesis: 'Le seul alt que je garde. Staking et L2 ; je sors si le ratio ETH/BTC casse.',
+    priceUpdatedAt: ago(0),
     createdAt: ago(2 * DAY),
   },
   {
@@ -75,6 +78,7 @@ export const MOCK_CURRENT_TICKERS: Ticker[] = [
     entryBtcPrice: btcEntryFromVs(11.2, -3.7),
     sizeUsd: 6_800,
     thesis: 'Une poche BTC dans l’enveloppe fiscale. Pratique, mais ce ne sont pas mes clés.',
+    priceUpdatedAt: ago(0),
     createdAt: ago(3 * DAY),
   },
   {
@@ -87,6 +91,7 @@ export const MOCK_CURRENT_TICKERS: Ticker[] = [
     entryBtcPrice: btcEntryFromVs(-61, -66.4),
     sizeUsd: 1_100,
     thesis: 'Aucune thèse. Pur degen. Assumé jusqu’au bout.',
+    priceUpdatedAt: ago(0),
     createdAt: ago(5 * DAY),
   },
 ];
@@ -162,6 +167,7 @@ const HISTORY_TICKERS: Ticker[] = HISTORY.map((entry, index) => ({
   entryBtcPrice: entry.vs === null ? entry.entry : btcEntryFromVs(entry.perf, entry.vs),
   sizeUsd: null,
   thesis: THESES[entry.symbol] ?? '',
+  priceUpdatedAt: ago(0),
   createdAt: ago(entry.ageDays * DAY),
 }));
 

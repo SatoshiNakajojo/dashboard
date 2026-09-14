@@ -4,6 +4,7 @@ import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 
 import { Micro } from '@/components/ui/Micro';
+import { useSuggestedPrice } from '@/features/bag/useSuggestedPrice';
 import { formatUsd } from '@/lib/format';
 import {
   ASSET_CLASSES,
@@ -26,8 +27,6 @@ export interface CallDraft {
 
 export interface ComposerSheetProps {
   visible: boolean;
-  /** Cours spot, pour pré-remplir le prix d'entrée. */
-  spotPrice: number;
   /** Écriture en cours : le bouton se verrouille et annonce l'attente. */
   publishing?: boolean;
   onClose: () => void;
@@ -41,7 +40,6 @@ const THESIS_MAX = 140;
 /** Bottom sheet « Poster un call ». */
 export function ComposerSheet({
   visible,
-  spotPrice,
   publishing = false,
   onClose,
   onPublish,
@@ -51,10 +49,15 @@ export function ComposerSheet({
   const [entry, setEntry] = useState('');
   const [thesis, setThesis] = useState('');
 
-  /** Le prix saisi, ou le spot à défaut. Trop court pour mériter un `useMemo`. */
+  // Le cours proposé dépend de l'actif : spot BTC pour un call bitcoin, Yahoo
+  // pour une action ou un ETF, rien pour un alt — plutôt qu'un prix faux.
+  const suggested = useSuggestedPrice(assetClass, symbol);
+
+  /** Le prix saisi, ou le cours proposé à défaut. */
   const entryPrice = (() => {
     const parsed = Number(entry.replace(/[^\d.,]/g, '').replace(',', '.'));
-    return Number.isFinite(parsed) && parsed > 0 ? parsed : spotPrice;
+    if (Number.isFinite(parsed) && parsed > 0) return parsed;
+    return suggested.price ?? 0;
   })();
 
   const reset = () => {
@@ -73,7 +76,25 @@ export function ComposerSheet({
   // Le motif est celui de la contrainte `tickers_symbol_check` : refuser ici
   // ce que la base refusera de toute façon, mais avec un retour immédiat.
   const symbolValid = /^\$[A-Z0-9.\-]{1,10}$/.test(symbol);
-  const canPublish = symbolValid && thesis.trim().length > 0 && entryPrice > 0 && !publishing;
+
+  /**
+   * Pourquoi la publication est bloquée, s'il y a lieu.
+   *
+   * Un bouton inerte sans explication est un cul-de-sac : depuis que le cours
+   * n'est plus pré-rempli au petit bonheur, un alt exige une saisie, et il faut
+   * le dire.
+   */
+  const blockedReason = !symbolValid
+    ? 'Un ticker comme « $BTC », lettres et chiffres.'
+    : entryPrice <= 0
+      ? suggested.loading
+        ? 'Recherche du cours…'
+        : 'Indiquez votre prix d’entrée.'
+      : thesis.trim().length === 0
+        ? 'Une thèse, même courte.'
+        : null;
+
+  const canPublish = blockedReason === null && !publishing;
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
@@ -186,14 +207,20 @@ export function ComposerSheet({
               style={{ flex: 1, paddingVertical: 13, paddingLeft: 16, borderLeftWidth: 1, borderLeftColor: c.hairline }}
             >
               <Micro size={8.5} tracking={1.7} style={{ color: c.sepiaMuted }}>
-                PRIX D’ENTRÉE
+                {suggested.source === 'yahoo' ? 'PRIX D’ENTRÉE · YAHOO' : 'PRIX D’ENTRÉE'}
               </Micro>
               <TextInput
                 value={entry}
                 onChangeText={setEntry}
                 keyboardType="decimal-pad"
-                // Pré-rempli au cours spot, mais éditable (README §5.5).
-                placeholder={formatUsd(spotPrice)}
+                // Pré-rempli au cours du moment, mais éditable (README §5.5).
+                placeholder={
+                  suggested.loading
+                    ? '…'
+                    : suggested.price === null
+                      ? 'à saisir'
+                      : formatUsd(suggested.price)
+                }
                 placeholderTextColor={c.sepiaFaint}
                 style={{
                   fontFamily: f.monoMed,
@@ -259,11 +286,12 @@ export function ComposerSheet({
               fontFamily: f.sans,
               fontSize: 10,
               lineHeight: 16,
-              color: c.sepiaFaint,
+              color: blockedReason ? c.sepia : c.sepiaFaint,
               textAlign: 'center',
             }}
           >
-            Perf calculée en dollars et vs ₿ depuis ce prix. Non modifiable après publication.
+            {blockedReason ??
+              'Perf calculée en dollars et vs ₿ depuis ce prix. Non modifiable après publication.'}
           </Text>
         </View>
       </View>

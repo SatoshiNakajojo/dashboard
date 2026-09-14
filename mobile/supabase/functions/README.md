@@ -2,10 +2,43 @@
 
 ## `refresh-prices`
 
-Met à jour `tickers.current_price` depuis CoinGecko. C'est le **seul écrivain
-légitime** de cette colonne : le déclencheur `tickers_freeze` interdit au membre
-de modifier quoi que ce soit d'autre sur un call publié, et cette fonction
-n'écrit rien d'autre non plus.
+Met à jour `tickers.current_price`. C'est le **seul écrivain légitime** de cette
+colonne : le déclencheur `tickers_freeze` interdit au membre de modifier quoi
+que ce soit d'autre sur un call publié, et cette fonction n'écrit rien d'autre
+non plus.
+
+### Deux fournisseurs, un critère
+
+| Classe d'actif | Fournisseur | Colonne |
+|---|---|---|
+| `BTC`, `ALT`, `DEGEN` | CoinGecko | `coingecko_id` |
+| `ACTION`, `ETF` | **Yahoo Finance** | `yahoo_symbol` |
+
+Yahoo est la source utilisée par le dashboard JCGI (`app.jsx`, `fetchYahoo`) :
+`query1.finance.yahoo.com/v8/finance/chart/{symbole}`, prix de séance
+`meta.regularMarketPrice` avec repli sur la dernière clôture non nulle.
+
+La contrainte `tickers_one_quote_source` interdit qu'une ligne porte les deux :
+un actif a un fournisseur, pas deux rafraîchisseurs qui se disputent sa ligne.
+
+Les deux fournisseurs sont interrogés **en parallèle et indépendamment**. Une
+panne CoinGecko ne prive pas les actions de leur cours, et réciproquement : la
+fonction ne renvoie 502 que si *tout* a échoué.
+
+### Devises
+
+Le club compte en dollars ; Yahoo cote dans la devise de la place. `meta.currency`
+est lu à chaque cotation, et les taux manquants sont demandés à Yahoo lui-même
+(`EURUSD=X`). Deux pièges traités :
+
+- **Londres cote en pence** (`GBp`), pas en livres. L'oublier multiplie une
+  position par cent.
+- **Un taux manquant ne donne jamais un prix approximatif** : la ligne est
+  laissée telle quelle et signalée dans `problems`.
+
+Le dashboard JCGI déclare un `EUR_YAHOO_TICKERS_SET` codé en dur — mais ne
+l'utilise nulle part. S'appuyer sur `meta.currency` évite d'avoir à tenir cette
+liste à jour.
 
 ### Déployer
 
@@ -52,22 +85,41 @@ accès au schéma.
 
 ### Ce qu'elle ne fait pas
 
-- **Les actions et ETF.** `$MSTR`, `$NVDA`, `$IBIT`, `$GME` ne sont pas cotés
-  chez CoinGecko : ils n'ont pas de `coingecko_id` et sont simplement ignorés.
-  C'est le point qui attend un arbitrage — second fournisseur (Finnhub, Alpha
-  Vantage, Twelve Data) ou saisie manuelle par le membre.
-- **Inventer un prix.** Un actif absent de la réponse garde le sien. Un échec
-  CoinGecko laisse toute la table en place et renvoie 502 : mieux vaut un cours
-  daté par `price_updated_at` qu'un cours effacé.
+- **Inventer un prix.** Un actif absent des réponses garde le sien. Mieux vaut
+  un cours daté par `price_updated_at` qu'un cours effacé.
 - **Réveiller les clients pour rien.** Un prix inchangé n'est pas réécrit —
   chaque `UPDATE` sur `tickers` est diffusé en Realtime à tous les membres
-  connectés.
+  connectés. Un second passage sans mouvement de marché écrit zéro ligne.
+- **Confondre les deux fournisseurs.** Les tables de prix restent séparées :
+  `ETH` peut désigner le jeton chez CoinGecko et un ETF chez Yahoo, et les
+  fusionner donnerait un prix faux sans rien signaler.
 
 ### Réponse
 
 ```json
-{ "updated": 3, "skipped": 4, "failures": [], "assets": 5, "at": "2026-09-14T…" }
+{
+  "updated": 10,
+  "skipped": 0,
+  "failures": [],
+  "problems": [],
+  "assets": { "coingecko": 4, "yahoo": 4 },
+  "at": "2026-09-14T…"
+}
 ```
 
-`skipped` compte les actifs absents de la réponse **et** ceux dont le prix n'a
-pas bougé : les deux cas sont normaux.
+`skipped` compte les actifs absents des réponses **et** ceux dont le prix n'a
+pas bougé : les deux cas sont normaux. `problems` porte les pannes partielles —
+fournisseur injoignable, taux de change manquant — sans faire échouer le reste.
+
+### Symboles Yahoo
+
+`yahoo_symbol` ne porte pas le « $ » du club, et suffixe les places non
+américaines : `MSTR`, mais `AI.PA` pour Paris et `AVIO.MI` pour Milan. La
+migration a repris les lignes existantes en retirant simplement le « $ » —
+**les titres non américains sont donc à corriger à la main** :
+
+```sql
+update public.tickers set yahoo_symbol = 'AI.PA' where symbol = '$AI';
+```
+
+`src/lib/quotes.ts` porte la table des suffixes et la conversion, côté app.

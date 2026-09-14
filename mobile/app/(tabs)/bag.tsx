@@ -8,7 +8,6 @@ import { LeaderboardRow } from '@/components/LeaderboardRow';
 import { ScreenShell } from '@/components/ScreenShell';
 import { SectionTitle } from '@/components/ui/SectionTitle';
 import { useCalls } from '@/features/bag/useCalls';
-import { useBtcSpot } from '@/hooks/useBtcMarket';
 import { useMembers } from '@/hooks/useMembers';
 import { useSession } from '@/hooks/useSession';
 import {
@@ -28,7 +27,6 @@ type BagView = 'bag' | 'rekt';
 export default function BagScreen() {
   const { userId } = useSession();
   const { byId } = useMembers();
-  const { spot } = useBtcSpot();
   const { calls, loading, error, vote, publish, publishing } = useCalls(userId, byId);
 
   const [view, setView] = useState<BagView>('bag');
@@ -84,7 +82,6 @@ export default function BagScreen() {
 
       <ComposerSheet
         visible={composerOpen}
-        spotPrice={spot.usd}
         publishing={publishing}
         onClose={() => setComposerOpen(false)}
         onPublish={handlePublish}

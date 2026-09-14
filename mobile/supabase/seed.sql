@@ -85,13 +85,13 @@ on conflict (id) do nothing;
 -- chiffres du design à un spot BTC de 120 911 $.
 
 insert into public.tickers
-  (id, user_id, symbol, asset_class, entry_price, current_price, entry_btc_price, size_usd, thesis, coingecko_id, created_at)
+  (id, user_id, symbol, asset_class, entry_price, current_price, entry_btc_price, size_usd, thesis, coingecko_id, yahoo_symbol, created_at)
 values
-  ('44444444-4444-4444-8444-000000000001', '11111111-1111-4111-8111-000000000006', '$BTC',  'BTC',    103200,   118576.80, 103200.00, 12500, 'Le seul actif que je garde dix ans. DCA hebdomadaire, jamais de levier, cold storage.', 'bitcoin',  now() - interval '2 hours'),
-  ('44444444-4444-4444-8444-000000000002', '11111111-1111-4111-8111-000000000001', '$MSTR', 'ACTION',    412,     463.088, 104882.53,  9000, 'Levier propre sur BTC via le bilan. Tant que la trésorerie achète, je tiens.',          null,       now() - interval '1 day'),
-  ('44444444-4444-4444-8444-000000000003', '11111111-1111-4111-8111-000000000002', '$ETH',  'ALT',      3940,    4798.920, 106120.53,  4200, 'Le seul alt que je garde. Staking et L2 ; je sors si le ratio ETH/BTC casse.',          'ethereum', now() - interval '2 days'),
-  ('44444444-4444-4444-8444-000000000004', '11111111-1111-4111-8111-000000000005', '$IBIT', 'ETF',      58.30,    64.8296, 104709.87,  6800, 'Une poche BTC dans l’enveloppe fiscale. Pratique, mais ce ne sont pas mes clés.',       null,       now() - interval '3 days'),
-  ('44444444-4444-4444-8444-000000000005', '11111111-1111-4111-8111-000000000003', '$WIF',  'DEGEN',     1.84,     0.71760, 104169.00,  1100, 'Aucune thèse. Pur degen. Assumé jusqu’au bout.',                                       'dogwifcoin', now() - interval '5 days')
+  ('44444444-4444-4444-8444-000000000001', '11111111-1111-4111-8111-000000000006', '$BTC',  'BTC',    103200,   118576.80, 103200.00, 12500, 'Le seul actif que je garde dix ans. DCA hebdomadaire, jamais de levier, cold storage.', 'bitcoin', null, now() - interval '2 hours'),
+  ('44444444-4444-4444-8444-000000000002', '11111111-1111-4111-8111-000000000001', '$MSTR', 'ACTION',    412,     463.088, 104882.53,  9000, 'Levier propre sur BTC via le bilan. Tant que la trésorerie achète, je tiens.',          null, 'MSTR', now() - interval '1 day'),
+  ('44444444-4444-4444-8444-000000000003', '11111111-1111-4111-8111-000000000002', '$ETH',  'ALT',      3940,    4798.920, 106120.53,  4200, 'Le seul alt que je garde. Staking et L2 ; je sors si le ratio ETH/BTC casse.',          'ethereum', null, now() - interval '2 days'),
+  ('44444444-4444-4444-8444-000000000004', '11111111-1111-4111-8111-000000000005', '$IBIT', 'ETF',      58.30,    64.8296, 104709.87,  6800, 'Une poche BTC dans l’enveloppe fiscale. Pratique, mais ce ne sont pas mes clés.',       null, 'IBIT', now() - interval '3 days'),
+  ('44444444-4444-4444-8444-000000000005', '11111111-1111-4111-8111-000000000003', '$WIF',  'DEGEN',     1.84,     0.71760, 104169.00,  1100, 'Aucune thèse. Pur degen. Assumé jusqu’au bout.',                                       'dogwifcoin', null, now() - interval '5 days')
 on conflict (id) do nothing;
 
 -- --- Positions closes des saisons précédentes -------------------------------
@@ -103,13 +103,13 @@ on conflict (id) do nothing;
 -- `$WIF` n'y figure pas : le -61 % du Rekt Board est le call du fil ci-dessus.
 
 insert into public.tickers
-  (id, user_id, symbol, asset_class, entry_price, current_price, entry_btc_price, size_usd, thesis, coingecko_id, created_at)
+  (id, user_id, symbol, asset_class, entry_price, current_price, entry_btc_price, size_usd, thesis, coingecko_id, yahoo_symbol, created_at)
 values
-  ('44444444-4444-4444-8444-000000000101', '11111111-1111-4111-8111-000000000006', '$BTC', 'BTC', 61000, 119560.00000, 61000.00, null, 'Le seul actif que je garde dix ans. DCA hebdomadaire, jamais de levier, cold storage.', 'bitcoin', now() - interval '420 days'),
-  ('44444444-4444-4444-8444-000000000102', '11111111-1111-4111-8111-000000000002', '$NVDA', 'ACTION', 88.4, 153.81600, 91030.70, null, 'Les pelles de la ruée vers l’or. Je sors quand les hyperscalers arrêtent de commander.', null, now() - interval '300 days'),
-  ('44444444-4444-4444-8444-000000000103', '11111111-1111-4111-8111-000000000001', '$MSTR', 'ACTION', 252, 410.76000, 88272.45, null, 'Levier propre sur BTC via le bilan. Tant que la trésorerie achète, je tiens.', null, now() - interval '280 days'),
-  ('44444444-4444-4444-8444-000000000104', '11111111-1111-4111-8111-000000000005', '$ETHW', 'ALT', 4.2, 2.18400, 111610.15, null, 'La fork que personne n’a gardée. J’ai oublié de vendre.', 'ethereum-pow-iou', now() - interval '260 days'),
-  ('44444444-4444-4444-8444-000000000105', '11111111-1111-4111-8111-000000000004', '$GME', 'ACTION', 28.9, 22.54200, 103859.45, null, 'Nostalgie 2021. Ce n’était pas un investissement, c’était un souvenir.', null, now() - interval '190 days')
+  ('44444444-4444-4444-8444-000000000101', '11111111-1111-4111-8111-000000000006', '$BTC', 'BTC', 61000, 119560.00000, 61000.00, null, 'Le seul actif que je garde dix ans. DCA hebdomadaire, jamais de levier, cold storage.', 'bitcoin', null, now() - interval '420 days'),
+  ('44444444-4444-4444-8444-000000000102', '11111111-1111-4111-8111-000000000002', '$NVDA', 'ACTION', 88.4, 153.81600, 91030.70, null, 'Les pelles de la ruée vers l’or. Je sors quand les hyperscalers arrêtent de commander.', null, 'NVDA', now() - interval '300 days'),
+  ('44444444-4444-4444-8444-000000000103', '11111111-1111-4111-8111-000000000001', '$MSTR', 'ACTION', 252, 410.76000, 88272.45, null, 'Levier propre sur BTC via le bilan. Tant que la trésorerie achète, je tiens.', null, 'MSTR', now() - interval '280 days'),
+  ('44444444-4444-4444-8444-000000000104', '11111111-1111-4111-8111-000000000005', '$ETHW', 'ALT', 4.2, 2.18400, 111610.15, null, 'La fork que personne n’a gardée. J’ai oublié de vendre.', 'ethereum-pow-iou', null, now() - interval '260 days'),
+  ('44444444-4444-4444-8444-000000000105', '11111111-1111-4111-8111-000000000004', '$GME', 'ACTION', 28.9, 22.54200, 103859.45, null, 'Nostalgie 2021. Ce n’était pas un investissement, c’était un souvenir.', null, 'GME', now() - interval '190 days')
 on conflict (id) do nothing;
 
 insert into public.ticker_votes (ticker_id, user_id, side) values

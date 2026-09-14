@@ -20,8 +20,10 @@ export interface CallDraftInput {
   thesis: string;
   /** Cours BTC au moment de la publication — fige le référentiel vs ₿. */
   btcSpot: number;
-  /** Identifiant CoinGecko si l'actif y est coté. */
+  /** Identifiant CoinGecko, pour une crypto. */
   coingeckoId: string | null;
+  /** Symbole Yahoo Finance, pour une action ou un ETF. */
+  yahooSymbol: string | null;
 }
 
 export interface VoteRow {
@@ -42,7 +44,7 @@ export interface CallsSource {
 // ---------------------------------------------------------------------------
 
 const COLUMNS =
-  'id, user_id, symbol, asset_class, entry_price, current_price, entry_btc_price, size_usd, thesis, coingecko_id, created_at';
+  'id, user_id, symbol, asset_class, entry_price, current_price, entry_btc_price, size_usd, thesis, coingecko_id, yahoo_symbol, price_updated_at, created_at';
 
 interface Row {
   id: string;
@@ -55,6 +57,8 @@ interface Row {
   size_usd: number | string | null;
   thesis: string;
   coingecko_id: string | null;
+  yahoo_symbol: string | null;
+  price_updated_at: string | null;
   created_at: string;
 }
 
@@ -76,6 +80,7 @@ function fromRow(row: Row): Ticker {
     entryBtcPrice: num(row.entry_btc_price),
     sizeUsd: num(row.size_usd),
     thesis: row.thesis,
+    priceUpdatedAt: row.price_updated_at,
     createdAt: row.created_at,
   };
 }
@@ -120,7 +125,10 @@ function createSupabaseSource(client: NonNullable<typeof supabase>): CallsSource
           current_price: draft.entryPrice,
           entry_btc_price: draft.btcSpot,
           thesis: draft.thesis,
+          // Un actif a un fournisseur, pas deux : la contrainte
+          // `tickers_one_quote_source` le vérifie côté base.
           coingecko_id: draft.coingeckoId,
+          yahoo_symbol: draft.yahooSymbol,
         })
         .select(COLUMNS)
         .single();
@@ -200,6 +208,7 @@ function createMockSource(): CallsSource {
         entryBtcPrice: draft.btcSpot,
         sizeUsd: null,
         thesis: draft.thesis,
+        priceUpdatedAt: new Date().toISOString(),
         createdAt: new Date().toISOString(),
       };
       tickers.unshift(ticker);

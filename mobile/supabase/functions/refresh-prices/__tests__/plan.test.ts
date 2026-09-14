@@ -1,74 +1,146 @@
 /**
  * Le plan de rafraîchissement — ce qui sera écrit dans `tickers`.
  *
- * Deux garanties comptent plus que le reste, et sont testées comme telles :
- * on n'efface jamais un prix connu, et on ne réveille pas les clients pour rien.
+ * Trois garanties comptent plus que le reste, et sont testées comme telles :
+ * on n'efface jamais un prix connu, on ne réveille pas les clients pour rien,
+ * et on ne confond jamais les deux fournisseurs.
  */
 
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { chunk, planUpdates, type PricedTicker } from '../plan.ts';
+import { chunk, planUpdates, quoteRequests, type PricedTicker } from '../plan.ts';
 
-const row = (id: string, cg: string, current: number | null): PricedTicker => ({
+const crypto = (id: string, cg: string, current: number | null): PricedTicker => ({
   id,
   coingecko_id: cg,
+  yahoo_symbol: null,
   current_price: current,
 });
 
+const stock = (id: string, yahoo: string, current: number | null): PricedTicker => ({
+  id,
+  coingecko_id: null,
+  yahoo_symbol: yahoo,
+  current_price: current,
+});
+
+describe('regroupement des demandes', () => {
+  it('sépare les deux fournisseurs', () => {
+    const requests = quoteRequests([
+      crypto('a', 'bitcoin', null),
+      stock('b', 'MSTR', null),
+      stock('c', 'IBIT', null),
+    ]);
+    assert.deepEqual(requests, { coingecko: ['bitcoin'], yahoo: ['IBIT', 'MSTR'] });
+  });
+
+  it('dédoublonne de chaque côté', () => {
+    const requests = quoteRequests([
+      crypto('a', 'bitcoin', null),
+      crypto('b', 'bitcoin', null),
+      stock('c', 'MSTR', null),
+      stock('d', 'MSTR', null),
+    ]);
+    assert.deepEqual(requests, { coingecko: ['bitcoin'], yahoo: ['MSTR'] });
+  });
+
+  it('ne demande rien pour une ligne sans fournisseur', () => {
+    const orphan: PricedTicker = {
+      id: 'x',
+      coingecko_id: null,
+      yahoo_symbol: null,
+      current_price: 42,
+    };
+    assert.deepEqual(quoteRequests([orphan]), { coingecko: [], yahoo: [] });
+  });
+});
+
 describe('plan de rafraîchissement', () => {
-  it('met à jour un prix qui a bougé', () => {
-    const plan = planUpdates([row('a', 'bitcoin', 100_000)], { bitcoin: 120_911 });
+  it('met à jour une crypto depuis CoinGecko', () => {
+    const plan = planUpdates([crypto('a', 'bitcoin', 100_000)], {
+      coingecko: { bitcoin: 120_911 },
+    });
     assert.deepEqual(plan.updates, [{ id: 'a', price: 120_911 }]);
-    assert.equal(plan.skipped, 0);
+  });
+
+  it('met à jour une action depuis Yahoo', () => {
+    const plan = planUpdates([stock('a', 'MSTR', 412)], { yahoo: { MSTR: 463.088 } });
+    assert.deepEqual(plan.updates, [{ id: 'a', price: 463.088 }]);
+  });
+
+  it('ne confond jamais les deux tables — un symbole homonyme reste distinct', () => {
+    // `ETH` existe des deux côtés : le jeton chez CoinGecko, un ETF chez Yahoo.
+    const plan = planUpdates([crypto('jeton', 'ETH', 1), stock('etf', 'ETH', 1)], {
+      coingecko: { ETH: 4_798 },
+      yahoo: { ETH: 31.2 },
+    });
+    assert.deepEqual(plan.updates, [
+      { id: 'jeton', price: 4_798 },
+      { id: 'etf', price: 31.2 },
+    ]);
   });
 
   it('renseigne un prix encore inconnu', () => {
-    const plan = planUpdates([row('a', 'solana', null)], { solana: 212.4 });
-    assert.deepEqual(plan.updates, [{ id: 'a', price: 212.4 }]);
+    const plan = planUpdates([stock('a', 'NVDA', null)], { yahoo: { NVDA: 153.8 } });
+    assert.deepEqual(plan.updates, [{ id: 'a', price: 153.8 }]);
   });
 
   it('n’efface jamais un prix absent de la réponse', () => {
-    const plan = planUpdates([row('a', 'bitcoin', 100_000)], {});
+    const plan = planUpdates([stock('a', 'MSTR', 412)], { yahoo: {} });
     assert.deepEqual(plan.updates, [], 'aucune écriture');
     assert.equal(plan.skipped, 1);
   });
 
+  it('laisse tranquille une ligne sans fournisseur', () => {
+    const orphan: PricedTicker = {
+      id: 'x',
+      coingecko_id: null,
+      yahoo_symbol: null,
+      current_price: 42,
+    };
+    const plan = planUpdates([orphan], { coingecko: { x: 1 }, yahoo: { x: 1 } });
+    assert.deepEqual(plan.updates, []);
+    assert.equal(plan.skipped, 1);
+  });
+
   it('ne réécrit pas un prix inchangé — chaque UPDATE réveille tout le club', () => {
-    const plan = planUpdates([row('a', 'bitcoin', 120_911)], { bitcoin: 120_911 });
+    const plan = planUpdates([crypto('a', 'bitcoin', 120_911)], {
+      coingecko: { bitcoin: 120_911 },
+    });
     assert.deepEqual(plan.updates, []);
     assert.equal(plan.skipped, 1);
   });
 
   it('rejette une valeur inexploitable plutôt que de l’écrire', () => {
     for (const bad of [0, -5, Number.NaN, Number.POSITIVE_INFINITY, 'cher' as never]) {
-      const plan = planUpdates([row('a', 'bitcoin', 100_000)], { bitcoin: bad });
+      const plan = planUpdates([stock('a', 'MSTR', 412)], { yahoo: { MSTR: bad } });
       assert.deepEqual(plan.updates, [], `valeur ${String(bad)}`);
       assert.equal(plan.skipped, 1);
     }
   });
 
-  it('dédoublonne les identifiants à demander', () => {
-    const plan = planUpdates(
-      [row('a', 'bitcoin', null), row('b', 'bitcoin', null), row('c', 'ethereum', null)],
-      {},
-    );
-    assert.deepEqual(plan.ids, ['bitcoin', 'ethereum']);
-  });
-
   it('applique un même cours à plusieurs positions du même actif', () => {
-    const plan = planUpdates([row('a', 'bitcoin', 100_000), row('b', 'bitcoin', 61_000)], {
-      bitcoin: 120_911,
+    const plan = planUpdates([stock('a', 'MSTR', 412), stock('b', 'MSTR', 252)], {
+      yahoo: { MSTR: 463.088 },
     });
     assert.deepEqual(plan.updates, [
-      { id: 'a', price: 120_911 },
-      { id: 'b', price: 120_911 },
+      { id: 'a', price: 463.088 },
+      { id: 'b', price: 463.088 },
     ]);
   });
 
-  it('ne demande rien quand il n’y a aucun actif coté', () => {
-    const plan = planUpdates([], { bitcoin: 120_911 });
-    assert.deepEqual(plan, { updates: [], skipped: 0, ids: [] });
+  it('ne demande rien quand la table est vide', () => {
+    assert.deepEqual(planUpdates([], { coingecko: { bitcoin: 1 } }), {
+      updates: [],
+      skipped: 0,
+    });
+  });
+
+  it('tolère une absence complète de prix', () => {
+    const plan = planUpdates([crypto('a', 'bitcoin', 100)], {});
+    assert.deepEqual(plan.updates, []);
+    assert.equal(plan.skipped, 1);
   });
 });
 

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { useBtcSpot } from '@/hooks/useBtcMarket';
 import { resolveCoingeckoId } from '@/lib/coingecko';
+import { providerFor, toYahooSymbol } from '@/lib/quotes';
 import { performancePercent, vsBitcoinPercent } from '@/lib/performance';
 import { describeError } from '@/lib/supabase';
 import type { CallView, Member, Ticker, Vote } from '@/types/domain';
@@ -12,6 +13,8 @@ export interface PublishInput {
   symbol: string;
   entryPrice: number;
   thesis: string;
+  /** Place de cotation, pour suffixer le symbole Yahoo d'un titre non américain. */
+  exchange?: string | null;
 }
 
 export interface CallsState {
@@ -139,12 +142,19 @@ export function useCalls(
       setPublishing(true);
 
       try {
-        // La résolution CoinGecko est facultative : une action ou un ETF n'y
-        // est pas coté, et le call se publie quand même.
-        const coingeckoId = await resolveCoingeckoId(input.symbol);
+        // Un actif a un fournisseur, pas deux (contrainte
+        // `tickers_one_quote_source`) : la classe d'actif décide, et la
+        // résolution du symbole suit.
+        const yahoo = providerFor(input.assetClass) === 'yahoo';
+
+        // Côté Yahoo le symbole se déduit ; côté CoinGecko il faut demander.
+        // Les deux peuvent échouer sans empêcher la publication — le call
+        // partira sans fournisseur, et son cours restera à saisir.
+        const yahooSymbol = yahoo ? toYahooSymbol(input.symbol, input.exchange) : null;
+        const coingeckoId = yahoo ? null : await resolveCoingeckoId(input.symbol);
 
         const ticker = await source.publish(
-          { ...input, btcSpot: spot.usd, coingeckoId },
+          { ...input, btcSpot: spot.usd, coingeckoId, yahooSymbol },
           currentUserId,
         );
 

@@ -25,6 +25,8 @@ export class HttpError extends Error {
 
 export interface RequestOptions {
   signal?: AbortSignal;
+  /** En-têtes additionnels — fusionnés avec `accept: application/json`. */
+  headers?: Record<string, string>;
   /** Nombre total de tentatives, la première comprise. */
   attempts?: number;
   timeoutMs?: number;
@@ -59,7 +61,7 @@ function sleep(ms: number, signal?: AbortSignal): Promise<void> {
 
 /** GET JSON typé. Lève `HttpError`, `AbortError`, ou l'erreur réseau d'origine. */
 export async function getJson<T>(url: string, options: RequestOptions = {}): Promise<T> {
-  const { signal, attempts = 3, timeoutMs = 8_000, backoffMs = 400 } = options;
+  const { signal, headers, attempts = 3, timeoutMs = 8_000, backoffMs = 400 } = options;
 
   let lastError: unknown;
 
@@ -76,7 +78,7 @@ export async function getJson<T>(url: string, options: RequestOptions = {}): Pro
     try {
       const response = await fetch(url, {
         signal: controller.signal,
-        headers: { accept: 'application/json' },
+        headers: { accept: 'application/json', ...headers },
       });
       if (!response.ok) throw new HttpError(response.status, url);
       return (await response.json()) as T;
