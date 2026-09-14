@@ -491,6 +491,105 @@ délistés/cotés, et n'être malgré tout qu'une exposition de classe.
 | délistés contre encore cotés | tient des deux côtés (0,0014 / 0,0052) |
 | **nul par bloc** | **ne tient pas — p = 0,164** |
 
+## Un seul actif, est-ce mieux ? La question a une réponse chiffrée
+
+La question posée était : chercher une stratégie qui marche sur *plusieurs*
+actifs est peut-être une erreur — ne vaudrait-il pas mieux en chercher une qui
+marche sur *un seul* ?
+
+Elle a une réponse exacte, et elle est à double tranchant.
+
+### Ce que l'intuition a de juste
+
+Le seuil de Benjamini-Hochberg au rang 1 vaut `alpha / m`, où `m` est le
+nombre d'hypothèses **déclarées**. Réduire l'univers réduit `m`, donc desserre
+le seuil. Ce n'est pas un détail de présentation, c'est ce qui décide :
+
+```
+tsmom BTC 1d, p = 0,00105 mesuré à 20 000 tirages
+
+    les 84 cellules de la grille    seuil 0,05/84 = 0,000595   ne survit pas
+    BTC seul, 12 cellules           seuil 0,05/12 = 0,004167   SURVIT
+    BTC 1d seul, 6 stratégies       seuil 0,05/6  = 0,008333   SURVIT
+```
+
+**La même mesure, trois verdicts.** Le seul paramètre qui change est le nombre
+d'hypothèses qu'on s'est autorisé. L'intuition est donc fondée : un univers
+étroit déclaré d'avance achète de la puissance statistique.
+
+### Ce qu'elle coûte, mesuré
+
+Trente combinaisons de paramètres sur BTC 1d uniquement — ce qu'une personne
+essaie naturellement en réglant une stratégie sur un actif : quatre familles,
+des périodes plausibles, rien d'extravagant. Résultat :
+
+```
+                          BTC 1d seul      registre entier
+combinaisons testées          30                 35
+p < 0,05 brut                 10                 12
+attendues par pur hasard      1,5                1,8
+seuil BH au rang 1          0,00167            0,00143
+SURVIVANTES                    1                  0
+```
+
+La survivante est `tsmom lookback=56`, p = 0,0015, net +302,51 $. Elle passe
+le seuil de 0,00167 **d'un cheveu** — et elle meurt dès qu'on ajoute au
+dénominateur les cinq combinaisons déjà présentes au registre. Cinq
+combinaisons qui ne portent même pas sur BTC.
+
+**Même donnée, même mesure, deux verdicts opposés**, et le seul écart est la
+portée qu'on déclare. C'est la démonstration la plus nette qu'ait produite ce
+dépôt de ce que « quatorze cellules ne font pas quatorze tests » veut
+réellement dire.
+
+### Le piège, et il est précis
+
+Réduire l'univers ne paie **que si on l'a déclaré AVANT de regarder**. Ce
+dépôt a déjà regardé : les 84 cellules de la grille, puis ces trente
+combinaisons. Le dénominateur qu'on doit est celui de tout ce qu'on a essayé,
+pas celui qu'on choisit après avoir vu le gagnant. Choisir sa portée après
+coup, c'est désigner le vainqueur une fois la course courue.
+
+Et l'univers restreint coûte la preuve la moins chère qui existe : la
+**cohérence entre actifs**. Ce dépôt sait où mène l'autre voie —
+`rsi_continuation` est née d'une régularité sur un jeu de données et n'a pas
+survécu à dix-huit actifs neufs.
+
+### Ce que le balayage montre quand même, et qui n'est pas du bruit
+
+Les dix cellules à p < 0,05 ne sont pas dispersées au hasard : elles se
+rangent par famille.
+
+| famille | combinaisons | à p < 0,05 | net médian |
+| --- | ---: | ---: | ---: |
+| `turtle_breakout` | 6 | 4 | +326,52 $ |
+| `tsmom` | 4 | 3 | +220,92 $ |
+| `ema_cross` | 11 | 3 | +25,81 $ |
+| `rsi_reversion` | 9 | **0** | **−58,05 $** |
+
+Le suivi de tendance gagne sur BTC en journalier, le retour à la moyenne perd
+de façon uniforme, et le modèle nul prend le même nombre de trades avec les
+mêmes durées — l'écart n'est donc pas un effet de frais. C'est une structure,
+pas un tirage chanceux.
+
+Mais une structure n'est pas un edge démontré : le dépôt a déjà tiré
+`rsi_continuation` d'une régularité de ce type, et elle est morte hors
+échantillon. **Ce qui est mesuré ici est une hypothèse, née dans
+l'échantillon, et elle vaut exactement ce que vaut ce statut.**
+
+### La seule façon propre de l'encaisser
+
+Un univers restreint ne peut plus être déclaré rétroactivement sur ces
+données. Il reste une direction, et une seule : **figer la règle entièrement
+— stratégie, paramètres, actif, échelle — et la juger sur des données qui
+n'existent pas encore.** C'est ce que fait déjà `journal_unlocks.py` pour les
+déblocages, et c'est la seule preuve que ce dépôt reconnaisse comme
+concluante.
+
+Le dénominateur redevient alors honnête, parce qu'il est déclaré avant que la
+donnée existe. Une règle de prix figée aujourd'hui et relevée dans six mois
+serait la deuxième chose de ce dépôt à mériter le mot « validé ».
+
 ## Méthode : ce qui est acquis
 
 - **Le plancher de p** est inscrit dans chaque fichier de campagne. Sans
