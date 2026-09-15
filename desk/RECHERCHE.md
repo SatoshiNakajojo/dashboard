@@ -670,6 +670,78 @@ backtest expose `decision_suivante`, la décision qu'il avait en attente à la
 dernière clôture, et le journal l'appelle. Le live et le backtest empruntent
 le même chemin de code. Un test le verrouille sur chaque règle figée.
 
+## Le glissement, enfin mesuré — et le modèle est conservateur d'un ordre de grandeur
+
+Le modèle de coûts facture **3 bps de glissement par côté**, 15 bps
+l'aller-retour frais compris. `costs.py` le dit lui-même : « en backtest sur
+bougies, on ne voit pas le carnet : cette constante en tient lieu ». Elle
+n'avait jamais été confrontée à une exécution — c'était la seule brique du
+dépôt où une mesure gratuite était disponible et n'était pas prise.
+
+Elle l'est maintenant, à deux endroits. `execution/glissement.py` mesure
+l'écart entre le prix **décidé** et le prix **obtenu** à chaque fill, en
+production ; `scripts/sonder_profondeur.py` fait passer une grille de tailles
+dans le carnet réel du moment.
+
+### La courbe, relevée sur carnets réels
+
+```
+  écart mid-ask            BTC      ETH      SOL
+                          0,07     0,21     0,05  bps
+
+       taille $           BTC      ETH      SOL
+            100         +0,07    +0,21    +0,05
+            500         +0,07    +0,21    +0,05
+          2 000         +0,23    +0,21    +0,05
+         10 000         +0,73    +0,21    +0,05
+         50 000         +1,28    +0,21   +0,05*
+        200 000         +1,58    +0,21   +0,05*
+      1 000 000        +1,67*    +0,26   +0,05*
+```
+
+`*` = fill tronqué au-delà de 10 % du carnet visible : le chiffre
+**sous-estime** alors le coût de l'ordre demandé.
+
+### Ce que ça change, et c'est la sizing qui est concernée
+
+**À la taille où le desk trade aujourd'hui — 33 $ par position — le
+glissement vaut 0,05 à 0,21 bps contre 3,0 supposés.** Le modèle est
+conservateur d'un facteur **quinze à soixante**.
+
+Et le mur de liquidité est très loin : sur BTC, 200 000 $ coûtent encore
+1,58 bps, sous l'hypothèse. Autrement dit, le constat n° 1 du manuel — le
+desk prend 3,3 % du capital là où la validation en suppose 25 % — **ne se
+heurte à aucune contrainte d'exécution**. Passer de 33 $ à 250 $ par position
+ne coûte rien de mesurable. Ce qui bloquait était un garde-fou, pas le marché.
+
+Le seul actif dont le carnet est mince est SOL : tronqué dès 50 000 $.
+
+### Les trois réserves, et elles ne sont pas cosmétiques
+
+**C'est UN instantané, sur un carnet calme.** Un jour de cascade n'a rien à
+voir. Le script est fait pour être relancé pendant une panique et comparé —
+c'est cette fourchette-là qui compte, pas une mesure d'un mardi après-midi.
+
+**Le simulateur traverse un carnet FIGÉ.** Il ne modélise ni l'impact
+permanent de l'ordre, ni le retrait des autres participants quand ils le
+voient venir. Le papier reste optimiste, et un chiffre rassurant n'est pas
+une garantie.
+
+**Le style demandé n'est pas le rôle réalisé.** La mesure enregistre si
+l'ordre était *passif* ou *agressif* au moment de la décision ; seul le
+`Fill` de l'exchange porte `is_maker`. Passif et agressif ne sont jamais
+moyennés ensemble : un ordre passif est servi au mieux à sa limite, donc son
+glissement est nul ou négatif par construction, et les mélanger donnerait un
+coût moyen qui ne correspond à aucune exécution réelle.
+
+### Le sens de l'erreur compte plus que sa taille
+
+Un modèle **optimiste** sous-estime le coût : tout ce qu'il a validé est
+flatté d'autant, et c'est le sens qui condamne. Un modèle **conservateur**
+rend les résultats prudents. Le panneau du desk affiche donc ce sens en
+toutes lettres plutôt qu'un simple écart — un nombre sans son sens ne dit pas
+s'il faut s'inquiéter.
+
 ## Méthode : ce qui est acquis
 
 - **Le plancher de p** est inscrit dans chaque fichier de campagne. Sans
@@ -706,6 +778,11 @@ le même chemin de code. Un test le verrouille sur chaque règle figée.
   Il rendait un p élevé, ce qui ressemble exactement à un contrôle réussi.
   Tout modèle nul rapporte désormais la plage sur laquelle il a tiré, et se
   tait plutôt que de rendre un p sur trois observations.
+- **Une hypothèse de coût se mesure dès qu'une exécution existe.** Les 3 bps
+  de glissement du modèle ont vécu des mois sans être confrontés, alors que
+  le mode PAPER s'exécute contre le carnet réel. Mesurés : 0,05 à 0,21 bps à
+  la taille du desk. Toute constante posée « faute de mieux » doit porter la
+  date à laquelle on la confrontera.
 - **Une règle qui tourne doit être celle qui a été mesurée, et ça se
   vérifie.** Deux écarts silencieux ont été trouvés le même jour : un journal
   qui re-simulait l'état de position et ratait 18 % des ouvertures, et une

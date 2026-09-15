@@ -573,6 +573,82 @@ def regles_figees(chemin: Path | None = None) -> dict[str, Any]:
     }
 
 
+def glissement(store: Any = None) -> dict[str, Any]:
+    """L'ecart entre le prix decide et le prix obtenu, contre ce que le modele suppose.
+
+    **Maker et taker ne sont JAMAIS melanges.** Un ordre passif servi l'est au
+    mieux a son prix limite : son glissement est nul ou negatif par
+    construction. Les moyenner avec des ordres agressifs donnerait un cout
+    moyen flatteur qui ne correspond a aucune execution reelle.
+
+    **La mediane avant la moyenne.** Un seul fill traversant un carnet mince
+    deplace une moyenne de plusieurs points de base ; la mediane dit ce que
+    coute un ordre ORDINAIRE, et c'est ce qu'on veut savoir avant d'engager.
+    Le neuvieme decile dit ce que coute un mauvais jour, et il figure aussi.
+    """
+    from ..backtest.costs import CostModel
+
+    modele = CostModel()
+    suppose = float(modele.slippage_bps)
+    base = {
+        "disponible": False,
+        "suppose_bps": suppose,
+        "frais_taker_bps": float(modele.taker_fee_bps),
+        "aller_retour_suppose_bps": 2 * (suppose + float(modele.taker_fee_bps)),
+        "raison": "aucun ordre n'a encore ete rempli — la mesure se fait en "
+                  "mode PAPER, contre le carnet reel",
+        "mesures": 0, "lots": [],
+    }
+    if store is None or not hasattr(store, "recent_glissements"):
+        return base
+    try:
+        lignes = store.recent_glissements(2000)
+    except Exception:
+        return base
+    if not lignes:
+        return base
+
+    def lot(nom: str, sous: list[dict]) -> dict[str, Any]:
+        bps = sorted(float(x["bps"]) for x in sous)
+        n = len(bps)
+        return {
+            "nom": nom, "n": n,
+            "mediane": bps[n // 2],
+            "moyenne": sum(bps) / n,
+            "d9": bps[min(n - 1, int(n * 0.9))],
+            "pire": bps[-1],
+            "ameliorations": sum(1 for x in bps if x < 0),
+        }
+
+    taker = [x for x in lignes if not x["passif"]]
+    passif = [x for x in lignes if x["passif"]]
+    lots = [lot(nom, sous) for nom, sous in
+            (("agressif", taker), ("passif", passif)) if sous]
+
+    # Le verdict porte sur les AGRESSIFS : c'est eux que `slippage_bps`
+    # modelise, et c'est le style qu'un signal calendaire impose — une entree
+    # a J-7 doit etre en position ce jour-la.
+    verdict = None
+    if taker:
+        med = lot("agressif", taker)["mediane"]
+        verdict = {
+            "mesure_bps": med,
+            "suppose_bps": suppose,
+            "ecart_bps": med - suppose,
+            # Un modele OPTIMISTE sous-estime le cout : tout ce qui a ete
+            # valide avec lui est flatte, et c'est le sens qui inquiete.
+            "optimiste": med > suppose,
+        }
+
+    return {**base, "disponible": True, "raison": "",
+            "mesures": len(lignes), "lots": lots, "verdict": verdict,
+            "par_actif": [
+                lot(a, [x for x in taker if x["asset"] == a])
+                for a in sorted({x["asset"] for x in taker})
+            ] if taker else [],
+            "derniers": lignes[:12]}
+
+
 # -------------------------------------------------------------- navigation
 
 def navigation(chemin: Path | None = None) -> dict[str, Any]:
@@ -1069,6 +1145,7 @@ def tout(store: Any = None, racine_collecte: Path | str | None = None) -> dict[s
         "navigation": nav,
         "consommation": conso,
         "vols": v,
+        "glissement": glissement(store),
         "prevol": prevol(telemetrie_=tel, navigation_=nav, consommation_=conso,
                          vols_=v, campagnes_=camp),
     }

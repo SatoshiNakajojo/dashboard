@@ -23,11 +23,15 @@ from itertools import count
 from ..contracts.common import EntryStyle, Frozen, Side, now_ms
 from ..contracts.mandate import Mandate
 from ..contracts.orders import (
-    AccountState, OrderIntent, OrderPurpose, OrderRecord, OrderStatus, Position,
+    OrderIntent,
+    OrderPurpose,
+    OrderRecord,
+    OrderStatus,
 )
 from ..risk import RiskContext, evaluate, reduce_only_verdict
 from .cloid import make_cloid
 from .exchange import Exchange, ExchangeError, ExchangeRejected, ExchangeTimeout
+from .glissement import mesurer
 
 log = logging.getLogger(__name__)
 
@@ -137,6 +141,7 @@ class OrderManager:
                                  reason=record.error or "rejete")
 
         self._journal("order_sent", intent, cloid, record.status.value)
+        self._mesurer_le_glissement(intent, record)
         return SubmitOutcome(accepted=True, record=record, cloid=cloid)
 
     def _find_remote(self, cloid: str) -> OrderRecord | None:
@@ -279,6 +284,27 @@ class OrderManager:
         ]
 
     # ---------------------------------------------------------------- journal
+
+    def _mesurer_le_glissement(self, intent: OrderIntent, record: OrderRecord) -> None:
+        """L'ecart entre le prix decide et le prix obtenu, a chaque fill.
+
+        Le modele de couts facture 15 bps l'aller-retour, et cette valeur est
+        une hypothese que rien n'a jamais confrontee. Le mode PAPER execute
+        contre le carnet REEL : il peut trancher, et c'est gratuit.
+
+        La mesure ne doit JAMAIS faire echouer un ordre. Un desk qui refuse
+        d'envoyer parce que sa metrologie a hoquete serait un desk casse par
+        son propre tableau de bord.
+        """
+        if self.store is None:
+            return
+        try:
+            g = mesurer(intent, record)
+            if g is not None:
+                self.store.write_glissement(g.payload())
+        except Exception:
+            log.warning("mesure du glissement impossible sur %s", record.cloid,
+                        exc_info=True)
 
     def _journal(self, kind: str, intent: OrderIntent, cloid: str, detail: str) -> None:
         if self.store is None:

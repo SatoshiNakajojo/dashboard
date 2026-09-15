@@ -321,7 +321,7 @@ def test_le_panneau_complet_ne_touche_ni_reseau_ni_modele(client, monkeypatch):
     d = r.json()
     assert set(d) == {"campagnes", "strategies", "atelier", "regles_figees",
                       "telemetrie", "navigation", "consommation", "vols",
-                      "prevol"}
+                      "glissement", "prevol"}
     assert d["prevol"], "la checklist n'est jamais vide"
     for ligne in d["prevol"]:
         assert ligne["etat"] in {"ok", "attente", "bloc"}

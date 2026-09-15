@@ -423,6 +423,7 @@ function rendreRecherche(d) {
   rendreReglesFigees(d.regles_figees);
   rendreConsommation(d.consommation);
   rendreVols(d.vols);
+  rendreGlissement(d.glissement);
   preparerSelecteurs(d.strategies);
 }
 
@@ -692,6 +693,52 @@ function rendreInventaire(inv) {
         + "<td><span class='tag " + (s.survit_bh ? "ok'>survit" : "ko'>non") + "</span></td></tr>").join("")
       + "</tbody></table>"
     : '<div class="empty">Aucune stratégie.</div>';
+}
+
+/* ---------- GLISSEMENT RÉEL ---------- */
+function rendreGlissement(g) {
+  g = g || {};
+  const lots = g.lots || [];
+  $("glBadge").textContent = g.disponible
+    ? g.mesures + " fill(s) mesuré(s)"
+    : "aucune exécution";
+  $("glBadge").style.color = g.disponible ? "var(--ok)" : "var(--muted)";
+
+  if (!g.disponible) {
+    $("glissement").innerHTML = '<div class="empty">' + esc(g.raison || "")
+      + "<br>Le modèle suppose " + num(g.suppose_bps, 1) + " bps par côté, soit "
+      + num(g.aller_retour_suppose_bps, 1) + " bps l'aller-retour.</div>";
+    return;
+  }
+
+  const v = g.verdict;
+  $("glissement").innerHTML =
+    "<table><thead><tr><th>Style demandé</th><th>Fills</th><th>Médiane</th>"
+    + "<th>Moyenne</th><th>9ᵉ décile</th><th>Pire</th>"
+    + "<th>Améliorations</th></tr></thead><tbody>"
+    + lots.map((l) =>
+      "<tr><td class='name'>" + esc(l.nom) + "</td><td>" + l.n + "</td>"
+      /* La médiane avant la moyenne : un seul fill traversant un carnet
+         mince déplace une moyenne de plusieurs bps. */
+      /* Positif = coût. Le signe porte le sens, il ne se devine pas. */
+      + "<td style='color:" + (l.mediane > 0 ? "var(--crit)" : "var(--ok)") + "'>"
+      + num(l.mediane, 2) + " bps</td>"
+      + "<td>" + num(l.moyenne, 2) + "</td><td>" + num(l.d9, 2) + "</td>"
+      + "<td>" + num(l.pire, 2) + "</td><td>" + l.ameliorations + "</td></tr>").join("")
+    + "</tbody></table>"
+    + (v
+      ? '<div class="verdict' + (v.optimiste ? " bloc" : "") + '"><span class="gros">'
+        + "Agressif mesuré " + num(v.mesure_bps, 2) + " bps contre "
+        + num(v.suppose_bps, 1) + " supposés</span>"
+        + (v.optimiste
+          ? "Le modèle est OPTIMISTE de " + num(v.ecart_bps, 2) + " bps par côté : "
+            + "tout ce qui a été validé avec lui est flatté d'autant. "
+            + "C'est le sens qui inquiète."
+          : "Le modèle est conservateur de " + num(-v.ecart_bps, 2)
+            + " bps par côté. Les résultats validés avec lui sont donc "
+            + "prudents, ce qui est le bon sens de l'erreur.")
+        + "</div>"
+      : "");
 }
 
 /* ---------- RÈGLES DE PRIX FIGÉES ---------- */

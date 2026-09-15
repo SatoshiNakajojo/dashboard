@@ -87,6 +87,28 @@ CREATE TABLE IF NOT EXISTS fills (
 );
 CREATE INDEX IF NOT EXISTS idx_fills_ts ON fills(ts_ms);
 
+-- L'ecart entre le prix DECIDE et le prix OBTENU, a chaque fill.
+--
+-- La table `fills` garde le prix obtenu mais pas celui que la decision
+-- portait : l'ecart y est donc incalculable, et le modele de couts — 15 bps
+-- l'aller-retour — n'a jamais pu etre confronte a une execution. C'est la
+-- seule brique du depot ou une mesure gratuite etait disponible et n'etait
+-- pas prise.
+CREATE TABLE IF NOT EXISTS glissements (
+    cloid       TEXT PRIMARY KEY,
+    ts_ms       INTEGER NOT NULL,
+    asset       TEXT    NOT NULL,
+    side        TEXT    NOT NULL,
+    purpose     TEXT    NOT NULL,
+    style       TEXT    NOT NULL,
+    size        TEXT    NOT NULL,
+    prix_decide TEXT    NOT NULL,
+    prix_obtenu TEXT    NOT NULL,
+    bps         REAL    NOT NULL,
+    passif      INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_glissements_ts ON glissements(ts_ms);
+
 CREATE TABLE IF NOT EXISTS halts (
     ts_ms  INTEGER NOT NULL,
     reason TEXT    NOT NULL,
@@ -103,6 +125,8 @@ class Store(Protocol):
     def journal(self, kind: str, payload: dict[str, Any], mandate_id: str | None) -> str: ...
     def recent_journal(self, limit: int) -> list[dict[str, Any]]: ...
     def recent_fills(self, limit: int) -> list[dict[str, Any]]: ...
+    def write_glissement(self, g: dict[str, Any]) -> None: ...
+    def recent_glissements(self, limit: int) -> list[dict[str, Any]]: ...
     def recent_mandates(self, limit: int) -> list[dict[str, Any]]: ...
     def recent_halts(self, limit: int) -> list[dict[str, Any]]: ...
 
@@ -245,6 +269,30 @@ class SqliteStore:
             for r in rows
         ]
 
+    def write_glissement(self, g: dict[str, Any]) -> None:
+        """Un fill, compare a la decision. `OR IGNORE` : un meme cloid ne se
+        mesure qu'une fois, et une reconciliation qui repasse dessus ne doit
+        pas dupliquer la mesure."""
+        with self._lock, self._conn:
+            self._conn.execute(
+                "INSERT OR IGNORE INTO glissements "
+                "(cloid, ts_ms, asset, side, purpose, style, size, "
+                " prix_decide, prix_obtenu, bps, passif) "
+                "VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+                (g["cloid"], int(g["ts_ms"]), g["asset"], g["side"],
+                 g["purpose"], g["style"], g["size"], g["prix_decide"],
+                 g["prix_obtenu"], float(g["bps"]), 1 if g["passif"] else 0),
+            )
+
+    def recent_glissements(self, limit: int = 500) -> list[dict[str, Any]]:
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT cloid, ts_ms, asset, side, purpose, style, size, "
+                "prix_decide, prix_obtenu, bps, passif FROM glissements "
+                "ORDER BY ts_ms DESC LIMIT ?", (int(limit),),
+            ).fetchall()
+        return [dict(r) for r in rows]
+
     def recent_fills(self, limit: int = 200) -> list[dict[str, Any]]:
         """Les executions, de la plus recente a la plus ancienne.
 
@@ -286,7 +334,7 @@ class SqliteStore:
             out = {}
             for table in ("trades", "book_samples", "marks", "fills", "decision_journal"):
                 out[table] = self._conn.execute(
-                    f"SELECT COUNT(*) AS n FROM {table}"  # noqa: S608 - liste fermee
+                    f"SELECT COUNT(*) AS n FROM {table}"
                 ).fetchone()["n"]
             return out
 

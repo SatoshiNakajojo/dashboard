@@ -267,6 +267,19 @@
       <h2>Historique des transactions</h2>
       <div class="body tscroll" id="historique"></div>
     </section>
+    <section class="panel">
+      <h2>Glissement réel <span class="badge" id="glBadge">—</span></h2>
+      <div class="intro">
+        L'écart entre le prix <b>décidé</b> et le prix <b>obtenu</b>, mesuré à
+        chaque fill. Le modèle de coûts facture 15 bps l'aller-retour — et
+        c'est une <b>hypothèse</b> que rien n'avait jamais confrontée. Le mode
+        PAPER exécute contre le carnet réel : il peut trancher.
+        <b>Maker et taker ne sont jamais mélangés</b> — un ordre passif est
+        servi au mieux à sa limite, les moyenner donnerait un coût flatteur
+        qui ne correspond à aucune exécution.
+      </div>
+      <div class="body" id="glissement"></div>
+    </section>
   </section>
 
   <!-- ==================== SYSTÈMES ==================== -->
