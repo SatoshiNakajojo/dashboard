@@ -118,3 +118,63 @@ def test_le_service_ne_se_relance_pas_tout_seul():
     service = (RACINE / "deploy" / "rituel-deblocages.service").read_text(encoding="utf-8")
     assert "Type=oneshot" in service
     assert "\nRestart=" not in service
+
+
+# ────────────────────────────────────────────────── l'installateur du VPS
+
+def _installateur() -> str:
+    return (RACINE / "deploy" / "installer.sh").read_text(encoding="utf-8")
+
+
+def test_l_installateur_connait_toutes_les_unites_livrees():
+    """Ajouter une unité systemd sans l'ajouter à l'installateur donnerait un
+    VPS qui tourne l'ancienne configuration après une mise à jour — et rien
+    ne le dirait, puisque les autres unités, elles, redémarrent."""
+    texte = _installateur()
+    unites = sorted(p.name for p in (RACINE / "deploy").glob("*.service"))
+    unites += sorted(p.name for p in (RACINE / "deploy").glob("*.timer"))
+    for u in unites:
+        assert u in texte, f"{u} est livrée mais absente de l'installateur"
+
+
+def test_l_installateur_active_les_timers_et_pas_les_oneshot():
+    """Activer un service `oneshot` le lancerait à chaque démarrage, hors de
+    sa cadence — et un rituel hebdomadaire qui tourne à chaque reboot n'est
+    plus hebdomadaire."""
+    texte = _installateur()
+    assert "rituel-deblocages.timer" in texte and "regles-figees.timer" in texte
+    for ligne in texte.splitlines():
+        if "enable --now" in ligne and "$t" not in ligne:
+            assert "enregistreur" in ligne, (
+                f"seul le service continu s'active directement : {ligne.strip()}")
+
+
+def test_l_installateur_refuse_d_ecraser_des_modifications_locales():
+    """Quelqu'un a peut-être corrigé quelque chose à la main, en urgence. Un
+    installateur qui écrase en silence détruit ce correctif et la trace de la
+    raison pour laquelle il existait."""
+    texte = _installateur()
+    assert "diff --quiet HEAD" in texte
+    assert "modifications locales" in texte
+
+
+def test_l_installateur_s_arrete_a_la_premiere_erreur():
+    """Un installateur qui continue après un échec laisse une machine dans un
+    état que personne ne sait décrire."""
+    assert "set -euo pipefail" in _installateur()
+
+
+def test_l_installateur_cree_les_dossiers_declares_en_ReadWritePaths():
+    """Un chemin déclaré `ReadWritePaths` qui n'existe pas fait échouer le
+    démarrage de l'unité — avec un message qui ne dit pas lequel."""
+    texte = _installateur()
+    declares = set()
+    for u in (RACINE / "deploy").glob("*.service"):
+        for ligne in u.read_text(encoding="utf-8").splitlines():
+            if ligne.startswith("ReadWritePaths="):
+                declares.update(ligne.split("=", 1)[1].split())
+    assert declares, "les unités doivent déclarer leurs chemins d'écriture"
+    for chemin in declares:
+        court = chemin.replace("/opt/desk/src/desk", "$RACINE")
+        assert court in texte or chemin in texte, (
+            f"{chemin} est déclaré par une unité mais jamais créé")

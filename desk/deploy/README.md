@@ -31,6 +31,25 @@ Le service s'arrête d'écrire — et le hurle dans le journal — sous **2 Go
 libres**. Écrire jusqu'à saturation ferait tomber le VPS entier, pas seulement
 l'enregistreur.
 
+## Mettre à jour : une seule commande
+
+Après la première installation, tout passe par là — code, dépendances,
+unités systemd, activation, état :
+
+```bash
+sudo bash /opt/desk/src/desk/deploy/installer.sh
+```
+
+Il est **idempotent** : on le relance après chaque changement, autant de fois
+qu'on veut. Il refuse de tourner s'il trouve des modifications locales dans le
+dépôt — quelqu'un a peut-être corrigé quelque chose à la main, en urgence, et
+écraser ce correctif en silence détruirait aussi la trace de sa raison d'être.
+
+Il active le service continu et les **timers**, jamais les services `oneshot`
+eux-mêmes : les activer les lancerait à chaque démarrage, hors de leur
+cadence — et un rituel hebdomadaire qui tourne à chaque reboot n'est plus
+hebdomadaire.
+
 ## Installation
 
 ```bash
