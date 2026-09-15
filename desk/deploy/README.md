@@ -189,6 +189,34 @@ sans danger.
 filtrage sortant, ce sont les trois hôtes à autoriser — et c'est aussi
 pourquoi ce rituel ne peut pas tourner depuis n'importe quelle machine.
 
+## Les règles de prix figées — une inscription par jour
+
+Le second journal hors échantillon. Même discipline que les déblocages :
+`scripts/journal_regles.py` demande à chaque règle figée, **à la clôture de la
+barre journalière**, ce qu'elle veut faire à l'ouverture suivante, et
+l'inscrit dans un fichier en ajout seul.
+
+```bash
+sudo cp deploy/regles-figees.{service,timer} /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now regles-figees.timer
+
+systemctl list-timers regles-figees.timer
+journalctl -u regles-figees -n 40
+```
+
+**La cadence est celle de la règle, pas une préférence.** 00:10 UTC, soit dix
+minutes après la clôture de la bougie journalière. Inscrire plus tard dans la
+journée raterait l'ouverture, et le desk exécuterait au milieu de la barre —
+ce qui n'est plus la règle qui a été mesurée.
+
+**Ce que ce journal peut et ne peut pas prouver.** `regles_figees.py` porte le
+détail, et il faut l'avoir lu avant d'espérer quoi que ce soit : à dix trades
+par an, une règle de tendance journalière demande des années pour rendre un p
+exploitable. Ce qui est utilisable en semaines est ailleurs — l'écart entre le
+prix décidé et le prix obtenu, et la preuve que la règle s'exécute comme elle
+a été simulée.
+
 ## Rapatriement pour analyse
 
 ```bash

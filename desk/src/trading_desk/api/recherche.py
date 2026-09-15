@@ -513,6 +513,66 @@ def atelier(registre: Path | None = None) -> dict[str, Any]:
     }
 
 
+def regles_figees(chemin: Path | None = None) -> dict[str, Any]:
+    """Le second journal hors echantillon : les regles de prix figees.
+
+    Il affiche la PUISSANCE de chaque regle a cote de son compte de signaux,
+    et ce n'est pas decoratif : `turtle` demande plus de trois ans pour 8 %
+    de chances de conclure. Un panneau qui montrerait « 4 signaux » sans ce
+    contexte laisserait esperer un verdict qui ne viendra pas.
+    """
+    from ..sentinelle.regles_figees import (
+        DENOMINATEUR,
+        FIGE_LE,
+        REGLES,
+        VERSION,
+        empreinte_du_registre,
+    )
+
+    p = chemin or DONNEES / "journal_regles.jsonl"
+    rel = str(p.relative_to(RACINE)) if p.is_relative_to(RACINE) else str(p)
+    entrees: list[dict[str, Any]] = []
+    if p.exists():
+        for ligne in p.read_text(encoding="utf-8").splitlines():
+            ligne = ligne.strip()
+            if not ligne:
+                continue
+            try:
+                entrees.append(json.loads(ligne))
+            except ValueError:
+                continue
+
+    par_regle: dict[str, list[dict]] = {}
+    for e in entrees:
+        par_regle.setdefault(str(e.get("regle")), []).append(e)
+
+    return {
+        "disponible": bool(entrees),
+        "fichier": rel,
+        "raison": (f"{rel} absent — le journal se remplit a la cloture de "
+                   "chaque barre journaliere"
+                   if not entrees else ""),
+        "commande": "python scripts/journal_regles.py",
+        "version": VERSION,
+        "fige_le": FIGE_LE,
+        "empreinte": empreinte_du_registre(),
+        # Declare AVANT que la donnee existe, et c'est tout son interet.
+        "denominateur": DENOMINATEUR,
+        "seuil_bh_rang1": round(ALPHA / DENOMINATEUR, 5),
+        "inscrits": len(entrees),
+        "regles": [
+            {
+                "cle": r.cle, "strategie": r.strategie, "actif": r.actif,
+                "intervalle": r.intervalle, "parametres": r.parametres,
+                "mecanisme": r.mecanisme, "puissance": r.puissance,
+                "refus_mesure": r.refus_mesure,
+                "signaux": len(par_regle.get(r.cle, [])),
+            }
+            for r in REGLES
+        ],
+    }
+
+
 # -------------------------------------------------------------- navigation
 
 def navigation(chemin: Path | None = None) -> dict[str, Any]:
@@ -1004,6 +1064,7 @@ def tout(store: Any = None, racine_collecte: Path | str | None = None) -> dict[s
         "campagnes": camp,
         "strategies": strategies(),
         "atelier": atelier(),
+        "regles_figees": regles_figees(),
         "telemetrie": tel,
         "navigation": nav,
         "consommation": conso,

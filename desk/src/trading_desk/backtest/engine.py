@@ -93,6 +93,27 @@ class BacktestResult(Frozen):
     """
     costs: dict[str, Any] = Field(default_factory=dict)
 
+    # ── Ce que la strategie voulait faire APRES la derniere barre ──────────
+    #
+    # Le backtest force la cloture sur la derniere barre, ce qui efface la
+    # decision en attente. Or c'est EXACTEMENT cette decision qu'un journal
+    # hors echantillon doit inscrire : « a la cloture de N, la regle veut
+    # entrer a l'ouverture de N+1 ».
+    #
+    # Sans ces deux champs, un journal devrait re-simuler l'etat de position
+    # de son cote — et il DERIVE. Mesure le 14 septembre 2026 : une telle
+    # re-simulation ratait 10 ouvertures sur 56 pour `turtle_breakout`, parce
+    # qu'elle ignorait les sorties au STOP et se croyait encore en position.
+    # Le journal aurait alors mesure une autre regle que celle qui a ete
+    # backtestee, et rien ne l'aurait signale.
+    #
+    # Les exposer ici rend la garantie STRUCTURELLE : le live et le backtest
+    # empruntent le meme chemin de code.
+    decision_suivante: tuple[str, Decimal, Decimal | None] | None = None
+    """(sens, stop, cible) decide a la derniere cloture, ou `None`."""
+    position_finale: str | None = None
+    """Le sens de la position ouverte a la derniere barre, avant cloture forcee."""
+
     @property
     def net_pnl_usd(self) -> Decimal:
         return self.final_equity_usd - self.initial_equity_usd
@@ -199,6 +220,13 @@ def run_backtest(
             mark -= position.funding_paid
         curve.append(mark)
 
+    # L'etat AVANT la cloture forcee : c'est celui du monde reel a l'instant
+    # ou la derniere barre se ferme, et c'est lui qu'un journal doit inscrire.
+    decision_suivante = (
+        (pending[0].value, pending[1], pending[2]) if pending is not None else None
+    )
+    position_finale = position.side.value if position is not None else None
+
     # Cloture forcee sur la derniere barre : une position laissee ouverte
     # gonflerait le resultat d'un gain latent jamais realise.
     if position is not None:
@@ -225,6 +253,8 @@ def run_backtest(
         rejected_by_risk=rejected,
         stops_resserres=stops_resserres,
         costs=costs.model_dump(mode="json"),
+        decision_suivante=decision_suivante,
+        position_finale=position_finale,
     )
 
 

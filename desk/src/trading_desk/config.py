@@ -103,6 +103,10 @@ class Settings(BaseSettings):
     # Le fichier que le pilote de deblocages lit. Ses positions ont ete
     # inscrites AVANT les faits ; le desk ne trade que celles-la.
     paper_journal: str = "data/journal_unlocks.jsonl"
+    # Le second journal : les regles de prix figees. Meme discipline que le
+    # premier — inscrit avant les faits, en ajout seul — et meme recherche
+    # de fichier, d'abord a cote de vous puis dans le depot.
+    regles_journal: str = "data/journal_regles.jsonl"
 
     # --- signer (adresses publiques uniquement) ---
     agent_wallet_address: str | None = None
@@ -160,7 +164,7 @@ class Settings(BaseSettings):
         racine = racine_projet()
         if racine is None:
             return self
-        for champ in ("paper_journal",):
+        for champ in ("paper_journal", "regles_journal"):
             valeur = getattr(self, champ)
             if not valeur or Path(valeur).is_absolute():
                 continue

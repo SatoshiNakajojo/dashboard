@@ -420,6 +420,7 @@ function rendreRecherche(d) {
   rendreCampagnes(d.campagnes);
   rendreInventaire(d.strategies);
   rendreAtelier(d.atelier);
+  rendreReglesFigees(d.regles_figees);
   rendreConsommation(d.consommation);
   rendreVols(d.vols);
   preparerSelecteurs(d.strategies);
@@ -691,6 +692,42 @@ function rendreInventaire(inv) {
         + "<td><span class='tag " + (s.survit_bh ? "ok'>survit" : "ko'>non") + "</span></td></tr>").join("")
       + "</tbody></table>"
     : '<div class="empty">Aucune stratégie.</div>';
+}
+
+/* ---------- RÈGLES DE PRIX FIGÉES ---------- */
+function rendreReglesFigees(rf) {
+  rf = rf || {};
+  const rs = rf.regles || [];
+  $("rfBadge").textContent = (rf.inscrits || 0) + " signal(aux) · "
+    + "dénominateur " + (rf.denominateur ?? "—");
+  $("rfBadge").style.color = rf.disponible ? "var(--ok)" : "var(--muted)";
+
+  $("reglesFigees").innerHTML =
+    '<div class="chiffres">'
+    + chiffre("version", rf.version)
+    + chiffre("figé le", rf.fige_le)
+    + chiffre("empreinte", rf.empreinte)
+    + chiffre("seuil BH au rang 1", num(rf.seuil_bh_rang1, 5))
+    + "</div>"
+    + (rf.disponible ? "" :
+      '<div class="res doute">' + esc(rf.raison || "")
+      + '<div class="cmd">' + esc(rf.commande || "") + "</div></div>")
+    + (rs.length
+      ? "<table><thead><tr><th>Règle</th><th>Paramètres</th><th>Refus risque</th>"
+        + "<th>Signaux</th><th>Ce qu'elle peut prouver</th></tr></thead><tbody>"
+        + rs.map((r) =>
+          "<tr><td class='name'>" + esc(r.cle)
+          + "<div class='sousnom'>" + esc(r.mecanisme || "") + "</div></td>"
+          + "<td class='params'>" + esc(Object.entries(r.parametres || {})
+              .map(([k, v]) => k + "=" + v).join(" ")) + "</td>"
+          /* Au-delà de quelques pour cent, la règle qui tourne n'est plus
+             celle qui a été mesurée. C'est ce qui a écarté tsmom. */
+          + "<td style='color:" + (r.refus_mesure > 0.10 ? "var(--warn)" : "var(--ok)")
+          + "'>" + pct(r.refus_mesure) + "</td>"
+          + "<td>" + r.signaux + "</td>"
+          + "<td class='sousnom'>" + esc(r.puissance || "") + "</td></tr>").join("")
+        + "</tbody></table>"
+      : "");
 }
 
 /* ---------- ATELIER ---------- */

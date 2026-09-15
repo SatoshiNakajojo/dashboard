@@ -400,10 +400,20 @@ def test_l_intro_de_l_atelier_annonce_le_danger():
 
 def test_le_formulaire_ne_code_en_dur_aucune_strategie():
     """Il vient du catalogue. Ajouter une stratégie au code doit la faire
-    apparaître sans toucher à cette page."""
+    apparaître sans toucher à cette page.
+
+    La vérification porte sur le BLOC de l'atelier, pas sur tout le fichier :
+    d'autres panneaux ont de bonnes raisons de nommer une stratégie dans un
+    commentaire — celui des règles figées explique pourquoi `tsmom` a été
+    écarté du registre. Élargir la recherche à tout le fichier ferait
+    échouer ce test sur de la prose, ce qui n'est pas ce qu'il surveille.
+    """
     js = _ui("desk.js")
+    debut = js.index("/* ---------- ATELIER ---------- */")
+    bloc = js[debut:js.index("/* ---------- CONSOMMATION ---------- */", debut)]
+    assert "atCat" in bloc, "on regarde bien le bloc de l'atelier"
     for nom in ("ema_cross", "tsmom", "turtle_breakout"):
-        assert nom not in js, f"« {nom} » est écrit en dur dans l'interface"
+        assert nom not in bloc, f"« {nom} » est écrit en dur dans le formulaire"
 
 
 def test_la_regle_deployee_n_entre_pas_dans_le_selecteur_de_courbe():

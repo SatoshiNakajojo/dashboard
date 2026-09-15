@@ -22,6 +22,7 @@ import logging
 import math
 import random
 import time
+from datetime import UTC
 from decimal import Decimal
 
 import uvicorn
@@ -33,8 +34,8 @@ from .contracts.common import Bias, DeskMode, HaltReason, Regime, now_ms
 from .contracts.mandate import Mandate
 from .contracts.market import BookSnapshot, FeedHealth, FeedStatus, MarkPrice, Trade
 from .market import HyperliquidFeed, Subscription, perps_disponibles
-from .version import version
 from .storage import SqliteStore
+from .version import version
 
 log = logging.getLogger("desk")
 
@@ -102,7 +103,7 @@ async def run_ingestion(state: DeskState, settings: Settings,
     inconnus: list[str] = []
     try:
         connus = perps_disponibles(testnet=settings.testnet)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         # Ne pas empecher le desk de demarrer parce qu'on n'a pas pu
         # verifier : on garde le comportement d'avant et on le DIT. Se
         # rabattre sur le socle serait pire — l'univers retrecirait en
@@ -349,6 +350,15 @@ def _verifier_la_bande_de_stop(pilote, limites, settings: Settings) -> None:
     On ne corrige rien tout seul : elargir la borne en douce reviendrait a
     laisser le signal redefinir la limite de risque qui le borne.
     """
+    # Un faisceau porte plusieurs sources : on verifie CHACUNE. Ne regarder
+    # que le faisceau lui-meme laisserait passer une source contradictoire
+    # derriere une source saine — exactement la panne qui a l'air de marcher.
+    sources = getattr(pilote, "sources", None)
+    if sources:
+        for source in sources:
+            _verifier_la_bande_de_stop(source, limites, settings)
+        return
+
     stop_pct = getattr(pilote, "stop_pct", None)
     if stop_pct is None:
         return                       # ce signal ne fixe pas de stop : rien a dire
@@ -412,7 +422,7 @@ def _annoncer_le_programme(pilote, settings: Settings) -> None:
     Le cas concret qui a motive ceci : le journal demandait KAITO, ZRO,
     LISTA, le desk etait abonne a BTC et ETH, et rien ne le disait.
     """
-    from datetime import datetime, timezone
+    from datetime import datetime
 
     maintenant = now_ms()
     attendus = pilote.symboles_attendus(maintenant)
@@ -427,7 +437,7 @@ def _annoncer_le_programme(pilote, settings: Settings) -> None:
                 "python3 scripts/journal_unlocks.py")
         else:
             symbole, quand = suite
-            jour = datetime.fromtimestamp(quand / 1000, timezone.utc)
+            jour = datetime.fromtimestamp(quand / 1000, UTC)
             heures = max(0, (quand - maintenant) // 3_600_000)
             log.info(
                 "aucune fenetre ouverte. Prochaine : %s le %s (dans %d h). "
@@ -626,19 +636,36 @@ async def main_async(demo: bool) -> None:
     # de vrai qui en manquerait.
     pupitre = None
     if settings.mode in (DeskMode.PAPER, DeskMode.TESTNET) and not demo:
+        from .execution.faisceau import Faisceau
         from .execution.pupitre import Pupitre, exchange_pour
         from .sentinelle.pilote_deblocages import PiloteDeblocages
+        from .sentinelle.pilote_regles import PiloteRegles
 
-        pilote = PiloteDeblocages(settings.paper_journal)
-        if pilote.absent:
+        # Deux familles de signaux, et toutes deux inscrites AVANT les faits :
+        # les deblocages (un evenement date) et les regles de prix figees.
+        # L'ordre compte — le mandat peut ne laisser de la place que pour une
+        # position, et elle revient alors au seul edge mesure du depot.
+        deblocages = PiloteDeblocages(settings.paper_journal)
+        regles = PiloteRegles(settings.regles_journal)
+        if deblocages.absent and regles.absent:
             raise SystemExit(
-                f"mode {settings.mode.value} refuse : {settings.paper_journal} "
-                "est absent. Le desk ne trade que des positions inscrites "
+                f"mode {settings.mode.value} refuse : ni "
+                f"{settings.paper_journal} ni {settings.regles_journal} "
+                "n'existe. Le desk ne trade que des positions inscrites "
                 "AVANT les faits ; sans journal, il n'y a rien a trader et "
                 "une entree calculee a la volee ne serait pas hors "
-                "echantillon. "
-                "Produire le journal : python scripts/journal_unlocks.py"
+                "echantillon.\n"
+                "  Deblocages     : python scripts/journal_unlocks.py\n"
+                "  Regles figees  : python scripts/journal_regles.py"
             )
+        # Une source absente n'est pas une panne : c'est une information, et
+        # le desk tourne avec celles qui repondent.
+        vivantes = [s for s in (deblocages, regles) if not s.absent]
+        for s in (deblocages, regles):
+            if s.absent:
+                log.warning("signal « %s » sans journal : il ne proposera rien",
+                            s.nom)
+        pilote = Faisceau(*vivantes) if len(vivantes) > 1 else vivantes[0]
         _verifier_la_bande_de_stop(pilote, state.limits, settings)
         pupitre = Pupitre(state, exchange_pour(state), pilote,
                           univers=tuple(settings.assets))
@@ -652,6 +679,7 @@ async def main_async(demo: bool) -> None:
         from .sentinelle import triggers as _tg
         state.signal = {
             "nom": pilote.nom,
+            "sources": [s.nom for s in getattr(pilote, "sources", (pilote,))],
             "fenetre": f"J-{_tg.DEBLOCAGE_AVANCE_J} → J-1",
             "duree_j": _tg.DEBLOCAGE_DUREE_J,
             "part_min": _tg.DEBLOCAGE_PART_MIN,
@@ -668,7 +696,8 @@ async def main_async(demo: bool) -> None:
         # On lui donne la MEME table que la supervision, par reference : deux
         # tables finiraient par diverger, et le desk traderait sur des prix
         # que l'ecran ne montre pas.
-        pilote.prix = _PrixVus(state.last_prices)
+        for source in getattr(pilote, "sources", (pilote,)):
+            source.prix = _PrixVus(state.last_prices)
 
     store.journal("boot", {
         "mode": settings.mode.value,

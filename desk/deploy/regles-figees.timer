@@ -1,0 +1,29 @@
+# /etc/systemd/system/regles-figees.timer
+#
+#   sudo cp deploy/regles-figees.{service,timer} /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now regles-figees.timer
+#
+[Unit]
+Description=Declenche l'inscription des signaux des regles figees
+Documentation=https://github.com/SatoshiNakajojo/dashboard
+
+[Timer]
+# 00:10 UTC, soit dix minutes apres la cloture de la bougie journaliere.
+#
+# LA CADENCE EST CELLE DE LA REGLE, pas une preference. Une regle journaliere
+# decide a la cloture de la barre N pour l'ouverture de N+1 : inscrire plus
+# tard dans la journee raterait l'ouverture, et le desk executerait au milieu
+# de la barre — ce qui n'est plus la regle qui a ete mesuree.
+OnCalendar=*-*-* 00:10:00 UTC
+
+# Rattrape une journee ou le VPS etait eteint. Sans elle, un signal manque est
+# un signal perdu, et rien ne le dit.
+Persistent=true
+
+# Dix minutes de dispersion : assez pour ne pas taper a la seconde pres,
+# assez peu pour rester dans la premiere heure de la barre.
+RandomizedDelaySec=600
+
+[Install]
+WantedBy=timers.target

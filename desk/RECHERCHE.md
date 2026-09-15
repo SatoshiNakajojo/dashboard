@@ -590,6 +590,86 @@ Le dénominateur redevient alors honnête, parce qu'il est déclaré avant que l
 donnée existe. Une règle de prix figée aujourd'hui et relevée dans six mois
 serait la deuxième chose de ce dépôt à mériter le mot « validé ».
 
+## Deux règles de prix figées, et ce qu'elles peuvent honnêtement prouver
+
+La section précédente a montré qu'un univers restreint achète de la puissance
+— mais seulement s'il est déclaré *avant* de regarder, ce que ce dépôt ne peut
+plus faire sur ces données. Il restait une voie : **figer entièrement une
+règle et la juger sur des données qui n'existent pas encore.**
+`src/trading_desk/sentinelle/regles_figees.py` est cette déclaration, et
+`scripts/journal_regles.py` le journal qui l'accumule.
+
+### Ce que la puissance mesurée dit, et il faut le lire avant d'espérer
+
+Fenêtres glissantes sur tout l'historique : si l'on avait figé la règle à une
+date quelconque, quel p un test de durée donnée aurait-il rendu ?
+
+| règle | durée | trades | p médian | part à p < 0,05 |
+| --- | --- | ---: | ---: | ---: |
+| `turtle` BTC 1d | 1 an | 9 | 0,431 | 5 % |
+| `turtle` BTC 1d | 3 ans | 31 | 0,329 | 8 % |
+| `tsmom` BTC 1d | 1 an | 14 | 0,238 | 20 % |
+| `tsmom` BTC 1d | 3 ans | 52 | **0,040** | **54 %** |
+
+Le suivi de tendance a un taux de réussite de 40 % et des queues épaisses :
+son rapport signal sur bruit par trade est minuscule. À dix trades par an,
+`turtle` ne se prouvera **jamais** par ce chemin — 8 % des fenêtres de trois
+ans passent, contre 5 % pour le pur hasard. `tsmom` était le seul à avoir une
+chance réelle, et il lui fallait trois ans.
+
+### Pourquoi `tsmom` a quand même été écarté
+
+Parce que le desk le refuserait. En rejouant chaque règle contre le moteur de
+risque du déploiement :
+
+| règle | trades | refus du risque | part refusée |
+| --- | ---: | ---: | ---: |
+| `turtle_btc_1d` | 58 | 2 | **3 %** |
+| `turtle_eth_1d` | 50 | 11 | 18 % |
+| `tsmom_btc_1d` | 84 | 197 | **70 %** |
+
+`tsmom` pose son stop à trois ATR : médiane 1 175 bps, neuvième décile 1 781,
+au-dessus de la bande de 1 600. **Sept entrées sur dix seraient refusées**, et
+la règle qui tournerait ne serait pas celle qui a été mesurée.
+
+Deux façons de « réparer » ça, toutes deux malhonnêtes : élargir la bande de
+stop pour que la stratégie passe — c'est ajuster le garde-fou à la stratégie —
+ou baisser `atr_stop` jusqu'à ce que ça rentre, c'est-à-dire choisir un
+paramètre sur une contrainte d'exécution puis le présenter comme validé.
+
+**Le coût de cette décision est réel : il ne reste que des règles à faible
+puissance. Aucune règle de prix figée de ce dépôt n'a aujourd'hui de chemin
+réaliste vers une validation statistique.** C'est vrai, et ça ne change pas
+si on ne l'écrit pas.
+
+### Alors pourquoi les faire tourner
+
+Parce que la validation statistique n'est pas le seul produit d'un journal.
+Trois résultats sont disponibles en semaines, pas en années :
+
+- la vérification que la règle s'exécute **comme elle a été simulée** — un
+  écart entre le backtest et le live est un bogue, et il se voit au premier
+  trade ;
+- la mesure du **glissement réel** contre les 15 bps du modèle de coûts, qui
+  est une hypothèse jamais confrontée et que le mode PAPER peut trancher ;
+- la preuve que la plomberie tient avant qu'un centime réel ne passe.
+
+### Le défaut qui aurait rendu tout le dispositif inutile
+
+La première version du journal re-simulait l'état de position de son côté
+pour savoir ce que la règle voulait faire. Elle **dérivait** : dix ouvertures
+manquées sur cinquante-six pour `turtle_breakout`, parce qu'elle ignorait les
+sorties au **stop** et se croyait encore en position.
+
+Le journal aurait alors accumulé des prédictions sur une règle différente de
+celle qui a été mesurée — le seul mode de panne qui rende un test hors
+échantillon inutile, et le seul qui ne se voie pas dans les résultats.
+
+La garantie est désormais **structurelle** plutôt qu'espérée : le moteur de
+backtest expose `decision_suivante`, la décision qu'il avait en attente à la
+dernière clôture, et le journal l'appelle. Le live et le backtest empruntent
+le même chemin de code. Un test le verrouille sur chaque règle figée.
+
 ## Méthode : ce qui est acquis
 
 - **Le plancher de p** est inscrit dans chaque fichier de campagne. Sans
@@ -626,6 +706,12 @@ serait la deuxième chose de ce dépôt à mériter le mot « validé ».
   Il rendait un p élevé, ce qui ressemble exactement à un contrôle réussi.
   Tout modèle nul rapporte désormais la plage sur laquelle il a tiré, et se
   tait plutôt que de rendre un p sur trois observations.
+- **Une règle qui tourne doit être celle qui a été mesurée, et ça se
+  vérifie.** Deux écarts silencieux ont été trouvés le même jour : un journal
+  qui re-simulait l'état de position et ratait 18 % des ouvertures, et une
+  règle que le moteur de risque aurait refusée sept fois sur dix. Aucun des
+  deux ne se voit dans un résultat — seulement en confrontant la règle au
+  moteur qui l'exécutera.
 - **Une bougie n'est pas une exécution.** Un tiers des cotations Hyperliquid
   ont un volume nul le jour même — prix de marque, rien d'échangé. Un seul
   de ces faux rendements déplaçait une moyenne de vingt-cinq points de
