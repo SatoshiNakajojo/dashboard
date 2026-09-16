@@ -392,8 +392,15 @@ def regle_deployee() -> dict[str, Any]:
 
     ligne = {
         "nom": "deblocages",
+        # **Ce que le desk fait, pas ce que la validation mesurait.** Cette
+        # ligne disait « adossé à BTC » alors que la jambe de couverture n'est
+        # pas branchée — l'écran affirmait une neutralité de marché que le
+        # desk n'a pas. La version adossée est la référence, et son absence
+        # est dite ici plutôt que tue.
         "resume": ("règle événementielle : vendre à découvert avant un "
-                   "déblocage de jetons, adossé à BTC"),
+                   "déblocage de jetons. Jambe de couverture BTC NON "
+                   "branchée — la validation la mesure (Sharpe 2,46 contre "
+                   "1,80, repli 7,9 % contre 15,3 %)"),
         "deployee": True,
         "regle": {
             "fenetre": f"J{entree_j} → J{sortie_j}",
@@ -402,6 +409,11 @@ def regle_deployee() -> dict[str, Any]:
             "part_min": tg.DEBLOCAGE_PART_MIN,
             "part_max": tg.DEBLOCAGE_PART_MAX,
         },
+        # La part du capital qu'une position prend REELLEMENT, contre celle
+        # que la validation suppose. Ce chiffre n'apparaissait nulle part
+        # parce qu'il n'est le reglage de personne : il tombe du quotient
+        # `risque par trade / distance au stop`.
+        "dimensionnement": _dimensionnement(),
         # Les colonnes de grille, laissees vides a dessein.
         "cellules": len(poole) if isinstance(poole, list) else 0,
         "gagnantes": None,
@@ -421,6 +433,20 @@ def regle_deployee() -> dict[str, Any]:
                              "data/unlocks.json --tirages 2000 "
                              "--out baselines/unlocks.json")
     return ligne
+
+
+def _dimensionnement() -> dict[str, Any]:
+    """Ce que le desk prend vraiment, contre ce que la validation suppose.
+
+    Le stop vient du pilote deploye et le risque par trade des limites : les
+    deux sources sont lues, jamais recopiees. Un ecran qui afficherait des
+    constantes recopiees finirait par decrire un desk qui n'existe plus.
+    """
+    from ..risk.fraction import diagnostic
+    from ..risk.limits import RiskLimits
+    from ..sentinelle.pilote_deblocages import STOP_PCT
+
+    return diagnostic(RiskLimits(), stop_pct=STOP_PCT)
 
 
 def _mediane(valeurs: list[float]) -> float | None:

@@ -1061,3 +1061,54 @@ apprendrait à ignorer.
 
 Le module ne débranche rien. Couper un agent est une action ; il ne fait que
 chiffrer.
+
+## La taille de position — personne ne l'a choisie
+
+Le desk prend **3,3 % du capital** par position là où la validation de la
+règle des déblocages en suppose **25 %**. L'écart vaut, composé sur la période
+mesurée, ≈5 %/an contre ≈48 %/an. C'était le premier constat du manuel, et il
+manquait la chose qui explique pourquoi il a pu vivre des mois sans être vu.
+
+**Les 3,3 % ne sont le réglage de personne.** Ils tombent d'une division :
+
+    fraction du capital = risque par trade / distance au stop
+                  3,3 % =          0,5 %    /        15 %
+
+Le budget de risque a été fixé à 0,5 % parce que c'est une prudence classique.
+Le stop a été posé à 15 % parce que les jetons concernés bougent de plus de
+5 % par jour et qu'un stop serré sortirait au bruit. Ni l'un ni l'autre n'a été
+choisi en pensant à la taille de position, et leur quotient n'apparaît dans
+aucun fichier de configuration.
+
+C'est la forme la plus courante d'un réglage qui dérive : **un nombre que
+personne n'a posé et que personne ne relit**, parce qu'il n'est écrit nulle
+part.
+
+`src/trading_desk/risk/fraction.py` le calcule, l'affiche, et donne son
+inverse — le chiffre actionnable : **pour viser 25 % avec un stop de 15 %, il
+faut régler le risque par trade à 3,75 %**. Sept fois et demie la valeur
+actuelle. Écrit comme ça, ça se voit et ça se discute.
+
+La formule est confrontée au moteur de risque lui-même, à trois distances de
+stop, plutôt qu'affirmée : une formule qui ressemble au moteur sans en être
+l'image afficherait un chiffre faux avec l'autorité d'une mesure.
+
+Les plafonds sont traduits dans la même unité que la fraction — ils sont en
+dollars, elle est en pourcent, et tant qu'ils ne sont pas comparables la
+question « peut-on monter à 25 % ? » n'a pas de réponse. **Réponse : aucun
+plafond ne mord.** Sur 1 000 $, 250 $ par position contre un plafond de 500 $,
+un notionnel brut de 1 000 $ et un levier de 3×.
+
+**La valeur déployée n'est pas changée.** Rendre un réglage visible et le
+modifier sont deux actes différents ; le second appartient à qui porte le
+risque.
+
+### Un mensonge d'écran, corrigé au passage
+
+En regardant la ligne rendue, le résumé de la règle déployée disait *« vendre
+à découvert avant un déblocage de jetons, **adossé à BTC** »*. La jambe de
+couverture n'est pas branchée. L'écran affirmait une neutralité de marché que
+le desk n'a pas — et c'est exactement la classe de défaut que ce dépôt traque
+partout ailleurs : un affichage qui ressemble à un état mais en décrit un
+autre. Le résumé dit désormais que la jambe est absente, et ce qu'elle
+coûterait.

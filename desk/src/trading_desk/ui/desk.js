@@ -646,6 +646,38 @@ function celluleOuTiret(v, rendu) {
     : rendu(v);
 }
 
+/* La part du capital qu'une position prend vraiment.
+
+   Elle n'apparaissait nulle part, et ce n'est pas un oubli d'affichage :
+   **c'est le réglage de personne**. Elle tombe du quotient `risque par trade
+   / distance au stop`, entre deux valeurs choisies pour d'autres raisons —
+   0,5 % parce que c'est une prudence classique, 15 % parce que les jetons
+   concernés bougent de plus de 5 % par jour.
+
+   Un nombre que personne n'a posé et que personne ne relit est la forme la
+   plus courante d'un réglage qui dérive. Celui-ci vaut 7,5 fois moins que la
+   taille sur laquelle la règle a été validée, et la mesure du glissement dit
+   qu'aucune contrainte de marché ne s'y oppose. */
+function ligneDimensionnement(d) {
+  if (!d) return "";
+  const ecart = d.facteur && d.facteur > 1.1;
+  return "<div class='sousnom regle'"
+    + (ecart ? " style='color:var(--crit)'" : "") + ">taille de position "
+    + d.fraction_deployee_pct.toFixed(1) + " % du capital"
+    + (ecart
+      ? " contre " + d.fraction_cible_pct.toFixed(0) + " % à la validation — "
+        + "soit " + d.facteur.toFixed(1) + "× moins. Personne n'a choisi ce "
+        + "chiffre : c'est " + d.risque_par_trade_actuel_pct + " % de risque "
+        + "par trade divisé par un stop de " + d.stop_pct.toFixed(0) + " %. "
+        + "Pour viser " + d.fraction_cible_pct.toFixed(0) + " %, régler le "
+        + "risque par trade à " + d.risque_par_trade_requis_pct + " %"
+        + (d.plafonds_bloquants && d.plafonds_bloquants.length
+          ? " — mais " + esc(d.plafonds_bloquants.join(", ")) + " mordrait."
+          : " ; aucun plafond ne mord à cette taille.")
+      : "")
+    + "</div>";
+}
+
 function ligneDeployee(s) {
   const r = s.regle || {};
   const pct = (x) => (x === null || x === undefined ? "—" : (x * 100).toFixed(0) + " %");
@@ -655,6 +687,7 @@ function ligneDeployee(s) {
     + "<div class='sousnom regle'>fenêtre " + esc(r.fenetre || "—")
     + " · déblocage de " + pct(r.part_min) + " à " + pct(r.part_max)
     + " de l'offre · " + esc(String(r.duree_j ?? "—")) + " jours de détention</div>"
+    + ligneDimensionnement(s.dimensionnement)
     + (s.jamais_testee
       ? "<div class='sousnom manque'>" + esc(s.raison || "artefact absent")
         + "<br><code>" + esc(s.commande || "") + "</code></div>"
