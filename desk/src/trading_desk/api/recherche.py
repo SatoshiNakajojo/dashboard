@@ -933,6 +933,45 @@ def consommation() -> dict[str, Any]:
         # peut rien emettre — et c'est la seule ligne qui explique les zeros
         # de tous les autres panneaux.
         "seuil_conviction": 0.60,
+        # A partir de quel capital une couche d'IA permanente se paierait.
+        # Le cout par cycle est mesure, le rendement est mesure ; le seuil
+        # n'est qu'une division, et c'est pour ca qu'il a sa place ici plutot
+        # que dans une discussion.
+        "rentabilite": _rentabilite(),
+    }
+
+
+def _rentabilite(capital_usd: float = 1000.0) -> dict[str, Any]:
+    """Le tableau des seuils, a trois cadences et aux deux tailles mesurees.
+
+    Les deux tailles ne sont pas une fioriture : l'ecart entre elles EST le
+    bloc 3 vu par le cout. A la taille deployee il faut vingt-quatre mille
+    dollars pour payer une IA horaire ; a la taille validee, trois mille.
+    """
+    from .. import rentabilite as rent
+
+    cadences = [(1.0, "un cycle par jour"), (24.0, "un cycle par heure"),
+                (96.0, "un cycle par quart d'heure")]
+    lignes = []
+    for cycles, libelle in cadences:
+        lignes.append({
+            "cadence": libelle,
+            "cycles_par_jour": cycles,
+            "cout_mensuel_usd": round(rent.cout_mensuel_usd(cycles), 2),
+            "seuil_deploye_usd": round(rent.capital_seuil_usd(
+                cycles, rent.RENDEMENT_DEPLOYE) or 0),
+            "seuil_valide_usd": round(rent.capital_seuil_usd(
+                cycles, rent.RENDEMENT_VALIDE) or 0),
+        })
+    verdict = rent.juger(capital_usd, cycles_par_jour=24.0)
+    return {
+        "capital_usd": capital_usd,
+        "cout_par_cycle_usd": rent.COUT_PAR_CYCLE_USD,
+        "rendement_deploye": rent.RENDEMENT_DEPLOYE,
+        "rendement_valide": rent.RENDEMENT_VALIDE,
+        "lignes": lignes,
+        "verdict": verdict.resume(),
+        "rentable": verdict.rentable,
     }
 
 

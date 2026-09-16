@@ -1004,3 +1004,60 @@ l'exchange ne fournit pas. C'est un vrai morceau, pas un drapeau.
 
 Tant que l'une des deux n'est pas tranchée, **la jambe de couverture reste
 débranchée**, et l'écart Sharpe 1,80 contre 2,46 subsiste.
+
+## Le seuil de rentabilité d'une couche d'IA — une division, pas une opinion
+
+Cadrage repris de la même conversation. L'ami en question a la discipline que
+ce dépôt n'avait pas : *« si tous mes agents tournaient en IA, c'était
+800 boules par mois ; avec le modèle que j'ai là, ça me coûte 54 dollars par
+mois — faut que je gagne plus de 50 boules pour être rentable »*. Et la phrase
+qui contient une question chiffrable : *« ça deviendrait rentable qu'à partir
+de grosses sommes à lui confier »*.
+
+`src/trading_desk/rentabilite.py` calcule la réponse. Le coût par cycle est
+mesuré (0,1335 $, campagne du 8 septembre 2026), les rendements aussi (≈5 %/an
+à la taille déployée, ≈48 %/an à la taille validée). Le seuil n'est qu'une
+division.
+
+    cadence                    facture    seuil à 5 %/an   seuil à 48 %/an
+    un cycle par jour        4,06 $/mois           997 $             122 $
+    un cycle par heure      97,53 $/mois        23 939 $           2 937 $
+    un cycle par quart d'h. 390,12 $/mois        95 755 $          11 747 $
+
+Sur les 1 000 $ du desk, au rythme d'un cycle par heure : **97,53 $ de facture
+mensuelle pour 4,07 $ de gain, soit 23,9 fois le gain.** Même à la taille
+validée — 40 $ de gain mensuel — la facture reste deux fois et demie le gain.
+
+Les deux colonnes de seuil sont **l'écart de taille du desk vu par le coût**.
+Le même bloc revient par une autre porte : à la taille déployée il faut
+vingt-quatre mille dollars pour payer une IA horaire ; à la taille validée,
+moins de trois mille.
+
+### L'erreur commise en écrivant ce module, et son sens
+
+La première version divisait le rendement annuel par douze. C'est faux, et
+**faux du mauvais côté** : à 48 %/an la division naïve rend 4,00 % par mois,
+alors que le taux qui compose réellement à 48 % sur douze mois vaut
+`1,48^(1/12) − 1`, soit 3,32 %. Elle surestimait donc le gain de vingt pour
+cent, et le seuil de rentabilité d'autant — elle faisait paraître une couche
+d'IA plus abordable qu'elle ne l'est.
+
+Le module sert à décider s'il faut payer. Quand une approximation doit
+pencher, elle penche du côté qui ne fait pas dépenser.
+
+### La règle mécanique, et pourquoi elle est mécanique
+
+`agents_muets()` liste les agents qui ont coûté sans jamais émettre de mandat.
+Ceux du dépôt en sont à zéro mandat sur toute la campagne. **La règle proposée
+est mécanique et c'est le point** : un agent sans mandat après un nombre de
+cycles donné est débranché, pas débattu. Tant que la décision reste une
+discussion, elle se reporte et la facture continue.
+
+Deux garde-fous, parce qu'une règle mécanique mal bornée coupe ce qu'il ne
+faut pas : un seuil de cycles, pour qu'un agent branché la veille ne soit pas
+jugé sur trois cycles ; et zéro appel ne vaut pas « muet » — c'est un agent
+déjà débranché, et le compter gonflerait la liste de faux positifs qu'on
+apprendrait à ignorer.
+
+Le module ne débranche rien. Couper un agent est une action ; il ne fait que
+chiffrer.

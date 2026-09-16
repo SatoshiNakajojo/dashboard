@@ -1070,6 +1070,39 @@ async function atLancer() {
 }
 
 /* ---------- CONSOMMATION ---------- */
+/* Le seuil de rentabilité d'une couche d'IA permanente.
+
+   Ce n'est pas une mesure de plus : c'est une division entre deux chiffres
+   déjà mesurés — le coût par cycle et le rendement de la règle déployée. Elle
+   a sa place à l'écran plutôt que dans une discussion, parce qu'une division
+   affichée tranche ce qu'une intuition laisse ouvert.
+
+   Les deux colonnes de seuil sont l'écart de taille du desk vu par le coût :
+   à la taille déployée il faut vingt-quatre mille dollars pour payer une IA
+   horaire, à la taille validée moins de trois mille. */
+function rendreRentabilite(r) {
+  if (!r) { $("rentabilite").innerHTML = ""; return; }
+  $("rentaBadge").textContent = r.rentable ? "rentable" : "déficitaire";
+  $("rentaBadge").style.color = r.rentable ? "var(--ok)" : "var(--crit)";
+  $("rentabilite").innerHTML =
+    '<div class="verdict' + (r.rentable ? "" : " bloc") + '"><span class="gros">'
+    + esc(r.verdict.charAt(0).toUpperCase() + r.verdict.slice(1))
+    + "</span>Sur " + usd(r.capital_usd) + " de capital, au rythme d'un cycle "
+    + "par heure. Le coût par cycle (" + usd(r.cout_par_cycle_usd) + ") est "
+    + "mesuré ; les rendements aussi. Le seuil n'est qu'une division.</div>"
+    + "<table><thead><tr><th>Cadence</th><th>Facture</th>"
+    + "<th>Seuil à " + pct(r.rendement_deploye * 100, 0) + "/an <span class='dim'>(taille déployée)</span></th>"
+    + "<th>Seuil à " + pct(r.rendement_valide * 100, 0) + "/an <span class='dim'>(taille validée)</span></th>"
+    + "</tr></thead><tbody>"
+    + (r.lignes || []).map((l) =>
+      "<tr><td class='name'>" + esc(l.cadence) + "</td>"
+      + "<td>" + usd(l.cout_mensuel_usd) + " / mois</td>"
+      + "<td style='color:var(--crit)'>" + usd(l.seuil_deploye_usd) + "</td>"
+      + "<td>" + usd(l.seuil_valide_usd) + "</td></tr>").join("")
+    + "</tbody></table>";
+}
+
+
 function rendreConsommation(c) {
   c = c || {};
   const q = c.qualite || {};
@@ -1094,6 +1127,8 @@ function rendreConsommation(c) {
       "Le fichier de qualité n'est pas sur cette machine.",
       "python -m trading_desk.agents --cycles 30 --politique diversifie");
   }
+
+  rendreRentabilite(c.rentabilite);
 
   $("politiques").innerHTML = pols.length
     ? "<table><thead><tr><th>Politique</th><th>Ce que c'est</th><th>Cycles</th>"
