@@ -323,6 +323,11 @@ def test_une_source_qui_sort_ne_ferme_QUE_sa_part(tmp_path):
                    last_message_ms=t, max_age_ms=10_000, messages=10),
     ), True)
 
+    # Le desk est réputé réconcilié : ces tests portent sur ce qui se passe
+    # APRÈS le démarrage. Sans cette ligne I01 bloque, et c'est le
+    # comportement voulu — un desk qui n'a jamais vérifié ses positions
+    # orphelines n'a pas le droit d'ouvrir.
+    state.marquer_reconciliation(convergee=True, detail="test")
     px = PaperExchange(equity_usd=Decimal("10000"), costs=FRICTIONLESS)
     px.on_book(carnet("BTC", mid=Decimal("100"), pas=Decimal("0.01"),
                       taille=Decimal("100000")))
@@ -384,6 +389,11 @@ def test_une_source_unique_ferme_toujours_TOUTE_la_position(tmp_path):
         FeedHealth(name="book:BTC", status=FeedStatus.LIVE,
                    last_message_ms=t, max_age_ms=10_000, messages=10),
     ), True)
+    # Le desk est réputé réconcilié : ces tests portent sur ce qui se passe
+    # APRÈS le démarrage. Sans cette ligne I01 bloque, et c'est le
+    # comportement voulu — un desk qui n'a jamais vérifié ses positions
+    # orphelines n'a pas le droit d'ouvrir.
+    state.marquer_reconciliation(convergee=True, detail="test")
     px = PaperExchange(equity_usd=Decimal("10000"), costs=FRICTIONLESS)
     px.on_book(carnet("BTC", mid=Decimal("100"), pas=Decimal("0.01"),
                       taille=Decimal("100000")))
@@ -429,6 +439,11 @@ def _desk_adosse(tmp_path, lignes, *, adosser=True):
                    last_message_ms=t, max_age_ms=20_000, messages=10)
         for a in ("PYTH", "BTC") for flux in ("trades", "book")), True)
 
+    # Le desk est réputé réconcilié : ces tests portent sur ce qui se passe
+    # APRÈS le démarrage. Sans cette ligne I01 bloque, et c'est le
+    # comportement voulu — un desk qui n'a jamais vérifié ses positions
+    # orphelines n'a pas le droit d'ouvrir.
+    state.marquer_reconciliation(convergee=True, detail="test")
     px = PaperExchange(equity_usd=Decimal("10000"), costs=FRICTIONLESS)
     px.on_book(carnet("PYTH", mid=Decimal("0.40"), pas=Decimal("0.0001"),
                       taille=Decimal("1000000")))

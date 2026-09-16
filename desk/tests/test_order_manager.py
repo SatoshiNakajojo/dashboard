@@ -27,7 +27,9 @@ from trading_desk.execution import (
     FakeExchange, FaultProfile, OrderManager, make_cloid, protect_or_flatten,
     reconcile, reconcile_and_protect,
 )
-from trading_desk.risk import RiskContext, RiskLimits
+from trading_desk.contracts.orders import AccountState
+from trading_desk.risk import RiskContext, RiskLimits, evaluate
+from trading_desk.risk.engine import Invariant
 
 
 # --------------------------------------------------------------------------
@@ -525,3 +527,87 @@ def test_rejet_de_l_exchange_est_propre():
     assert not out.unknown, "un rejet franc n'est pas un sort inconnu"
     assert out.record is not None
     assert out.record.status is OrderStatus.REJECTED
+
+
+# ─────────── I01 : « soldes frais » n'est pas « réconciliation convergée »
+
+def test_I01_refuse_un_releve_frais_SANS_sequence_de_reconciliation():
+    """**Le défaut P0 du 16 septembre 2026.**
+
+    `reconcile_and_protect` existait, était testé, et sa docstring disait « à
+    appeler avant d'autoriser la moindre entrée ». Personne ne l'appelait.
+
+    Pendant ce temps le relevé périodique posait `reconciled=True` toutes les
+    quinze secondes après un simple `account_state()`, et I01 le lisait comme
+    « la réconciliation a convergé ». Un drapeau qui veut dire « soldes
+    frais » tenait lieu de garantie de sécurité : le desk pouvait ouvrir des
+    positions sans avoir jamais vérifié qu'il n'en portait pas une, orpheline
+    et sans stop, héritée d'un crash.
+    """
+    from trading_desk.api.state import DeskState
+    from trading_desk.config import Settings
+    from trading_desk.storage import SqliteStore
+
+    state = DeskState(Settings(), SqliteStore(":memory:"))
+    assert state.reconciliation_convergee is False, (
+        "un desk qui vient de démarrer n'a rien vérifié")
+
+    # Un relevé frais, comme la boucle périodique en produit un toutes les
+    # quinze secondes.
+    state.set_account(AccountState(
+        equity_usd=Decimal("10000"), available_margin_usd=Decimal("10000"),
+        used_margin_usd=Decimal("0"), positions=()), reconciled=True)
+
+    ctx = state.risk_context()
+    assert ctx.reconciled is True, "les soldes SONT frais"
+    assert ctx.reconciliation_convergee is False, "mais rien n'a été vérifié"
+
+    i01 = next(c for c in evaluate(ctx).checks
+               if c.invariant is Invariant.I01_RECONCILED)
+    assert i01.passed is False
+    assert "jamais convergée" in i01.detail
+
+
+def test_I01_passe_une_fois_la_sequence_convergee():
+    from trading_desk.api.state import DeskState
+    from trading_desk.config import Settings
+    from trading_desk.storage import SqliteStore
+
+    state = DeskState(Settings(), SqliteStore(":memory:"))
+    state.set_account(AccountState(
+        equity_usd=Decimal("10000"), available_margin_usd=Decimal("10000"),
+        used_margin_usd=Decimal("0"), positions=()), reconciled=True)
+    state.marquer_reconciliation(convergee=True, detail="rien à corriger")
+
+    i01 = next(c for c in evaluate(state.risk_context()).checks
+               if c.invariant is Invariant.I01_RECONCILED)
+    assert i01.passed is True
+
+
+def test_un_releve_periodique_ne_REMET_PAS_la_convergence():
+    """Le relevé ne doit pas pouvoir marquer la convergence — ni la poser, ni
+    l'effacer. Sinon le contrôle redevient inerte à la quinzième seconde."""
+    from trading_desk.api.state import DeskState
+    from trading_desk.config import Settings
+    from trading_desk.storage import SqliteStore
+
+    state = DeskState(Settings(), SqliteStore(":memory:"))
+    state.marquer_reconciliation(convergee=True, detail="rien à corriger")
+    state.set_account(AccountState(
+        equity_usd=Decimal("10000"), available_margin_usd=Decimal("10000"),
+        used_margin_usd=Decimal("0"), positions=()), reconciled=True)
+    assert state.reconciliation_convergee is True
+    assert state.reconciliation_detail == "rien à corriger"
+
+
+def test_le_detail_de_reconciliation_est_conserve_pour_l_ecran():
+    """« Convergée » ne dit pas si on a trouvé deux orphelines et posé deux
+    stops — et c'est exactement ce qu'un humain veut savoir au redémarrage."""
+    from trading_desk.api.state import DeskState
+    from trading_desk.config import Settings
+    from trading_desk.storage import SqliteStore
+
+    state = DeskState(Settings(), SqliteStore(":memory:"))
+    state.marquer_reconciliation(
+        convergee=True, detail="2 orpheline(s) : BTC, ETH · 2 stop(s) posé(s)")
+    assert "orpheline" in state.reconciliation_detail

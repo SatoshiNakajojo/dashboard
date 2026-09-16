@@ -57,6 +57,24 @@ class DeskState:
         self.account: AccountState | None = None
         self.reconciled = False
         self.reconciled_at_ms: int | None = None
+
+        # **Deux choses differentes, et les confondre etait un defaut.**
+        #
+        # `reconciled` veut dire « l'etat du compte vient de l'exchange et il
+        # est frais ». La boucle de releve le pose toutes les quinze secondes
+        # apres un simple `account_state()`.
+        #
+        # `reconciliation_convergee` veut dire « la sequence COMPLETE a
+        # tourne » : positions orphelines detectees, positions sans stop
+        # corrigees ou fermees. Elle ne se pose qu'une fois, au demarrage, par
+        # `reconcile_and_protect`.
+        #
+        # L'invariant I01 lisait `reconciled` comme s'il portait le second
+        # sens. Il passait donc au vert sur un desk qui n'avait jamais verifie
+        # qu'il ne portait pas une position orpheline sans stop — exactement
+        # le scenario que le reconciliateur existe pour rendre survivable.
+        self.reconciliation_convergee = False
+        self.reconciliation_detail = "jamais exécutée"
         self.day_realized_pnl_usd: Decimal | None = None
 
         # Le registre des parts du pupitre, quand il y en a un. L'exchange
@@ -193,10 +211,27 @@ class DeskState:
             self.ws_connected = connected
 
     def set_account(self, account: AccountState, *, reconciled: bool = True) -> None:
+        """Le releve periodique : l'etat est frais, rien de plus.
+
+        Ne touche PAS a `reconciliation_convergee` : un releve de soldes ne
+        dit rien des positions orphelines ni des stops manquants, et le
+        laisser marquer la convergence rendrait le controle inerte.
+        """
         with self._lock:
             self.account = account
             self.reconciled = reconciled
             self.reconciled_at_ms = now_ms()
+
+    def marquer_reconciliation(self, *, convergee: bool, detail: str) -> None:
+        """La sequence complete a tourne. Appelee par `reconcile_and_protect`.
+
+        Le detail est conserve pour l'ecran : « convergee » ne dit pas si on a
+        trouve deux positions orphelines et pose deux stops, et c'est
+        precisement ce qu'un humain veut savoir apres un redemarrage.
+        """
+        with self._lock:
+            self.reconciliation_convergee = convergee
+            self.reconciliation_detail = detail
 
     def _basculer_le_jour_si_besoin(self) -> None:
         """Remet le compteur a zero au changement de jour UTC.
@@ -236,6 +271,7 @@ class DeskState:
                 limits=self.limits,
                 account=self.account,
                 reconciled=self.reconciled and not self.halted,
+                reconciliation_convergee=self.reconciliation_convergee,
                 reconciliation_age_ms=age,
                 day_realized_pnl_usd=self.day_realized_pnl_usd,
                 mandate=self.mandate,
@@ -274,6 +310,15 @@ class DeskState:
                 "halt_reason": self.halt_reason.value if self.halt_reason else None,
                 "halt_detail": self.halt_detail,
                 "ws_connected": self.ws_connected,
+                # La séquence de réconciliation, et ce qu'elle a trouvé. Un
+                # contrôle qui tourne sans être visible ne protège qu'à
+                # moitié : « convergée » ne dit pas si on a trouvé deux
+                # orphelines et posé deux stops, et c'est ça qu'on veut lire
+                # après un redémarrage.
+                "reconciliation": {
+                    "convergee": self.reconciliation_convergee,
+                    "detail": self.reconciliation_detail,
+                },
                 # La version du code EN MEMOIRE, pas celle du disque :
                 # un `git pull` ne change rien a un processus deja lance.
                 "version": version(),

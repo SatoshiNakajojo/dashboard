@@ -213,6 +213,16 @@ function render(s) {
   const tiles = [
     { k: "Équité", v: a ? usd(a.equity_usd) : "—",
       s: a ? "marge libre " + usd(a.available_margin_usd) : "compte non reconcilié" },
+    { k: "Réconciliation",
+      v: d.reconciliation ? (d.reconciliation.convergee ? "convergée" : "JAMAIS")
+                          : "—",
+      c: d.reconciliation && !d.reconciliation.convergee ? "crit" : "",
+      /* « Soldes frais » et « réconciliation convergée » sont deux choses
+         différentes, et les confondre a laissé I01 passer au vert pendant des
+         semaines sur un desk qui n'avait jamais cherché ses positions
+         orphelines. Le détail est affiché parce que « convergée » seul ne dit
+         pas ce qui a été trouvé ni corrigé. */
+      s: d.reconciliation ? d.reconciliation.detail : "état inconnu" },
     { k: "PnL du jour", v: pnl === null ? "—" : usd(pnl),
       cls: pnl === null ? "dim" : (pnl >= 0 ? "pos" : "neg"),
       s: "limite " + s.limits.max_daily_loss_pct + " % de l'équité" },

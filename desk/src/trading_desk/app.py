@@ -333,6 +333,49 @@ async def run_ingestion(state: DeskState, settings: Settings,
             t.cancel()
 
 
+def _reconcilier_au_demarrage(state, pupitre, settings) -> None:
+    """Lit l'etat reel, pose les stops manquants, ferme ce qui resiste.
+
+    **Un echec ne fait pas tomber le desk, il le laisse bloque.** I01 refusera
+    toute entree tant que la sequence n'aura pas converge, ce qui est le
+    comportement voulu : mieux vaut un desk inerte qu'un desk qui trade sur un
+    etat suppose. Lever ici tuerait aussi la supervision, qui est precisement
+    ce qu'on veut garder pour comprendre pourquoi il est bloque.
+    """
+    from .execution.reconciler import reconcile_and_protect
+
+    try:
+        rapport = reconcile_and_protect(
+            pupitre.exchange, pupitre.orders, state.risk_context(),
+            state.limits, known_assets=set(settings.assets),
+        )
+    except Exception as exc:
+        log.error("réconciliation de démarrage impossible : %s", exc)
+        state.marquer_reconciliation(
+            convergee=False, detail=f"échec : {str(exc)[:80]}")
+        return
+
+    morceaux = []
+    if rapport.orphan_positions:
+        morceaux.append(f"{len(rapport.orphan_positions)} orpheline(s) : "
+                        + ", ".join(rapport.orphan_positions))
+    if rapport.stops_placed:
+        morceaux.append(f"{len(rapport.stops_placed)} stop(s) posé(s)")
+    if rapport.positions_flattened:
+        morceaux.append(f"{len(rapport.positions_flattened)} fermée(s) faute "
+                        f"de stop")
+    if rapport.unprotected_positions:
+        morceaux.append(f"{len(rapport.unprotected_positions)} TOUJOURS sans "
+                        f"stop")
+    detail = " · ".join(morceaux) or "rien à corriger"
+
+    state.marquer_reconciliation(convergee=rapport.converged, detail=detail)
+    if rapport.converged:
+        log.info("réconciliation au démarrage : %s", detail)
+    else:
+        log.error("réconciliation non convergée : %s", rapport.error)
+
+
 def _verifier_la_bande_de_stop(pilote, limites, settings: Settings) -> None:
     """Refuser de demarrer si le signal ne peut RIEN passer.
 
@@ -686,6 +729,23 @@ async def main_async(demo: bool) -> None:
         # affichant « aucun blocage » : les invariants disent si le desk a le
         # DROIT d'agir, pas s'il agit.
         state.rapport_pupitre = pupitre.resume
+
+        # ─── LA SEQUENCE DE RECONCILIATION, QUI N'ETAIT JAMAIS APPELEE ───
+        #
+        # `reconcile_and_protect` existait, etait teste, et sa docstring
+        # disait « a appeler avant d'autoriser la moindre entree ». Personne
+        # ne l'appelait. Le desk demarrait donc sans jamais verifier qu'il ne
+        # portait pas une position orpheline — ouverte avant un crash — ni une
+        # position sans stop cote exchange.
+        #
+        # Le releve periodique posait `reconciled=True` toutes les quinze
+        # secondes, et l'invariant I01 le lisait comme « la reconciliation a
+        # converge ». Un drapeau qui veut dire « soldes frais » tenait lieu de
+        # garantie de securite.
+        #
+        # Elle tourne ICI, apres le pupitre (qui fournit le gestionnaire
+        # d'ordres) et AVANT le premier cycle.
+        _reconcilier_au_demarrage(state, pupitre, settings)
         # La regle branchee, pour l'ecran. Les parametres sont LUS depuis le
         # module de la regle, jamais recopies : une prose et un code qui
         # divergent, c'est le code qui trade.

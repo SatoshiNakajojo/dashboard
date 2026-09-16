@@ -333,6 +333,11 @@ def _desk(tmp_path, journal_lignes, *, equity=Decimal("10000")):
         FeedHealth(name="book:PYTH", status=FeedStatus.LIVE,
                    last_message_ms=t, max_age_ms=10_000, messages=10),
     ), True)
+    # Le desk est réputé réconcilié : ces tests portent sur ce qui se passe
+    # APRÈS le démarrage. Sans cette ligne I01 bloque, et c'est le
+    # comportement voulu — un desk qui n'a jamais vérifié ses positions
+    # orphelines n'a pas le droit d'ouvrir.
+    state.marquer_reconciliation(convergee=True, detail="test")
     px = PaperExchange(equity_usd=equity, costs=FRICTIONLESS)
     pilote = PiloteDeblocages(j, prix={"PYTH": Decimal("0.40")})
     pupitre = Pupitre(state, px, pilote, univers=("PYTH",))

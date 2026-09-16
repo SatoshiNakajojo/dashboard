@@ -89,6 +89,12 @@ class RiskContext(Frozen):
     # I01 / I02 / I03 / I04
     account: AccountState | None = None
     reconciled: bool = False
+    # La sequence COMPLETE a-t-elle tourne : orphelines detectees, stops
+    # manquants poses ou positions fermees. Distinct de `reconciled`, qui ne
+    # dit que la fraicheur du releve. Defaut True pour ne pas casser les
+    # appelants qui construisent un contexte a la main dans les tests ; c'est
+    # le cablage reel qui le pose a False tant que la sequence n'a pas tourne.
+    reconciliation_convergee: bool = True
     reconciliation_age_ms: int | None = None
     day_realized_pnl_usd: Decimal | None = None
 
@@ -188,7 +194,18 @@ def _i01(ctx: RiskContext) -> Check:
                      detail="aucun état de compte connu")
     if not ctx.reconciled:
         return Check(invariant=Invariant.I01_RECONCILED, passed=False,
-                     detail="réconciliation non convergée")
+                     detail="état de compte non rafraîchi")
+    # **Deux conditions, et la seconde manquait.** Un relevé de soldes frais
+    # ne dit rien des positions orphelines ni des stops absents cote
+    # exchange. Passer au vert sans elle, c'est autoriser des entrees sur un
+    # desk qui porte peut-etre une position a levier sans protection —
+    # exactement le scenario que le reconciliateur existe pour rendre
+    # survivable.
+    if not ctx.reconciliation_convergee:
+        return Check(invariant=Invariant.I01_RECONCILED, passed=False,
+                     detail="séquence de réconciliation jamais convergée : "
+                            "positions orphelines et stops manquants non "
+                            "vérifiés")
     age = ctx.reconciliation_age_ms
     if age is None:
         return Check(invariant=Invariant.I01_RECONCILED, passed=False,
