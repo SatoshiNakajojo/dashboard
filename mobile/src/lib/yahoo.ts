@@ -4,22 +4,24 @@
  * Même contrat que `coingecko.ts` : cache à TTL, retry exponentiel,
  * `AbortController`, et repli silencieux sur la dernière valeur connue.
  *
- * ## Pourquoi pas de proxy CORS ici
+ * ## Deux chemins, selon la plateforme
  *
- * Le dashboard JCGI passe par `api.allorigins.win` / `corsproxy.io` parce que
- * c'est une page de navigateur et que Yahoo ne pose pas d'en-tête CORS. Une
- * application React Native n'a pas de politique d'origine : elle appelle Yahoo
- * directement, sans tiers dans le chemin des données.
+ * Yahoo ne pose pas d'en-tête CORS. Sur iOS et Android, aucune importance : une
+ * app native n'a pas de politique d'origine et appelle Yahoo directement.
  *
- * La build web fait exception et échouera sur CORS. Ce n'est pas grave : sur le
- * web les prix viennent de la base, alimentée par la fonction Edge — qui, étant
- * serveur, n'a pas ce problème non plus. Seule la pré-saisie du composer perd
- * sa suggestion, et le membre tape le prix.
+ * Dans la PWA, le navigateur refuserait la réponse. On passe alors par la
+ * fonction Edge `quote`, hébergée sur le projet Supabase du club — plutôt que
+ * par un proxy public anonyme comme le fait le dashboard JCGI. Pas de tiers
+ * dans le chemin des données, et une seule autorité à qui faire confiance.
+ *
+ * Sans Supabase configuré, la PWA n'a pas de relais : elle ne propose alors
+ * aucun cours, et le membre saisit son prix d'entrée.
  */
 
 import { Platform } from 'react-native';
 
 import { withCache } from './cache';
+import { supabase } from './supabase';
 import { getJson } from './http';
 import { fxSymbol } from './quotes';
 import {
@@ -103,16 +105,55 @@ export async function fetchRates(
 }
 
 /**
+ * Relais Supabase, utilisé par la PWA. `null` si le backend n'est pas configuré.
+ *
+ * L'annulation est portée par le `signal` passé à `invoke` : `functions-js`
+ * l'accepte et coupe la requête si le membre change de ticker entre-temps.
+ */
+async function fetchViaEdge(symbol: string, signal?: AbortSignal): Promise<StockQuote | null> {
+  const client = supabase;
+  if (!client) return null;
+
+  const { data, error } = await client.functions.invoke<{
+    price?: number;
+    currency?: string;
+    changePercent?: number | null;
+    usd?: number | null;
+    symbol?: string;
+    error?: string;
+  }>(`quote?symbol=${encodeURIComponent(symbol)}`, { method: 'GET', signal });
+
+  if (error || !data || data.error || typeof data.price !== 'number') return null;
+
+  return {
+    price: data.price,
+    currency: data.currency ?? 'USD',
+    changePercent: data.changePercent ?? null,
+    symbol: data.symbol ?? symbol,
+    usd: data.usd ?? null,
+    stale: false,
+  };
+}
+
+/**
  * Cotation prête à l'emploi, convertie en dollars.
  *
- * Sur le web, renvoie `null` sans tenter l'appel : la requête serait bloquée
- * par CORS et l'échec coûterait trois tentatives et huit secondes.
+ * Ne lève jamais : une suggestion de prix absente est un désagrément, pas une
+ * panne — le membre saisit son prix.
  */
 export async function fetchStockQuote(
   symbol: string,
   signal?: AbortSignal,
 ): Promise<StockQuote | null> {
-  if (Platform.OS === 'web') return null;
+  // Dans un navigateur, l'appel direct serait bloqué par CORS : on passe par
+  // la fonction Edge, qui est un serveur.
+  if (Platform.OS === 'web') {
+    try {
+      return await fetchViaEdge(symbol, signal);
+    } catch {
+      return null;
+    }
+  }
 
   try {
     const quote = await fetchYahooQuote(symbol, signal);

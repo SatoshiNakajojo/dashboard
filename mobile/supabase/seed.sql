@@ -11,13 +11,13 @@
 
 insert into auth.users (id, instance_id, aud, role, email, created_at, updated_at)
 values
-  ('11111111-1111-4111-8111-000000000001', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'john@satoshisocial.club',  now(), now()),
-  ('11111111-1111-4111-8111-000000000002', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'alex@satoshisocial.club',  now(), now()),
-  ('11111111-1111-4111-8111-000000000003', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'marco@satoshisocial.club', now(), now()),
-  ('11111111-1111-4111-8111-000000000004', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'sofia@satoshisocial.club', now(), now()),
-  ('11111111-1111-4111-8111-000000000005', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'rayan@satoshisocial.club', now(), now()),
-  ('11111111-1111-4111-8111-000000000006', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'lea@satoshisocial.club',   now(), now()),
-  ('11111111-1111-4111-8111-000000000007', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'toi@satoshisocial.club',   now(), now())
+  ('11111111-1111-4111-8111-000000000001', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'john@cryptosclub.fr',  now(), now()),
+  ('11111111-1111-4111-8111-000000000002', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'alex@cryptosclub.fr',  now(), now()),
+  ('11111111-1111-4111-8111-000000000003', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'marco@cryptosclub.fr', now(), now()),
+  ('11111111-1111-4111-8111-000000000004', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'sofia@cryptosclub.fr', now(), now()),
+  ('11111111-1111-4111-8111-000000000005', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'rayan@cryptosclub.fr', now(), now()),
+  ('11111111-1111-4111-8111-000000000006', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'lea@cryptosclub.fr',   now(), now()),
+  ('11111111-1111-4111-8111-000000000007', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'toi@cryptosclub.fr',   now(), now())
 on conflict (id) do nothing;
 
 -- --- Membres ----------------------------------------------------------------

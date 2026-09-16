@@ -1,6 +1,7 @@
 import type { PropsWithChildren } from 'react';
 import { ScrollViewStyleReset } from 'expo-router/html';
 
+import { brand } from '@/theme/brand';
 import { c } from '@/theme/tokens';
 
 /**
@@ -32,14 +33,11 @@ export default function Root({ children }: PropsWithChildren) {
         <meta name="apple-mobile-web-app-capable" content="yes" />
         {/* `black-translucent` laisse le fond encre passer derrière l'heure. */}
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-        <meta name="apple-mobile-web-app-title" content="Satoshi Club" />
-        <meta name="application-name" content="Satoshi Social Club" />
+        <meta name="apple-mobile-web-app-title" content={brand.shortName} />
+        <meta name="application-name" content={brand.name} />
         <meta name="theme-color" content={c.ink} />
         <meta name="color-scheme" content="dark" />
-        <meta
-          name="description"
-          content="Le club — Crypto Nights, calls d’investissement et prédictions BTC."
-        />
+        <meta name="description" content={brand.description} />
 
         <link rel="manifest" href="manifest.json" />
         <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png" />

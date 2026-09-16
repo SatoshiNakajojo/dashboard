@@ -1,20 +1,13 @@
 import { useState } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, Text, TextInput, View } from 'react-native';
+import { Image, KeyboardAvoidingView, Platform, Pressable, Text, TextInput, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { BitcoinGlyph } from '@/components/ui/BitcoinGlyph';
 import { Micro } from '@/components/ui/Micro';
 import { useAuth, useProfileBootstrap } from '@/features/auth/useAuth';
 import { useSession } from '@/hooks/useSession';
-import {
-  c,
-  f,
-  goldButtonGradient,
-  goldRadial,
-  goldRadialLocations,
-  radius,
-} from '@/theme/tokens';
+import { brand } from '@/theme/brand';
+import { c, f, goldButtonGradient, radius } from '@/theme/tokens';
 
 /**
  * Porte du club.
@@ -42,23 +35,16 @@ export default function SignInScreen() {
     >
       <View className="flex-1 justify-center" style={{ paddingHorizontal: 22 }}>
         <View className="items-center" style={{ marginBottom: 34 }}>
-          <LinearGradient
-            colors={[...goldRadial]}
-            locations={[...goldRadialLocations]}
-            start={{ x: 0.34, y: 0.28 }}
-            end={{ x: 1, y: 1 }}
-            style={{
-              width: 44,
-              height: 44,
-              borderRadius: 22,
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-          >
-            <BitcoinGlyph size={24} />
-          </LinearGradient>
+          {/* Le logo du club, pas un ₿ générique : c'est la porte d'entrée,
+              autant qu'on reconnaisse chez qui on frappe. */}
+          <Image
+            source={require('../../assets/brand/logo.png')}
+            style={{ width: 92, height: 92 }}
+            resizeMode="contain"
+            accessibilityLabel={brand.name}
+          />
 
-          <Micro style={{ marginTop: 20 }}>Satoshi Social Club</Micro>
+          <Micro style={{ marginTop: 20 }}>{brand.name}</Micro>
           <Text
             style={{
               fontFamily: f.serif,

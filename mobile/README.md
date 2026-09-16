@@ -1,7 +1,10 @@
-# Satoshi Social Club
+# Cryptos Club
 
-Application mobile privée d'un club de sept investisseurs Bitcoin.
+Application privée d'un club de sept investisseurs Bitcoin, installable sur
+l'écran d'accueil — **une PWA**, comme le dashboard JCGI.
 React Native (Expo SDK 57) · TypeScript · NativeWind v4 · Supabase · Skia.
+
+**[Comment l'installer sur un téléphone →](docs/INSTALLATION.md)**
 
 Trois onglets, trois mécaniques :
 
@@ -20,7 +23,8 @@ accent rare, sur fond encre chaude. Référence : `Bitcoin Club v2.dc.html`.
 
 ```bash
 npm install
-npm start
+npm start        # développement
+npm run build:web && npm run deploy   # publier la PWA
 ```
 
 **Aucune configuration n'est nécessaire pour voir l'app tourner.** Sans variables
@@ -159,6 +163,21 @@ signale la composition du geste au rendu ; l'analyse est conservatrice — un
 handler de geste ne s'exécute jamais pendant le rendu. L'alternative
 (recomposer le geste à chaque point capturé) interromprait le tracé en cours.
 La suppression est ciblée sur deux lignes et justifiée sur place.
+
+---
+
+## Identité
+
+Le nom et le logo vivent en un seul endroit chacun : `src/theme/brand.ts` pour
+le nom, `assets/brand/logo-source.jpg` pour la marque. `scripts/make-icons.py`
+dérive toutes les tailles de la seconde — PWA, iOS, Android, splash, écran de
+connexion.
+
+Le dossier de design parle de « Satoshi Social Club » ; le logo du club porte
+« CRYPTOS CLUB ». C'est le logo qui l'emporte : il sera sur l'écran d'accueil de
+chaque membre, et un nom qui contredit la marque se remarque. Revenir en arrière
+est un mot à changer dans `brand.ts` — plus les deux fichiers statiques qu'il
+nomme.
 
 ---
 

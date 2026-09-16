@@ -26,6 +26,7 @@ import { loadSkia } from '@/lib/skiaWeb';
 import { useProfileBootstrap } from '@/features/auth/useAuth';
 import { useSession } from '@/hooks/useSession';
 import { isSupabaseConfigured } from '@/lib/supabase';
+import { brand } from '@/theme/brand';
 import { c } from '@/theme/tokens';
 import '../global.css';
 
@@ -67,7 +68,7 @@ export default function RootLayout() {
           {/* `expo-router/head` pilote le <title> de la build web ; sur mobile
               natif il ne rend rien. */}
           <Head>
-            <title>Satoshi Social Club</title>
+            <title>{brand.name}</title>
           </Head>
           <AuthGate />
           <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: c.ink } }}>
