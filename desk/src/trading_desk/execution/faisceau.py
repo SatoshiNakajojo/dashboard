@@ -19,8 +19,10 @@ depot — et les regles figees derriere.
 
 from __future__ import annotations
 
+from decimal import Decimal
+
 from ..execution.parts import Sortie
-from ..execution.pupitre import Intention
+from ..execution.pupitre import Intention, appeler_confirmer
 
 
 class Faisceau:
@@ -89,13 +91,24 @@ class Faisceau:
         source = self._origine.get(id(intention))
         return getattr(source, "nom", None) if source is not None else None
 
-    def confirmer(self, intention: Intention) -> None:
+    def confirmer(self, intention: Intention,
+                  taille: Decimal | None = None) -> None:
+        """Route la confirmation, ET la taille remplie, vers la bonne source.
+
+        La taille est ce qui permet a une source d'emettre une jambe adossee
+        au bon notionnel. Elle traverse donc le faisceau comme le reste, avec
+        la meme inspection d'arite : une source qui n'en veut pas ne doit pas
+        avoir a changer de signature.
+        """
         source = self._origine.get(id(intention))
         if source is None:
             return
         fn = getattr(source, "confirmer", None)
         if callable(fn):
-            fn(intention)
+            if taille is None:
+                fn(intention)
+            else:
+                appeler_confirmer(fn, intention, taille)
 
     # --- ce que la supervision lit -------------------------------------
 

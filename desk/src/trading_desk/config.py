@@ -103,6 +103,20 @@ class Settings(BaseSettings):
     # Le fichier que le pilote de deblocages lit. Ses positions ont ete
     # inscrites AVANT les faits ; le desk ne trade que celles-la.
     paper_journal: str = "data/journal_unlocks.jsonl"
+
+    # La jambe ADOSSEE de la regle des deblocages. La validation mesure deux
+    # versions : nue (Sharpe 1,80, repli 15,3 %) et adossee a un achat de BTC
+    # pour le meme notionnel (Sharpe 2,46, repli 7,9 %). L'adossee est la
+    # seule dont le resultat soit attribuable aux deblocages — la nue est
+    # courte sur des alts pratiquement chaque semaine, donc son resultat
+    # contient une exposition courte permanente au marche.
+    #
+    # **Par defaut FAUX, et ce n'est pas de la timidite.** Adosser double le
+    # nombre de positions ouvertes : avec le plafond de deux positions
+    # simultanees, un seul deblocage adosse occupe tout le desk. Relever ce
+    # plafond est une decision distincte, qui se prend en sachant ce qu'elle
+    # coute.
+    deblocages_adosses: bool = False
     # Le second journal : les regles de prix figees. Meme discipline que le
     # premier — inscrit avant les faits, en ajout seul — et meme recherche
     # de fichier, d'abord a cote de vous puis dans le depot.

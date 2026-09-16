@@ -29,6 +29,8 @@ perime est un verdict sur le passe.
 
 from __future__ import annotations
 
+import inspect
+
 import logging
 from dataclasses import dataclass
 from decimal import Decimal
@@ -72,6 +74,15 @@ class Intention:
     # L'urgence du signal. Un signal calendaire doit etre en position a une
     # DATE : un ordre passif non servi lui fait rater la fenetre entiere.
     style: EntryStyle = EntryStyle.MARKET_IOC
+    # Pour une jambe ADOSSEE : le notionnel de la paire qu'elle couvre. Une
+    # couverture n'est pas une prise de risque independante — elle REDUIT
+    # l'exposition du livre — et la dimensionner par le budget de risque
+    # donnerait une taille sans rapport avec ce qu'elle couvre. Tous les
+    # plafonds continuent de s'appliquer ; voir `risk/sizing.py`.
+    notionnel_cible: Decimal | None = None
+    # L'actif que cette jambe couvre, pour l'ecran et le journal. Une
+    # couverture anonyme se lirait comme une prise de position.
+    couverture_de: str | None = None
 
 
 class Signal(Protocol):
@@ -86,7 +97,33 @@ class Signal(Protocol):
     # attendre cet appel pour rayer une occasion : la rayer des la lecture
     # la perdrait chaque fois que le desk refuse d'agir — amorcage, flux
     # fige, plafond atteint — et rien ne le signalerait.
-    def confirmer(self, intention: Intention) -> None: ...
+    def confirmer(self, intention: Intention,
+                  taille: Decimal | None = None) -> None: ...
+
+
+def appeler_confirmer(fn, intention: Intention, taille: Decimal) -> None:
+    """Confirme, en passant la taille SI la source sait la recevoir.
+
+    La taille remplie est ce qui permet a une source d'emettre une jambe
+    adossee au bon notionnel. Mais toutes les sources n'en ont pas besoin, et
+    changer la signature du protocole casserait les plus simples.
+
+    **L'arite est inspectee, jamais devinee par un `try/except TypeError`.**
+    Une `TypeError` levee A L'INTERIEUR de `confirmer` serait alors prise pour
+    un desaccord de signature, et l'appel serait relance sans la taille : une
+    vraie erreur deviendrait un silence, et la source croirait avoir confirme.
+    """
+    try:
+        params = inspect.signature(fn).parameters
+        accepte = len([p for p in params.values()
+                       if p.kind in (p.POSITIONAL_ONLY, p.POSITIONAL_OR_KEYWORD)])
+        variadique = any(p.kind is p.VAR_POSITIONAL for p in params.values())
+    except (TypeError, ValueError):
+        accepte, variadique = 1, False
+    if accepte >= 2 or variadique:
+        fn(intention, taille)
+    else:
+        fn(intention)
 
 
 class Pupitre:
@@ -324,11 +361,23 @@ class Pupitre:
             account=compte, mandate=mandat, limits=self.state.limits,
             asset=intention.asset, side=intention.side,
             entry_price=intention.entry_price, stop_price=intention.stop_price,
+            notionnel_cible=intention.notionnel_cible,
         )
         if taille.size <= 0:
             self.refus.append(
                 f"{intention.asset} non dimensionnable : {taille.binding_constraint}")
             return
+
+        if taille.couverture_partielle:
+            # Le livre n'est adosse qu'en partie, et cette exposition
+            # residuelle n'a ete decidee par personne. Elle remonte dans les
+            # refus — qui sont ce que l'ecran affiche — plutot que d'etre
+            # avalee par une ouverture qui a l'air normale.
+            self.refus.append(
+                f"{intention.asset} : couverture partielle, "
+                f"{taille.notional_usd:.2f} $ au lieu de "
+                f"{intention.notionnel_cible:.2f} $ "
+                f"({taille.binding_constraint})")
 
         self.state.set_mandate(mandat)
 
@@ -351,7 +400,7 @@ class Pupitre:
 
             confirmer = getattr(self.signal, "confirmer", None)
             if confirmer is not None:
-                confirmer(intention)
+                appeler_confirmer(confirmer, intention, taille.size)
             log.info("ouverture %s %s taille %s (%s)", intention.side.value,
                      intention.asset, taille.size, intention.motif)
         else:

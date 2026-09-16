@@ -645,7 +645,8 @@ async def main_async(demo: bool) -> None:
         # les deblocages (un evenement date) et les regles de prix figees.
         # L'ordre compte — le mandat peut ne laisser de la place que pour une
         # position, et elle revient alors au seul edge mesure du depot.
-        deblocages = PiloteDeblocages(settings.paper_journal)
+        deblocages = PiloteDeblocages(settings.paper_journal,
+                                      adosser=settings.deblocages_adosses)
         regles = PiloteRegles(settings.regles_journal)
         if deblocages.absent and regles.absent:
             raise SystemExit(

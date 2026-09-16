@@ -50,6 +50,10 @@ JOUR_MS = 86_400_000
 # protegerait pas, il sortirait au bruit avant la fin de la fenetre.
 STOP_PCT = Decimal("0.15")
 
+# L'actif de la jambe ADOSSEE. La validation a mesure BTC ; en changer
+# changerait la strategie mesuree, pas seulement un reglage.
+REFERENCE = "BTC"
+
 
 class PiloteDeblocages:
     """Traduit le journal des deblocages en intentions datees."""
@@ -62,9 +66,34 @@ class PiloteDeblocages:
         *,
         prix: dict[str, Decimal] | None = None,
         stop_pct: Decimal = STOP_PCT,
+        adosser: bool = False,
+        reference: str = REFERENCE,
     ) -> None:
         self.chemin = Path(journal)
         self.stop_pct = stop_pct
+        # **La jambe adossee est OPTIONNELLE et par defaut absente.**
+        #
+        # La validation mesure deux versions : la vente a decouvert nue
+        # (Sharpe 1,80, repli 15,3 %) et la meme position adossee a un achat
+        # de la reference pour le meme notionnel (Sharpe 2,46, repli 7,9 %).
+        # L'adossee est la seule dont le resultat soit attribuable aux
+        # deblocages : la nue est courte sur des alts pratiquement chaque
+        # semaine, donc son resultat contient une exposition courte permanente
+        # au marche.
+        #
+        # Elle reste desactivee par defaut parce qu'elle double le nombre de
+        # positions ouvertes, donc consomme le plafond de positions
+        # simultanees. L'activer est une decision de configuration, pas un
+        # detail d'implementation.
+        self.adosser = adosser
+        self.reference = reference
+        # Les couvertures a emettre au prochain cycle, et celles deja
+        # ouvertes. Une couverture est emise APRES l'ouverture de sa paire,
+        # jamais en meme temps : son notionnel doit etre celui qui a
+        # REELLEMENT ete rempli, pas celui qui a ete demande — le moteur de
+        # risque peut avoir rabote la jambe courte.
+        self._a_couvrir: list[tuple[str, Decimal]] = []
+        self._couvertures: dict[str, Decimal] = {}
         # Les derniers prix connus, alimentes par le flux. Sans prix, une
         # intention n'a ni niveau d'entree ni stop, donc pas de taille.
         self.prix: dict[str, Decimal] = prix if prix is not None else {}
@@ -177,9 +206,47 @@ class PiloteDeblocages:
                 motif=f"deblocage {e.get('part_offre')} le "
                       f"{int(e.get('deblocage_ms', 0)) // JOUR_MS}",
             ))
+
+        out.extend(self._jambes_de_couverture())
         return out
 
-    def confirmer(self, intention: Intention) -> None:
+    def _jambes_de_couverture(self) -> list[Intention]:
+        """Les achats de la reference, pour les jambes courtes deja ouvertes.
+
+        **Le stop de la couverture est une concession, et il faut la voir.**
+        L'invariant « aucune position sans stop » n'est pas negociable : c'est
+        la distance au stop qui donne la taille, donc une position sans stop
+        n'est pas une position non protegee, c'est une position sans taille.
+        La couverture recoit donc le meme stop en pourcentage que sa paire.
+
+        Consequence : si ce stop est touche, le livre redevient nu alors que
+        la jambe courte est encore ouverte. Sur la reference, a quinze pour
+        cent, c'est rare — mais ce n'est pas impossible, et le taire serait
+        pretendre a une neutralite que le desk n'a pas toujours.
+        """
+        if not self.adosser or not self._a_couvrir:
+            return []
+        prix = self.prix.get(self.reference)
+        if prix is None or prix <= 0:
+            self.sans_prix.add(self.reference)
+            return []
+
+        jambes: list[Intention] = []
+        for couvert, notionnel in self._a_couvrir:
+            jambes.append(Intention(
+                asset=self.reference,
+                side=Side.LONG,
+                entry_price=prix,
+                # La couverture est LONGUE : son stop est EN DESSOUS.
+                stop_price=prix * (Decimal("1") - self.stop_pct),
+                notionnel_cible=notionnel,
+                couverture_de=couvert,
+                motif=f"couverture de {couvert} ({notionnel:.2f} $)",
+            ))
+        return jambes
+
+    def confirmer(self, intention: Intention,
+                  taille: Decimal | None = None) -> None:
         """Marque une entree comme prise. Appele APRES l'ouverture reussie.
 
         C'est le correctif d'un bug qui aurait fait rater des trades en
@@ -196,9 +263,28 @@ class PiloteDeblocages:
         Consommer a la CONFIRMATION rend le pilote reprenable : tant que la
         position n'est pas ouverte, la fenetre reste offerte a chaque cycle.
         """
+        if intention.couverture_de is not None:
+            # C'est la couverture elle-meme qui vient d'etre ouverte : on la
+            # raye de la file et on la retient comme ouverte.
+            self._a_couvrir = [(a, n) for (a, n) in self._a_couvrir
+                               if a != intention.couverture_de]
+            if taille is not None:
+                self._couvertures[intention.couverture_de] = taille
+            return
+
         for e in self.positions():
             if str(e.get("symbole", "")) == intention.asset:
                 self._entrees_faites.add((intention.asset, int(e.get("entree_ms", 0))))
+
+        # La jambe courte est ouverte : on met sa couverture en file, au
+        # notionnel REELLEMENT rempli. La demander au meme cycle la
+        # dimensionnerait sur un notionnel demande que le moteur de risque
+        # peut avoir rabote — et le livre serait adosse de travers.
+        if self.adosser and taille is not None and taille > 0:
+            notionnel = taille * intention.entry_price
+            deja = any(a == intention.asset for a, _ in self._a_couvrir)
+            if not deja and intention.asset not in self._couvertures:
+                self._a_couvrir.append((intention.asset, notionnel))
 
     def sorties(self, at_ms: int, ouvertes: tuple[str, ...]) -> list[str]:
         """Les positions dont la fenetre est close.
@@ -213,7 +299,26 @@ class PiloteDeblocages:
             symbole = str(e.get("symbole", ""))
             connus[symbole] = max(connus.get(symbole, 0), int(e.get("sortie_ms", 0)))
 
-        return [
+        sortants = [
             asset for asset in ouvertes
-            if asset not in connus or at_ms >= connus[asset]
+            if asset != self.reference
+            and (asset not in connus or at_ms >= connus[asset])
         ]
+
+        # **La couverture ne sort que quand la DERNIERE jambe courte sort.**
+        #
+        # Le contrat de sortie ferme toute la part d'une source sur un actif.
+        # Sortir la reference des qu'une jambe courte se ferme fermerait donc
+        # aussi la couverture des autres, encore ouvertes — le meme defaut que
+        # celui qu'on vient de corriger, d'un cran plus bas.
+        if self.adosser and self.reference in ouvertes:
+            restantes = [a for a in ouvertes
+                         if a != self.reference and a not in sortants
+                         and a in self._couvertures]
+            if not restantes:
+                sortants.append(self.reference)
+                self._couvertures.clear()
+
+        for asset in sortants:
+            self._couvertures.pop(asset, None)
+        return sortants

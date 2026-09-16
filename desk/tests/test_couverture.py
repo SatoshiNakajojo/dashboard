@@ -400,3 +400,136 @@ def test_une_source_unique_ferme_toujours_TOUTE_la_position(tmp_path):
     pupitre.cycle(t + 1000)
     assert px.account_state().positions == (), (
         "une chaîne nue ferme tout — le comportement historique est intact")
+
+
+# ────────────────────────────── la jambe adossée, branchée, de bout en bout
+
+def _desk_adosse(tmp_path, lignes, *, adosser=True):
+    """Un desk papier avec le pilote des déblocages et sa jambe de couverture."""
+    import json
+
+    from trading_desk.api.state import DeskState
+    from trading_desk.config import Settings
+    from trading_desk.contracts.common import DeskMode
+    from trading_desk.contracts.market import FeedHealth, FeedStatus
+    from trading_desk.execution.pupitre import Pupitre
+    from trading_desk.sentinelle.pilote_deblocages import PiloteDeblocages
+    from trading_desk.storage import SqliteStore
+    from tests.test_paper import FRICTIONLESS, PaperExchange, carnet, now_ms
+
+    j = tmp_path / "journal.jsonl"
+    j.write_text("".join(json.dumps(x) + "\n" for x in lignes), encoding="utf-8")
+
+    t = now_ms()
+    state = DeskState(
+        Settings(mode=DeskMode.PAPER, max_stop_distance_bps=Decimal("1600")),
+        SqliteStore(":memory:"))
+    state.set_feeds(tuple(
+        FeedHealth(name=f"{flux}:{a}", status=FeedStatus.LIVE,
+                   last_message_ms=t, max_age_ms=20_000, messages=10)
+        for a in ("PYTH", "BTC") for flux in ("trades", "book")), True)
+
+    px = PaperExchange(equity_usd=Decimal("10000"), costs=FRICTIONLESS)
+    px.on_book(carnet("PYTH", mid=Decimal("0.40"), pas=Decimal("0.0001"),
+                      taille=Decimal("1000000")))
+    px.on_book(carnet("BTC", mid=Decimal("100"), pas=Decimal("0.01"),
+                      taille=Decimal("100000")))
+
+    pilote = PiloteDeblocages(
+        j, prix={"PYTH": Decimal("0.40"), "BTC": Decimal("100")},
+        adosser=adosser)
+    return state, px, pilote, Pupitre(state, px, pilote, univers=("PYTH", "BTC")), t
+
+
+def _ligne_journal(entree_ms, sortie_ms, symbole="PYTH"):
+    return {"version": 2, "symbole": symbole, "deblocage_ms": sortie_ms + 86_400_000,
+            "part_offre": 0.05, "entree_ms": entree_ms, "sortie_ms": sortie_ms,
+            "sens": "COURT", "reference": "BTC", "inscrit_ms": entree_ms - 86_400_000}
+
+
+def test_la_couverture_s_ouvre_au_notionnel_REELLEMENT_rempli(tmp_path):
+    """**Le payoff de tout ce qui précède.**
+
+    La jambe courte s'ouvre, puis la couverture longue BTC au notionnel de sa
+    paire. Pas au notionnel demandé : à celui qui a réellement été rempli,
+    parce que le moteur de risque peut avoir raboté la jambe courte et qu'un
+    livre adossé de travers n'est pas un livre adossé.
+
+    C'est aussi pourquoi la couverture arrive au cycle SUIVANT : sa taille
+    n'existe pas avant que sa paire soit remplie.
+    """
+    _, px, pilote, pupitre, t = _desk_adosse(
+        tmp_path, [_ligne_journal(0, 10**13)])
+
+    pupitre.cycle(t)
+    apres_1 = {p.asset: p for p in px.account_state().positions}
+    assert "PYTH" in apres_1, "la jambe courte s'ouvre d'abord"
+    assert "BTC" not in apres_1, (
+        "la couverture ne peut pas s'ouvrir au même cycle : sa taille dépend "
+        "du remplissage de sa paire")
+
+    pupitre.cycle(t + 1000)
+    apres_2 = {p.asset: p for p in px.account_state().positions}
+    assert "BTC" in apres_2, "la couverture s'ouvre au cycle suivant"
+
+    court = apres_1["PYTH"]
+    couverture = apres_2["BTC"]
+    assert court.side.value != couverture.side.value, "les sens s'opposent"
+    notionnel_court = court.size * court.entry_price
+    notionnel_couv = couverture.size * couverture.entry_price
+    assert float(notionnel_couv) == pytest.approx(float(notionnel_court), rel=1e-3), (
+        f"adossé à {notionnel_couv} $ pour une jambe de {notionnel_court} $")
+
+
+def test_sans_adossement_aucune_jambe_BTC_n_est_ouverte(tmp_path):
+    """Le défaut reste la version nue : activer l'adossement est une décision.
+
+    Elle double le nombre de positions ouvertes, donc consomme le plafond de
+    positions simultanées. Ce n'est pas un détail d'implémentation.
+    """
+    _, px, _, pupitre, t = _desk_adosse(
+        tmp_path, [_ligne_journal(0, 10**13)], adosser=False)
+    pupitre.cycle(t)
+    pupitre.cycle(t + 1000)
+    assert {p.asset for p in px.account_state().positions} == {"PYTH"}
+
+
+def test_la_couverture_sort_avec_sa_paire(tmp_path):
+    """Une couverture qui survivrait à sa paire serait un pari sur BTC.
+
+    C'est le pire des deux mondes : on a payé deux allers-retours pour
+    neutraliser le marché, et on se retrouve long le marché.
+    """
+    from tests.test_paper import now_ms
+    maintenant = now_ms()
+    _, px, pilote, pupitre, t = _desk_adosse(
+        tmp_path, [_ligne_journal(0, maintenant + 2000)])
+
+    pupitre.cycle(t)
+    pupitre.cycle(t + 1000)
+    assert {p.asset for p in px.account_state().positions} == {"PYTH", "BTC"}
+
+    pupitre.cycle(maintenant + 3000)          # après la fin de fenêtre
+    assert px.account_state().positions == (), (
+        "les deux jambes sortent ensemble")
+
+
+def test_l_ecran_dit_l_etat_REEL_de_l_adossement(monkeypatch):
+    """L'écran a menti pendant des semaines, et c'est ce test qui l'empêche.
+
+    Le résumé de la règle déployée disait « adossé à BTC » alors que la jambe
+    de couverture n'était pas branchée : l'interface affirmait une neutralité
+    de marché que le desk n'avait pas. Il lit désormais le réglage — et un
+    texte codé en dur redeviendrait faux au premier changement.
+    """
+    from trading_desk.api import recherche
+
+    monkeypatch.delenv("DESK_DEBLOCAGES_ADOSSES", raising=False)
+    nu = recherche._resume_deblocages()
+    assert "NON branchée" in nu
+    assert "DESK_DEBLOCAGES_ADOSSES" in nu, "l'écran dit comment l'activer"
+
+    monkeypatch.setenv("DESK_DEBLOCAGES_ADOSSES", "true")
+    adosse = recherche._resume_deblocages()
+    assert "adossé à un achat de BTC" in adosse
+    assert "NON branchée" not in adosse

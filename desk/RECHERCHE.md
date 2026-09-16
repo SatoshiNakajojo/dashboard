@@ -1196,3 +1196,50 @@ elles appartiennent cacherait exactement l'information qui permet de savoir ce
 qu'une sortie va fermer — et c'est ce silence qui a permis au défaut de vivre.
 Dans un dépôt dont tout l'objet est la supervision, un registre juste mais
 invisible revient à ne pas l'avoir.
+
+## La jambe adossée, branchée
+
+Avec l'identité de position en place, la couverture peut enfin exister. Mesure
+réelle sur un desk papier, un déblocage sur PYTH :
+
+    cycle 1   PYTH  COURT  833,3333 unités   notionnel  333,25 $
+    cycle 2   BTC   LONG     3,3333 unités   notionnel  333,36 $
+
+Le livre est neutre au marché. Trois choses méritent d'être dites.
+
+**La couverture arrive au cycle SUIVANT, et c'est nécessaire.** Son notionnel
+doit être celui qui a *réellement* été rempli, pas celui qui a été demandé :
+le moteur de risque peut avoir raboté la jambe courte, et un livre adossé de
+travers n'est pas un livre adossé. La taille remplie traverse donc le pupitre
+et le faisceau jusqu'au pilote, par une confirmation dont l'arité est
+**inspectée et non devinée** — un `try/except TypeError` prendrait une vraie
+erreur levée *dans* `confirmer` pour un désaccord de signature, et la source
+croirait avoir confirmé.
+
+**Le stop de la couverture est une concession qu'il faut voir.** L'invariant
+« aucune position sans stop » n'est pas négociable : c'est la distance au stop
+qui donne la taille, donc une position sans stop n'est pas une position non
+protégée, c'est une position sans taille. La couverture reçoit le même stop en
+pourcentage que sa paire. Conséquence : si ce stop est touché, le livre
+redevient nu alors que la jambe courte est encore ouverte. Sur BTC, à 15 %,
+c'est rare — mais le taire serait prétendre à une neutralité que le desk n'a
+pas toujours.
+
+**La couverture ne sort que quand la DERNIÈRE jambe courte sort.** Le contrat
+de sortie ferme toute la part d'une source sur un actif ; sortir BTC dès
+qu'une jambe courte se ferme fermerait aussi la couverture des autres, encore
+ouvertes. C'est le même défaut qu'on vient de corriger, un cran plus bas.
+
+### Le réglage, et ce qu'il coûte
+
+`DESK_DEBLOCAGES_ADOSSES` — **faux par défaut, et ce n'est pas de la
+timidité.** Adosser double le nombre de positions ouvertes : avec le plafond
+de deux positions simultanées, un seul déblocage adossé occupe tout le desk.
+Relever ce plafond est une décision distincte, qui se prend en sachant ce
+qu'elle coûte.
+
+Et l'écran lit le réglage. Le résumé de la règle déployée a dit « adossé à
+BTC » pendant des semaines alors que la jambe n'était pas branchée :
+l'interface affirmait une neutralité de marché que le desk n'avait pas. Un
+test le verrouille désormais dans les deux sens — un texte codé en dur
+redeviendrait faux au premier changement.
