@@ -425,6 +425,7 @@ function rendreRecherche(d) {
   rendreConsommation(d.consommation);
   rendreVols(d.vols);
   rendreGlissement(d.glissement);
+  rendrePoussee((d.vols || {}).poussee);
   preparerSelecteurs(d.strategies);
 }
 
@@ -1212,6 +1213,56 @@ function rendreConsommation(c) {
 }
 
 /* ---------- VOLS ---------- */
+/* La poussée : le PnL réalisé, converti en distance parcourue.
+
+   Ça peut passer pour de la décoration. Ça n'en est pas : la partie la plus
+   dure de la discipline des règles figées est de ne pas y toucher pendant
+   trois mois, et un tableau de p qui ne bouge pas ne donne envie de rien.
+
+   L'échelle est calée pour qu'un tour de Terre vaille une année à la taille
+   VALIDÉE. À la taille déployée, une année entière fait un dixième de tour —
+   l'écart de taille cesse d'être une ligne dans un tableau et devient quelque
+   chose qu'on voit ne pas avancer.
+
+   La distance est le réalisé et rien d'autre. Afficher ce que le desk AURAIT
+   parcouru à pleine taille donnerait la satisfaction sans le résultat. */
+function rendrePoussee(p) {
+  if (!p) { $("poussee").innerHTML = ""; return; }
+  const r = p.reperes || {};
+  const reperes = "<table><thead><tr><th>Repère</th><th>Sur un an</th>"
+    + "<th>Tours de Terre</th></tr></thead><tbody>"
+    + "<tr><td class='name'>Taille déployée <span class='dim'>(3,3 % du capital)</span></td>"
+    + "<td style='color:var(--crit)'>" + Math.round(r.an_taille_deployee_km).toLocaleString("fr") + " km</td>"
+    + "<td style='color:var(--crit)'>" + Number(r.tours_par_an_deployee).toLocaleString("fr", {minimumFractionDigits: 2, maximumFractionDigits: 2}) + "</td></tr>"
+    + "<tr><td class='name'>Taille validée <span class='dim'>(25 % du capital)</span></td>"
+    + "<td>" + Math.round(r.an_taille_validee_km).toLocaleString("fr") + " km</td>"
+    + "<td>" + Number(r.tours_par_an_validee).toLocaleString("fr", {minimumFractionDigits: 2, maximumFractionDigits: 2}) + "</td></tr>"
+    + "</tbody></table>";
+
+  if (!p.disponible) {
+    $("pousseeBadge").textContent = "à quai";
+    $("pousseeBadge").style.color = "var(--muted)";
+    $("poussee").innerHTML = '<div class="verdict bloc"><span class="gros">'
+      + "Le vaisseau n'avance pas</span>" + esc(p.raison || "") + "</div>"
+      + reperes;
+    return;
+  }
+
+  const km = Number(p.distance_km);
+  $("pousseeBadge").textContent = Math.round(km).toLocaleString("fr") + " km";
+  $("pousseeBadge").style.color = km >= 0 ? "var(--ok)" : "var(--crit)";
+  $("poussee").innerHTML = '<div class="chiffres">'
+    + chiffre("distance parcourue", Math.round(km).toLocaleString("fr") + " km",
+              km >= 0 ? "var(--ok)" : "var(--crit)")
+    + chiffre("tours de Terre", p.tours + " + " + Math.round(p.fraction_tour * 100) + " %")
+    + chiffre("rythme", Math.round(p.km_par_jour).toLocaleString("fr") + " km/jour")
+    + chiffre("prochain tour dans",
+              p.jours_avant_le_prochain_tour === null
+                ? "jamais à ce rythme"
+                : Math.round(p.jours_avant_le_prochain_tour).toLocaleString("fr") + " jours")
+    + "</div>" + reperes;
+}
+
 function rendreVols(v) {
   v = v || {};
   marquer("vols", v.executions, v.executions ? "ok" : "bad");

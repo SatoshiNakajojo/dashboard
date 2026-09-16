@@ -1331,3 +1331,59 @@ dénominateur — seuil BH au rang 1 de 0,00625 contre un p de 0,0289. Et ce p
 n'est pas un artefact de plancher : il est cinq fois au-dessus des 0,00578.
 
 La septième famille d'événements rejoint donc les six autres au cimetière.
+
+## La poussée — rendre l'écart de taille physique
+
+Dernière idée de la conversation : *« tes profits génèrent la poussée de ton
+vaisseau, du coup tu parcours une distance ; ce serait génial d'avoir un
+onglet dans le cockpit où tu as ta position en direct »*.
+
+Ça peut passer pour de la décoration. Ça n'en est pas, pour une raison
+précise : **la partie la plus dure de la discipline des règles figées est de
+ne pas y toucher pendant trois mois.** Un tableau de p qui ne bouge pas ne
+donne envie de rien. Une distance qui avance, si.
+
+### L'unité n'est pas arbitraire, et c'est ce qui la rend utile
+
+Un kilomètre par dollar n'aurait rien voulu dire. L'échelle est calée sur
+**un tour de Terre = une année à la taille validée** :
+
+    40 075 km / 480 $ par an (48 %/an sur 1 000 $) = 83,49 km par dollar
+
+Conséquence, et c'est elle qui fait passer le compteur de joli à utile :
+
+    repère                                sur un an   tours de Terre
+    taille déployée (3,3 % du capital)     4 174 km        0,10
+    taille validée  (25 % du capital)     40 075 km        1,00
+
+**À la taille déployée, une année entière fait un dixième de tour.** L'écart
+du bloc 3 cesse d'être une ligne dans un tableau et devient quelque chose
+qu'on voit ne pas avancer.
+
+### Ce que le module refuse de faire
+
+Aucune taille virtuelle, aucune projection, aucun « ce que ça aurait donné ».
+**La distance est le PnL réalisé et rien d'autre.** Un compteur qui afficherait
+ce que le desk *aurait* parcouru à pleine taille donnerait la satisfaction
+sans le résultat, ce qui est exactement l'inverse de ce qu'on attend d'un
+instrument. Les deux repères encadrent le compteur ; ils ne le gonflent pas.
+
+Trois refus, chacun verrouillé par un test :
+
+- **Un PnL indisponible reste indisponible.** Position ouverte, le cumul de
+  trésorerie mélange du réalisé et du coût d'entrée ; l'afficher comme une
+  distance ferait reculer le vaisseau à chaque ouverture et avancer à chaque
+  fermeture. Un compteur qui oscille avec les entrées ne mesure rien.
+- **Une perte recule le vaisseau.** Un compteur qui ne saurait qu'avancer
+  serait un jeu vidéo.
+- **Un desk à l'arrêt n'arrive jamais**, et le panneau le dit ainsi plutôt que
+  d'afficher un très grand nombre de jours, qui laisserait croire à une
+  progression lente.
+
+### Un motif d'écran faux, attrapé en regardant la page
+
+Le panneau annonçait *« position ouverte »* sur un desk qui n'a jamais rien
+exécuté — ce qui envoie chercher une position inexistante. Deux absences
+différentes appellent deux motifs différents. C'est la même classe de défaut
+que le « adossé à BTC » sans jambe de couverture, et elle ne se voit qu'en
+ouvrant la page.

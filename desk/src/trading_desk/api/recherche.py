@@ -432,6 +432,44 @@ def regle_deployee() -> dict[str, Any]:
     return ligne
 
 
+def _poussee(realise: float | None, jours: float, *,
+             aucun_fill: bool = False) -> dict[str, Any]:
+    """Le PnL realise, en distance parcourue — et les deux reperes.
+
+    La distance est le realise et rien d'autre. Les reperes disent ce qu'une
+    annee rapporterait aux deux tailles mesurees ; ils encadrent le compteur
+    sans le gonfler, ce qui est toute la difference entre un instrument et un
+    jeu video.
+    """
+    from .. import poussee as po
+
+    e = po.etat(realise, jours)
+    base = {"reperes": po.reperes(), "disponible": e is not None}
+    if e is None:
+        # **Deux absences differentes, deux motifs differents.** « Position
+        # ouverte » sur un desk qui n'a jamais trade enverrait chercher une
+        # position qui n'existe pas — le meme defaut d'affichage que celui qui
+        # faisait dire a l'ecran « adosse a BTC » sans jambe de couverture.
+        base["raison"] = (
+            "aucune exécution : le vaisseau n'a pas encore décollé"
+            if aucun_fill else
+            "position ouverte : le cumul de trésorerie mélange du réalisé et "
+            "du coût d'entrée")
+        return base
+    base.update({
+        "pnl_realise_usd": e.pnl_realise_usd,
+        "distance_km": round(e.distance_km, 1),
+        "tours": e.tours,
+        "fraction_tour": round(e.fraction_tour, 4),
+        "jours_ecoules": round(e.jours_ecoules, 2),
+        "km_par_jour": round(e.km_par_jour, 2),
+        "jours_avant_le_prochain_tour": (
+            round(e.jours_avant_le_prochain_tour, 1)
+            if e.jours_avant_le_prochain_tour is not None else None),
+    })
+    return base
+
+
 def _resume_deblocages() -> str:
     """Ce que le desk fait, pas ce que la validation mesurait.
 
@@ -1089,11 +1127,19 @@ def vols(store: Any) -> dict[str, Any]:
 
     ouvertes = {a: t for a, t in net_taille.items() if abs(t) > 1e-12}
 
+    realise = round(cumul, 4) if fills and not ouvertes else None
+    # Depuis quand le desk tourne, pour un rythme. Le premier fill plutot que
+    # le demarrage du processus : un desk redemarre vingt fois n'a pas vingt
+    # histoires, il en a une.
+    jours = ((chronologie[-1]["ts_ms"] - chronologie[0]["ts_ms"]) / 86_400_000
+             if len(chronologie) > 1 else 0.0)
+
     return {
         "mandats": len(mandats),
         "executions": len(fills),
         "frais_usd": round(frais, 4),
-        "pnl_realise_usd": round(cumul, 4) if fills and not ouvertes else None,
+        "pnl_realise_usd": realise,
+        "poussee": _poussee(realise, jours, aucun_fill=not fills),
         "pnl_indisponible": bool(ouvertes),
         "positions_ouvertes": sorted(ouvertes),
         "courbe": courbe,
