@@ -122,6 +122,12 @@ class Settings(BaseSettings):
     # de fichier, d'abord a cote de vous puis dans le depot.
     regles_journal: str = "data/journal_regles.jsonl"
 
+    # Le journal des regles proposees par un agent LLM externe. Declaration
+    # SEPAREE — sa propre version, sa propre empreinte, son propre
+    # denominateur de six. Les melanger dans un journal rendrait impossible de
+    # dire, dans six mois, sous quel denominateur une ligne a ete inscrite.
+    regles_llm_journal: str = "data/journal_regles_llm.jsonl"
+
     # --- signer (adresses publiques uniquement) ---
     agent_wallet_address: str | None = None
     master_wallet_address: str | None = None

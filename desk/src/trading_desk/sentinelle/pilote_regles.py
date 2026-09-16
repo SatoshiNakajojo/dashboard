@@ -50,7 +50,18 @@ class PiloteRegles:
         journal: str | Path = "data/journal_regles.jsonl",
         *,
         prix: dict[str, Decimal] | None = None,
+        nom: str | None = None,
     ) -> None:
+        # **Le nom doit pouvoir differer d'une instance a l'autre.**
+        #
+        # Le registre des parts du pupitre indexe sur `(source, actif)` : deux
+        # pilotes portant le meme nom partageraient une entree, et la sortie
+        # de l'un fermerait la part de l'autre. C'est exactement le defaut que
+        # `execution/parts.py` existe pour corriger, et le laisser revenir par
+        # un nom de classe partage serait le reintroduire par la porte de
+        # derriere.
+        if nom is not None:
+            self.nom = nom
         self.chemin = Path(journal)
         self.prix: dict[str, Decimal] = prix if prix is not None else {}
         self._faites: set[tuple[str, int]] = set()

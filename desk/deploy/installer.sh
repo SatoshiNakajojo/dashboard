@@ -88,7 +88,8 @@ done
 bleu "4. Unites systemd"
 for u in enregistreur.service \
          rituel-deblocages.service rituel-deblocages.timer \
-         regles-figees.service regles-figees.timer; do
+         regles-figees.service regles-figees.timer \
+         regles-llm.service regles-llm.timer; do
     install -m 0644 "$RACINE/deploy/$u" "/etc/systemd/system/$u"
     ok "$u"
 done
@@ -100,7 +101,7 @@ bleu "5. Activation"
 # jamais les services oneshot eux-memes — les activer les lancerait a chaque
 # demarrage, hors de leur cadence.
 systemctl enable --now enregistreur >/dev/null 2>&1 && ok "enregistreur (continu)"
-for t in rituel-deblocages.timer regles-figees.timer; do
+for t in rituel-deblocages.timer regles-figees.timer regles-llm.timer; do
     systemctl enable --now "$t" >/dev/null 2>&1 && ok "$t"
 done
 
@@ -110,7 +111,8 @@ for t in rituel-deblocages.timer regles-figees.timer; do
     printf '  %-28s %s\n' "$t" "$(systemctl is-active "$t" 2>&1)"
 done
 echo
-systemctl list-timers --no-pager rituel-deblocages.timer regles-figees.timer 2>/dev/null \
+systemctl list-timers --no-pager rituel-deblocages.timer regles-figees.timer \
+    regles-llm.timer 2>/dev/null \
     | sed 's/^/  /' || true
 
 bleu "Et ensuite"
@@ -119,6 +121,7 @@ cat <<'FIN'
     journalctl -u enregistreur      -n 30 --no-pager
     journalctl -u rituel-deblocages -n 40 --no-pager
     journalctl -u regles-figees     -n 40 --no-pager
+    journalctl -u regles-llm        -n 40 --no-pager
 
   Forcer une execution sans attendre son echeance :
     sudo systemctl start rituel-deblocages.service

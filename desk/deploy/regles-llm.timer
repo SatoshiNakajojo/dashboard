@@ -1,0 +1,36 @@
+# /etc/systemd/system/regles-llm.timer
+#
+#   sudo cp deploy/regles-llm.{service,timer} /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now regles-llm.timer
+#
+[Unit]
+Description=Declenche l'inscription des signaux des regles LLM
+Documentation=https://github.com/SatoshiNakajojo/dashboard
+
+[Timer]
+# **Cadence HORAIRE, et non quotidienne comme regles-figees.timer.**
+#
+# LA CADENCE EST CELLE DE LA REGLE, pas une preference. Les regles du depot
+# sont en 1 jour : une inscription par jour les capture toutes. Celles-ci sont
+# en 1 HEURE. Un timer quotidien n'inscrirait que la decision de la barre
+# 23 h-minuit, donc environ un signal sur vingt-quatre — et le journal hors
+# echantillon decrirait une regle que personne ne trade, tout en ayant l'air
+# de fonctionner.
+#
+# Cinq minutes apres l'heure : le temps que la bougie close chez l'exchange et
+# que l'API la serve. Interroger a l'heure pile rendrait une bougie
+# incomplete, donc une decision prise sur un prix qui n'est pas la cloture.
+OnCalendar=*-*-* *:05:00 UTC
+
+# Rattrape une heure ou le VPS etait eteint. Sans elle, un signal manque est un
+# signal perdu, et rien ne le dit.
+Persistent=true
+
+# Une minute de dispersion. Bien plus courte que celle du timer journalier :
+# au-dela, le tir deborderait sur la barre suivante et inscrirait une decision
+# datee de la mauvaise heure.
+RandomizedDelaySec=60
+
+[Install]
+WantedBy=timers.target

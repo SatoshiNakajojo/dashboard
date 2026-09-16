@@ -46,6 +46,7 @@ from trading_desk.backtest.data import (
 from trading_desk.backtest.engine import run_backtest
 from trading_desk.backtest.strategies import BASELINES
 from trading_desk.risk.limits import RiskLimits
+from trading_desk.sentinelle import regles_llm
 from trading_desk.sentinelle.regles_figees import (
     DENOMINATEUR,
     FIGE_LE,
@@ -194,7 +195,31 @@ def main() -> int:
     p.add_argument("--hors-ligne", action="store_true",
                    help="travailler sur les fichiers du dépôt plutôt que "
                         "l'API. Pour les tests et les machines sans réseau.")
+    p.add_argument("--declaration", choices=("depot", "llm"), default="depot",
+                   help="quelle famille de règles inscrire. Les deux ont leur "
+                        "propre version, leur propre empreinte et leur propre "
+                        "dénominateur — les mélanger dans un journal "
+                        "corromprait les deux.")
     args = p.parse_args()
+
+    # Chaque déclaration a SON journal. Un journal partagé rendrait
+    # impossible de dire, dans six mois, sous quel dénominateur une ligne a
+    # été inscrite.
+    if args.declaration == "llm":
+        regles = regles_llm.REGLES
+        version = regles_llm.VERSION
+        empreinte = regles_llm.empreinte_du_registre()
+        titre = f"RÈGLES LLM — {regles_llm.ORIGINE}"
+        defaut = "data/journal_regles_llm.jsonl"
+    else:
+        regles, version = REGLES, VERSION
+        empreinte = empreinte_du_registre()
+        titre = "RÈGLES FIGÉES"
+        defaut = JOURNAL
+    denominateur = (regles_llm.DENOMINATEUR if args.declaration == "llm"
+                    else DENOMINATEUR)
+    if args.journal == JOURNAL and args.declaration == "llm":
+        args.journal = defaut
 
     journal = Path(args.journal)
     if args.resoudre:
@@ -202,9 +227,8 @@ def main() -> int:
 
     maintenant = int(time.time() * 1000)
     nouvelles = []
-    print(f"\n  RÈGLES FIGÉES — version {VERSION}, "
-          f"empreinte {empreinte_du_registre()}\n")
-    for regle in REGLES:
+    print(f"\n  {titre} — version {version}, empreinte {empreinte}\n")
+    for regle in regles:
         try:
             bars = charger_barres(regle, args.hors_ligne)
         except (DataUnavailable, FileNotFoundError) as exc:
@@ -224,7 +248,7 @@ def main() -> int:
         entree_ms = derniere.ts_ms + INTERVAL_MS[regle.intervalle]
         nouvelles.append({
             "inscrit_ms": maintenant,
-            "version": VERSION,
+            "version": version,
             "regle": regle.cle,
             "empreinte": regle.empreinte(),
             # La regle est RECOPIEE : si elle change, les anciennes lignes
@@ -248,7 +272,7 @@ def main() -> int:
 
     n = inscrire(nouvelles, journal)
     print(f"\n  {n} signal(aux) inscrit(s) dans {journal}.")
-    print(f"  Le dénominateur déclaré reste {DENOMINATEUR}, et il le restera.\n")
+    print(f"  Le dénominateur déclaré reste {denominateur}, et il le restera.\n")
     return 0
 
 

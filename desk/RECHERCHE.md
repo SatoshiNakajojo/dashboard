@@ -1476,3 +1476,48 @@ Un test sur le nombre de trades l'aurait laissé passer. Celui qui l'attrape
 regarde la grandeur intermédiaire — combien de résiduels ont été calculés — et
 c'est la leçon : quand une absence peut être un résultat, il faut tester ce
 qui la produit, pas ce qu'elle produit.
+
+### Le test en paper, et pourquoi il a quand même lieu
+
+La mesure en échantillon a refusé les neuf cellules. Le test en paper a
+néanmoins été monté, et ce n'est pas une contradiction : **la mesure porte sur
+les données qui ont servi à trouver ces règles, et aucune correction
+statistique ne répare ça.** Le rapport nomme neuf stratégies — trois gardées,
+six abandonnées — sans compter les paramètres de chacune. Le dénominateur réel
+de la recherche qui les a produites est inconnu et ne le sera jamais.
+
+Il reste une voie, et une seule : figer les règles et les juger sur des
+données qui n'existent pas encore.
+
+`sentinelle/regles_llm.py` est cette déclaration, avec **son propre
+dénominateur de six** — six règles venues d'un agent externe et deux règles du
+dépôt ne sont pas le même espace d'hypothèses, et les corriger ensemble serait
+faux dans les deux sens. Empreinte `9be087b8ab7c3f3c`, verrouillée par un
+test. Chaque règle porte l'annonce du rapport **et** la mesure du dépôt, pour
+que la comparaison se fasse contre la promesse écrite et pas contre un
+souvenir.
+
+**La liste est celle que l'agent a lui-même désignée**, pas la mienne : son
+rapport porte une ligne « Paper » par stratégie, ON pour `supertrend` et
+`donchian_ema_be`, « pas en paper pour l'instant » pour `momentum_residuel`.
+La troisième est donc absente — alors qu'elle est la seule dont une cellule
+ait battu le hasard. La retenir maintenant serait une sélection faite *après*
+avoir vu le résultat.
+
+### Deux collisions évitées en branchant
+
+**Le nom du pilote.** Le registre des parts indexe sur `(source, actif)`. Deux
+`PiloteRegles` portant le même nom de classe auraient partagé une entrée, et
+la sortie de l'un aurait fermé la part de l'autre — exactement le défaut que
+`execution/parts.py` existe pour corriger, réintroduit par la porte de
+derrière. Le nom est désormais réglable par instance, et un test le verrouille.
+
+**La cadence du timer.** Le service a d'abord été copié sur celui des règles
+du dépôt, donc **quotidien**. Les règles du dépôt sont en 1 jour ; celles-ci
+sont en 1 heure. Un timer quotidien n'aurait inscrit que la décision de la
+barre 23 h–minuit, soit environ un signal sur vingt-quatre — et le journal
+hors échantillon aurait décrit une règle que personne ne trade, tout en ayant
+l'air de fonctionner. Corrigé en horaire, cinq minutes après l'heure.
+
+C'est la même leçon que partout ailleurs dans ce dépôt : **la cadence est
+celle de la règle, jamais une préférence.**

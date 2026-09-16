@@ -648,6 +648,12 @@ async def main_async(demo: bool) -> None:
         deblocages = PiloteDeblocages(settings.paper_journal,
                                       adosser=settings.deblocages_adosses)
         regles = PiloteRegles(settings.regles_journal)
+        # La seconde famille : les regles d'un agent externe, sous leur propre
+        # declaration. Le NOM differe, et ce n'est pas cosmetique — le
+        # registre des parts du pupitre indexe sur (source, actif), et deux
+        # pilotes homonymes verraient la sortie de l'un fermer la part de
+        # l'autre.
+        regles_ia = PiloteRegles(settings.regles_llm_journal, nom="regles_llm")
         if deblocages.absent and regles.absent:
             raise SystemExit(
                 f"mode {settings.mode.value} refuse : ni "
@@ -661,8 +667,14 @@ async def main_async(demo: bool) -> None:
             )
         # Une source absente n'est pas une panne : c'est une information, et
         # le desk tourne avec celles qui repondent.
-        vivantes = [s for s in (deblocages, regles) if not s.absent]
-        for s in (deblocages, regles):
+        # L'ORDRE compte : quand le mandat ne laisse de la place que pour une
+        # position, elle revient a la premiere source. Les deblocages d'abord
+        # — seul edge mesure du depot ; les regles figees ensuite ; les regles
+        # d'un agent externe en dernier, parce que la mesure les a toutes
+        # refusees et qu'elles ne tournent que pour le test hors echantillon.
+        sources = (deblocages, regles, regles_ia)
+        vivantes = [s for s in sources if not s.absent]
+        for s in sources:
             if s.absent:
                 log.warning("signal « %s » sans journal : il ne proposera rien",
                             s.nom)
