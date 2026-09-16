@@ -942,3 +942,65 @@ Une ligne sans origine — écrite avant que le champ existe — est rattachée 
 `main` plutôt qu'ignorée. L'ignorer retirerait des hypothèses réellement
 testées du dénominateur, ce qui rendrait la correction plus laxiste : l'erreur
 exacte que le registre en ajout seul existe pour empêcher.
+
+## La jambe de couverture — la capacité est prête, le branchement est bloqué
+
+La validation de la règle des déblocages mesure deux versions : la vente à
+découvert **nue** et la même position **adossée** à un achat de BTC pour le
+même notionnel.
+
+    version       Sharpe    repli
+    nue             1,80    15,3 %
+    adossée         2,46     7,9 %
+
+L'adossée est la seule dont le résultat soit attribuable aux déblocages : la
+nue est courte sur des alts pratiquement chaque semaine de la période, donc
+son résultat contient une exposition courte permanente au marché, qui a
+rapporté ou coûté indépendamment de tout déblocage. Le desk déployé ne passe
+que la jambe courte.
+
+### Ce qui a été livré
+
+`size_position` accepte un `notionnel_cible`. Une jambe adossée part du
+notionnel de la paire qu'elle couvre au lieu du budget de risque — une
+couverture n'est pas une prise de risque indépendante, elle *réduit*
+l'exposition du livre, et la dimensionner par le budget de risque donnerait
+une taille sans rapport avec ce qu'elle couvre.
+
+**Le paramètre ne fait sauter aucun plafond.** Notionnel par position,
+notionnel brut, levier, marge et bande de stop continuent de s'appliquer.
+Quand un plafond rabote la couverture sous sa cible, `couverture_partielle`
+passe à vrai : le livre n'est alors neutre qu'en partie, et cette exposition
+résiduelle n'a été décidée par personne — elle doit remonter, pas être avalée.
+
+### Ce qui bloque le branchement, et ce n'est pas un détail
+
+**Le contrat de sortie est indexé par nom d'actif.** `sorties()` rend des
+chaînes, et le pupitre appelle `flatten(asset, size=position.size)` — la
+position *entière*. Sur un exchange qui nette, une jambe longue BTC de
+couverture et la position de `turtle_btc_1d` sont **une seule position**.
+
+Conséquence mesurée par `tests/test_couverture.py` : quand la fenêtre d'un
+déblocage se referme, le pilote demande la sortie de BTC, le faisceau en fait
+l'union — comportement correct et délibéré dans le cas général — et le pupitre
+ferme aussi la position de la règle gelée. Qui rentrerait au signal suivant,
+en payant l'aller-retour.
+
+L'asymétrie est nette et le test la fige : à l'**entrée**, le faisceau sait
+router la confirmation vers la bonne source, par identité d'objet. À la
+**sortie**, il n'a aucun moyen équivalent.
+
+### Les deux façons d'en sortir
+
+**Changer de référence** pour un actif qu'aucune règle gelée ne trade. C'est
+une ligne de configuration — mais la validation a mesuré BTC, et changer la
+référence change la stratégie. Il faudrait la remesurer, donc dépenser une
+hypothèse de plus.
+
+**Donner au contrat de sortie une identité de position.** C'est la correction
+juste, et elle est plus lourde qu'il n'y paraît : il faut attribuer les parts
+d'une position nettée à chaque source qui la détient, comptabilité que
+l'exchange ne fournit pas. C'est un vrai morceau, pas un drapeau.
+
+Tant que l'une des deux n'est pas tranchée, **la jambe de couverture reste
+débranchée**, et l'écart Sharpe 1,80 contre 2,46 subsiste.

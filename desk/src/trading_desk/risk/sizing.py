@@ -25,6 +25,11 @@ class SizingResult(Frozen):
     risk_usd: Decimal
     binding_constraint: str
     constraints: tuple[str, ...]
+    # Vrai quand un plafond a rabote une jambe ADOSSEE sous le notionnel de
+    # la paire qu'elle couvre. Le livre n'est alors neutre qu'en partie, et
+    # l'exposition residuelle au marche n'a ete decidee par personne : elle
+    # doit remonter, pas etre avalee.
+    couverture_partielle: bool = False
 
     @property
     def is_tradable(self) -> bool:
@@ -42,12 +47,26 @@ def size_position(
     stop_price: Decimal,
     advisory_factor: Decimal = Decimal("1"),
     size_decimals: int = 4,
+    notionnel_cible: Decimal | None = None,
 ) -> SizingResult:
     """Calcule la taille autorisee, en unites de l'actif.
 
     `advisory_factor` est le seul canal d'influence des agents, et il est
     strictement reducteur : la valeur est ecretee a 1 avant usage, de sorte
     qu'une regression amont ne puisse pas elargir la position.
+
+    `notionnel_cible` sert aux jambes ADOSSEES. Une couverture n'est pas une
+    prise de risque independante : elle REDUIT l'exposition directionnelle du
+    livre, et la dimensionner par le budget de risque donnerait une taille
+    sans rapport avec la jambe qu'elle couvre — le livre ne serait neutre que
+    par accident. Elle part donc du notionnel de sa paire.
+
+    **Ce parametre ne fait sauter aucun plafond.** Il remplace le seul point
+    de depart du calcul ; le notionnel par position, le notionnel brut, le
+    levier et la marge continuent de s'appliquer, et la bande de stop aussi.
+    Laisser une couverture franchir ces plafonds transformerait un outil de
+    reduction du risque en moyen de l'augmenter — ce qui est exactement le
+    genre d'exception qui se justifie une fois et se generalise ensuite.
     """
     factor = min(max(advisory_factor, Decimal("0")), Decimal("1"))
     distance = abs(entry_price - stop_price)
@@ -81,11 +100,18 @@ def size_position(
             constraints=("mandat",),
         )
 
-    # 1. Point de depart : budget de risque / distance au stop.
-    risk_budget = limits.risk_budget_usd(account.equity_usd) * factor
-    size = risk_budget / distance
-    binding = "budget de risque"
-    constraints.append("budget de risque")
+    # 1. Point de depart : budget de risque / distance au stop — ou, pour une
+    #    jambe adossee, le notionnel de la paire qu'elle couvre.
+    if notionnel_cible is not None and notionnel_cible > 0:
+        size = notionnel_cible / entry_price
+        binding = "notionnel adossé"
+        constraints.append("notionnel adossé")
+    else:
+        risk_budget = limits.risk_budget_usd(account.equity_usd) * factor
+        size = risk_budget / distance
+        binding = "budget de risque"
+        constraints.append("budget de risque")
+    taille_visee = size
 
     def cap(max_notional: Decimal, label: str) -> None:
         nonlocal size, binding
@@ -121,10 +147,18 @@ def size_position(
 
     quantum = Decimal(1).scaleb(-size_decimals)
     size = size.quantize(quantum, rounding=ROUND_DOWN)
+    # Une couverture rabotee par un plafond laisse une exposition residuelle.
+    # On la compare a la taille VISEE avant arrondi : l'arrondi au quantum est
+    # une troncature technique, pas une decision de risque, et la compter
+    # comme telle ferait crier « partielle » a chaque couverture.
+    partielle = bool(notionnel_cible is not None and notionnel_cible > 0
+                     and size < taille_visee.quantize(quantum,
+                                                      rounding=ROUND_DOWN))
     if size <= 0:
         return SizingResult(
             size=Decimal("0"), notional_usd=Decimal("0"), risk_usd=Decimal("0"),
             binding_constraint=binding, constraints=tuple(constraints),
+            couverture_partielle=partielle,
         )
 
     return SizingResult(
@@ -133,4 +167,5 @@ def size_position(
         risk_usd=size * distance,
         binding_constraint=binding,
         constraints=tuple(constraints),
+        couverture_partielle=partielle,
     )
