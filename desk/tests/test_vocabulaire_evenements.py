@@ -28,9 +28,9 @@ from trading_desk.sentinelle import vocabulaire_evenements as v
 def test_l_empreinte_est_verrouillee():
     """La changer exige d'incrémenter VERSION, ce qui repart d'un dénominateur
     neuf et d'un journal qui distingue les deux régimes."""
-    assert v.VERSION == 1
+    assert v.VERSION == 2
     assert v.FIGE_LE == "2026-09-16"
-    assert v.empreinte() == "24bb1eeb6f90263c"
+    assert v.empreinte() == "31916f7e3cb78557"
 
 
 def test_l_empreinte_couvre_les_PARAMETRES_des_detecteurs():
@@ -48,38 +48,74 @@ def test_l_empreinte_couvre_les_PARAMETRES_des_detecteurs():
     assert v.empreinte() == avant
 
 
-def test_le_criblage_peut_voir():
-    """Le plancher de p doit passer sous le seuil BH au rang 1.
+def test_le_plancher_de_p_ne_depend_PAS_du_nombre_de_tirages():
+    """**L'erreur de la version 1, verrouillée pour ne pas revenir.**
 
-    Sinon le criblage est aveugle par construction : aucune cellule ne peut
-    survivre, et son verdict ne décrit que le nombre de tirages.
+    Elle vérifiait `1/(TIRAGES+1) < alpha/m` et se déclarait mesurable. La
+    vérification était juste et portait sur le mauvais plancher : le nombre de
+    réalisations distinctes d'un nul PAR BLOC est le nombre d'offsets
+    disponibles, pas le nombre de fois qu'on en tire un. Tirer cinq mille fois
+    dans une plage de cent-dix offsets produit cent-dix nuls, rééchantillonnés.
     """
-    plancher = 1 / (v.TIRAGES + 1)
+    assert v.plancher_de_p(110) == pytest.approx(1 / 111)
+    assert v.plancher_de_p(5000) == pytest.approx(1 / 5001)
+    # Et le nul est exhaustif : il n'y a plus de nombre de tirages du tout.
+    assert not hasattr(v, "TIRAGES")
+    assert v.NUL_EXHAUSTIF is True
+
+
+def test_le_criblage_peut_voir_avec_la_plage_REELLE():
+    """À 365 jours d'historique minimal, la plage vaut 171 offsets.
+
+    Plancher 0,00581 contre un seuil BH au rang 1 de 0,05/8 = 0,00625. La
+    marge est mince, et c'est pour ça qu'elle est testée : une hypothèse de
+    plus la ferait basculer.
+    """
+    plage = 171
+    plancher = v.plancher_de_p(plage)
     seuil_rang1 = 0.05 / v.DENOMINATEUR_DECLARE
     assert plancher < seuil_rang1, (
-        f"plancher {plancher:.6f} contre seuil {seuil_rang1:.6f} : il "
-        f"faudrait au moins {int(v.DENOMINATEUR_DECLARE / 0.05)} tirages")
+        f"plancher {plancher:.5f} contre seuil {seuil_rang1:.5f}")
+    assert v.hypotheses_supportees(plage) == v.DENOMINATEUR_DECLARE
+
+
+def test_une_hypothese_de_plus_rendrait_le_criblage_aveugle():
+    """La contrainte qui a fait tomber la version 1, dans l'autre sens."""
+    plage = 171
+    assert v.plancher_de_p(plage) >= 0.05 / (v.DENOMINATEUR_DECLARE + 1)
 
 
 def test_le_denominateur_declare_est_celui_des_sequences():
-    """Huit types, longueurs 1 et 2 : 8 + 64."""
+    """Version 2 : les huit types seuls, sans les paires."""
     seqs = v.sequences_declarees()
-    assert len(seqs) == v.DENOMINATEUR_DECLARE == 72
+    assert len(seqs) == v.DENOMINATEUR_DECLARE == 8
     assert len(set(seqs)) == len(seqs), "aucune séquence en double"
-    assert sum(1 for s in seqs if len(s) == 1) == len(v.EVENEMENTS)
+    assert all(len(s) == 1 for s in seqs)
 
 
-def test_l_ordre_d_une_sequence_compte():
-    """« Qui se succèdent DANS UN ORDRE ». Confondre (A,B) et (B,A) diviserait
-    le dénominateur par deux en fusionnant des hypothèses distinctes."""
-    seqs = set(v.sequences_declarees())
-    assert ("cassure_haute", "volume_extreme") in seqs
-    assert ("volume_extreme", "cassure_haute") in seqs
+def test_les_paires_demanderaient_un_historique_qui_n_existe_pas():
+    """**La réponse à l'idée des séquences : pas sur cette donnée.**
+
+    64 paires exigent une plage de 1 280 offsets, donc plus de 1 480 jours
+    d'historique commun à tous les actifs retenus. Aucun univers de perpétuels
+    crypto sans biais du survivant ne l'offre.
+    """
+    plage_requise = int(64 / 0.05)
+    assert plage_requise > 1_200
+    # Et l'historique commun qu'il faudrait, avec la marge de bloc des deux
+    # côtés :
+    assert plage_requise + 2 * v.MARGE_BLOC > 1_400
 
 
-def test_une_sequence_peut_repeter_un_type():
-    """Deux cassures hautes à trois jours d'écart est un motif, pas une erreur."""
-    assert ("cassure_haute", "cassure_haute") in set(v.sequences_declarees())
+def test_relever_le_seuil_d_historique_couterait_le_biais_du_survivant():
+    """La colonne qui décide n'est pas la résolution, c'est la composition.
+
+    Un perpétuel délisté est court par construction. L'univers de 234 perps a
+    été collecté précisément pour ne pas avoir ce biais ; acheter de la
+    résolution en montant le seuil revient à payer avec sa seule propriété
+    rare. Mesuré : 21,3 % de délistés à 365 jours contre 11,8 % à 730.
+    """
+    assert v.HISTORIQUE_MIN_J == 365
 
 
 def test_la_marge_du_nul_par_bloc_est_non_nulle():
@@ -97,17 +133,16 @@ def test_le_volume_nul_est_ecarte():
 
 
 def test_la_longueur_reste_dans_ce_que_la_donnee_porte():
-    """Passer à 3 ferait 584 hypothèses, donc un seuil BH au rang 1 de
-    0,000086, donc plus de 11 600 tirages nécessaires — et des séquences trop
-    rares pour franchir le plancher d'occurrences de toute façon.
+    """Le couplage qu'on oublie : allonger les séquences exige de la
+    résolution, et la résolution ne s'achète qu'en historique commun.
 
-    Ce test n'interdit pas d'y aller ; il oblige à monter les tirages en même
-    temps, ce qui est précisément le couplage qu'on oublie.
+    Ce test n'interdit pas d'allonger ; il oblige à vérifier la plage en même
+    temps. À 365 jours d'historique minimal, la plage vaut 171 offsets.
     """
-    plancher = 1 / (v.TIRAGES + 1)
     hypotheses = sum(len(v.EVENEMENTS) ** n
                      for n in range(1, v.LONGUEUR_MAX + 1))
-    assert plancher < 0.05 / hypotheses
+    assert hypotheses == v.DENOMINATEUR_DECLARE
+    assert v.plancher_de_p(171) < 0.05 / hypotheses
 
 
 def test_aucun_detecteur_ne_regarde_l_avenir():

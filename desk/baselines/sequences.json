@@ -1,0 +1,105 @@
+{
+  "version_vocabulaire": 2,
+  "empreinte_vocabulaire": "31916f7e3cb78557",
+  "fige_le": "2026-09-16",
+  "mesure_ms": 1789543809426,
+  "denominateur_declare": 8,
+  "denominateur_reel": 8,
+  "actifs": 202,
+  "plage_decalage": [
+    100,
+    271
+  ],
+  "decalages_effectifs_nuls_pct": 0.0,
+  "offsets": 172,
+  "nul_exhaustif": true,
+  "delistes_conserves": 43,
+  "seuil_bh_rang1": 0.00625,
+  "plancher_p": 0.005780346820809248,
+  "decalages_effectifs_nuls": 0,
+  "bruts": 1,
+  "attendues": 0.4,
+  "survivants": 0,
+  "cellules": [
+    {
+      "sequence": [
+        "ecart_bas"
+      ],
+      "occurrences": 134,
+      "moyenne_bps": 442.54,
+      "p": 0.028901734104046242,
+      "offsets": 172,
+      "survit_bh": false
+    },
+    {
+      "sequence": [
+        "serie_baissiere"
+      ],
+      "occurrences": 4730,
+      "moyenne_bps": 194.66,
+      "p": 0.10982658959537572,
+      "offsets": 172,
+      "survit_bh": false
+    },
+    {
+      "sequence": [
+        "cassure_haute"
+      ],
+      "occurrences": 6207,
+      "moyenne_bps": 77.69,
+      "p": 0.4161849710982659,
+      "offsets": 172,
+      "survit_bh": false
+    },
+    {
+      "sequence": [
+        "ecart_haut"
+      ],
+      "occurrences": 168,
+      "moyenne_bps": 115.59,
+      "p": 0.4682080924855491,
+      "offsets": 172,
+      "survit_bh": false
+    },
+    {
+      "sequence": [
+        "serie_haussiere"
+      ],
+      "occurrences": 3249,
+      "moyenne_bps": -65.4,
+      "p": 0.6705202312138728,
+      "offsets": 172,
+      "survit_bh": false
+    },
+    {
+      "sequence": [
+        "volume_extreme"
+      ],
+      "occurrences": 13571,
+      "moyenne_bps": 21.71,
+      "p": 0.6878612716763006,
+      "offsets": 172,
+      "survit_bh": false
+    },
+    {
+      "sequence": [
+        "cassure_basse"
+      ],
+      "occurrences": 8746,
+      "moyenne_bps": 42.96,
+      "p": 0.7109826589595376,
+      "offsets": 172,
+      "survit_bh": false
+    },
+    {
+      "sequence": [
+        "amplitude_extreme"
+      ],
+      "occurrences": 4624,
+      "moyenne_bps": 22.74,
+      "p": 0.7745664739884393,
+      "offsets": 172,
+      "survit_bh": false
+    }
+  ]
+}

@@ -34,7 +34,58 @@ jusqu'a ce qu'elle plaise, et personne — pas meme son auteur — ne peut
 distinguer apres coup les deux cas.
 
 ────────────────────────────────────────────────────────────────────────────
-  POURQUOI LA LONGUEUR S'ARRETE A DEUX, ET NON A QUATRE
+  VERSION 2 : LA VERSION 1 S'ETAIT PIEGEE ELLE-MEME
+────────────────────────────────────────────────────────────────────────────
+
+La version 1 declarait 72 hypotheses et verifiait que le criblage pouvait
+voir : plancher de p a `1/(TIRAGES+1)` = 0,0002, sous le seuil de
+Benjamini-Hochberg au rang 1 de 0,05/72 = 0,00069. La verification etait
+juste, et elle portait sur le mauvais plancher.
+
+**Le plancher d'un nul PAR BLOC n'est pas fixe par le nombre de tirages, il
+est fixe par la DONNEE.** Un nul par bloc decale tous les evenements d'un
+meme offset ; le nombre de realisations distinctes du nul est donc le nombre
+d'offsets disponibles, pas le nombre de fois qu'on en tire un. Tirer cinq
+mille fois dans une plage de cent-dix offsets ne produit pas cinq mille nuls,
+il en produit cent-dix, reechantillonnes. Le plancher reel vaut
+`1/(plage+1)`.
+
+Mesure sur l'univers, le 16 septembre 2026 :
+
+    seuil d'historique   actifs   delistes   plage   hypotheses max
+              300 j        216     21,8 %     110          5
+              365 j        202     21,3 %     171          8
+              500 j        179     17,9 %     302         15
+              730 j        127     11,8 %     532         26
+
+La colonne qui decide n'est pas la derniere, c'est l'avant-derniere.
+**Relever le seuil d'historique reintroduit le biais du survivant** : un
+perpetuel deliste est court par construction, et l'univers de 234 perps avait
+ete collecte precisement pour ne pas avoir ce biais. Acheter de la resolution
+en montant le seuil revient a payer avec la seule propriete rare de cet
+univers.
+
+A 365 jours, la part de delistes tombe de 23,9 % a 21,3 % — a peu pres rien —
+et la donnee porte huit hypotheses. C'est exactement le nombre de types
+d'evenements.
+
+**Version 2 declare donc les huit evenements SEULS, sans les paires.** Le
+changement est dicte par la resolution du controle et la composition de
+l'univers, deux quantites calculees sans avoir regarde un seul rendement.
+C'est ce qui le distingue d'un ajustement : on ne sait toujours pas si une
+seule de ces huit sequences rapporte quoi que ce soit.
+
+Et le nul devient EXHAUSTIF plutot qu'echantillonne : on enumere tous les
+offsets de la plage au lieu d'en tirer au hasard. Strictement meilleur, et ca
+supprime la graine — donc la question « et si on avait tire autrement ».
+
+**La reponse a donner sur l'idee des sequences est donc : pas sur cette
+donnee.** Les paires demandent une plage de 1 280 offsets pour 64 hypotheses,
+soit plus de 1 480 jours d'historique commun. Aucun univers de perpetuels
+crypto sans biais du survivant ne l'offre aujourd'hui.
+
+────────────────────────────────────────────────────────────────────────────
+  CE QUE DISAIT DEJA LA VERSION 1, ET QUI RESTE VRAI
 ────────────────────────────────────────────────────────────────────────────
 
 Avec huit types d'evenements :
@@ -85,12 +136,21 @@ from dataclasses import dataclass
 from typing import Any
 
 # La version de la DECLARATION. L'incrementer repart d'un denominateur neuf.
-VERSION = 1
+VERSION = 2
 FIGE_LE = "2026-09-16"
 
-# La longueur maximale d'une sequence. Voir l'en-tete : deux est ce que cette
-# donnee peut porter.
-LONGUEUR_MAX = 2
+# La longueur maximale d'une sequence. Voir l'en-tete : la version 1 disait
+# deux, et la resolution du nul par bloc ne le permet pas sur cet univers.
+LONGUEUR_MAX = 1
+
+# L'historique minimal d'un actif pour entrer dans l'etude. Ce n'est PAS un
+# reglage de confort : c'est lui qui fixe la plage du decalage commun, donc
+# le plancher de p. Le monter achete de la resolution et la paie en biais du
+# survivant — un perpetuel deliste est court par construction.
+#
+# 365 jours : 202 actifs sur 234, dont 21,3 % de delistes contre 23,9 % dans
+# l'univers complet. La resolution obtenue porte exactement huit hypotheses.
+HISTORIQUE_MIN_J = 365
 
 # Deux evenements forment une sequence s'ils surviennent sur le MEME actif a
 # au plus tant de jours d'ecart. Au-dela, « a la suite » ne veut plus rien
@@ -107,11 +167,13 @@ HORIZON_J = 5
 # filtre ne triche pas.
 OCCURRENCES_MIN = 100
 
-# Le nombre de tirages du modele nul. Fixe pour que le plancher de p
-# (1/(D+1) = 0,0002) passe sous le seuil de Benjamini-Hochberg au rang 1
-# (0,05/72 = 0,00069) — sans quoi le criblage serait aveugle et son « zero
-# survivant » ne dirait rien du marche.
-TIRAGES = 5000
+# Le nul est EXHAUSTIF : on enumere tous les offsets de la plage plutot que
+# d'en tirer au hasard. Il n'y a donc pas de nombre de tirages, et pas de
+# graine — donc pas de question « et si on avait tire autrement ».
+#
+# C'est possible parce que la plage est petite, et elle est petite pour la
+# raison meme qui rendait la version 1 impossible.
+NUL_EXHAUSTIF = True
 
 # La marge du nul PAR BLOC, en jours. Le decalage commun est tire dans
 # [MARGE_BLOC, MARGE_BLOC + plage]. Sans cette marge, la plage est bornee par
@@ -163,6 +225,27 @@ EVENEMENTS: tuple[TypeEvenement, ...] = (
 )
 
 
+def plancher_de_p(plage: int) -> float:
+    """Le plancher de p d'un nul par bloc EXHAUSTIF sur `plage` offsets.
+
+    **Ce n'est pas 1/(tirages+1).** Le nombre de realisations distinctes d'un
+    nul par bloc est le nombre d'offsets, pas le nombre de fois qu'on en tire
+    un. La version 1 de cette declaration verifiait le mauvais plancher et
+    s'etait declaree mesurable alors qu'elle ne l'etait pas.
+    """
+    return 1.0 / (max(plage, 0) + 1)
+
+
+def hypotheses_supportees(plage: int, alpha: float = 0.05) -> int:
+    """Combien d'hypotheses cette plage peut porter.
+
+    Il faut `plancher < alpha/m`, donc `m < alpha x (plage+1)`. En rendre une
+    de plus rendrait le criblage aveugle : aucune cellule ne pourrait
+    survivre, et son « zero survivant » ne dirait rien du marche.
+    """
+    return int(alpha * (max(plage, 0) + 1))
+
+
 def sequences_declarees() -> list[tuple[str, ...]]:
     """Toutes les sequences que cette declaration autorise a tester.
 
@@ -208,6 +291,8 @@ def empreinte() -> str:
         "horizon_j": HORIZON_J,
         "occurrences_min": OCCURRENCES_MIN,
         "volume_min_requis": VOLUME_MIN_REQUIS,
+        "historique_min_j": HISTORIQUE_MIN_J,
+        "nul_exhaustif": NUL_EXHAUSTIF,
     }
     return hashlib.sha256(
         json.dumps(corps, sort_keys=True, separators=(",", ":")).encode()

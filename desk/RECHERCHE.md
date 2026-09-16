@@ -1243,3 +1243,91 @@ BTC » pendant des semaines alors que la jambe n'était pas branchée :
 l'interface affirmait une neutralité de marché que le desk n'avait pas. Un
 test le verrouille désormais dans les deux sens — un texte codé en dur
 redeviendrait faux au premier changement.
+
+## Les séquences d'événements — et le piège que je me suis tendu moi-même
+
+L'idée vient de la conversation : *« la big stratégie, c'est qu'il y a une
+stratégie par événement — dès qu'il détecte trois, quatre événements qui se
+succèdent dans un ordre, il se réfère à tous les moments dans l'histoire où
+ces quatre événements se sont produits à la suite »*.
+
+La seule voie honnête était de figer le vocabulaire avant de mesurer.
+`vocabulaire_evenements.py` a donc été **commité seul**, avant qu'une ligne de
+mesure n'existe : l'historique git est la preuve qu'aucun ajustement n'a suivi
+un résultat.
+
+### La version 1 s'était déclarée mesurable, et ne l'était pas
+
+Elle déclarait 72 hypothèses — huit types d'événements, longueurs 1 et 2 — et
+vérifiait que le criblage pouvait voir : plancher de p à `1/(TIRAGES+1)` =
+0,0002, sous le seuil de Benjamini–Hochberg au rang 1 de 0,05/72 = 0,00069.
+La vérification était juste. **Elle portait sur le mauvais plancher.**
+
+Le nombre de réalisations distinctes d'un nul **par bloc** est le nombre
+d'offsets disponibles, pas le nombre de fois qu'on en tire un. Un nul par bloc
+décale tous les événements d'un même offset ; tirer cinq mille fois dans une
+plage de cent-dix offsets ne produit pas cinq mille nuls, il en produit
+cent-dix, rééchantillonnés. Le plancher réel vaut `1/(plage+1)`, et la plage
+est fixée par la donnée.
+
+C'est la classe de défaut habituelle de ce dépôt, cette fois appliquée à mon
+propre contrôle : une vérification qui ressemble à une garantie et garantit
+autre chose.
+
+### Ce que la donnée porte, et pourquoi on ne peut pas en acheter plus
+
+    seuil d'historique   actifs   délistés   plage   hypothèses max
+              300 j        216     21,8 %     110          5
+              365 j        202     21,3 %     171          8
+              500 j        179     17,9 %     302         15
+              730 j        127     11,8 %     532         26
+
+La colonne qui décide n'est pas la dernière, c'est l'avant-dernière.
+**Relever le seuil d'historique réintroduit le biais du survivant** : un
+perpétuel délisté est court par construction, et l'univers de 234 perps avait
+été collecté précisément pour ne pas avoir ce biais. Acheter de la résolution
+en montant le seuil revient à payer avec la seule propriété rare de cet
+univers.
+
+À 365 jours la part de délistés passe de 23,9 % à 21,3 % — à peu près rien —
+et la donnée porte exactement huit hypothèses.
+
+### Version 2, et la réponse à donner sur les séquences
+
+Les huit événements **seuls**, sans les paires. Le changement est dicté par la
+résolution du contrôle et la composition de l'univers, deux quantités
+calculées sans avoir regardé un seul rendement — c'est ce qui le distingue
+d'un ajustement.
+
+Le nul devient **exhaustif** plutôt qu'échantillonné : on énumère les 172
+offsets de la plage au lieu d'en tirer. Strictement meilleur, et ça supprime
+la graine, donc la question « et si on avait tiré autrement ».
+
+**La réponse sur l'idée des séquences est : pas sur cette donnée.** Soixante-
+quatre paires exigent une plage de 1 280 offsets, donc plus de 1 480 jours
+d'historique commun à tous les actifs retenus. Aucun univers de perpétuels
+crypto sans biais du survivant ne l'offre aujourd'hui.
+
+### La mesure
+
+Contrôle du nul d'abord : **0 décalage effectif nul sur 34 744**, médiane
+185 jours. Le contrôle peut échouer, donc il contrôle quelque chose.
+
+    séquence              observations   moyenne         p
+    ecart_bas                      134   +442,54 bps   0,0289
+    serie_baissiere               4730   +194,66 bps   0,1098
+    cassure_haute                 6207    +77,69 bps   0,4162
+    ecart_haut                     168   +115,59 bps   0,4682
+    serie_haussiere               3249    −65,40 bps   0,6705
+    volume_extreme               13571    +21,71 bps   0,6879
+    cassure_basse                 8746    +42,96 bps   0,7110
+    amplitude_extreme             4624    +22,74 bps   0,7746
+
+**8 testées · 1 à p < 0,05 · 0,4 attendues par hasard · 0 survivante.**
+
+Une cellule brute là où le hasard en produit 0,4 : c'est exactement ce que le
+hasard produit. `ecart_bas` passe six épreuves sur sept et meurt au
+dénominateur — seuil BH au rang 1 de 0,00625 contre un p de 0,0289. Et ce p
+n'est pas un artefact de plancher : il est cinq fois au-dessus des 0,00578.
+
+La septième famille d'événements rejoint donc les six autres au cimetière.
