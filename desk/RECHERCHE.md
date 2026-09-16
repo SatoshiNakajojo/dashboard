@@ -1112,3 +1112,87 @@ le desk n'a pas — et c'est exactement la classe de défaut que ce dépôt traq
 partout ailleurs : un affichage qui ressemble à un état mais en décrit un
 autre. Le résumé dit désormais que la jambe est absente, et ce qu'elle
 coûterait.
+
+## L'identité de position — ce qui débloque l'adossement
+
+La section précédente sur la jambe de couverture s'arrêtait sur un blocage :
+le contrat de sortie était indexé par nom d'actif, et le pupitre appelait
+`flatten(asset, size=position.size)` — la position *entière*. Sur un exchange
+qui nette, une jambe longue BTC de couverture et la position de
+`turtle_btc_1d` sont **une seule position**, et la fin de fenêtre d'un
+déblocage fermait donc la règle gelée.
+
+Le blocage est levé. Trois pièces.
+
+### 1 · La sortie porte la source qui la demande
+
+`Faisceau.sorties()` rend des `Sortie(asset, source)` au lieu de chaînes.
+L'union reste, et reste juste : une entrée est une prise de risque sur
+laquelle on veut l'accord de la source qui la porte ; une sortie réduit le
+risque, et la refuser parce qu'une *autre* source ne la demande pas garderait
+une position que sa propre règle veut fermer. **Ce qui était faux n'était pas
+l'union, c'était ce qu'elle rendait.**
+
+Détail qui compte : la même demande émise par deux sources n'est pas un
+doublon. Deux sorties sur BTC ferment deux parts différentes, et les
+dédupliquer par actif en perdrait une — une part resterait ouverte sans que
+rien ne le dise, soit le défaut d'origine retourné. La déduplication porte
+donc sur `(source, actif)`.
+
+### 2 · Le registre des parts
+
+`execution/parts.py` tient qui détient quelle part de chaque actif. La part
+est inscrite **après** l'ouverture réussie et **au propriétaire que le
+faisceau désigne** — jamais deviné. Inscrire à la demande attribuerait une
+part que le moteur de risque a peut-être refusée ; deviner le propriétaire
+autoriserait une source à fermer ce qui ne lui appartient pas.
+
+### 3 · La réconciliation, ou le même bug déplacé d'un cran
+
+Une position peut diminuer sans que le desk le demande : stop touché,
+liquidation partielle. Un registre qui annoncerait encore l'ancienne taille
+laisserait une source fermer plus que sa part — donc la part d'une autre.
+**L'état du compte est la vérité, le registre n'est qu'une attribution.**
+
+`reconcilier()` tourne à chaque cycle, avant les sorties, et rend la liste des
+actifs corrigés : une correction silencieuse serait le pire cas, le registre
+redevenant juste sans que personne ne sache qu'il avait cessé de l'être.
+
+Le rattrapage se fait **au prorata**, et c'est un choix qui mérite d'être dit :
+quand un stop rogne une position partagée, rien ne dit *laquelle* des deux
+sources a été rognée — c'est une seule position chez l'exchange, l'information
+n'existe pas. Le prorata ne privilégie personne ; faire porter la perte à une
+source désignée inventerait une information.
+
+Et une position inconnue du registre n'est **pas adoptée**. Une position
+ouverte hors du desk — reprise après redémarrage, geste manuel —
+n'appartient à aucune source, et lui attribuer un propriétaire autoriserait
+cette source à la fermer.
+
+### Ce que le test prouve, et pourquoi il passe par un vrai pupitre
+
+    ouvertures : 2        positions : BTC 10,0000    (l'exchange nette)
+    parts      : deblocages 5,0000 · regles_figees 5,0000
+
+    après la sortie de `deblocages` :
+    positions  : BTC 5,0000
+    parts      : regles_figees 5,0000
+
+Avant la correction, les dix unités partaient. Le test traverse le chemin
+complet — faisceau, registre, dimensionnement, ordre, fill — parce que chaque
+pièce prise seule passait déjà *avant* la correction : c'est leur assemblage
+qui était faux.
+
+Un second test fige le pendant : une source unique qui rend une chaîne nue
+ferme toujours la position entière. Sans lui, le premier pourrait passer parce
+que la fermeture partielle serait devenue le *seul* comportement, ce qui
+casserait tous les desks à une source en silence.
+
+### Et les parts sont visibles
+
+Le registre remonte au snapshot et s'affiche sous l'actif dès qu'il y a plus
+d'un propriétaire. Un écran qui afficherait « BTC 10 unités » sans dire à qui
+elles appartiennent cacherait exactement l'information qui permet de savoir ce
+qu'une sortie va fermer — et c'est ce silence qui a permis au défaut de vivre.
+Dans un dépôt dont tout l'objet est la supervision, un registre juste mais
+invisible revient à ne pas l'avoir.

@@ -59,6 +59,17 @@ class DeskState:
         self.reconciled_at_ms: int | None = None
         self.day_realized_pnl_usd: Decimal | None = None
 
+        # Le registre des parts du pupitre, quand il y en a un. L'exchange
+        # NETTE : deux sources sur le meme actif n'ont qu'une position, et
+        # l'ecran qui afficherait « BTC 10 unites » sans dire a qui elles
+        # appartiennent cacherait precisement l'information qui permet de
+        # savoir ce qu'une sortie va fermer.
+        #
+        # Optionnel a dessein : un desk mono-source n'en a pas besoin, et un
+        # snapshot qui exigerait un pupitre ne pourrait plus etre pris avant
+        # qu'il existe.
+        self.parts = None
+
         # LA regle branchee, decrite pour l'ecran. `None` tant qu'aucune ne
         # l'est — et c'est une information : un desk sans signal ne peut rien
         # ouvrir, ce qui explique a lui seul tous les zeros des autres
@@ -304,6 +315,14 @@ class DeskState:
                             "protected": p.is_protected,
                             "liquidation_price": str(p.liquidation_price)
                             if p.liquidation_price else None,
+                            # A qui appartient quelle part. Vide quand le desk
+                            # n'a qu'une source, ou quand la position lui est
+                            # inconnue — reprise apres redemarrage, geste
+                            # manuel. Un vide est une information : cette
+                            # position n'a pas de proprietaire declare, donc
+                            # aucune source ne la fermera.
+                            "parts": (self.parts.en_dict().get(p.asset, {})
+                                      if self.parts is not None else {}),
                         }
                         for p in acc.positions
                     ],

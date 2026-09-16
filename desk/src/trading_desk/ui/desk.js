@@ -294,7 +294,8 @@ function render(s) {
     ? "<table><thead><tr><th>Actif</th><th>Sens</th><th>Taille</th><th>Entrée</th>"
       + "<th>Mark</th><th>Notionnel</th><th>PnL</th><th>Stop</th></tr></thead><tbody>"
       + a.positions.map((p) =>
-        "<tr><td class='name'>" + esc(p.asset) + "</td><td>" + esc(p.side) + "</td>"
+        "<tr><td class='name'>" + esc(p.asset) + parts(p.parts) + "</td>"
+        + "<td>" + esc(p.side) + "</td>"
         + "<td>" + esc(p.size) + "</td><td>" + esc(p.entry_price) + "</td>"
         + "<td>" + esc(p.mark_price) + "</td><td>" + usd(p.notional_usd) + "</td>"
         + "<td style='color:" + (Number(p.unrealized_pnl_usd) >= 0 ? "var(--ok)" : "var(--crit)") + "'>"
@@ -638,6 +639,22 @@ function chiffre(k, v, couleur) {
   return "<div><span class='k'>" + k + "</span><span class='v'"
     + (couleur ? " style='color:" + couleur + "'" : "") + ">"
     + (v === null || v === undefined ? "—" : esc(v)) + "</span></div>";
+}
+
+/* À qui appartient une position nettée.
+
+   L'exchange nette : deux sources sur le même actif n'ont qu'une position. Un
+   écran qui afficherait « BTC 10 unités » sans dire à qui elles appartiennent
+   cacherait exactement l'information qui permet de savoir ce qu'une sortie va
+   fermer — et c'est ce silence qui a permis au défaut de vivre.
+
+   Rien n'est affiché quand il n'y a qu'un propriétaire : sur un desk
+   mono-source, la mention serait du bruit sur chaque ligne. */
+function parts(p) {
+  const noms = Object.keys(p || {});
+  if (noms.length < 2) return "";
+  return "<div class='sousnom'>" + noms.map((n) =>
+    esc(n) + " " + esc(p[n])).join(" · ") + "</div>";
 }
 
 function celluleOuTiret(v, rendu) {

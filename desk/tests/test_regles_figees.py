@@ -271,9 +271,15 @@ def test_le_faisceau_route_la_confirmation_vers_la_BONNE_source():
 def test_le_faisceau_fait_l_UNION_des_sorties():
     """Asymétrique avec les entrées, et délibérément : une sortie réduit le
     risque, la refuser garderait une position que sa propre règle veut
-    fermer."""
+    fermer.
+
+    Chaque sortie porte désormais la source qui la demande. Une chaîne nue
+    voulait dire « ferme toute la position », ce qui fermait la part des
+    autres sources — voir `tests/test_couverture.py`.
+    """
     f = Faisceau(_Source("a", []), _Source("b", []))
-    assert f.sorties(0, ("ETH",)) == ["ETH"]
+    sorties = f.sorties(0, ("ETH",))
+    assert [(x.asset, x.source) for x in sorties] == [("ETH", "b")]
 
 
 def test_le_faisceau_n_est_absent_que_si_TOUTES_ses_sources_le_sont():

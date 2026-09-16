@@ -46,6 +46,7 @@ from ..contracts.common import (
 from ..contracts.mandate import Mandate, StopBand
 from ..contracts.market import BookSnapshot, MarkPrice, Trade
 from ..risk import size_position
+from .parts import Parts, Sortie
 from .exchange import Exchange, ExchangeError
 from .order_manager import OrderManager
 
@@ -104,6 +105,16 @@ class Pupitre:
         self.signal = signal
         self.orders = OrderManager(exchange, store=state.store)
         self.univers = univers
+        # Qui detient quelle part de chaque position. Necessaire des qu'il y a
+        # plus d'une source : l'exchange NETTE, donc deux sources sur le meme
+        # actif n'ont qu'une position, et fermer « BTC » les fermerait toutes
+        # les deux.
+        self.parts = Parts()
+        # Le pupitre publie son registre pour la supervision. Sans ce lien,
+        # les parts existeraient et seraient justes, mais resteraient
+        # invisibles — ce qui, dans un depot dont tout l'objet est la
+        # supervision, revient a ne pas les avoir.
+        self.state.parts = self.parts
 
         self.ouvertures = 0
         self.fermetures = 0
@@ -228,17 +239,50 @@ class Pupitre:
 
         ouvertes = tuple(p.asset for p in compte.positions)
 
+        # LE REGISTRE DES PARTS SE CALE SUR L'EXCHANGE AVANT TOUT.
+        #
+        # L'etat du compte est la verite, le registre n'est qu'une
+        # attribution. Une position peut avoir diminue sans que le desk le
+        # demande — stop touche, liquidation partielle — et un registre qui
+        # annoncerait encore l'ancienne taille laisserait une source fermer
+        # plus que sa part, donc la part d'une autre. C'est le meme bug,
+        # deplace d'un cran.
+        for asset in self.parts.reconcilier(compte.positions):
+            log.info("parts de %s recalees sur l'exchange", asset)
+
         # SORTIES D'ABORD. Une fermeture est toujours autorisee, meme desk en
         # defaut : c'est le sens de `submit_reduce`.
-        for asset in self.signal.sorties(maintenant, ouvertes):
+        for demande in self.signal.sorties(maintenant, ouvertes):
+            asset = demande.asset if isinstance(demande, Sortie) else demande
             poste = next((p for p in compte.positions if p.asset == asset), None)
             if poste is None:
                 continue
+
+            # Une chaine nue vaut « toute la position » : c'est ce que rend
+            # une source unique, et c'est juste dans ce cas. Une `Sortie` ne
+            # ferme que la part de la source qui la demande — sauf si le
+            # registre ne connait pas cette part, auquel cas on ne DEVINE pas :
+            # fermer une part inconnue fermerait celle de quelqu'un d'autre.
+            if isinstance(demande, Sortie):
+                taille = self.parts.part(demande.source, asset)
+                if taille <= 0:
+                    self.refus.append(
+                        f"fermeture {asset} : aucune part attribuée à "
+                        f"{demande.source}")
+                    continue
+                taille = min(taille, poste.size)
+            else:
+                taille = poste.size
+
             issue = self.orders.flatten(asset, self.state.risk_context(),
-                                        size=poste.size, side=poste.side)
+                                        size=taille, side=poste.side)
             if issue.accepted:
                 self.fermetures += 1
-                log.info("fermeture %s : %s", asset, issue.cloid)
+                if isinstance(demande, Sortie):
+                    self.parts.retirer(demande.source, asset, taille)
+                else:
+                    self.parts.oublier(asset)
+                log.info("fermeture %s de %s : %s", taille, asset, issue.cloid)
             else:
                 self.refus.append(f"fermeture {asset} : {issue.reason}")
 
@@ -296,6 +340,15 @@ class Pupitre:
         )
         if issue.opened:
             self.ouvertures += 1
+            # La part est inscrite APRES l'ouverture reussie, et au
+            # proprietaire que le faisceau designe — jamais devine. Une source
+            # unique n'a pas de `source_de` ; son propre nom fait l'affaire,
+            # puisqu'elle detient tout.
+            source_de = getattr(self.signal, "source_de", None)
+            proprietaire = (source_de(intention) if callable(source_de)
+                            else None) or getattr(self.signal, "nom", "?")
+            self.parts.inscrire(proprietaire, intention.asset, taille.size)
+
             confirmer = getattr(self.signal, "confirmer", None)
             if confirmer is not None:
                 confirmer(intention)

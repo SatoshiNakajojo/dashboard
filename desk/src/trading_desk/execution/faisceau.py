@@ -19,6 +19,7 @@ depot — et les regles figees derriere.
 
 from __future__ import annotations
 
+from ..execution.parts import Sortie
 from ..execution.pupitre import Intention
 
 
@@ -45,21 +46,48 @@ class Faisceau:
                 out.append(intention)
         return out
 
-    def sorties(self, at_ms: int, ouvertes: tuple[str, ...]) -> list[str]:
-        """L'UNION des sorties. Une seule source suffit a faire sortir.
+    def sorties(self, at_ms: int, ouvertes: tuple[str, ...]) -> list[Sortie]:
+        """L'union des sorties, CHACUNE PORTANT LA SOURCE QUI LA DEMANDE.
 
-        C'est deliberement asymetrique avec les entrees : une entree est une
-        prise de risque, sur laquelle on veut l'accord de la source qui la
-        porte ; une sortie reduit le risque, et la refuser parce qu'une autre
-        source ne la demande pas serait garder une position que sa propre
-        regle veut fermer.
+        L'union reste juste : une entree est une prise de risque, sur laquelle
+        on veut l'accord de la source qui la porte ; une sortie reduit le
+        risque, et la refuser parce qu'une AUTRE source ne la demande pas
+        garderait une position que sa propre regle veut fermer.
+
+        Ce qui etait faux, c'est ce qu'elle rendait. Une chaine nue voulait
+        dire « ferme tout BTC », alors que la source n'en detient qu'une part.
+        Sur un exchange qui nette, une jambe de couverture et une regle figee
+        sont une seule position : la fin de fenetre d'un deblocage fermait
+        donc la regle figee, qui rentrait au signal suivant en payant
+        l'aller-retour.
+
+        **La meme demande de deux sources n'est pas un doublon.** Deux sorties
+        sur BTC emises par deux sources ferment deux parts differentes ; les
+        deduplicquer par actif en perdrait une, et une position resterait
+        ouverte sans que rien ne le dise. On ne deduplique donc que par
+        (source, actif).
         """
-        vues: list[str] = []
+        vues: list[Sortie] = []
+        deja: set[tuple[str, str]] = set()
         for source in self.sources:
+            nom = getattr(source, "nom", "?")
             for actif in source.sorties(at_ms, ouvertes):
-                if actif not in vues:
-                    vues.append(actif)
+                cle = (nom, actif)
+                if cle in deja:
+                    continue
+                deja.add(cle)
+                vues.append(Sortie(asset=actif, source=nom))
         return vues
+
+    def source_de(self, intention: Intention) -> str | None:
+        """Le nom de la source qui a emis cette intention.
+
+        C'est ce qui permet au pupitre d'inscrire la part au bon proprietaire
+        apres une ouverture reussie. Sans lui, le registre des parts serait
+        alimente par un proprietaire devine.
+        """
+        source = self._origine.get(id(intention))
+        return getattr(source, "nom", None) if source is not None else None
 
     def confirmer(self, intention: Intention) -> None:
         source = self._origine.get(id(intention))
