@@ -1387,3 +1387,92 @@ exécuté — ce qui envoie chercher une position inexistante. Deux absences
 différentes appellent deux motifs différents. C'est la même classe de défaut
 que le « adossé à BTC » sans jambe de couverture, et elle ne se voit qu'en
 ouvrant la page.
+
+## Les trois règles d'un agent LLM externe — mesurées
+
+Un agent a produit un rapport annonçant trois stratégies rentables sur
+BTC/ETH/SOL en 1 h, fenêtre fév→sep 2026, frais 3,5 bps par côté. Elles sont
+implémentées fidèlement (`supertrend`, `donchian_ema_be`,
+`momentum_residuel`), inscrites au registre avec **`origine="llm"`** — donc
+avec leur propre dénominateur — et passées au modèle nul et à l'épreuve.
+
+### Ce que le rapport annonce, et ce que la mesure rend
+
+Avec **le modèle de coûts du rapport lui-même** (3,5 bps/côté, sans
+glissement ni funding), sur les trois actifs :
+
+    stratégie            annoncé PF   mesuré PF   annoncé        mesuré net
+    supertrend                 1,92        0,88   +0,22 R          −85,44 $
+    donchian_ema_be            1,24        1,01   +0,11 R          +10,45 $
+    momentum_residuel          1,28        1,46   +0,11 R          +80,24 $
+
+Le profit factor est **sans échelle** : il ne dépend ni du capital ni du
+dimensionnement, donc 1,92 contre 0,88 ne peut pas s'expliquer par une
+convention de taille. Le repli maximal non plus : −9,1 % mesuré sur BTC contre
+−2,3 % annoncé.
+
+**Le classement du rapport est inversé par la mesure.** Celle qu'il met en
+priorité desk (★, « Paper : ON ») est la seule nettement perdante ; celle
+qu'il écarte explicitement (« pas en paper pour l'instant ») est la seule qui
+gagne — et son propre caveat était juste, l'edge est sur SOL.
+
+### Ce que j'ai éliminé avant de conclure
+
+Une implémentation infidèle ne réfute rien : elle mesure une quatrième
+stratégie que personne n'a proposée. Quatre causes testées :
+
+- **le nombre de trades colle** — 119/133/131 mesurés contre 120 annoncés pour
+  `supertrend`, donc la logique d'entrée est la bonne ;
+- **le modèle de coûts** — testé avec celui du rapport, celui du desk et le
+  glissement réellement mesuré (0,21 bps) : le signe ne change pas ;
+- **la sémantique de sortie** — « stop = ligne Supertrend (trail) » se lit de
+  deux façons, stop dur sur la ligne ou sortie au retournement à la clôture.
+  Les deux ont été mesurées : PF 0,73–0,79 et 0,61–1,12. Aucune ne rejoint
+  1,92 ;
+- **l'entrée à l'ouverture suivante** plutôt qu'à la clôture du signal : écart
+  moyen mesuré de **+0,01 bps sur BTC et −0,09 bps sur ETH**. Négligeable.
+
+### Le modèle nul, et l'épreuve
+
+    cellule                  trades      net        p        verdict
+    supertrend BTC              108   −31,02   0,4873   non distinguable
+    supertrend ETH              129   −92,76   0,8336   non distinguable
+    supertrend SOL              131   +16,72   0,1954   non distinguable
+    donchian_ema_be BTC         140   −31,39   0,2299   non distinguable
+    donchian_ema_be ETH         141    −4,78   0,2574   non distinguable
+    donchian_ema_be SOL         152   −49,20   0,4698   non distinguable
+    momentum_residuel BTC         0     0,00        —   aucun trade
+    momentum_residuel ETH        35    +3,92   0,3458   non distinguable
+    momentum_residuel SOL        54   +54,57   0,0130   BAT LE HASARD
+
+Une cellule sur neuf bat le hasard. Le seuil de Benjamini–Hochberg au rang 1
+sur huit cellules testées vaut 0,00625 ; p = 0,0130 ne passe pas. **Neuf
+refusées sur neuf**, et le taux de refus du moteur de risque est nul partout —
+l'obstacle n'est pas l'exécutabilité.
+
+### Le détail qui tranche : c'est un mois
+
+Les deux cellules positives de `momentum_residuel` et celle de `supertrend`
+meurent toutes sur **l'épreuve du retrait d'un mois**, et c'est le même mois.
+
+    toutes cellules confondues
+      août 2026 . . . . . . . . . . . . +84,59 $
+      tous les autres mois réunis . . . −218,53 $
+
+Retirer août 2026 fait passer `supertrend SOL` de +16,72 à −16,70 $, et
+`momentum_residuel ETH` de +3,92 à −16,77 $. Février est le second mois
+porteur. Sur huit mois d'historique, deux portent tout le résultat — c'est la
+définition d'un épisode, pas d'un edge.
+
+### Un bug de ma part, et ce qu'il apprend
+
+`MomentumResiduel` allait chercher l'intervalle sur `bars[0].interval`, un
+attribut que le contrat `Bar` ne porte pas. L'`AttributeError` tombait dans un
+`except Exception` large, le résiduel rendait des `None` partout, et la
+stratégie produisait **zéro trade en silence**. Ça se lisait comme un résultat
+(« aucun signal ») au lieu d'un bug.
+
+Un test sur le nombre de trades l'aurait laissé passer. Celui qui l'attrape
+regarde la grandeur intermédiaire — combien de résiduels ont été calculés — et
+c'est la leçon : quand une absence peut être un résultat, il faut tester ce
+qui la produit, pas ce qu'elle produit.

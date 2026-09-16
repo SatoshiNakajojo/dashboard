@@ -19,6 +19,7 @@ from pydantic import Field
 
 from ..contracts.common import Frozen, Side
 from ..features.bars import Bar
+from .data import DataUnavailable
 from ..features.indicators import (
     Series,
     adx,
@@ -699,3 +700,362 @@ BASELINES: dict[str, type] = {
     "trend_follower_atr": TrendFollowerATR,
     "regime_switch": RegimeSwitch,
 }
+
+
+# ───────────────────────────────────────────────────────────────────────────
+#  Les trois regles proposees par un agent LLM externe, le 16 septembre 2026.
+#
+#  Elles sont implementees ICI, fidelement aux regles enoncees, pour une
+#  raison simple : une regle qu'on ne code pas ne peut pas etre refutee. Le
+#  rapport annonce des esperances et des profit factors sans modele nul ni
+#  valeur de p ; ce depot a de quoi les produire, et c'est le seul moyen de
+#  savoir si ces chiffres decrivent un edge ou un balayage.
+#
+#  **Leur origine est `llm` au registre de l'atelier**, donc leur denominateur
+#  est le leur. Elles ne portent pas le poids statistique des idees du depot,
+#  et le depot ne porte pas le leur.
+# ───────────────────────────────────────────────────────────────────────────
+
+
+def _supertrend(bars: list[Bar], period: int, mult: float
+                ) -> tuple[Series, list[int | None]]:
+    """La ligne Supertrend et le sens de tendance, barre par barre.
+
+    Algorithme standard, avec sa regle de CLIQUET : une bande ne se resserre
+    que dans le sens favorable, et ne se relache que lorsque le prix la
+    traverse. Sans ce cliquet la ligne suivrait l'ATR dans les deux sens et
+    produirait des retournements a chaque respiration de la volatilite.
+
+    Le sens de la barre `i` est decide en comparant la cloture de `i` aux
+    bandes de `i-1`. Comparer aux bandes de `i` — qui dependent de la cloture
+    de `i` — ferait regarder la barre courante pour decider de la barre
+    courante, et la strategie se validerait toute seule.
+    """
+    a = atr(bars, period)
+    n = len(bars)
+    ligne: Series = [None] * n
+    sens: list[int | None] = [None] * n
+    fu = fl = None
+    for i in range(n):
+        if a[i] is None:
+            continue
+        hl2 = (float(bars[i].high) + float(bars[i].low)) / 2.0
+        haut = hl2 + mult * a[i]
+        bas = hl2 - mult * a[i]
+        c_prec = float(bars[i - 1].close) if i else float(bars[i].close)
+        fu = haut if (fu is None or haut < fu or c_prec > fu) else fu
+        fl = bas if (fl is None or bas > fl or c_prec < fl) else fl
+        prec = sens[i - 1] if i and sens[i - 1] is not None else 1
+        c = float(bars[i].close)
+        if c > fu:
+            s = 1
+        elif c < fl:
+            s = -1
+        else:
+            s = prec
+        sens[i] = s
+        ligne[i] = fl if s == 1 else fu
+    return ligne, sens
+
+
+class Supertrend:
+    """Supertrend(10, 3) — la regle que l'agent classe en priorite desk.
+
+    Regles transposees telles qu'ecrites : entree sur croisement du sens,
+    stop sur la ligne Supertrend qui suit le prix, abandon si la distance au
+    stop est sous `stop_min_pct`, sortie forcee apres `time_stop` barres,
+    aucun filtre de moyenne mobile.
+
+    **Le trailing passe par le resserrement du moteur**, qui n'autorise qu'un
+    stop plus proche. C'est exactement la semantique d'un stop suiveur, et ca
+    evite qu'un relachement de la ligne elargisse le risque d'une position
+    deja ouverte — ce qu'un stop suiveur ne fait jamais.
+
+    **Le time-stop est en BARRES.** Soixante-douze heures valent 72 barres en
+    1 h et trois barres en 1 jour. Le parametre ne porte pas l'echelle ; c'est
+    au parametrage de la porter.
+    """
+
+    name = "supertrend"
+
+    def __init__(self, atr_period: int = 10, mult: float = 3.0,
+                 stop_min_pct: float = 0.40, time_stop: int = 72) -> None:
+        self.atr_period, self.mult = atr_period, mult
+        self.stop_min_pct, self.time_stop = stop_min_pct, time_stop
+        self._ligne: Series = []
+        self._sens: list[int | None] = []
+        self._entree: int | None = None
+
+    def prepare(self, bars: list[Bar]) -> None:
+        self._ligne, self._sens = _supertrend(bars, self.atr_period, self.mult)
+        # Remis a zero a chaque preparation : le modele nul rejoue la meme
+        # instance des milliers de fois, et un etat qui survivrait d'un tirage
+        # au suivant melangerait les tirages entre eux.
+        self._entree = None
+
+    def on_bar(self, i: int, bars: list[Bar], in_position: Side | None) -> Signal:
+        ligne, sens = self._ligne[i], self._sens[i]
+        if ligne is None or sens is None or i == 0:
+            return FLAT
+        close = bars[i].close
+
+        if in_position is not None:
+            if self._entree is None:
+                self._entree = i
+            if i - self._entree >= self.time_stop:
+                self._entree = None
+                return Signal(exit_now=True, note=f"time-stop {self.time_stop} barres")
+            # Le stop suit la ligne. Le moteur ne retient que le resserrement.
+            cible = Decimal(str(ligne))
+            return Signal(stop_price=cible) if cible > 0 else FLAT
+
+        self._entree = None
+        prec = self._sens[i - 1]
+        if prec is None or prec == sens:
+            return FLAT
+
+        distance = abs(float(close) - ligne) / float(close) * 100.0
+        if distance < self.stop_min_pct:
+            return FLAT
+        cote = Side.LONG if sens == 1 else Side.SHORT
+        st = Decimal(str(ligne))
+        if st <= 0:
+            return FLAT
+        return Signal(side=cote, stop_price=st, note=f"supertrend {sens:+d}")
+
+
+class DonchianEmaBe:
+    """Donchian(20) filtre par EMA(100), avec passage a breakeven a +1R.
+
+    Regles transposees : cassure de Donchian(`entry_period`), longs seulement
+    au-dessus de l'EMA(`ema_period`) et shorts seulement en dessous, stop a
+    `atr_stop` x ATR(`atr_period`) avec un plancher de `stop_min_pct`, stop
+    ramene au point mort des que le gain atteint 1R, sortie sur Donchian
+    oppose de `exit_period`, sur `cible_r` R, ou apres `time_stop` barres.
+
+    **Le passage a breakeven est une iteration APRES resultat**, le rapport le
+    dit lui-meme (« iteration legere (BE a 1R) »). Elle est implementee telle
+    quelle, et c'est justement ce qu'il faut mesurer : un parametre ajoute
+    parce qu'il ameliorait le backtest est un parametre de plus au
+    denominateur, pas une amelioration gratuite.
+    """
+
+    name = "donchian_ema_be"
+
+    def __init__(self, entry_period: int = 20, exit_period: int = 10,
+                 ema_period: int = 100, atr_period: int = 14,
+                 atr_stop: float = 2.0, stop_min_pct: float = 0.40,
+                 cible_r: float = 3.0, time_stop: int = 48) -> None:
+        self.entry_period, self.exit_period = entry_period, exit_period
+        self.ema_period, self.atr_period = ema_period, atr_period
+        self.atr_stop, self.stop_min_pct = atr_stop, stop_min_pct
+        self.cible_r, self.time_stop = cible_r, time_stop
+        self._eh: Series = []
+        self._el: Series = []
+        self._xh: Series = []
+        self._xl: Series = []
+        self._atr: Series = []
+        self._ema: Series = []
+        self._entree: int | None = None
+        self._prix_entree: float | None = None
+        self._risque: float | None = None
+        self._be_fait = False
+
+    def prepare(self, bars: list[Bar]) -> None:
+        self._eh, self._el = donchian(bars, self.entry_period)
+        self._xh, self._xl = donchian(bars, self.exit_period)
+        self._atr = atr(bars, self.atr_period)
+        self._ema = ema(closes(bars), self.ema_period)
+        self._entree = self._prix_entree = self._risque = None
+        self._be_fait = False
+
+    def on_bar(self, i: int, bars: list[Bar], in_position: Side | None) -> Signal:
+        eh, el, xh, xl = self._eh[i], self._el[i], self._xh[i], self._xl[i]
+        a, e = self._atr[i], self._ema[i]
+        if None in (eh, el, xh, xl, a, e) or not a:
+            return FLAT
+        close = float(bars[i].close)
+
+        if in_position is not None:
+            if self._entree is None:
+                self._entree, self._prix_entree = i, close
+                self._risque = self.atr_stop * a
+                self._be_fait = False
+            if i - self._entree >= self.time_stop:
+                self._reset()
+                return Signal(exit_now=True, note=f"time-stop {self.time_stop}")
+            if in_position is Side.LONG and close < xl:
+                self._reset()
+                return Signal(exit_now=True, note=f"donchian {self.exit_period} bas")
+            if in_position is Side.SHORT and close > xh:
+                self._reset()
+                return Signal(exit_now=True, note=f"donchian {self.exit_period} haut")
+
+            if self._prix_entree and self._risque:
+                sens = 1 if in_position is Side.LONG else -1
+                gain_r = sens * (close - self._prix_entree) / self._risque
+                if gain_r >= self.cible_r:
+                    self._reset()
+                    return Signal(exit_now=True, note=f"+{self.cible_r:g}R")
+                if gain_r >= 1.0 and not self._be_fait:
+                    self._be_fait = True
+                    be = Decimal(str(self._prix_entree))
+                    if be > 0:
+                        return Signal(stop_price=be, note="breakeven à +1R")
+            return FLAT
+
+        self._reset()
+        span = float(a) * self.atr_stop
+        # Le plancher de stop est une DISTANCE MINIMALE, pas un ecretage : il
+        # elargit un stop trop serre plutot que de refuser l'entree, ce que le
+        # rapport decrit par « floor 0,40 % ».
+        span = max(span, close * self.stop_min_pct / 100.0)
+        d = Decimal(str(span))
+
+        if close > eh and close > e and (st := _stop(bars[i].close, d, Side.LONG)):
+            return Signal(side=Side.LONG, stop_price=st, note="cassure haute > EMA")
+        if close < el and close < e and (st := _stop(bars[i].close, d, Side.SHORT)):
+            return Signal(side=Side.SHORT, stop_price=st, note="cassure basse < EMA")
+        return FLAT
+
+    def _reset(self) -> None:
+        self._entree = self._prix_entree = self._risque = None
+        self._be_fait = False
+
+
+# Le cache des series de reference. Une strategie transversale a besoin d'un
+# SECOND actif, que le protocole `Strategy` ne lui passe pas : il ne connait
+# que la serie tradee. Le charger ici, une fois, evite de relire un fichier a
+# chaque tirage du modele nul — cinq mille tirages feraient cinq mille
+# lectures disque pour la meme donnee.
+_REFERENCES: dict[tuple[str, str], dict[int, float]] = {}
+
+
+def _reference(actif: str, intervalle: str) -> dict[int, float]:
+    """Les clotures de l'actif de reference, indexees par horodatage.
+
+    Indexees par TEMPS et non par rang : deux series du meme intervalle
+    peuvent avoir des longueurs differentes — une bougie manquante chez l'un,
+    une cotation plus tardive chez l'autre — et un alignement par rang
+    decalerait silencieusement toute la comparaison. L'erreur ne se verrait
+    pas : la strategie continuerait de produire des signaux, simplement contre
+    le mauvais jour.
+    """
+    cle = (actif, intervalle)
+    if cle not in _REFERENCES:
+        from .data import load_from_file
+        from pathlib import Path
+        racine = Path(__file__).resolve().parents[3]
+        chemin = racine / "data" / f"{actif}_{intervalle}_real.json"
+        bars = load_from_file(str(chemin), actif, intervalle)
+        _REFERENCES[cle] = {b.ts_ms: float(b.close) for b in bars}
+    return _REFERENCES[cle]
+
+
+class MomentumResiduel:
+    """Momentum d'un actif RELATIF a BTC, long seulement.
+
+    Regles transposees : long si la performance sur `lookback` barres depasse
+    celle de la reference de plus de `seuil_pct`, et si le prix est au-dessus
+    de l'EMA(`ema_period`) ; stop a `atr_stop` x ATR ; sortie quand le
+    residuel repasse sous zero ou apres `time_stop` barres.
+
+    **Le rapport porte lui-meme sa refutation** : « caveat dur : edge = SOL ;
+    ETH negatif en backtest ». Une regle qui gagne sur un actif et perd sur
+    l'autre, avec 78 trades en tout, decrit surtout ces 78 trades. Elle est
+    codee quand meme, parce qu'une regle qu'on ne code pas ne peut pas etre
+    refutee — et parce que c'est le modele nul qui doit trancher, pas moi.
+
+    **Aucun short.** Le rapport dit « long-only » et c'est repris tel quel :
+    ajouter les shorts serait tester une autre regle que celle proposee, tout
+    en profitant de la selection qui a produit celle-ci.
+    """
+
+    name = "momentum_residuel"
+
+    def __init__(self, lookback: int = 12, seuil_pct: float = 1.5,
+                 ema_period: int = 50, atr_period: int = 14,
+                 atr_stop: float = 2.0, time_stop: int = 30,
+                 reference: str = "BTC", intervalle: str = "1h") -> None:
+        self.lookback, self.seuil_pct = lookback, seuil_pct
+        self.ema_period, self.atr_period = ema_period, atr_period
+        self.atr_stop, self.time_stop = atr_stop, time_stop
+        self.reference = reference
+        # L'intervalle est un PARAMETRE et non une lecture sur la barre : le
+        # contrat `Bar` ne le porte pas, et la premiere version allait le
+        # chercher sur `bars[0].interval`. L'AttributeError tombait dans un
+        # `except Exception` large qui rendait un residuel vide — la strategie
+        # produisait zero trade, silencieusement, et ca ressemblait a un
+        # resultat (« aucun signal ») au lieu d'un bug.
+        self.intervalle = intervalle
+        self._atr: Series = []
+        self._ema: Series = []
+        self._res: Series = []
+        self._entree: int | None = None
+
+    def prepare(self, bars: list[Bar]) -> None:
+        self._atr = atr(bars, self.atr_period)
+        self._ema = ema(closes(bars), self.ema_period)
+        self._entree = None
+
+        # Le residuel : perf de l'actif moins perf de la reference, sur la
+        # meme fenetre et les MEMES horodatages.
+        # L'absence de fichier de reference est le SEUL cas tolere, et la
+        # strategie s'abstient alors plutot que de comparer a rien : un
+        # residuel calcule contre une serie absente vaudrait la performance
+        # brute, donc une AUTRE strategie, qui aurait l'air de marcher pour de
+        # mauvaises raisons. Toute autre exception remonte — une erreur de
+        # programmation avalee ici se lirait comme « aucun signal ».
+        try:
+            ref = _reference(self.reference, self.intervalle)
+        except (FileNotFoundError, DataUnavailable):
+            self._res = [None] * len(bars)
+            return
+
+        n = len(bars)
+        res: Series = [None] * n
+        for i in range(self.lookback, n):
+            t0, t1 = bars[i - self.lookback].ts_ms, bars[i].ts_ms
+            r0, r1 = ref.get(t0), ref.get(t1)
+            if r0 is None or r1 is None or r0 <= 0:
+                continue
+            c0, c1 = float(bars[i - self.lookback].close), float(bars[i].close)
+            if c0 <= 0:
+                continue
+            res[i] = (c1 / c0 - 1.0) * 100.0 - (r1 / r0 - 1.0) * 100.0
+        self._res = res
+
+    def on_bar(self, i: int, bars: list[Bar], in_position: Side | None) -> Signal:
+        r, a, e = self._res[i], self._atr[i], self._ema[i]
+        if r is None or a is None or e is None or not a:
+            return FLAT
+        close = bars[i].close
+
+        if in_position is not None:
+            if self._entree is None:
+                self._entree = i
+            if i - self._entree >= self.time_stop:
+                self._entree = None
+                return Signal(exit_now=True, note=f"time-stop {self.time_stop}")
+            if r < 0:
+                self._entree = None
+                return Signal(exit_now=True, note="résiduel repassé sous zéro")
+            return FLAT
+
+        self._entree = None
+        if r <= self.seuil_pct or float(close) <= e:
+            return FLAT
+        span = Decimal(str(float(a) * self.atr_stop))
+        st = _stop(close, span, Side.LONG)
+        return (Signal(side=Side.LONG, stop_price=st,
+                       note=f"résiduel +{r:.2f} % vs {self.reference}")
+                if st else FLAT)
+
+
+# Les trois regles proposees par un agent LLM externe entrent au catalogue
+# comme les autres. Enregistrees ICI plutot que dans le litteral ci-dessus
+# parce qu'elles sont definies apres lui — et c'est la seule facon de les
+# soumettre au meme modele nul et a la meme epreuve que le reste.
+BASELINES["supertrend"] = Supertrend
+BASELINES["donchian_ema_be"] = DonchianEmaBe
+BASELINES["momentum_residuel"] = MomentumResiduel
