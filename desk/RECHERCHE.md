@@ -1600,3 +1600,101 @@ tenir SOL en rapporte +33,9 %. `turtle_breakout BTC` rend +5,4 %/an contre
 +37,2 % pour BTC.
 
 C'était le critère #2 du briefing, et c'est de loin le plus sévère des deux.
+
+## La bibliothèque, le ticket, la carte — échanger sans fusionner
+
+Demandé par le briefing : bibliothèque commune formatée **et** desks
+individuels séparés, ticket de stratégie normé, colonnes de carte communes,
+tag de provenance dans le bilan.
+
+Trois objets, et leur séparation est tout le sujet :
+
+- le **ticket** est une recette — indicateurs, paramètres, stop, cible,
+  échelle, actif, signal, provenance. Il ne porte **aucun résultat** : la même
+  recette donne deux résultats chez deux personnes qui ne tradent pas la même
+  taille, et y coller un PnL ferait voyager un chiffre qui ne veut rien dire
+  chez l'autre ;
+- la **carte** est le ticket plus ses mesures, dans les treize colonnes du
+  briefing. Elle est toujours relative à un desk ;
+- la **bibliothèque** est une collection de tickets, en ajout seul. Elle n'est
+  le desk de personne.
+
+### La ligne qui protège les deux desks
+
+`importer()` **force `origine="externe"`**. C'est la seule ligne du module qui
+empêche l'échange de casser la statistique des deux côtés.
+
+Importer trente recettes et les corriger avec les siennes est faux dans les
+deux sens : ça punit ses propres idées, qui porteraient le poids statistique
+de trente essais qu'elles n'ont pas demandés, et ça absout les trente, noyées
+dans un dénominateur où le seuil au rang 1 devient si laxiste qu'il ne rejette
+plus rien.
+
+### La rareté est dérivée, jamais tirée
+
+L'idée vient du vocabulaire des cartes à collectionner, et elle est bonne : un
+rang lisible d'un coup d'œil vaut mieux qu'une colonne de décimales. Mais une
+rareté tirée au sort donnerait le frisson d'une trouvaille à une carte qui n'a
+rien prouvé.
+
+Celle‑ci combine le verdict de l'épreuve, le relief, et le nombre d'actifs
+indépendants sur lesquels la recette tient — et elle rend **le motif avec le
+rang**, parce qu'un rang sans motif se lit comme un verdict alors que c'est un
+résumé. L'épreuve pèse deux points là où les portes en valent un : survivre au
+hasard est plus rare qu'être économiquement viable.
+
+## L'échelle 12 h — ce que le briefing demandait, et ce qu'elle rend
+
+Le briefing met le 6 h–12 h en priorité. Ces échelles n'étaient pas dans la
+table d'intervalles du dépôt : **omission, pas limite de l'API.** Hyperliquid
+sert le 8 h et le 12 h.
+
+Et la prémisse « historique HL ~1000 bougies » est à corriger. Mesuré sur BTC :
+
+    4 h   3 703 bougies       8 h   1 852
+    12 h  1 235               1 j     618
+
+L'historique dépend de l'échelle, et en journalier il est **plus court** que
+mille. Conséquence utile : descendre en échelle donne plus de barres. Le 12 h
+collecté sur 900 jours remonte à mars 2024 — quatre fois la fenêtre de
+208 jours du rapport de l'agent externe.
+
+### Ce que le catalogue rend en 12 h, et comment le lire
+
+Onze stratégies × trois actifs sur 900 jours : **sept cellules franchissent
+les deux portes**, contre une seule sur la fenêtre 1 h.
+
+Il faut lire la colonne d'à côté. L'achat‑conservation rend **−15,1 % sur ETH,
+−24,4 % sur SOL** et **+3,2 % sur BTC** sur cette période. Les sept passantes
+sont toutes sur ETH ou SOL, **aucune sur BTC** : elles battent
+l'achat‑conservation surtout parce qu'il a perdu, pas parce qu'elles ont
+gagné. Leurs rendements vont de +0,5 à +3,2 %/an.
+
+Et aucune n'est passée au modèle nul. Ce sont des candidates au sens du
+scorer, pas des résultats.
+
+### Le croisement CEX est bloqué, et ce n'est pas un manque de code
+
+Testé : `api.hyperliquid.xyz` répond, `binance`, `kraken` et `bybit` ne
+répondent pas. Écrire ici un collecteur qui ne peut pas tourner donnerait
+l'illusion d'une capacité.
+
+## Une stratégie contrastée, et pourquoi elle n'est pas mesurée
+
+Le catalogue était monochrome : six règles de suivi de tendance qui perdent
+ensemble quand le marché va de travers ne font pas un deck, elles font une
+seule mise sur un seul régime.
+
+`range_bollinger_adx` prend le contre‑pied : elle n'entre que lorsque l'ADX
+dit qu'il n'y a **pas** de tendance, et elle vend la force au lieu de la
+suivre. Sa cible est le retour à la moyenne, pas un multiple de risque —
+poser une cible ailleurs testerait autre chose que sa thèse.
+
+**Ses paramètres par défaut ne sont le résultat d'aucun balayage** : deux
+écarts‑types et un ADX sous vingt sont les valeurs de manuel, prises telles
+quelles. Les choisir en regardant ce qui marche sur les données du dépôt en
+ferait la trente‑sixième cellule d'une grille déjà dépensée ; les laisser au
+manuel garde une hypothèse propre pour un test hors échantillon.
+
+Mesurée en 1 h sur 208 jours, elle perd sur BTC et SOL. C'est une information
+sur ces paramètres‑là, pas sur l'idée.

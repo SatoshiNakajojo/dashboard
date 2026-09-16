@@ -29,6 +29,16 @@ INTERVAL_MS: dict[str, int] = {
     "15m": 900_000,
     "1h": 3_600_000,
     "4h": 14_400_000,
+    # 8 h et 12 h : Hyperliquid les sert, et le briefing du 16 septembre 2026
+    # les demande en priorite — moins sensibles au bruit micro que le 15 m,
+    # plus de barres que le journalier. Mesure du meme jour sur BTC depuis
+    # 2025 : 3 703 bougies en 4 h, 1 852 en 8 h, 1 235 en 12 h, 618 en 1 j.
+    #
+    # Ce dernier chiffre corrige une premisse du briefing : l'historique
+    # Hyperliquid n'est pas « ~1000 bougies » dans l'absolu, il depend de
+    # l'echelle. En journalier il est PLUS court que ca.
+    "8h": 28_800_000,
+    "12h": 43_200_000,
     "1d": 86_400_000,
 }
 

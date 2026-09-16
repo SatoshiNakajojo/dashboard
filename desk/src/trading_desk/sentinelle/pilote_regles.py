@@ -37,7 +37,10 @@ from ..execution.pupitre import Intention
 
 log = logging.getLogger("pilote")
 
-INTERVAL_MS = {"1d": 86_400_000, "4h": 14_400_000, "1h": 3_600_000}
+# Lu depuis la source unique plutot que recopie : deux tables d'intervalles
+# divergeraient, et la divergence se verrait comme une entree datee de la
+# mauvaise heure — donc silencieusement.
+from ..features.bars import INTERVAL_MS
 
 
 class PiloteRegles:

@@ -1059,3 +1059,112 @@ class MomentumResiduel:
 BASELINES["supertrend"] = Supertrend
 BASELINES["donchian_ema_be"] = DonchianEmaBe
 BASELINES["momentum_residuel"] = MomentumResiduel
+
+
+class RangeBollingerAdx:
+    """Retour a la moyenne DANS un range — le contraste du catalogue.
+
+    Le catalogue est monochrome : `ema_cross`, `turtle_breakout`, `tsmom`,
+    `trend_follower_atr`, `supertrend`, `donchian_ema_be` suivent tous la
+    tendance. Six regles qui perdent ensemble quand le marche va de travers ne
+    font pas un deck, elles font une seule mise sur un seul regime.
+
+    Celle-ci prend l'exact contre-pied : elle n'entre QUE lorsque l'ADX dit
+    qu'il n'y a pas de tendance, et elle vend la force plutot que de la suivre.
+
+    ────────────────────────────────────────────────────────────────────────
+      CE SQUELETTE N'A PAS ETE MESURE, ET C'EST DELIBERE
+    ────────────────────────────────────────────────────────────────────────
+
+    Il est ecrit pour exister au catalogue, donc pour pouvoir etre soumis au
+    meme modele nul et a la meme epreuve que le reste. **Ses parametres par
+    defaut ne sont le resultat d'aucun balayage** : deux ecarts-types et un
+    ADX sous vingt sont les valeurs de manuel, prises telles quelles.
+
+    Les choisir en regardant ce qui marche sur les donnees du depot ferait de
+    ce squelette la trente-sixieme cellule d'une grille deja depensee. Les
+    laisser au manuel garde une hypothese propre pour un test hors
+    echantillon.
+
+    **Le stop est a l'ATR**, comme partout ailleurs dans ce depot : la
+    distance de risque vient de la volatilite realisee, jamais d'un
+    pourcentage arbitraire.
+    """
+
+    name = "range_bollinger_adx"
+
+    def __init__(self, periode: int = 20, ecarts: float = 2.0,
+                 adx_period: int = 14, adx_max: float = 20.0,
+                 atr_period: int = 14, atr_stop: float = 2.0,
+                 time_stop: int = 48) -> None:
+        self.periode, self.ecarts = periode, ecarts
+        self.adx_period, self.adx_max = adx_period, adx_max
+        self.atr_period, self.atr_stop = atr_period, atr_stop
+        self.time_stop = time_stop
+        self._moy: Series = []
+        self._haut: Series = []
+        self._bas: Series = []
+        self._adx: Series = []
+        self._atr: Series = []
+        self._entree: int | None = None
+
+    def prepare(self, bars: list[Bar]) -> None:
+        c = closes(bars)
+        n = len(c)
+        moy: Series = [None] * n
+        haut: Series = [None] * n
+        bas: Series = [None] * n
+        for i in range(self.periode - 1, n):
+            fen = c[i - self.periode + 1:i + 1]
+            m = sum(fen) / self.periode
+            var = sum((x - m) ** 2 for x in fen) / self.periode
+            e = var ** 0.5
+            moy[i], haut[i], bas[i] = m, m + self.ecarts * e, m - self.ecarts * e
+        self._moy, self._haut, self._bas = moy, haut, bas
+        self._adx = adx(bars, self.adx_period)
+        self._atr = atr(bars, self.atr_period)
+        self._entree = None
+
+    def on_bar(self, i: int, bars: list[Bar], in_position: Side | None) -> Signal:
+        m, h, b = self._moy[i], self._haut[i], self._bas[i]
+        a, x = self._atr[i], self._adx[i]
+        if None in (m, h, b, a, x) or not a:
+            return FLAT
+        close = float(bars[i].close)
+
+        if in_position is not None:
+            if self._entree is None:
+                self._entree = i
+            if i - self._entree >= self.time_stop:
+                self._entree = None
+                return Signal(exit_now=True, note=f"time-stop {self.time_stop}")
+            # La cible est le RETOUR A LA MOYENNE, pas un multiple de risque :
+            # c'est la these de la strategie, et poser une cible ailleurs
+            # testerait autre chose.
+            if ((in_position is Side.LONG and close >= m) or
+                    (in_position is Side.SHORT and close <= m)):
+                self._entree = None
+                return Signal(exit_now=True, note="retour à la moyenne")
+            # Une tendance qui NAIT invalide la these : on sort avant le stop.
+            if x > self.adx_max * 1.5:
+                self._entree = None
+                return Signal(exit_now=True, note=f"ADX {x:.0f} : la tendance revient")
+            return FLAT
+
+        self._entree = None
+        # **Le filtre d'abord.** Sans lui, vendre la force revient a se mettre
+        # en travers d'une tendance, ce qui est la facon la plus rapide de
+        # perdre de l'argent avec une regle de retour a la moyenne.
+        if x >= self.adx_max:
+            return FLAT
+        span = Decimal(str(float(a) * self.atr_stop))
+        if close < b and (st := _stop(bars[i].close, span, Side.LONG)):
+            return Signal(side=Side.LONG, stop_price=st,
+                          note=f"sous la bande basse, ADX {x:.0f}")
+        if close > h and (st := _stop(bars[i].close, span, Side.SHORT)):
+            return Signal(side=Side.SHORT, stop_price=st,
+                          note=f"au-dessus de la bande haute, ADX {x:.0f}")
+        return FLAT
+
+
+BASELINES["range_bollinger_adx"] = RangeBollingerAdx
