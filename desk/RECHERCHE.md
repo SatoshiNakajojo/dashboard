@@ -834,3 +834,111 @@ s'il faut s'inquiéter.
   seul `api.hyperliquid.xyz` répond. C'est une limite d'accès, pas un
   résultat : la piste n'est ni confirmée ni infirmée au-delà de ce qui est
   déjà mesuré.
+
+## L'épreuve unique — l'avocat du diable cesse d'être éparpillé
+
+Idée reprise d'une conversation du 15 septembre 2026 avec un ami qui développe
+un bot de trading : *« je veux affiner le système de notes pour que ce soit le
+plus dur possible, un peu comme ton truc de dire il y a l'avocat du diable,
+toujours quelqu'un qui vient dire et si il y a ça, et si il y a ça »*.
+
+L'intuition est juste et sa mise en œuvre naturelle — durcir un barème — ne
+l'est pas. Ce qui fabrique les faux positifs n'est pas la générosité du
+barème, c'est **le nombre de candidates**. Trente-cinq combinaisons à
+l'atelier ont donné douze cellules sous p = 0,05 ; le hasard pur en aurait
+produit 1,8, et après correction il en reste zéro. Un barème deux fois plus
+dur aurait gardé six cellules au lieu de douze, et il en resterait toujours
+zéro de vraies : moins de faux positifs à la fois, pas moins **par vrai**.
+
+Une note *agrégée* a un second défaut, plus insidieux : une bonne moyenne peut
+masquer une épreuve fatale. Une règle dont 70 % des entrées seraient refusées
+par le moteur de risque n'est pas « une règle un peu moins bien notée », c'est
+une règle qui ne tournera jamais telle qu'elle a été mesurée. Aucune
+pondération ne rend cette information à une moyenne.
+
+D'où `src/trading_desk/epreuves.py` : sept épreuves indépendantes, chacune
+rendant son verdict avec son motif, **un seul échec suffit**.
+
+### Trois états, et le troisième est celui qui compte
+
+    RETENUE      toutes les épreuves applicables sont passées
+    REFUSÉE      au moins une a échoué
+    INCOMPLÈTE   aucune n'a échoué, mais une épreuve exigée n'a pas pu tourner
+
+**Une épreuve qui ne peut pas s'exécuter n'est pas une épreuve réussie.**
+C'est le défaut par lequel ce dépôt s'est déjà fait avoir : le nul par bloc des
+cotations tirait son décalage dans une plage bornée par le plus court
+historique, si bien que chaque tirage recouvrait l'observation. Il ne pouvait
+pas échouer. Il validait tout, et il a fallu le corriger pour découvrir que p
+valait 0,164.
+
+On distingue donc « sans objet » (l'épreuve ne concerne pas cette classe de
+candidate — un nul par bloc n'a pas de sens sur un actif unique) de
+« indisponible » (elle la concerne, la donnée manque). Le premier ne bloque
+pas, le second rend INCOMPLÈTE.
+
+### Ce que l'épreuve rend sur le registre réel
+
+Passée sur les 35 combinaisons déjà inscrites :
+
+    retenues 0 · incomplètes 0 · refusées 35
+
+    ce qui les tue :
+      15  trop peu d'aller-retours
+      11  ne survit pas au dénominateur
+       9  refus du moteur de risque
+
+Le verdict d'ensemble reproduit le « zéro survivant » déjà connu, ce qui est
+la moindre des choses. **Ce qui est neuf est la colonne des motifs.** Quinze
+combinaisons sur trente-cinq meurent sur le nombre d'aller-retours : c'est une
+propriété de la grille de paramètres, qui produit des stratégies trop lentes
+pour l'échelle journalière choisie — et ça se corrige, contrairement à une
+absence d'edge. Sans cette décomposition, les trente-cinq échecs se lisaient
+comme un seul et même verdict de marché.
+
+L'épreuve retrouve seule, depuis la ligne du registre, le refus à 70 % de
+`tsmom_btc_1d` — le verdict qui avait demandé une analyse à la main et qui a
+fait passer le dénominateur des règles figées de trois à deux.
+
+### Deux défauts trouvés en la branchant, et ce qu'ils apprennent
+
+**Le motif affiché masquait la cause.** `fatale` rendait la première épreuve
+bloquante dans l'ordre du tuple ; une épreuve *indisponible* placée avant un
+échec réel devenait le motif affiché. Le verdict annonçait REFUSÉE et la
+raison affichée disait « donnée absente », ce qui envoie chercher la donnée
+manquante au lieu de la vraie cause. Corrigé : un échec prime toujours sur une
+indisponibilité. C'est le même défaut que ceux qu'on traque ailleurs dans ce
+dépôt — un affichage qui ressemble à un résultat mais décrit autre chose.
+
+**Le critère du retrait d'un mois était trop laxiste.** Le critère sans seuil
+— « si retirer un mois rend le net non positif » — est exact mais ne mord que
+sur le cas extrême : un mois portant 95 % du net le franchit tranquillement,
+ce qui est précisément le défaut qu'on traque (le bêta du livre de portage
+passait de −0,54 à +0,08 en retirant août 2026). Il a fallu y ajouter une
+convention, et je préfère l'écrire que faire semblant qu'elle n'en est pas
+une : au-delà de la moitié du net pour un seul mois, sur trois mois ou plus,
+la candidate est refusée.
+
+## La provenance — un dénominateur par origine
+
+Reprise directe de la même conversation : *« c'est un des tags de catégorie
+d'où ils viennent, la provenance de la recette »*. Le desk ne l'avait pas.
+
+Chaque ligne du registre porte désormais une `origine` parmi `main`,
+`balayage`, `llm`, `externe`, et **la correction de Benjamini–Hochberg porte
+par origine**. Cinq cents cellules produites par un générateur et trois idées
+tapées à la main ne sont pas le même espace d'hypothèses ; les corriger
+ensemble est faux dans les deux sens — ça punit les trois idées réfléchies,
+qui portent le poids statistique de cinq cents essais qu'elles n'ont pas
+demandés, et ça absout les cinq cents, noyées dans un dénominateur où le seuil
+au rang 1 devient si laxiste qu'il ne rejette plus rien.
+
+Conséquence pratique, et c'est elle qui donne sa valeur au champ : **une
+stratégie importée de l'extérieur ne pollue pas le dénominateur des nôtres, et
+inversement.** L'échange de recettes devient possible sans casser la
+statistique de personne.
+
+Une ligne sans origine — écrite avant que le champ existe — est rattachée à
+`main` plutôt qu'ignorée. L'ignorer retirerait des hypothèses réellement
+testées du dénominateur, ce qui rendrait la correction plus laxiste : l'erreur
+exacte que le registre en ajout seul existe pour empêcher.

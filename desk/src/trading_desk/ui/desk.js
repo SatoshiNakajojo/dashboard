@@ -866,6 +866,60 @@ function rendreParamsAtelier() {
   };
 }
 
+/* Les sept épreuves : le badge d'une ligne, avec son motif en infobulle.
+
+   Trois états et non deux, parce que « l'épreuve n'a pas pu s'exécuter » n'est
+   ni une réussite ni un échec. Confondre le premier cas avec une réussite est
+   la façon exacte dont un contrôle devient inerte — et le dépôt s'est déjà
+   fait avoir une fois, par un nul par bloc dont chaque tirage recouvrait
+   l'observation. */
+function badgeEpreuve(v, resume) {
+  if (!v) return "<span class='tag'>—</span>";
+  const classe = v.etat === "RETENUE" ? "ok"
+    : (v.etat === "INCOMPLETE" ? "incomplet" : "ko");
+  const texte = v.etat === "RETENUE" ? "retenue"
+    : (v.etat === "INCOMPLETE" ? "incomplète" : "refusée");
+  return "<span class='tag " + classe + "' title='" + esc(resume || "") + "'>"
+    + texte + "</span>";
+}
+
+/* Le compte des verdicts, et surtout QUELLE épreuve tue le plus souvent.
+
+   Ce second chiffre est le plus utile des deux : si le même motif revient sur
+   la moitié du registre, il décrit le générateur de candidates et non le
+   marché. Quinze combinaisons refusées pour trop peu d'aller-retours disent
+   que la grille de paramètres produit des stratégies trop lentes pour
+   l'échelle choisie — ce qui se corrige, contrairement à une absence d'edge. */
+function rendreEpreuves(e, origines) {
+  if (!e) return "";
+  const MOTIFS = {
+    plancher: "p au plancher de l'instrument",
+    trades: "trop peu d'aller-retours",
+    refus: "refus du moteur de risque",
+    retrait: "le résultat tient à un mois",
+    denominateur: "ne survit pas au dénominateur",
+    bloc: "nul par bloc",
+    rang: "corrélation portée par des extrêmes",
+  };
+  const motifs = Object.entries(e.motifs || {})
+    .sort((a, b) => b[1] - a[1])
+    .map(([k, n]) => "<li><b>" + n + "</b> · " + esc(MOTIFS[k] || k) + "</li>")
+    .join("");
+  const parOrigine = (origines || []).length > 1
+    ? "<div class='sansobjet' style='margin-top:8px'>Dénominateur par origine : "
+      + origines.map((o) => esc(o.origine) + " (" + o.combinaisons + ")").join(" · ")
+      + "</div>"
+    : "";
+  return '<div class="chiffres" style="margin-top:10px">'
+    + chiffre("retenues", e.retenues, e.retenues ? "var(--ok)" : "var(--crit)")
+    + chiffre("incomplètes", e.incompletes, e.incompletes ? "var(--warn)" : undefined)
+    + chiffre("refusées", e.refusees)
+    + "</div>"
+    + (motifs ? "<div class='sansobjet' style='margin-top:6px'>Ce qui les tue :"
+        + "<ul style='margin:4px 0 0 16px'>" + motifs + "</ul></div>" : "")
+    + parOrigine;
+}
+
 function rendreAtelier(a) {
   a = a || {};
   if (a.catalogue) rendreFormulaireAtelier(a.catalogue);
@@ -907,13 +961,14 @@ function rendreAtelier(a) {
       : "Les " + (c.bruts || 0) + " cellule(s) à p < 0,05 sont compatibles avec le "
         + "bruit de " + (c.testees || 0) + " tests simultanés.")
     + (c.resolution ? " " + esc(c.resolution) : "")
-    + "</div>";
+    + "</div>"
+    + rendreEpreuves(a.epreuves, a.par_origine);
 
   const l = a.classement || [];
   $("atClassement").innerHTML = l.length
     ? "<table><thead><tr><th>Stratégie</th><th>Ticker</th><th>TF</th>"
       + "<th>Paramètres</th><th>Net</th><th>Trades</th><th>Hasard</th>"
-      + "<th>p</th><th>BH</th></tr></thead><tbody>"
+      + "<th>p</th><th>Épreuve</th></tr></thead><tbody>"
       + l.map((x) =>
         "<tr" + (x.survit_bh ? " class='survit'" : "") + ">"
         + "<td class='name'>" + esc(x.strategie) + "</td>"
@@ -927,7 +982,7 @@ function rendreAtelier(a) {
         + "<td>" + (x.p === null || x.p === undefined
           ? "<span class='tag ko' title='" + esc(x.raison_sans_p || "") + "'>sans p</span>"
           : num(x.p, 4)) + "</td>"
-        + "<td><span class='tag " + (x.survit_bh ? "ok'>survit" : "ko'>non") + "</span></td>"
+        + "<td>" + badgeEpreuve(x.verdict_epreuves, x.resume_epreuves) + "</td>"
         + "</tr>").join("")
       + "</tbody></table>"
     : '<div class="empty">Rien au registre.</div>';

@@ -49,6 +49,7 @@ from pathlib import Path
 from typing import Any
 
 from .backtest.strategies import BASELINES, parametres
+from .epreuves import Verdict, nets_par_mois, soumettre
 
 RACINE = Path(__file__).resolve().parents[2]
 DONNEES = RACINE / "data"
@@ -58,6 +59,23 @@ REGISTRE = DONNEES / "registre_atelier.jsonl"
 # essai ne peut pas descendre sous 0,005 et un criblage sur quelques dizaines
 # de combinaisons devient aveugle avant meme de commencer.
 TIRAGES_MIN, TIRAGES_DEFAUT, TIRAGES_MAX = 200, 2000, 20000
+
+# D'ou vient la candidate. L'idee est de Flo, qui tague la provenance de
+# chacune de ses recettes ; elle vaut plus ici que chez lui, parce que le
+# DENOMINATEUR est par origine.
+#
+# Cinq cents cellules produites par un generateur et trois idees tapees a la
+# main ne sont pas le meme espace d'hypotheses. Les corriger ensemble est faux
+# dans les deux sens : ca punit les trois idees reflechies, qui se retrouvent
+# a porter le poids statistique de cinq cents essais qu'elles n'ont pas
+# demandes, et ca absout les cinq cents, noyees dans un denominateur ou la
+# correction au rang 1 devient si laxiste qu'elle ne rejette plus rien.
+#
+# Consequence pratique : une strategie importee de l'exterieur ne pollue pas
+# le denominateur des notres, et inversement. C'est ce qui rend l'echange de
+# recettes possible sans casser la statistique de personne.
+ORIGINES = ("main", "balayage", "llm", "externe")
+ORIGINE_DEFAUT = "main"
 
 # Bornes par NOM de parametre. Elles ne sont pas cosmetiques : le formulaire
 # vient du navigateur, et le serveur n'ecoute que 127.0.0.1 — ce qui veut dire
@@ -200,7 +218,8 @@ def essayer(nom: str, actif: str, intervalle: str, *,
             params: dict[str, Any] | None = None,
             tirages: int = TIRAGES_DEFAUT,
             equite: float = 1000.0,
-            max_stop_bps: float | None = None) -> dict[str, Any]:
+            max_stop_bps: float | None = None,
+            origine: str = ORIGINE_DEFAUT) -> dict[str, Any]:
     """Une combinaison, contre son modele nul. Rend la ligne du registre.
 
     Le modele nul est le cœur : il compare la strategie a des versions
@@ -215,6 +234,8 @@ def essayer(nom: str, actif: str, intervalle: str, *,
 
     if nom not in BASELINES:
         raise ValueError(f"strategie inconnue : {nom}")
+    if origine not in ORIGINES:
+        raise ValueError(f"origine inconnue : {origine!r} (attendu {ORIGINES})")
     params = normaliser(nom, intervalle, params or {})
     tirages = max(TIRAGES_MIN, min(TIRAGES_MAX, int(tirages)))
 
@@ -231,9 +252,15 @@ def essayer(nom: str, actif: str, intervalle: str, *,
         "signature": signature(nom, actif, intervalle, params),
         "strategie": nom, "actif": actif, "intervalle": intervalle,
         "parametres": params,
+        "origine": origine,
         "net_usd": float(obs.net_pnl_usd),
         "trades": len(obs.trades),
         "rejets": obs.rejected_by_risk,
+        # La decomposition mensuelle est inscrite pour que l'epreuve du
+        # retrait d'un mois soit rejouable depuis le registre seul, sans
+        # relancer le backtest. C'est ce qui permet de juger a posteriori une
+        # ligne ecrite il y a des semaines.
+        "mois": nets_par_mois(obs.trades),
         "barres": len(bars),
         "equite": float(equite),
         "tirages": tirages,
@@ -324,3 +351,52 @@ def dernier_par_signature(essais: list[dict[str, Any]]) -> list[dict[str, Any]]:
     for e in sorted(essais, key=lambda x: int(x.get("essai_ms", 0))):
         par_cle[e["signature"]] = e
     return list(par_cle.values())
+
+
+def voisines(essais: list[dict[str, Any]], origine: str) -> list[dict[str, Any]]:
+    """Les autres combinaisons du registre essayees SOUS LA MEME ORIGINE.
+
+    Une ligne sans origine est une ligne ecrite avant que le champ existe. On
+    la rattache a `main` plutot que de l'ignorer : l'ignorer retirerait des
+    hypotheses reellement testees du denominateur, ce qui rendrait la
+    correction plus laxiste — exactement l'erreur que le registre en ajout
+    seul existe pour empecher.
+    """
+    return [e for e in dernier_par_signature(essais)
+            if e.get("origine", ORIGINE_DEFAUT) == origine]
+
+
+def juger(ligne: dict[str, Any], *, registre: Path | None = None,
+          essais: list[dict[str, Any]] | None = None,
+          classe: str = "prix_mono") -> Verdict:
+    """Le verdict des sept epreuves, avec le denominateur du registre.
+
+    `essais` permet de juger sans relire le fichier — utile quand on classe
+    tout le registre d'un coup, ou l'on paierait sinon une lecture par ligne.
+    """
+    tous = essais if essais is not None else lire(registre)
+    origine = ligne.get("origine", ORIGINE_DEFAUT)
+    return soumettre(ligne, voisines=voisines(tous, origine), classe=classe)
+
+
+def classement(registre: Path | None = None,
+               essais: list[dict[str, Any]] | None = None
+               ) -> list[dict[str, Any]]:
+    """Tout le registre, juge, la plus prometteuse en tete.
+
+    **L'ordre n'est pas le rendement.** Classer par net mettrait en tete la
+    meilleure de trente-cinq combinaisons sur du bruit, ce qui est le
+    generateur d'illusions que l'atelier existe pour ne pas etre. L'ordre est
+    d'abord l'etat du verdict, et le rendement ne departage que des candidates
+    de meme etat.
+    """
+    tous = essais if essais is not None else lire(registre)
+    rang = {"RETENUE": 0, "INCOMPLETE": 1, "REFUSEE": 2}
+    sorties = []
+    for ligne in dernier_par_signature(tous):
+        verdict = juger(ligne, essais=tous)
+        sorties.append({**ligne, "verdict_epreuves": verdict.en_dict(),
+                        "resume_epreuves": verdict.resume()})
+    sorties.sort(key=lambda x: (rang.get(x["verdict_epreuves"]["etat"], 3),
+                                -(x.get("net_usd") or 0.0)))
+    return sorties

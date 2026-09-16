@@ -471,12 +471,43 @@ def atelier(registre: Path | None = None) -> dict[str, Any]:
     crible = _criblage(lignes, "p")
     survivants = {c["signature"] for c in crible.get("survivants", [])}
 
+    # Le verdict des sept epreuves, ligne a ligne. On le calcule ICI et pas a
+    # l'affichage pour une raison simple : le denominateur d'une ligne depend
+    # des autres lignes de meme origine, donc la ligne seule ne suffit pas a
+    # se juger elle-meme. Un panneau qui recevrait les lignes nues et
+    # trancherait cote navigateur se tromperait forcement.
+    verdicts = {c["signature"]: ate.juger(c, essais=lignes) for c in lignes}
+
     classement = sorted(
-        ({**c, "survit_bh": c["signature"] in survivants} for c in lignes),
-        # Le rendement d'abord — c'est ce qu'on vient regarder — mais la
-        # colonne BH est a cote, et un survivant remonte a rang egal.
+        ({**c, "survit_bh": c["signature"] in survivants,
+          "verdict_epreuves": verdicts[c["signature"]].en_dict(),
+          "resume_epreuves": verdicts[c["signature"]].resume()}
+         for c in lignes),
+        # **Le rendement d'abord, et c'est delibere.** C'est la colonne qu'on
+        # vient regarder ; la cacher ne protege de rien, elle serait cherchee
+        # ailleurs. Ce qui protege, c'est que la ligne la plus tentante porte
+        # maintenant le motif de son refus A COTE de son net — « +9 000 $,
+        # REFUSEE : 70 % des entrees refusees » instruit davantage que la
+        # meme ligne reléguee au trentieme rang.
         key=lambda c: (-(c.get("net_usd") or 0.0),),
     )
+
+    # Le denominateur PAR ORIGINE. Cinq cents cellules generees et trois idees
+    # tapees a la main ne sont pas le meme espace d'hypotheses ; les compter
+    # ensemble punit les trois et absout les cinq cents.
+    par_origine: dict[str, dict[str, Any]] = {}
+    for c in lignes:
+        o = c.get("origine", ate.ORIGINE_DEFAUT)
+        d = par_origine.setdefault(o, {"origine": o, "combinaisons": 0,
+                                       "retenues": 0, "incompletes": 0,
+                                       "refusees": 0})
+        d["combinaisons"] += 1
+        etat = verdicts[c["signature"]].etat
+        d[{"RETENUE": "retenues", "INCOMPLETE": "incompletes",
+           "REFUSEE": "refusees"}[etat]] += 1
+    for o, d in par_origine.items():
+        d["criblage"] = _criblage(
+            [c for c in lignes if c.get("origine", ate.ORIGINE_DEFAUT) == o], "p")
 
     par_strategie: dict[str, dict[str, Any]] = {}
     for c in lignes:
@@ -506,6 +537,21 @@ def atelier(registre: Path | None = None) -> dict[str, Any]:
         "combinaisons": len(lignes),
         "repetitions": len(brut) - len(lignes),
         "criblage": crible,
+        # Ce que les sept epreuves rendent, tous essais confondus. C'est le
+        # chiffre a lire avant le classement : zero retenue sur trente-cinq
+        # combinaisons dit tout ce qu'il y a a savoir du tableau qui suit.
+        "epreuves": {
+            "retenues": sum(1 for v in verdicts.values() if v.etat == "RETENUE"),
+            "incompletes": sum(1 for v in verdicts.values()
+                               if v.etat == "INCOMPLETE"),
+            "refusees": sum(1 for v in verdicts.values() if v.etat == "REFUSEE"),
+            # Quelle epreuve tue le plus souvent. Si c'est toujours la meme,
+            # c'est une propriete du generateur de candidates, pas du marche.
+            "motifs": _compte(v.fatale.cle for v in verdicts.values()
+                              if v.fatale is not None),
+        },
+        "par_origine": sorted(par_origine.values(),
+                              key=lambda d: -d["combinaisons"]),
         "classement": classement[:200],
         "par_strategie": sorted(par_strategie.values(),
                                 key=lambda d: (-d["survivants"],

@@ -441,3 +441,95 @@ def test_l_atelier_part_sur_le_journalier_pas_sur_le_15_minutes():
     demandé, et 1d est l'échelle sur laquelle les campagnes ont été lues.
     Le premier de la liste triée serait 15m."""
     assert 'communs.includes("1d")' in _ui("desk.js")
+
+
+# ─────────────────────────────────────── la provenance, et son dénominateur
+
+def test_une_origine_inconnue_est_refusee():
+    """Le champ ne sert à rien s'il accepte n'importe quelle valeur.
+
+    Un registre où l'origine est libre laisserait s'installer `llm`, `LLM`,
+    `ia` et `gpt` comme quatre espaces d'hypothèses distincts alors que c'est
+    le même — et la correction deviendrait quatre fois trop laxiste.
+    """
+    with pytest.raises(ValueError, match="origine inconnue"):
+        atelier.essayer("ema_cross", "BTC", "1d", origine="ia_maison")
+
+
+def test_le_denominateur_est_par_origine(tmp_path: Path):
+    """La propriété entière du bloc, en un test.
+
+    Trois idées tapées à la main ne doivent pas porter le poids statistique de
+    trois cents cellules générées qu'elles n'ont pas demandées. Et les trois
+    cents ne doivent pas être absoutes par un dénominateur où la correction au
+    rang 1 devient si laxiste qu'elle ne rejette plus rien.
+    """
+    registre = tmp_path / "registre.jsonl"
+    a_la_main = {"signature": "main1", "origine": "main", "p": 0.004,
+                 "tirages": 2000, "trades": 60, "rejets": 2, "net_usd": 120.0,
+                 "mois": {"2026-01": 40.0, "2026-02": 45.0, "2026-03": 35.0}}
+    atelier.inscrire(a_la_main, registre)
+    for i in range(300):
+        atelier.inscrire({"signature": f"llm{i}", "origine": "llm",
+                          "p": 0.30, "tirages": 2000, "trades": 60,
+                          "rejets": 2, "net_usd": 5.0}, registre)
+
+    verdict = atelier.juger(a_la_main, registre=registre)
+    fond = next(e for e in verdict.epreuves if e.cle == "denominateur")
+    assert fond.etat == "reussie", (
+        "les 300 cellules générées ne doivent pas peser sur l'idée tapée à "
+        f"la main — motif rendu : {fond.motif}")
+    assert "1 signatures" in fond.motif
+
+
+def test_une_ligne_sans_origine_est_rattachee_a_main(tmp_path: Path):
+    """Les lignes écrites avant que le champ existe comptent quand même.
+
+    Les ignorer retirerait des hypothèses réellement testées du dénominateur,
+    ce qui rendrait la correction plus laxiste — l'erreur exacte que le
+    registre en ajout seul existe pour empêcher.
+    """
+    registre = tmp_path / "registre.jsonl"
+    atelier.inscrire({"signature": "vieille", "p": 0.2, "tirages": 2000}, registre)
+    atelier.inscrire({"signature": "neuve", "origine": "main", "p": 0.2,
+                      "tirages": 2000}, registre)
+    assert len(atelier.voisines(atelier.lire(registre), "main")) == 2
+
+
+def test_le_classement_ne_met_pas_le_rendement_en_tete(tmp_path: Path):
+    """Classer par net remettrait le générateur d'illusions aux commandes.
+
+    C'est la tentation permanente d'un tableau de résultats : la colonne qui
+    donne envie est le rendement, et c'est précisément celle qui ne doit pas
+    décider de l'ordre.
+    """
+    registre = tmp_path / "registre.jsonl"
+    # Riche mais refusée : 70 % de refus du moteur de risque.
+    atelier.inscrire({"signature": "riche", "origine": "main", "p": 0.004,
+                      "tirages": 2000, "trades": 84, "rejets": 197,
+                      "net_usd": 9000.0,
+                      "mois": {"2026-01": 3000.0, "2026-02": 3000.0,
+                               "2026-03": 3000.0}}, registre)
+    # Modeste mais complète.
+    atelier.inscrire({"signature": "sobre", "origine": "main", "p": 0.004,
+                      "tirages": 2000, "trades": 60, "rejets": 2,
+                      "net_usd": 120.0,
+                      "mois": {"2026-01": 40.0, "2026-02": 45.0,
+                               "2026-03": 35.0}}, registre)
+
+    ordre = atelier.classement(registre)
+    assert ordre[0]["signature"] == "sobre"
+    assert ordre[0]["verdict_epreuves"]["etat"] == "RETENUE"
+    assert ordre[1]["verdict_epreuves"]["fatale"] == "refus"
+
+
+def test_la_decomposition_mensuelle_est_inscrite_au_registre():
+    """Sans elle, l'épreuve du retrait serait indisponible sur chaque ligne,
+    donc tout le registre serait INCOMPLETE à perpétuité."""
+    ligne = atelier.essayer("turtle_breakout", "BTC", "1d", tirages=200)
+    assert ligne["origine"] == "main"
+    assert isinstance(ligne["mois"], dict) and ligne["mois"]
+    assert all(len(cle) == 7 and cle[4] == "-" for cle in ligne["mois"])
+    # La somme des mois est le net : si elle dérivait, le retrait mesurerait
+    # une part d'autre chose.
+    assert sum(ligne["mois"].values()) == pytest.approx(ligne["net_usd"], abs=1e-6)
