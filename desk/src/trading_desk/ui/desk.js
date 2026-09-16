@@ -934,6 +934,20 @@ function rendreParamsAtelier() {
    la façon exacte dont un contrôle devient inerte — et le dépôt s'est déjà
    fait avoir une fois, par un nul par bloc dont chaque tirage recouvrait
    l'observation. */
+/* La note du scorer. Deux informations en un badge : la note sur dix, et si
+   les PORTES sont franchies.
+
+   Les portes décident, la note classe. Une stratégie à 9/10 qui ne bat pas
+   l'achat-conservation n'est pas une bonne stratégie mal classée : c'est une
+   façon compliquée de faire moins bien que ne rien faire. Le badge est donc
+   rouge dans ce cas, quelle que soit la note affichée à côté. */
+function badgeNote(n) {
+  if (!n) return "<span class='tag'>—</span>";
+  const classe = n.deployable ? "ok" : "ko";
+  return "<span class='tag " + classe + "' title='" + esc(n.resume || "") + "'>"
+    + Number(n.note_sur_10).toFixed(1) + "/10</span>";
+}
+
 function badgeEpreuve(v, resume) {
   if (!v) return "<span class='tag'>—</span>";
   const classe = v.etat === "RETENUE" ? "ok"
@@ -951,7 +965,7 @@ function badgeEpreuve(v, resume) {
    marché. Quinze combinaisons refusées pour trop peu d'aller-retours disent
    que la grille de paramètres produit des stratégies trop lentes pour
    l'échelle choisie — ce qui se corrige, contrairement à une absence d'edge. */
-function rendreEpreuves(e, origines) {
+function rendreEpreuves(e, origines, sc) {
   if (!e) return "";
   const MOTIFS = {
     plancher: "p au plancher de l'instrument",
@@ -976,6 +990,16 @@ function rendreEpreuves(e, origines) {
     + chiffre("incomplètes", e.incompletes, e.incompletes ? "var(--warn)" : undefined)
     + chiffre("refusées", e.refusees)
     + "</div>"
+    + (sc && sc.notees
+        ? "<div class='sansobjet' style='margin-top:6px'>Scorer : "
+          + "<b>" + sc.deployables + "</b> déployable(s) sur " + sc.notees
+          + " notée(s)"
+          + (sc.recalees_buy_hold
+             ? " · <b>" + sc.recalees_buy_hold + "</b> recalée(s) parce "
+               + "qu'elles ne battent pas l'achat-conservation"
+             : "")
+          + "</div>"
+        : "")
     + (motifs ? "<div class='sansobjet' style='margin-top:6px'>Ce qui les tue :"
         + "<ul style='margin:4px 0 0 16px'>" + motifs + "</ul></div>" : "")
     + parOrigine;
@@ -1023,13 +1047,13 @@ function rendreAtelier(a) {
         + "bruit de " + (c.testees || 0) + " tests simultanés.")
     + (c.resolution ? " " + esc(c.resolution) : "")
     + "</div>"
-    + rendreEpreuves(a.epreuves, a.par_origine);
+    + rendreEpreuves(a.epreuves, a.par_origine, a.scorer);
 
   const l = a.classement || [];
   $("atClassement").innerHTML = l.length
     ? "<table><thead><tr><th>Stratégie</th><th>Ticker</th><th>TF</th>"
       + "<th>Paramètres</th><th>Net</th><th>Trades</th><th>Hasard</th>"
-      + "<th>p</th><th>Épreuve</th></tr></thead><tbody>"
+      + "<th>p</th><th>Épreuve</th><th>Note</th></tr></thead><tbody>"
       + l.map((x) =>
         "<tr" + (x.survit_bh ? " class='survit'" : "") + ">"
         + "<td class='name'>" + esc(x.strategie) + "</td>"
@@ -1044,6 +1068,7 @@ function rendreAtelier(a) {
           ? "<span class='tag ko' title='" + esc(x.raison_sans_p || "") + "'>sans p</span>"
           : num(x.p, 4)) + "</td>"
         + "<td>" + badgeEpreuve(x.verdict_epreuves, x.resume_epreuves) + "</td>"
+        + "<td>" + badgeNote(x.note) + "</td>"
         + "</tr>").join("")
       + "</tbody></table>"
     : '<div class="empty">Rien au registre.</div>';

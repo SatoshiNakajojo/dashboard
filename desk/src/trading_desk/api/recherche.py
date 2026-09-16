@@ -623,6 +623,19 @@ def atelier(registre: Path | None = None) -> dict[str, Any]:
         # Ce que les sept epreuves rendent, tous essais confondus. C'est le
         # chiffre a lire avant le classement : zero retenue sur trente-cinq
         # combinaisons dit tout ce qu'il y a a savoir du tableau qui suit.
+        # Ce que le SCORER rend, sur les lignes qui en portent un. Distinct
+        # des epreuves : l'epreuve dit si c'est reel, le scorer si ca vaut le
+        # coup. Une ligne peut etre retenue par l'epreuve et non deployable
+        # par le scorer — c'est meme le cas le plus frequent.
+        "scorer": {
+            "notees": sum(1 for c in lignes if c.get("note")),
+            "deployables": sum(1 for c in lignes
+                               if (c.get("note") or {}).get("deployable")),
+            "recalees_buy_hold": sum(
+                1 for c in lignes
+                for p in ((c.get("note") or {}).get("portes") or [])
+                if p.get("cle") == "buy_hold" and not p.get("passee")),
+        },
         "epreuves": {
             "retenues": sum(1 for v in verdicts.values() if v.etat == "RETENUE"),
             "incompletes": sum(1 for v in verdicts.values()

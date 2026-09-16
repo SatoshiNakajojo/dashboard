@@ -1521,3 +1521,82 @@ l'air de fonctionner. Corrigé en horaire, cinq minutes après l'heure.
 
 C'est la même leçon que partout ailleurs dans ce dépôt : **la cadence est
 celle de la règle, jamais une préférence.**
+
+## Le scorer — « est-ce que ça vaut le coup », pas « est-ce que c'est réel »
+
+Demandé par le briefing du 16 septembre 2026 : critères go **#1 annualisé
+USD** et **#2 battre l'achat-conservation**, les deux verts ; barème /10 ;
+win rate en R ; ATR comme base du stop ; score relief/plateau ; filtre
+paper/live.
+
+### La tension à résoudre, et comment
+
+Le même briefing demande un **barème agrégé sur dix** et, plus loin, de
+« durcir le scoring avocat du diable ». Or `epreuves.py` refuse délibérément
+d'agréger : une bonne moyenne peut masquer une épreuve fatale, et « 70 % des
+entrées refusées » n'est pas une mauvaise note, c'est une règle qui ne
+tournera jamais telle qu'elle a été mesurée.
+
+Les deux se composent au lieu de s'opposer :
+
+    epreuves.py   →  est-ce distinguable du hasard ?   BLOQUANT
+    portes        →  annualisé > 0 ET bat le B&H       BLOQUANT
+    note /10      →  classement de ce qui a survécu    INDICATIF
+
+**Les portes ne sont pas des composantes de la note.** Une stratégie à 9/10
+qui ne bat pas l'achat-conservation n'est pas une bonne stratégie mal
+classée : c'est une façon compliquée de faire moins bien que ne rien faire.
+
+### Quatre manières de se flatter, écartées
+
+**L'annualisé est géométrique.** Diviser le rendement de période par la durée
+surestime — à +48 % sur douze mois, la division naïve rend 4,00 % par mois
+quand le taux composé en rend 3,32. L'erreur penche du côté qui fait déployer.
+
+**L'achat-conservation paie ses frais.** Un aller-retour, comme n'importe
+quelle position. Le comparer à une stratégie qui paie les siens sur cent
+trades sans lui faire payer ses deux siens serait truqué en sa faveur.
+
+**Le R est lu sur le trade, pas déduit du budget.** `BacktestTrade` porte
+désormais `risque_usd` = taille × distance au stop à l'ouverture. Le déduire
+du budget de risque n'est exact que si aucun plafond de notionnel ne mord —
+et il mord : **risque médian mesuré 2,64 $ pour un budget de 5 $** sur
+`supertrend BTC`. L'estimation se serait trompée d'un facteur deux sur la
+moitié des trades.
+
+**Le repli se lit sur la courbe d'équité.** Dix pertes séparées par des gains
+ne font pas un repli de dix pertes.
+
+### Le relief, et ce qu'il discrimine
+
+`relief()` bouge chaque paramètre de ±10 %, un seul à la fois, et compte la
+part des voisins qui gagnent encore. Un sommet qui s'effondre dès qu'on bouge
+d'un cran est un artefact de la grille : on a trouvé la cellule où le bruit
+était favorable.
+
+Mesuré sur `supertrend` : **12 % de relief sur BTC, 100 % sur SOL.** Le
+premier est un sommet isolé, le second un vrai plateau. Et pourtant SOL échoue
+à la porte de l'achat-conservation — ce qui est précisément pourquoi le relief
+est une composante et non une porte.
+
+### Ce que le registre rend, une fois noté
+
+44 combinaisons notées · **1 déployable** · 42 recalées par la porte de
+l'achat-conservation.
+
+La seule déployable est `ema_cross SOL 4h` : +4,5 %/an, bat le B&H, repli
+4,7 %, +0,26 R, note 5,3/10. **Et l'épreuve la refuse** — son p ne survit pas
+à la correction sur les 35 signatures de même origine.
+
+C'est l'illustration la plus nette de pourquoi les deux existent séparément :
+une stratégie économiquement séduisante et statistiquement indistinguable du
+hasard. Un scorer seul l'aurait branchée.
+
+### Le chiffre qui recale le plus
+
+**Battre l'achat-conservation.** Sur 44 cellules, 42 échouent à cette porte —
+y compris des stratégies rentables. `supertrend SOL` rend +2,9 %/an quand
+tenir SOL en rapporte +33,9 %. `turtle_breakout BTC` rend +5,4 %/an contre
++37,2 % pour BTC.
+
+C'était le critère #2 du briefing, et c'est de loin le plus sévère des deux.

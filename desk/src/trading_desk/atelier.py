@@ -50,6 +50,7 @@ from typing import Any
 
 from .backtest.strategies import BASELINES, parametres
 from .epreuves import Verdict, nets_par_mois, soumettre
+from .scorer import noter
 
 RACINE = Path(__file__).resolve().parents[2]
 DONNEES = RACINE / "data"
@@ -261,6 +262,11 @@ def essayer(nom: str, actif: str, intervalle: str, *,
         # relancer le backtest. C'est ce qui permet de juger a posteriori une
         # ligne ecrite il y a des semaines.
         "mois": nets_par_mois(obs.trades),
+        # La note du scorer, inscrite AVEC l'essai. Elle ne decide de rien —
+        # l'epreuve reste la porte — mais la recalculer plus tard exigerait de
+        # relire les barres, et une ligne de registre doit pouvoir se lire
+        # seule.
+        "note": noter(obs, bars, equite=equite).en_dict(),
         "barres": len(bars),
         "equite": float(equite),
         "tirages": tirages,

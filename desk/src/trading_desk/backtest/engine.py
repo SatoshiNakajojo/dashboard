@@ -50,6 +50,24 @@ class BacktestTrade(Frozen):
     fees_usd: Decimal
     funding_usd: Decimal
     reason: str
+    # Ce que ce trade RISQUAIT a l'ouverture : taille x distance au stop.
+    # Sans lui, le « win rate en R » serait une estimation — on le deduirait
+    # du budget de risque, ce qui n'est exact que si aucun plafond de
+    # notionnel n'a mordu. Il mord parfois, et c'est justement sur ces
+    # trades-la que l'estimation se tromperait.
+    risque_usd: Decimal = Decimal("0")
+
+    @property
+    def r_multiple(self) -> Decimal | None:
+        """Le gain en multiples du risque pris. None si le risque est nul.
+
+        None et non zero : un trade sans risque mesurable n'a pas un R de
+        zero, il n'a pas de R. Le compter comme nul tirerait l'esperance vers
+        le bas sans raison.
+        """
+        if self.risque_usd <= 0:
+            return None
+        return self.net_pnl_usd / self.risque_usd
 
     @property
     def net_pnl_usd(self) -> Decimal:
@@ -403,6 +421,7 @@ def _close(
     new_equity = equity + gross - exit_fee - pos.funding_paid
 
     trade = BacktestTrade(
+        risque_usd=abs(pos.entry_price - pos.stop_price) * pos.size,
         asset=pos.asset,
         side=pos.side,
         entry_ts_ms=pos.entry_ts_ms,
