@@ -1102,6 +1102,65 @@ function rendreAtelier(a) {
         + x.survivants + "</td></tr>").join("")
       + "</tbody></table>"
     : "";
+
+  /* LES COUPES — une règle à travers un panier d'actifs.
+
+     C'est la forme de recherche que le regroupement en familles rend payante :
+     passer SEUL est le cas le plus dur qui existe, alors que cinq actifs qui
+     tiennent se portent l'un l'autre.
+
+     Deux colonnes encadrent « survivantes » et elles ne sont pas décoratives.
+     « Hasard » dit combien de cellules sous alpha le pur hasard donnerait :
+     six sur cent quarante n'est pas une trouvaille, c'est moins que les sept
+     attendues. « Marchés » dit combien de marchés INDÉPENDANTS font les
+     actifs survivants : BTC, ETH et SOL en font 1,5, donc « tient sur trois
+     actifs » se lit « tient sur un marché et demi ». Sans ces deux colonnes,
+     le nombre de survivantes se lit comme une découverte. */
+  const cps = a.coupes || [];
+  const elCoupes = $("atCoupes");
+  if (elCoupes) {
+    elCoupes.innerHTML = cps.length
+      ? "<table><thead><tr><th>Règle</th><th>Échelle</th><th>Actifs</th>"
+        + "<th>Sous alpha</th><th>Hasard</th><th>Survivantes BH</th>"
+        + "<th>Retenues</th><th>Marchés</th></tr></thead><tbody>"
+        + cps.map((c) =>
+          "<tr><td class='name'>" + esc(c.strategie) + "</td>"
+          + "<td>" + esc(c.intervalle) + "</td>"
+          + "<td>" + c.familles + "</td>"
+          + "<td>" + c.sous_alpha
+          + ((c.maigres || []).length
+              ? " <span class='tag incomplet' title='moins de 30 aller-retours : "
+                + esc((c.maigres || []).join(" "))
+                + "'>dont " + c.maigres.length + " maigre(s)</span>" : "")
+          + "</td>"
+          + "<td class='sansobjet'>" + num(c.attendu_au_hasard, 1) + "</td>"
+          /* Survivantes en gris, JAMAIS en vert. Un balayage transversal du
+             17 septembre 2026 a rendu quinze actifs survivant ensemble, tous
+             les quinze refusés par l'épreuve : des cellules à trois trades
+             ont un nul dégénéré, donc des p artificiellement bas, et le
+             relâchement du seuil au rang les fait se sauver mutuellement. La
+             couleur va à la colonne qui compte : celle qui passe la porte.
+             `transversal.py` nomme la règle et porte la mesure. */
+          + "<td class='sansobjet'>" + (c.survivantes || []).length + "</td>"
+          + "<td" + ((c.retenues || []).length ? " style='color:var(--ok)'" : "") + ">"
+          + (c.retenues || []).length
+          + ((c.retenues || []).length
+              ? " <span class='dim'>" + esc(c.retenues.join(" ")) + "</span>" : "")
+          + "</td>"
+          + "<td" + (c.marches != null && c.marches < 2 ? " style='color:var(--warn)'" : "") + ">"
+          + (c.marches == null
+              ? "<span class='sansobjet' title='" + esc(c.motif_marches || "") + "'>—</span>"
+              : num(c.marches, 1))
+          + "</td></tr>").join("")
+        + "</tbody></table>"
+      /* Le nom de la stratégie vient du CATALOGUE, jamais d'un littéral :
+         ajouter une règle au code doit la faire apparaître sans toucher à
+         cette page, et un exemple écrit en dur vieillit en silence. */
+      : "<div class='empty'>Aucune coupe d'au moins trois actifs. "
+        + "<code>python scripts/balayage.py --strategie "
+        + esc(Object.keys((a.catalogue || {}).strategies || {})[0] || "&lt;règle&gt;")
+        + " --intervalle 1d</code></div>";
+  }
 }
 
 /* --- lancement d'un essai ---

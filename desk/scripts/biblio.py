@@ -23,7 +23,7 @@ from pathlib import Path
 RACINE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(RACINE / "src"))
 
-from trading_desk import atelier, biblio  # noqa: E402
+from trading_desk import atelier, biblio, transversal  # noqa: E402
 
 
 def peupler(auteur: str) -> int:
@@ -50,25 +50,31 @@ def lister() -> int:
         print("\n  Bibliothèque vide. `--peupler` d'abord.\n")
         return 1
 
-    # Combien d'actifs distincts portent la MEME strategie+parametres.
-    par_recette: dict[str, set[str]] = {}
-    for t in tickets:
-        cle = f"{t.strategie}:{json.dumps(t.parametres, sort_keys=True)}"
-        par_recette.setdefault(cle, set()).add(t.actif)
+    # Un seul jugement par ligne : la tenue d'une recette a besoin des verdicts
+    # de TOUTES ses cellules, pas seulement de celle qu'on regarde.
+    lignes = list(par_sig.values())
+    verdicts = {str(x.get("signature")): atelier.juger(x, essais=essais).etat
+                for x in lignes}
+    tenues: dict[str, object] = {}
 
     cartes = []
     for t in tickets:
-        e = next((x for x in par_sig.values()
+        e = next((x for x in lignes
                   if x.get("strategie") == t.strategie
                   and x.get("actif") == t.actif
                   and x.get("intervalle") == t.intervalle
                   and x.get("parametres") == t.parametres), None)
         if e is None:
             continue
-        v = atelier.juger(e, essais=essais)
-        cle = f"{t.strategie}:{json.dumps(t.parametres, sort_keys=True)}"
+        cle = (f"{t.strategie}:{t.intervalle}:"
+               f"{json.dumps(t.parametres, sort_keys=True)}")
+        if cle not in tenues:
+            tenues[cle] = transversal.tenue(
+                lignes, strategie=t.strategie, parametres=t.parametres,
+                intervalle=t.intervalle, verdicts=verdicts)
         cartes.append(biblio.carte(
-            t, e, v.etat, actifs_independants=len(par_recette.get(cle, {t.actif}))))
+            t, e, verdicts.get(str(e.get("signature")), "INCOMPLETE"),
+            tenue=tenues[cle]))
 
     ordre = {r: i for i, r in enumerate(reversed(biblio.RARETES))}
     cartes.sort(key=lambda c: (ordre.get(c["rarete"], 9),

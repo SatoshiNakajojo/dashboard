@@ -168,8 +168,14 @@ def ticket_depuis_essai(essai: dict[str, Any], *, auteur: str = "",
 
 # ──────────────────────────────────────────────────────────── la rareté
 
+# Le seuil de marchés indépendants qui vaut un point. Deux, et non deux
+# ACTIFS : vingt-huit perps crypto ne font pas vingt-huit marchés, et BTC,
+# ETH et SOL en font 1,5. Le point est donc rare en crypto — c'est le but.
+MARCHES_MIN = 2.0
+
+
 def rarete(*, retenue_par_l_epreuve: bool, relief: float | None,
-           actifs_independants: int, deployable: bool) -> tuple[str, str]:
+           deployable: bool, tenue: Any = None) -> tuple[str, str]:
     """Le rang, et la phrase qui l'explique.
 
     **Dérivée, jamais tirée.** Une rareté au hasard serait une décoration qui
@@ -178,6 +184,19 @@ def rarete(*, retenue_par_l_epreuve: bool, relief: float | None,
 
     Rend aussi le motif, parce qu'un rang sans motif se lit comme un verdict
     alors que c'est un résumé.
+
+    `tenue` est un `transversal.Tenue` — ce que la recette fait à travers les
+    marchés. Le paramètre s'appelait `actifs_independants` et recevait le
+    nombre d'actifs sur lesquels la recette avait été ESSAYÉE : une recette
+    lancée sur BTC, ETH et SOL et refusée sur les trois affichait « tient sur
+    3 actifs » et montait d'un rang. Quinze cartes sur quarante-quatre
+    portaient cette phrase, dont des REFUSÉES. Le nom a changé en même temps
+    que le calcul pour que l'ancienne lecture ne puisse pas revenir par
+    inadvertance.
+
+    Le point se gagne maintenant sur les marchés INDÉPENDANTS, pas sur les
+    actifs : `transversal.py` dit pourquoi les deux ne sont pas le même
+    nombre.
     """
     points = 0
     motifs = []
@@ -190,9 +209,10 @@ def rarete(*, retenue_par_l_epreuve: bool, relief: float | None,
     if relief is not None and relief >= 0.75:
         points += 1
         motifs.append(f"plateau ({relief:.0%} des voisins gagnent)")
-    if actifs_independants >= 2:
+    marches = getattr(tenue, "effectifs", None)
+    if marches is not None and marches >= MARCHES_MIN:
         points += 1
-        motifs.append(f"tient sur {actifs_independants} actifs")
+        motifs.append(tenue.phrase)
 
     rang = RARETES[min(points, len(RARETES) - 1)]
     return rang, " · ".join(motifs) or "rien de mesuré ne la distingue"
@@ -214,7 +234,7 @@ COLONNES = (
 
 
 def carte(ticket: Ticket, essai: dict[str, Any], verdict_etat: str, *,
-          actifs_independants: int = 1, xp_live: int = 0,
+          tenue: Any = None, xp_live: int = 0,
           live_pnl_usd: float | None = None,
           regimes: str = "") -> dict[str, Any]:
     """Le ticket plus ses mesures, dans les colonnes de l'écran.
@@ -228,8 +248,8 @@ def carte(ticket: Ticket, essai: dict[str, Any], verdict_etat: str, *,
     rang, motif = rarete(
         retenue_par_l_epreuve=(verdict_etat == "RETENUE"),
         relief=note.get("relief"),
-        actifs_independants=actifs_independants,
         deployable=bool(note.get("deployable")),
+        tenue=tenue,
     )
     return {
         "cle": ticket.cle, "empreinte": ticket.empreinte(),
@@ -240,6 +260,13 @@ def carte(ticket: Ticket, essai: dict[str, Any], verdict_etat: str, *,
         "deployable": bool(note.get("deployable")),
         "epreuve": verdict_etat,
         "rarete": rang, "rarete_motif": motif,
+        # Les trois nombres de la tenue, separes : « essayes » dit l'effort,
+        # « retenus » dit le resultat, « marches » dit ce que le resultat
+        # vaut. N'en afficher qu'un ramenerait la phrase qui mentait.
+        "actifs_essayes": len(getattr(tenue, "essayes", ()) or ()),
+        "actifs_retenus": len(getattr(tenue, "retenus", ()) or ()),
+        "marches_independants": getattr(tenue, "effectifs", None),
+        "tenue": getattr(tenue, "phrase", ""),
         "xp_live": xp_live,
         "annualise_pct": note.get("annualise_pct"),
         "annualise_usd": note.get("annualise_usd"),

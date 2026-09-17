@@ -91,6 +91,46 @@ Deux conséquences à connaître avant de lire un verdict :
   variantes (≈ `V/(D+1)`) : prendre la meilleure de dix ne peut pas être dix
   fois plus surprenant que la meilleure d'une seule.
 
+### Chercher des marchés plutôt que des réglages
+
+Passer **seul** est le cas le plus dur qui existe : au rang 1, le seuil vaut
+`alpha / m`. Une règle correcte qui tient sur cinq actifs produit cinq p bas
+qui se portent l'un l'autre, et le cinquième a droit à cinq fois le seuil du
+premier. C'est la forme de recherche que le regroupement en familles rend
+payante — et c'est l'inverse d'un balayage de paramètres.
+
+```bash
+python scripts/balayage.py --strategie tsmom --intervalle 1d
+```
+
+Le panier n'est pas choisi : c'est tout ce qui a des barres sur l'échelle (28
+actifs en 1 j). Le choisir serait une sélection, donc une hypothèse de plus, et
+invisible dans le dénominateur. L'origine est `balayage`, jamais `main`.
+
+**Trois nombres à lire, et jamais le premier seul.**
+
+| Colonne | Ce qu'elle dit |
+|---|---|
+| Survivantes BH | ce qui passe la correction — **pas une trouvaille** |
+| Retenues | ce qui passe les sept épreuves — la seule colonne verte |
+| Marchés | combien de marchés *indépendants* font les actifs retenus |
+
+Un balayage du 17 septembre 2026 l'a montré sans ambiguïté : sur 25 actifs,
+**15 survivaient ensemble à Benjamini-Hochberg et l'épreuve les refusait tous
+les 15** — onze pour moins de trente aller-retours, deux au plancher de p.
+
+La pathologie est propre à la recherche transversale et il faut la connaître
+avant de lancer un balayage : une cellule à trois trades a un nul dégénéré,
+donc un p artificiellement bas, et le relâchement du seuil au rang fait que
+ces cellules **se sauvent mutuellement**. Le criblage lit un amas de bruit
+comme un signal. La coupe affiche donc « dont N maigres » à côté de « sous
+alpha ».
+
+**Et trois actifs crypto ne font pas trois marchés.** BTC, ETH et SOL en font
+1,5 sur 2182 barres journalières ; dix perps en font 2,4. Le nombre effectif
+vient du rapport de participation des valeurs propres de la matrice de
+corrélation, `M_eff = M² / Σᵢⱼ Cᵢⱼ²` — voir `transversal.py`.
+
 ## 5. Le verdict, en deux couches
 
 ```bash

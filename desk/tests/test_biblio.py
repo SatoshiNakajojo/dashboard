@@ -18,7 +18,7 @@ import json
 
 import pytest
 
-from trading_desk import atelier, biblio
+from trading_desk import atelier, biblio, transversal
 
 
 def _ticket(actif="BTC", strategie="ema_cross", origine="main", **kw):
@@ -105,8 +105,10 @@ def test_la_rarete_est_DERIVEE_pas_tiree():
     """Une rareté au hasard donnerait le frisson d'une trouvaille à une carte
     qui n'a rien prouvé. Celle-ci compte ce à quoi la recette a survécu, et
     elle est reproductible."""
-    kw = dict(retenue_par_l_epreuve=True, relief=0.9, actifs_independants=3,
-              deployable=True)
+    kw = dict(retenue_par_l_epreuve=True, relief=0.9, deployable=True,
+              tenue=transversal.Tenue(essayes=("BTC", "ETH", "SOL"),
+                                      retenus=("BTC", "ETH", "SOL"),
+                                      effectifs=2.4))
     assert biblio.rarete(**kw) == biblio.rarete(**kw), "déterministe"
     rang, motif = biblio.rarete(**kw)
     assert rang == "légendaire"
@@ -115,7 +117,7 @@ def test_la_rarete_est_DERIVEE_pas_tiree():
 
 def test_une_carte_sans_rien_de_mesure_reste_commune():
     rang, motif = biblio.rarete(retenue_par_l_epreuve=False, relief=None,
-                                actifs_independants=1, deployable=False)
+                                deployable=False)
     assert rang == "commune"
     assert "rien de mesuré" in motif
 
@@ -124,9 +126,9 @@ def test_l_epreuve_pese_plus_que_les_portes():
     """Survivre au hasard est plus rare que d'être économiquement viable, et
     le rang doit le refléter — sinon la rareté récompenserait le rendement."""
     portes_seules = biblio.rarete(retenue_par_l_epreuve=False, relief=None,
-                                  actifs_independants=1, deployable=True)[0]
+                                  deployable=True)[0]
     epreuve_seule = biblio.rarete(retenue_par_l_epreuve=True, relief=None,
-                                  actifs_independants=1, deployable=False)[0]
+                                  deployable=False)[0]
     ordre = list(biblio.RARETES)
     assert ordre.index(epreuve_seule) > ordre.index(portes_seules)
 
@@ -179,3 +181,42 @@ def test_un_aller_retour_d_echange_conserve_la_recette(tmp_path):
     assert recu.parametres == t.parametres
     assert recu.empreinte() == t.empreinte()
     assert recu.origine == "externe", "et l'origine a bien été forcée"
+
+
+def test_une_recette_refusee_partout_ne_gagne_aucun_point_de_marche():
+    """LE test de la correction du 17 septembre 2026.
+
+    Le rang lisait `len(actifs sur lesquels la recette a ete ESSAYEE)`. Une
+    recette lancee sur BTC, ETH et SOL et refusee sur les trois affichait
+    « tient sur 3 actifs » et montait d'un rang — quinze cartes sur
+    quarante-quatre portaient cette phrase, dont des REFUSEES. La mesure
+    decrivait l'effort et s'affichait comme un resultat.
+    """
+    refusee_partout = transversal.Tenue(
+        essayes=("BTC", "ETH", "SOL"), retenus=(), effectifs=None)
+    rang, motif = biblio.rarete(retenue_par_l_epreuve=False, relief=None,
+                                deployable=False, tenue=refusee_partout)
+    assert rang == "commune"
+    assert "tient sur" not in motif
+
+
+def test_trois_actifs_correles_ne_font_pas_trois_marches():
+    """Essayer sur trois actifs crypto et reussir sur les trois ne suffit pas.
+
+    Le point se gagne sur les marches INDEPENDANTS : BTC, ETH et SOL en font
+    1,5 sur l'historique reel, donc sous le seuil.
+    """
+    correles = transversal.Tenue(essayes=("BTC", "ETH", "SOL"),
+                                 retenus=("BTC", "ETH", "SOL"),
+                                 effectifs=1.52)
+    _, motif = biblio.rarete(retenue_par_l_epreuve=True, relief=None,
+                             deployable=False, tenue=correles)
+    assert "tient sur" not in motif
+
+    disjoints = transversal.Tenue(essayes=("BTC", "ETH", "SOL"),
+                                  retenus=("BTC", "ETH", "SOL"),
+                                  effectifs=2.4)
+    _, motif = biblio.rarete(retenue_par_l_epreuve=True, relief=None,
+                             deployable=False, tenue=disjoints)
+    assert "tient sur 3 actif(s) sur 3 essayé(s)" in motif
+    assert "2.4 marché(s) indépendant(s)" in motif

@@ -576,16 +576,33 @@ def bibliotheque(texte: str = "", origine: str = "", rarete_min: str = "",
     from .. import atelier as ate
     from .. import biblio as bib
     from .. import testeur as ts
+    from .. import transversal as tr
 
     essais = ate.lire()
     lignes = ate.dernier_par_signature(essais)
     tickets = bib.lire()
     tests = ts.par_strategie()
 
-    par_recette: dict[str, set[str]] = {}
-    for t in tickets:
-        cle = f"{t.strategie}:{_json.dumps(t.parametres, sort_keys=True)}"
-        par_recette.setdefault(cle, set()).add(t.actif)
+    # UN SEUL jugement par ligne, calcule ici et reutilise. La tenue d'une
+    # recette a besoin des verdicts de TOUTES ses cellules, pas seulement de
+    # celle qu'on regarde ; et deux jugements calcules a deux endroits
+    # divergeraient, ce qui se lirait comme une carte incoherente.
+    verdicts = {str(x.get("signature")): ate.juger(x, essais=essais).etat
+                for x in lignes}
+
+    # La tenue est par (strategie, echelle, parametres) : c'est la recette, a
+    # travers les ACTIFS. L'echelle reste dans la cle parce qu'une regle en
+    # 1 j et la meme en 4 h sont deux affirmations, pas une.
+    tenues: dict[str, Any] = {}
+
+    def _tenue(t) -> Any:
+        cle = (f"{t.strategie}:{t.intervalle}:"
+               f"{_json.dumps(t.parametres, sort_keys=True)}")
+        if cle not in tenues:
+            tenues[cle] = tr.tenue(lignes, strategie=t.strategie,
+                                   parametres=t.parametres,
+                                   intervalle=t.intervalle, verdicts=verdicts)
+        return tenues[cle]
 
     cartes = []
     for t in tickets:
@@ -596,10 +613,8 @@ def bibliotheque(texte: str = "", origine: str = "", rarete_min: str = "",
                   and x.get("parametres") == t.parametres), None)
         if e is None:
             continue
-        v = ate.juger(e, essais=essais)
-        cle = f"{t.strategie}:{_json.dumps(t.parametres, sort_keys=True)}"
-        c = bib.carte(t, e, v.etat,
-                      actifs_independants=len(par_recette.get(cle, {t.actif})))
+        c = bib.carte(t, e, verdicts.get(str(e.get("signature")), "INCOMPLETE"),
+                      tenue=_tenue(t))
         # Ce qui a ete teste sur cette strategie, toutes campagnes confondues.
         c["tests"] = tests.get(t.strategie, {})
         c["auteur"] = t.auteur
@@ -642,6 +657,40 @@ def _mediane(valeurs: list[float]) -> float | None:
 
 
 # ----------------------------------------------------------------- atelier
+
+# Une coupe n'est lisible qu'a partir de quelques actifs : sur deux cellules,
+# « une survit » ne se distingue pas du hasard, et l'afficher inviterait a lire
+# un resultat la ou il n'y a pas d'echantillon.
+COUPE_MIN = 3
+
+
+def _coupes(lignes: list[dict[str, Any]],
+            verdicts: dict[str, str]) -> list[dict[str, Any]]:
+    """Chaque (strategie, echelle) du registre, vue a travers ses actifs.
+
+    Les verdicts sont passes, et ce n'est pas un detail d'optimisation : une
+    survivante n'est PAS une candidate. Sur le balayage tsmom du 17 septembre
+    2026, quinze actifs survivaient ensemble a la correction et l'epreuve les
+    refusait tous les quinze.
+    """
+    from .. import transversal as tr
+
+    paires = {(str(c.get("strategie")), str(c.get("intervalle")))
+              for c in lignes
+              if c.get("strategie") and c.get("intervalle")
+              and isinstance(c.get("p"), (int, float))}
+    out = []
+    for nom, iv in sorted(paires):
+        c = tr.coupe(lignes, strategie=nom, intervalle=iv, verdicts=verdicts)
+        if c.familles >= COUPE_MIN:
+            out.append(c.en_dict())
+    # Le plus de RETENUES en tete, puis de survivantes, puis de marches :
+    # c'est l'ordre de ce qui merite d'etre creuse. Trier par survivantes
+    # mettrait en tete un amas de cellules a trois trades.
+    return sorted(out, key=lambda d: (-len(d["retenues"]),
+                                      -len(d["survivantes"]),
+                                      -(d["marches"] or 0.0)))
+
 
 def atelier(registre: Path | None = None) -> dict[str, Any]:
     """Le registre des essais, crible et classe.
@@ -760,6 +809,14 @@ def atelier(registre: Path | None = None) -> dict[str, Any]:
         "combinaisons": len(lignes),
         "familles": len(familles.construire(lignes)),
         "repetitions": len(brut) - len(lignes),
+        # Les coupes : une regle a travers un panier d'actifs. C'est la forme
+        # de recherche que le regroupement en familles rend payante — passer
+        # SEUL est le cas le plus dur qui existe, et cinq actifs qui tiennent
+        # se portent l'un l'autre. Le nombre de marches independants est a
+        # cote parce que sans lui « cinq actifs » se lit comme « cinq
+        # marches », ce qui est faux en crypto.
+        "coupes": _coupes(lignes, {str(k): v.etat
+                                   for k, v in verdicts.items()}),
         "criblage": crible,
         # Ce que les sept epreuves rendent, tous essais confondus. C'est le
         # chiffre a lire avant le classement : zero retenue sur trente-cinq
