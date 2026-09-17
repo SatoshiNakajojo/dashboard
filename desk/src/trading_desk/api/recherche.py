@@ -659,9 +659,18 @@ def atelier(registre: Path | None = None) -> dict[str, Any]:
 
     **Un essai repete n'est pas une hypothese de plus.** Le moteur est
     deterministe ; on ne garde donc qu'une ligne par signature, la plus
-    recente, et le denominateur compte les signatures.
+    recente.
+
+    **Et le denominateur compte les FAMILLES, pas les signatures.** Dix
+    reglages du meme parent sur les memes barres posent une question, pas
+    dix ; les compter separement gonflait m sans jamais facturer la recherche
+    qu'ils constituent. L'ecran affiche les deux nombres, parce qu'afficher
+    les seules familles cacherait combien de reglages ont ete essayes, et les
+    seules signatures ferait croire a un criblage plus severe qu'il ne l'est.
+    `familles.py` porte le raisonnement.
     """
     from .. import atelier as ate
+    from .. import familles
 
     chemin = registre or ate.REGISTRE
     rel = str(chemin.relative_to(RACINE)) if chemin.is_relative_to(RACINE) else str(chemin)
@@ -709,6 +718,7 @@ def atelier(registre: Path | None = None) -> dict[str, Any]:
     for c in lignes:
         o = c.get("origine", ate.ORIGINE_DEFAUT)
         d = par_origine.setdefault(o, {"origine": o, "combinaisons": 0,
+                                       "familles": 0,
                                        "retenues": 0, "incompletes": 0,
                                        "refusees": 0})
         d["combinaisons"] += 1
@@ -716,8 +726,11 @@ def atelier(registre: Path | None = None) -> dict[str, Any]:
         d[{"RETENUE": "retenues", "INCOMPLETE": "incompletes",
            "REFUSEE": "refusees"}[etat]] += 1
     for o, d in par_origine.items():
-        d["criblage"] = _criblage(
-            [c for c in lignes if c.get("origine", ate.ORIGINE_DEFAUT) == o], "p")
+        siennes = [c for c in lignes if c.get("origine", ate.ORIGINE_DEFAUT) == o]
+        d["criblage"] = _criblage(siennes, "p")
+        # Le vrai denominateur de cette origine : c'est ce nombre-la qui fixe
+        # le seuil au rang 1, pas le nombre de combinaisons juste au-dessus.
+        d["familles"] = len(familles.construire(siennes))
 
     par_strategie: dict[str, dict[str, Any]] = {}
     for c in lignes:
@@ -745,6 +758,7 @@ def atelier(registre: Path | None = None) -> dict[str, Any]:
         # second seul cacherait qu'on a relance dix fois la meme cellule.
         "essais": len(brut),
         "combinaisons": len(lignes),
+        "familles": len(familles.construire(lignes)),
         "repetitions": len(brut) - len(lignes),
         "criblage": crible,
         # Ce que les sept epreuves rendent, tous essais confondus. C'est le

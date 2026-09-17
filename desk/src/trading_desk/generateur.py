@@ -45,6 +45,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Sequence
 
+from . import familles
 from .biblio import Ticket
 
 RACINE = Path(__file__).resolve().parents[2]
@@ -379,20 +380,41 @@ def bilan(chemin: Path | None = None) -> dict[str, Any]:
     """Ce que le generateur a produit EN TOUT, par source.
 
     Le chiffre a lire en premier est `produits`, pas `retenus`.
+
+    **Et le second est `familles`.** Produire quatre-vingt-cinq candidates ne
+    pose pas quatre-vingt-cinq questions : les derivees a plus ou moins 25 %
+    d'un meme parent, sur les memes barres, sont des reglages d'une seule
+    hypothese. C'est le nombre de familles qui entrera au denominateur de
+    Benjamini-Hochberg, donc le seul qui dise ce que la generation a
+    reellement coute en severite. L'afficher a cote de `produits` evite la
+    lecture qui gonfle — « on a genere quatre-vingt-cinq strategies » — et
+    celle qui minimise — « ce ne sont que des variantes » : les deux chiffres
+    ensemble disent l'ampleur de la recherche ET son prix.
     """
-    par_source: dict[str, dict[str, int]] = {}
+    par_source: dict[str, dict[str, Any]] = {}
+    cles: dict[str, set[str]] = {}
+    toutes: set[str] = set()
     for l in lots(chemin):
-        d = par_source.setdefault(str(l.get("source")),
+        source = str(l.get("source"))
+        d = par_source.setdefault(source,
                                   {"lots": 0, "produits": 0, "retenus": 0,
-                                   "ecartes": 0})
+                                   "ecartes": 0, "familles": 0})
         d["lots"] += 1
         d["produits"] += int(l.get("produits") or 0)
         d["retenus"] += int(l.get("retenus") or 0)
         d["ecartes"] += int(l.get("ecartes") or 0)
+        for t in l.get("tickets") or []:
+            if isinstance(t, dict):
+                k = familles.cle(t)
+                cles.setdefault(source, set()).add(k)
+                toutes.add(k)
+    for source, d in par_source.items():
+        d["familles"] = len(cles.get(source, ()))
     total = {
         "lots": sum(d["lots"] for d in par_source.values()),
         "produits": sum(d["produits"] for d in par_source.values()),
         "retenus": sum(d["retenus"] for d in par_source.values()),
         "ecartes": sum(d["ecartes"] for d in par_source.values()),
+        "familles": len(toutes),
     }
     return {"par_source": par_source, "total": total}

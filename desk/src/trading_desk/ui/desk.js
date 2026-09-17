@@ -984,9 +984,18 @@ function rendreEpreuves(e, origines, sc) {
     .sort((a, b) => b[1] - a[1])
     .map(([k, n]) => "<li><b>" + n + "</b> · " + esc(MOTIFS[k] || k) + "</li>")
     .join("");
+  /* Le dénominateur affiché est celui qui DÉCIDE : le nombre de familles,
+     pas celui de combinaisons. Dix réglages du même parent sur les mêmes
+     barres posent une question, pas dix — et c'est alpha/familles qui fixe
+     le seuil au rang 1. Les combinaisons restent entre parenthèses : les
+     cacher ferait disparaître l'ampleur de la recherche de réglages. */
   const parOrigine = (origines || []).length > 1
     ? "<div class='sansobjet' style='margin-top:8px'>Dénominateur par origine : "
-      + origines.map((o) => esc(o.origine) + " (" + o.combinaisons + ")").join(" · ")
+      + origines.map((o) => esc(o.origine) + " " + (o.familles != null ? o.familles : o.combinaisons)
+          + " famille(s)"
+          + (o.familles != null && o.familles !== o.combinaisons
+              ? " sur " + o.combinaisons + " combinaisons" : ""))
+        .join(" · ")
       + "</div>"
     : "";
   return '<div class="chiffres" style="margin-top:10px">'
@@ -1025,6 +1034,8 @@ function rendreAtelier(a) {
   }
 
   $("atVerdictBadge").textContent = a.combinaisons + " combinaison(s)"
+    + (a.familles != null && a.familles !== a.combinaisons
+        ? " · " + a.familles + " famille(s)" : "")
     + (a.repetitions ? " · " + a.repetitions + " relance(s)" : "");
   $("atVerdictBadge").style.color = c.nb_survivants ? "var(--ok)" : "var(--muted)";
 
@@ -1315,7 +1326,8 @@ function rendrePoussee(p) {
 function rendreGenerateur(g) {
   if (!g) { $("generateur").innerHTML = ""; return; }
   const b = g.bilan && g.bilan.total ? g.bilan.total : {};
-  $("genBadge").textContent = (b.produits || 0) + " produite(s)";
+  $("genBadge").textContent = (b.produits || 0) + " produite(s)"
+    + (b.familles != null ? " · " + b.familles + " famille(s)" : "");
   $("genBadge").style.color = b.produits ? "var(--ok)" : "var(--muted)";
 
   const sources = (g.sources || []).map((s) =>
@@ -1338,6 +1350,13 @@ function rendreGenerateur(g) {
     + chiffre("candidates PRODUITES", b.produits || 0, "var(--ok)")
     + chiffre("retenues", b.retenus || 0)
     + chiffre("écartées", b.ecartes || 0)
+    /* Le chiffre qui dit ce que la génération coûte VRAIMENT en sévérité :
+       c'est lui qui entre au dénominateur, pas « produites ». Quatre-vingt-cinq
+       candidates pour soixante-huit familles veut dire que les dérivations
+       ont surtout creusé deux cellules. */
+    + chiffre("familles", b.familles != null ? b.familles : "—",
+              b.familles != null && b.familles < (b.retenus || 0)
+                ? "var(--warn)" : undefined)
     + chiffre("lots", b.lots || 0)
     + "</div>"
     + "<h3 style='font:700 10px var(--f-mono);letter-spacing:.12em;"

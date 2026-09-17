@@ -58,6 +58,39 @@ print(l['verdict'], l['p'])
 pour une grille, `llm` pour une génération, `externe` pour un ticket importé.
 **Se tromper d'origine fausse la correction dans un sens ou dans l'autre.**
 
+### Plusieurs réglages sur une même cellule : les lancer d'un bloc
+
+Chercher le meilleur réglage parmi dix, c'est une recherche, et elle se paie.
+L'unité que compte Benjamini-Hochberg est la **famille** — une origine, une
+stratégie, un actif, une échelle — pas la signature ; dix dérivées à ±25 % du
+même parent sur les mêmes barres posent une question, pas dix.
+
+```bash
+python -c "
+from trading_desk import atelier
+lignes = atelier.essayer_famille('ema_cross', 'SOL', '4h',
+    variantes=[{'fast': f, 'slow': s} for f in (15, 20, 25) for s in (40, 50, 60)],
+    tirages=2000)
+for l in lignes:
+    atelier.inscrire(l)
+print(lignes[0]['famille_p'], lignes[0]['famille_methode'])
+"
+```
+
+Lancer les mêmes variantes **une par une** donne des lignes valides, mais un
+p de famille plus sévère : sans tirages alignés, on ne peut que majorer par la
+borne de Šidák. Mesuré sur dix réglages d'`ema_cross` SOL 4 h à 1 000 tirages :
+0,017 en exact contre 0,030 par la borne. Le prix d'une recherche dépend de la
+façon dont on a cherché.
+
+Deux conséquences à connaître avant de lire un verdict :
+
+- une variante qui n'est pas la meilleure de sa famille échoue au dénominateur
+  **même si sa famille survit** — le p de famille certifie la meilleure des V ;
+- sous la borne, le plancher de p de la famille monte avec le nombre de
+  variantes (≈ `V/(D+1)`) : prendre la meilleure de dix ne peut pas être dix
+  fois plus surprenant que la meilleure d'une seule.
+
 ## 5. Le verdict, en deux couches
 
 ```bash

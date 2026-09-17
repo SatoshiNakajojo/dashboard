@@ -479,7 +479,9 @@ def test_le_denominateur_est_par_origine(tmp_path: Path):
     assert fond.etat == "reussie", (
         "les 300 cellules générées ne doivent pas peser sur l'idée tapée à "
         f"la main — motif rendu : {fond.motif}")
-    assert "1 signatures" in fond.motif
+    # Une famille pour l'idee a la main ; les trois cents cellules llm sont
+    # dans une AUTRE origine, donc hors de ce denominateur-ci.
+    assert "1 famille(s)" in fond.motif
 
 
 def test_une_ligne_sans_origine_est_rattachee_a_main(tmp_path: Path):

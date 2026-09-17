@@ -232,3 +232,45 @@ def test_une_strategie_inverse_se_teste_sans_entree_au_catalogue():
     c = ts.tester("inverse:supertrend", actifs=["BTC"], intervalles=["1h"])
     assert len(c.cellules) == 1 and not c.cellules[0].erreur
     assert c.cellules[0].trades > 0
+
+
+def test_le_bilan_du_generateur_compte_les_familles(tmp_path):
+    """Produire n'est pas questionner.
+
+    Cinq derivees de parametres sur une meme cellule sont cinq candidates et
+    UNE hypothese. Le bilan doit montrer les deux nombres : « produites »
+    seul ferait croire a cinq trouvailles, « familles » seul cacherait
+    l'ampleur de la recherche de reglages.
+    """
+    from trading_desk import generateur as gen
+    from trading_desk.biblio import Ticket
+
+    chemin = tmp_path / "lots.jsonl"
+    lot = gen.Lot(source="derivation", parent="ema_cross", derivation="parametres")
+    for i in range(5):
+        lot.tickets.append(Ticket(
+            cle=f"d{i}", strategie="ema_cross", actif="SOL", intervalle="4h",
+            parametres={"fast": 18 + i, "slow": 50}, origine="main"))
+    lot.produits = 5
+    gen.inscrire_lot(lot, chemin)
+
+    b = gen.bilan(chemin)
+    assert b["total"]["produits"] == 5
+    assert b["total"]["familles"] == 1, (
+        "cinq reglages d'une meme cellule sont une hypothese, pas cinq")
+
+
+def test_le_bilan_separe_les_familles_de_cellules_distinctes(tmp_path):
+    from trading_desk import generateur as gen
+    from trading_desk.biblio import Ticket
+
+    chemin = tmp_path / "lots.jsonl"
+    lot = gen.Lot(source="catalogue", parent=None, derivation=None)
+    for actif in ("BTC", "ETH", "SOL"):
+        lot.tickets.append(Ticket(
+            cle=f"c{actif}", strategie="ema_cross", actif=actif,
+            intervalle="4h", parametres={"fast": 20}, origine="main"))
+    lot.produits = 3
+    gen.inscrire_lot(lot, chemin)
+
+    assert gen.bilan(chemin)["total"]["familles"] == 3

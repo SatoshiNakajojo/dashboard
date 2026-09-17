@@ -183,6 +183,14 @@ class NullResult(Frozen):
     p_value: float              # P(hasard >= observe), unilateral
     mean_trades_random: float
     observed_trades: int
+    # Le net de CHAQUE tirage, dans l'ordre des graines. Sans lui, deux
+    # variantes d'une meme cellule ne peuvent pas etre comparees tirage par
+    # tirage, et le p exact de « la meilleure des V » n'est pas calculable —
+    # il ne reste que la borne de Šidák, qui refuse plus souvent qu'il ne
+    # faut. Le champ ne va PAS au registre : `atelier.essayer` compose sa
+    # ligne champ par champ, et deux mille flottants par cellule dans un
+    # fichier en ajout seul ne se relisent jamais.
+    nuls_usd: tuple[float, ...] = ()
 
     @property
     def verdict(self) -> str:
@@ -286,6 +294,7 @@ def randomization_test(
         p_value=p,
         mean_trades_random=round(sum(counts) / draws, 1),
         observed_trades=n,
+        nuls_usd=tuple(pnls),
     )
 
 

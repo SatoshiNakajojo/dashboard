@@ -46,8 +46,9 @@ import json
 import time
 from decimal import Decimal
 from pathlib import Path
-from typing import Any
+from typing import Any, Sequence
 
+from . import familles
 from .backtest.strategies import BASELINES, parametres
 from .epreuves import Verdict, nets_par_mois, soumettre
 from .scorer import noter
@@ -215,12 +216,13 @@ def signature(nom: str, actif: str, intervalle: str,
 
 # -------------------------------------------------------------------- essai
 
-def essayer(nom: str, actif: str, intervalle: str, *,
-            params: dict[str, Any] | None = None,
-            tirages: int = TIRAGES_DEFAUT,
-            equite: float = 1000.0,
-            max_stop_bps: float | None = None,
-            origine: str = ORIGINE_DEFAUT) -> dict[str, Any]:
+def _essayer(nom: str, actif: str, intervalle: str, *,
+             params: dict[str, Any] | None = None,
+             tirages: int = TIRAGES_DEFAUT,
+             equite: float = 1000.0,
+             max_stop_bps: float | None = None,
+             origine: str = ORIGINE_DEFAUT
+             ) -> tuple[dict[str, Any], Any]:
     """Une combinaison, contre son modele nul. Rend la ligne du registre.
 
     Le modele nul est le cœur : il compare la strategie a des versions
@@ -281,6 +283,7 @@ def essayer(nom: str, actif: str, intervalle: str, *,
     except Exception:
         ligne["version"] = None
 
+    nul = None
     if obs.trades and tirages > 0:
         nul = randomization_test(bars, BASELINES[nom](**params), obs,
                                  draws=tirages, limits=limites,
@@ -300,7 +303,66 @@ def essayer(nom: str, actif: str, intervalle: str, *,
         # hypothese testee, et gonflerait le denominateur avec du vide.
         ligne["raison_sans_p"] = ("aucun trade : rien a comparer au hasard"
                                   if not obs.trades else "tirages nuls")
-    return ligne
+    return ligne, nul
+
+
+def essayer(nom: str, actif: str, intervalle: str, **kw: Any) -> dict[str, Any]:
+    """Une combinaison, contre son modele nul. Rend la ligne du registre."""
+    return _essayer(nom, actif, intervalle, **kw)[0]
+
+
+def essayer_famille(nom: str, actif: str, intervalle: str, *,
+                    variantes: Sequence[dict[str, Any]],
+                    tirages: int = TIRAGES_DEFAUT,
+                    equite: float = 1000.0,
+                    max_stop_bps: float | None = None,
+                    origine: str = ORIGINE_DEFAUT) -> list[dict[str, Any]]:
+    """Plusieurs reglages d'une meme cellule, lances d'un bloc.
+
+    C'est la seule facon d'obtenir le p EXACT de « la meilleure des V ».
+    Chaque variante est rejouee contre le meme jeu de graines ; on prend par
+    tirage le meilleur net des V, et on regarde ou tombe le meilleur net
+    observe dans ce nuage de maxima. La recherche de reglages est alors payee
+    a son prix reel, au lieu d'etre majoree par la borne de Šidák.
+
+    Lancer les memes variantes une par une donne des lignes valides mais un p
+    de famille plus severe. L'ecart n'est pas un bug : le prix d'une recherche
+    depend de la facon dont on a cherche, et recoller apres coup des essais
+    separes ne permet pas de savoir a quel point ils se ressemblaient.
+
+    Les variantes sans trade ne comptent pas. Elles n'ont pas de p, donc pas
+    d'hypothese : les inclure gonflerait `famille_variantes` avec du vide et
+    ferait payer a la famille une recherche qui n'a rien cherche.
+    """
+    if not variantes:
+        raise ValueError("famille vide : aucune variante a essayer")
+
+    lignes: list[dict[str, Any]] = []
+    nuls: list[tuple[dict[str, Any], Any]] = []
+    for params in variantes:
+        ligne, nul = _essayer(nom, actif, intervalle, params=dict(params),
+                              tirages=tirages, equite=equite,
+                              max_stop_bps=max_stop_bps, origine=origine)
+        lignes.append(ligne)
+        if nul is not None and nul.nuls_usd:
+            nuls.append((ligne, nul))
+
+    if not nuls:
+        return lignes
+
+    p = familles.p_maximum([n.nuls_usd for _, n in nuls],
+                           [float(l["net_usd"]) for l, _ in nuls])
+    cle = familles.cle(nuls[0][0])
+    meilleure = min(nuls, key=lambda x: float(x[0]["p"]))[0]["signature"]
+    for ligne, _ in nuls:
+        ligne.update({
+            "famille": cle,
+            "famille_p": p,
+            "famille_methode": familles.MAXIMUM,
+            "famille_variantes": len(nuls),
+            "famille_representante": ligne["signature"] == meilleure,
+        })
+    return lignes
 
 
 # ----------------------------------------------------------------- registre

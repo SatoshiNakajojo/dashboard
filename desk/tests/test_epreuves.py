@@ -157,14 +157,16 @@ def test_le_denominateur_porte_sur_tout_le_registre():
              for i in range(99)]
     v = soumettre(ligne(p=0.004), voisines=foule)
     assert par_cle(v, "denominateur").etat == ECHOUEE
-    assert "100 signatures" in par_cle(v, "denominateur").motif
+    # Cent lignes sans cellule identifiable font cent familles, pas une :
+    # les fondre absoudrait, et c'est le sens d'erreur interdit.
+    assert "100 famille(s)" in par_cle(v, "denominateur").motif
 
 
 def test_un_essai_relance_ne_compte_pas_deux_fois():
     """Le moteur est déterministe : la même signature est une hypothèse."""
     meme = [ligne(p=0.004) for _ in range(40)]
     v = soumettre(ligne(p=0.004), voisines=meme)
-    assert "1 signatures" in par_cle(v, "denominateur").motif
+    assert "1 famille(s)" in par_cle(v, "denominateur").motif
 
 
 def test_un_criblage_aveugle_est_indisponible_pas_reussi():

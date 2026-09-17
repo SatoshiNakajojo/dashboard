@@ -60,6 +60,7 @@ import math
 from dataclasses import dataclass
 from typing import Any, Sequence
 
+from . import familles
 from .sentinelle.regles_figees import REFUS_MAXIMUM
 from .sentinelle.validation import benjamini_hochberg
 
@@ -276,11 +277,25 @@ def _denominateur(ligne: dict[str, Any], voisines: Sequence[dict[str, Any]],
     """Survivre a la correction portant sur TOUT le registre de meme origine.
 
     Corriger une cellule sur elle-meme sous-estime le nombre d'hypotheses
-    testees. La correction porte donc sur l'ensemble des signatures distinctes
+    testees. La correction porte donc sur l'ensemble des combinaisons
     essayees SOUS LA MEME ORIGINE — cinq cents cellules generees par un modele
     et trois idees tapees a la main ne sont pas le meme espace d'hypotheses,
     et les melanger est faux dans les deux sens : ca punit les trois et ca
     absout les cinq cents.
+
+    **L'unite comptee est la FAMILLE, pas la signature.** Dix derivees a plus
+    ou moins 25 % du meme parent, sur les memes barres, ne sont pas dix
+    hypotheses : ce sont dix facons de poser la meme question, et les compter
+    separement gonflait m — donc durcissait le seuil de tout le monde — sans
+    jamais payer la recherche qu'elles constituent. `familles.py` porte le
+    raisonnement complet ; ici il suffit de savoir que la famille entre une
+    fois, avec un p qui a deja paye sa recherche interne.
+
+    Corollaire qui mord : une variante qui n'est pas la meilleure de sa
+    famille echoue meme si sa famille survit. Le p de la famille certifie
+    « la meilleure des V », pas chacune des V, et deployer la troisieme au
+    nom du score de la premiere serait exactement le tour de passe-passe que
+    la correction existe pour empecher.
     """
     titre = "Le dénominateur"
     p = ligne.get("p")
@@ -297,37 +312,59 @@ def _denominateur(ligne: dict[str, Any], voisines: Sequence[dict[str, Any]],
     par_signature[str(ligne.get("signature"))] = ligne
 
     lignes = list(par_signature.values())
-    ps = [float(v["p"]) for v in lignes]
-    m = len(ps)
-    garde = benjamini_hochberg(ps, alpha)
-    survivante = next(
-        (k for v, k in zip(lignes, garde, strict=True)
-         if str(v.get("signature")) == str(ligne.get("signature"))), False)
+    tribus = familles.construire(lignes)
+    m = len(tribus)
+    sienne = next((f for f in tribus if f.contient(ligne)), None)
+    if sienne is None:          # ne peut arriver que si `ligne` n'a pas de p
+        return Epreuve("denominateur", titre, INDISPONIBLE,
+                       "la candidate n'entre dans aucune famille")
 
-    # Le criblage peut-il voir ? Avec un plancher f = 1/(D+1), il faut
-    # ceil(f*m/alpha) cellules AU PLANCHER pour qu'une seule survive.
-    tirages = ligne.get("tirages")
-    if tirages:
-        f = 1.0 / (int(tirages) + 1)
+    garde = benjamini_hochberg([f.p for f in tribus], alpha)
+    survivante = next((k for f, k in zip(tribus, garde, strict=True)
+                       if f.cle == sienne.cle), False)
+    decompte = (f"{m} famille(s) de même origine"
+                + (f" ({len(lignes)} combinaisons)" if len(lignes) != m else ""))
+
+    # Le criblage peut-il voir ? Le plancher est celui de la FAMILLE : sous la
+    # borne de Šidák il monte avec le nombre de variantes, parce que prendre
+    # la meilleure de dix ne peut pas etre dix fois plus surprenant que la
+    # meilleure d'une seule. Il faut ceil(f*m/alpha) familles AU PLANCHER pour
+    # qu'une seule survive.
+    f = sienne.plancher
+    if f is not None:
         exigees = math.ceil(f * m / alpha)
         if f > alpha:
             return Epreuve("denominateur", titre, INDISPONIBLE,
-                           f"criblage aveugle : le plancher {f:.5f} dépasse "
-                           f"alpha = {alpha}. Aucune cellule ne peut survivre, "
-                           f"quelle que soit la donnée")
+                           f"criblage aveugle : le plancher de la famille "
+                           f"{f:.5f} ({sienne.taille} variante(s), méthode "
+                           f"« {sienne.methode} ») dépasse alpha = {alpha}. "
+                           f"Aucune famille ne peut survivre, quelle que soit "
+                           f"la donnée")
         if exigees > 1 and not survivante:
             return Epreuve("denominateur", titre, ECHOUEE,
-                           f"ne survit pas à la correction sur {m} signatures "
-                           f"(seuil au rang 1 : {alpha/m:.5f}), et à "
-                           f"{int(tirages)} tirages il faudrait {exigees} "
-                           f"cellules au plancher pour qu'une seule passe")
+                           f"la famille ne survit pas à la correction sur "
+                           f"{decompte} (seuil au rang 1 : {alpha/m:.5f} ; "
+                           f"p de famille {sienne.p:.5f}, méthode "
+                           f"« {sienne.methode} » sur {sienne.taille} "
+                           f"variante(s)), et il faudrait {exigees} familles "
+                           f"au plancher pour qu'une seule passe")
     if not survivante:
         return Epreuve("denominateur", titre, ECHOUEE,
-                       f"ne survit pas à Benjamini-Hochberg sur les {m} "
-                       f"signatures de même origine (seuil au rang 1 : "
-                       f"{alpha/m:.5f})")
+                       f"la famille ne survit pas à Benjamini-Hochberg sur "
+                       f"{decompte} (seuil au rang 1 : {alpha/m:.5f} ; p de "
+                       f"famille {sienne.p:.5f}, méthode « {sienne.methode} » "
+                       f"sur {sienne.taille} variante(s))")
+    if not sienne.est_representante(ligne):
+        meilleure = sienne.representante
+        return Epreuve("denominateur", titre, ECHOUEE,
+                       f"sa famille survit, mais une autre variante y fait "
+                       f"mieux (p {float(meilleure['p']):.5f} contre "
+                       f"{float(p):.5f}) : le p de famille certifie la "
+                       f"meilleure des {sienne.taille}, pas celle-ci")
     return Epreuve("denominateur", titre, REUSSIE,
-                   f"survit à la correction sur {m} signatures de même origine")
+                   f"survit à la correction sur {decompte} (p de famille "
+                   f"{sienne.p:.5f}, méthode « {sienne.methode} » sur "
+                   f"{sienne.taille} variante(s))")
 
 
 def _nul_par_bloc(ligne: dict[str, Any], classe: str) -> Epreuve:
