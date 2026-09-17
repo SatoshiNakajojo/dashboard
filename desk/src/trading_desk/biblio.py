@@ -317,3 +317,81 @@ def importer(tickets: list[Ticket], chemin: Path | None = None,
         connus.add(t.empreinte())
         importes += 1
     return importes, doublons
+
+
+# ────────────────────────────────────────────────────────── la recherche
+
+def chercher(cartes: list[dict[str, Any]], *, texte: str = "",
+             origine: str = "", rarete_min: str = "",
+             deployable: bool | None = None, epreuve: str = "",
+             note_min: float | None = None, actif: str = "",
+             intervalle: str = "", trie_par: str = "rarete"
+             ) -> list[dict[str, Any]]:
+    """Filtre et trie les cartes. Tous les criteres se cumulent.
+
+    **Le tri par defaut n'est PAS le rendement.** C'est le piege permanent
+    d'un tableau de strategies : la colonne qui donne envie est celle qui ne
+    doit pas decider. Le defaut est la rarete, qui incorpore le verdict de
+    l'epreuve ; le rendement reste triable, explicitement.
+
+    Le texte libre cherche dans la strategie, l'actif, l'auteur et les
+    indicateurs — pas dans les parametres. Chercher « 20 » ramenerait toutes
+    les recettes qui ont un vingt quelque part, ce qui n'est pas une
+    recherche, c'est du bruit.
+    """
+    t = texte.strip().lower()
+    rang = {r: i for i, r in enumerate(RARETES)}
+    seuil_rarete = rang.get(rarete_min, -1) if rarete_min else -1
+
+    out = []
+    for c in cartes:
+        if t:
+            champs = " ".join(str(c.get(k) or "") for k in
+                              ("strategie", "actif", "auteur", "cle",
+                               "intervalle", "origine")).lower()
+            champs += " " + " ".join(str(x) for x in (c.get("indicateurs") or []))
+            if t not in champs.lower():
+                continue
+        if origine and c.get("origine") != origine:
+            continue
+        if actif and c.get("actif") != actif:
+            continue
+        if intervalle and c.get("intervalle") != intervalle:
+            continue
+        if epreuve and c.get("epreuve") != epreuve:
+            continue
+        if deployable is not None and bool(c.get("deployable")) is not deployable:
+            continue
+        if seuil_rarete >= 0 and rang.get(str(c.get("rarete")), -1) < seuil_rarete:
+            continue
+        if note_min is not None and (c.get("note") or 0) < note_min:
+            continue
+        out.append(c)
+
+    if trie_par == "note":
+        out.sort(key=lambda c: -(c.get("note") or 0))
+    elif trie_par == "rendement":
+        out.sort(key=lambda c: -(c.get("annualise_pct") or -999))
+    elif trie_par == "vs_buy_hold":
+        out.sort(key=lambda c: -(c.get("vs_buy_hold") or -999))
+    else:
+        out.sort(key=lambda c: (-rang.get(str(c.get("rarete")), -1),
+                                -(c.get("note") or 0)))
+    return out
+
+
+def facettes(cartes: list[dict[str, Any]]) -> dict[str, list]:
+    """Les valeurs presentes, pour peupler les filtres de l'ecran.
+
+    Lues depuis les cartes plutot que codees en dur : une liste figee
+    proposerait des filtres qui ne ramenent rien, et en cacherait qui
+    existent.
+    """
+    def uniques(cle):
+        return sorted({str(c.get(cle)) for c in cartes if c.get(cle)})
+    return {
+        "origines": uniques("origine"), "actifs": uniques("actif"),
+        "intervalles": uniques("intervalle"), "epreuves": uniques("epreuve"),
+        "raretes": [r for r in RARETES
+                    if any(c.get("rarete") == r for c in cartes)],
+    }

@@ -1698,3 +1698,106 @@ manuel garde une hypothèse propre pour un test hors échantillon.
 
 Mesurée en 1 h sur 208 jours, elle perd sur BTC et SOL. C'est une information
 sur ces paramètres‑là, pas sur l'idée.
+
+## La fabrique — générateur, testeur, bibliothèque
+
+Trois modules qui se suivent, et qui partagent un danger : **ils rendent
+facile de produire beaucoup de candidates et de n'en regarder que les
+meilleures.** Chacun est donc écrit autour de son compteur plutôt qu'autour de
+sa fonction.
+
+### Le générateur compte ce qu'il produit, pas ce qu'il garde
+
+Un générateur de stratégies est, par construction, une machine à fabriquer des
+faux positifs. Le chiffre qui rend le reste interprétable n'est pas le nombre
+de trouvailles, c'est le **nombre total produit** : cinq cents variantes dont
+on garde trois, ce n'est pas trois trouvailles, c'est cinq cents tirages.
+
+`inscrire_lot()` enregistre le lot entier — retenues, écartées, et le motif de
+chaque écart. L'écran met « candidates PRODUITES » en premier.
+
+Quatre dérivations, **une dimension à la fois** : paramètres, actif,
+intervalle, inversion. Les combiner produirait beaucoup de candidates et
+aucune réponse, parce que chacune répond à une question différente.
+
+L'**inversion** mérite d'être signalée. Elle retourne le sens de toutes les
+entrées, et elle échoue presque toujours — ce qui est précisément ce qu'elle
+apprend. Mesuré : `supertrend BTC 1h` perd 62,01 $ ; son inverse perd
+**30,88 $**, pas +62. Les deux paient les mêmes frais sur le même nombre
+d'allers-retours. Seule une règle qui perd beaucoup plus que ses frais a une
+inverse qui peut gagner, et ça se vérifie plutôt que ça ne se suppose.
+
+### Les sources, et ce qu'elles peuvent vraiment
+
+Le briefing demande de s'appuyer sur « internet, GitHub, réseaux sociaux ».
+Mesure du 17 septembre 2026 depuis cette machine :
+
+    api.github.com               200    mais borné au dépôt de la session
+    raw.githubusercontent.com    301    idem
+    www.tradingview.com          000    injoignable
+    reddit.com                   000    injoignable
+
+Le mandataire de sortie borne GitHub aux dépôts configurés : une recherche de
+code renvoie *« sessions are bound to their configured repositories »*.
+
+**Une source indisponible le DIT, elle ne rend pas une liste vide.** Une liste
+vide se lirait comme « aucune stratégie trouvée sur GitHub », ce qui est un
+résultat ; l'indisponibilité est une absence de mesure.
+
+Et une distinction de plus, ajoutée en regardant l'écran : « non sondée » n'est
+pas « indisponible ». Le panneau servi ne sonde pas — un tableau de bord qui
+ouvrirait des connexions à chaque rafraîchissement dépendrait du réseau pour
+s'afficher, exactement quand le réseau est le problème. Il affiche donc un
+troisième état.
+
+Le chemin réaliste pour les stratégies externes est `fichier` : on télécharge
+ailleurs, on dépose un JSONL, on importe avec `origine="externe"` forcée.
+Moins séduisant qu'un robot qui ratisse GitHub, et c'est ce qui marche.
+
+### Le testeur a quatre étages, et il en refuse deux
+
+    backtest          rejouée sur l'historique          tourne
+    hors_echantillon  borné après une déclaration       tourne
+    paper             le desk tourne, exécution simulée REFUSÉ
+    reel              argent réel                       REFUSÉ
+
+**Le refus du réel n'est pas de la timidité.** Passer en réel n'est pas un
+mode de test, c'est une décision d'exploitation : elle passe par la
+configuration du desk, qui exige quatre conditions vérifiées au démarrage —
+testnet désactivé, portefeuille agent, aucun droit de retrait, signataire
+distinct du compte maître. Un testeur qui saurait ouvrir cette porte la
+contournerait, et on aurait deux chemins vers l'argent réel dont un écrit pour
+expérimenter. Le jour où l'un des deux oublie une vérification, ce sera
+celui-là. Un test vérifie que le module n'importe rien qui passe des ordres.
+
+Le **paper** est refusé pour une autre raison : il mesure la plomberie, la
+latence et le glissement réels, qu'un backtest ne peut pas produire. Le
+simuler ici rendrait un chiffre qui aurait l'air d'un résultat de paper
+trading sans en être un.
+
+Une campagne est un **balayage** : croiser trois actifs et quatre échelles
+dépense douze hypothèses. Le dénominateur est inscrit avec la campagne plutôt
+que laissé à la mémoire de l'appelant.
+
+### Un piège d'échelle corrigé au passage
+
+Les règles de l'agent externe comptent leurs time-stops en **heures** — « 72h »,
+« 48h ». Soixante-douze barres valent 72 heures en 1 h, mais 72 **jours** en
+journalier et 36 jours en 12 h. Sans conversion, comparer une même règle sur
+deux échelles compare deux règles différentes, et le verdict croisé ne veut
+rien dire.
+
+C'est exactement le piège déjà documenté pour `turtle` et `tsmom`, déplacé
+d'une famille à l'autre. Corrigé, et `BARRES_PAR_JOUR` couvre désormais le 8 h
+et le 12 h.
+
+### La bibliothèque, et son tri par défaut
+
+La recherche filtre sur le texte libre, l'origine, la rareté, l'épreuve,
+l'actif, l'échelle et la note. **Le tri par défaut est la rareté, pas le
+rendement** : la colonne qui donne envie est celle qui ne doit pas décider de
+l'ordre. Le rendement reste triable, explicitement.
+
+Chaque carte porte désormais ce qui a été testé sur elle — nombre de
+campagnes, de cellules, d'étages — pour que la bibliothèque soit un historique
+et pas seulement un catalogue.

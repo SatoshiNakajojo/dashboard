@@ -351,6 +351,7 @@ const SECTEURS = [
   ["navigation",   "Navigation"],
   ["soufflerie",   "Soufflerie"],
   ["atelier",      "Atelier"],
+  ["fabrique",     "Fabrique"],
   ["consommation", "Consommation"],
   ["vols",         "Vols"],
   ["systemes",     "Systèmes"],
@@ -436,6 +437,9 @@ function rendreRecherche(d) {
   rendreVols(d.vols);
   rendreGlissement(d.glissement);
   rendrePoussee((d.vols || {}).poussee);
+  rendreGenerateur(d.generateur);
+  rendreTesteur(d.testeur);
+  rendreBiblio(d.bibliotheque);
   preparerSelecteurs(d.strategies);
 }
 
@@ -1296,6 +1300,180 @@ function rendrePoussee(p) {
                 ? "jamais à ce rythme"
                 : Math.round(p.jours_avant_le_prochain_tour).toLocaleString("fr") + " jours")
     + "</div>" + reperes;
+}
+
+/* ---------- FABRIQUE : générateur, testeur, bibliothèque ---------- */
+
+/* Le générateur est, par construction, une machine à fabriquer des faux
+   positifs. L'écran met donc « produites » en premier et « retenues » après :
+   un générateur qui sort cinq cents variantes et en garde trois n'a pas
+   trouvé trois stratégies, il a tiré cinq cents fois.
+
+   Les sources indisponibles portent leur MOTIF. Une source qui rendrait une
+   liste vide se lirait comme « rien trouvé sur GitHub », ce qui est un
+   résultat ; l'indisponibilité est une absence de mesure. */
+function rendreGenerateur(g) {
+  if (!g) { $("generateur").innerHTML = ""; return; }
+  const b = g.bilan && g.bilan.total ? g.bilan.total : {};
+  $("genBadge").textContent = (b.produits || 0) + " produite(s)";
+  $("genBadge").style.color = b.produits ? "var(--ok)" : "var(--muted)";
+
+  const sources = (g.sources || []).map((s) =>
+    "<tr><td class='name'>" + esc(s.cle) + "</td><td>" + esc(s.quoi) + "</td>"
+    + "<td><span class='tag " + (s.sondee === false ? "incomplet'>non sondée"
+        : (s.disponible ? "ok'>disponible" : "ko'>indisponible"))
+    + "</span></td><td class='sansobjet'>" + esc(s.motif || "") + "</td></tr>").join("");
+
+  const lots = (g.lots || []).slice(0, 12).map((l) =>
+    "<tr><td class='name'>" + esc(l.source)
+    + (l.derivation ? " <span class='dim'>· " + esc(l.derivation) + "</span>" : "")
+    + "</td><td style='color:var(--ok)'>" + l.produits + "</td>"
+    + "<td>" + l.retenus + "</td><td class='sansobjet'>" + l.ecartes + "</td>"
+    + "<td class='sansobjet'>"
+    + esc(Object.entries(l.motifs_ecart || {}).map(([k, n]) => n + " " + k).join(" · "))
+    + "</td></tr>").join("");
+
+  $("generateur").innerHTML =
+    '<div class="chiffres">'
+    + chiffre("candidates PRODUITES", b.produits || 0, "var(--ok)")
+    + chiffre("retenues", b.retenus || 0)
+    + chiffre("écartées", b.ecartes || 0)
+    + chiffre("lots", b.lots || 0)
+    + "</div>"
+    + "<h3 style='font:700 10px var(--f-mono);letter-spacing:.12em;"
+    + "text-transform:uppercase;color:var(--muted);margin:14px 0 6px'>Sources</h3>"
+    + "<table><thead><tr><th>Source</th><th>Ce que c'est</th><th>État</th>"
+    + "<th>Motif</th></tr></thead><tbody>" + sources + "</tbody></table>"
+    + (lots
+      ? "<h3 style='font:700 10px var(--f-mono);letter-spacing:.12em;"
+        + "text-transform:uppercase;color:var(--muted);margin:14px 0 6px'>"
+        + "Derniers lots</h3>"
+        + "<table><thead><tr><th>Source</th><th>Produites</th><th>Retenues</th>"
+        + "<th>Écartées</th><th>Motifs</th></tr></thead><tbody>"
+        + lots + "</tbody></table>"
+      : "<div class='empty'>Aucun lot. <code>python scripts/generateur.py "
+        + "--catalogue</code></div>");
+}
+
+/* Le testeur affiche ses quatre étages ET lesquels tournent. Un écran qui les
+   listerait sans le dire laisserait croire que « argent réel » est à un clic
+   — alors que le testeur le refuse, délibérément : un second chemin vers
+   l'argent réel est un chemin de trop. */
+function rendreTesteur(t) {
+  if (!t) { $("testeur").innerHTML = ""; return; }
+  $("testBadge").textContent = t.campagnes + " campagne(s)";
+  $("testBadge").style.color = t.campagnes ? "var(--ok)" : "var(--muted)";
+
+  const etages = (t.etages || []).map((e) =>
+    "<tr><td class='name'>" + esc(e.cle) + "</td><td>" + esc(e.quoi) + "</td>"
+    + "<td><span class='tag " + (e.tourne ? "ok'>tourne" : "ko'>ne tourne pas")
+    + "</span></td><td class='sansobjet'>" + esc(e.reserve) + "</td></tr>").join("");
+
+  const strats = (t.par_strategie || []).map((s) =>
+    "<tr><td class='name'>" + esc(s.strategie) + "</td>"
+    + "<td>" + s.campagnes + "</td><td>" + s.cellules + "</td>"
+    + "<td style='color:var(--warn)'>" + s.denominateur + "</td>"
+    + "<td style='color:" + (s.deployables ? "var(--ok)" : "var(--crit)") + "'>"
+    + s.deployables + "</td>"
+    + "<td class='sansobjet'>"
+    + esc(Object.entries(s.etages || {}).map(([k, n]) => k + "×" + n).join(" · "))
+    + "</td></tr>").join("");
+
+  $("testeur").innerHTML =
+    "<table><thead><tr><th>Étage</th><th>Ce que c'est</th><th>État</th>"
+    + "<th>Réserve</th></tr></thead><tbody>" + etages + "</tbody></table>"
+    + '<div class="chiffres" style="margin-top:12px">'
+    + chiffre("hypothèses dépensées", t.denominateur_total || 0, "var(--warn)")
+    + chiffre("campagnes", t.campagnes || 0)
+    + "</div>"
+    + (strats
+      ? "<table style='margin-top:10px'><thead><tr><th>Stratégie</th>"
+        + "<th>Campagnes</th><th>Cellules</th><th>Dénominateur</th>"
+        + "<th>Déployables</th><th>Étages</th></tr></thead><tbody>"
+        + strats + "</tbody></table>"
+      : "<div class='empty'>Aucune campagne. <code>python scripts/testeur.py "
+        + "--strategie supertrend</code></div>");
+}
+
+/* La bibliothèque, avec sa recherche. Le tri par défaut est la RARETÉ et non
+   le rendement : la colonne qui donne envie est celle qui ne doit pas décider
+   de l'ordre. */
+let bibEtat = { texte: "", origine: "", rarete_min: "", trie_par: "rarete" };
+
+function rendreBiblio(b) {
+  if (!b) { $("biblio").innerHTML = ""; return; }
+  $("bibBadge").textContent = b.filtrees + " / " + b.total;
+  $("bibBadge").style.color = "var(--muted)";
+
+  const f = b.facettes || {};
+  const opt = (liste, sel, vide) =>
+    "<option value=''>" + vide + "</option>"
+    + (liste || []).map((x) => "<option value='" + esc(x) + "'"
+        + (x === sel ? " selected" : "") + ">" + esc(x) + "</option>").join("");
+
+  $("biblioFiltres").innerHTML =
+    "<div style='display:flex;gap:8px;flex-wrap:wrap;align-items:center'>"
+    + "<input id='bibTexte' type='search' placeholder='stratégie, actif, auteur…' "
+    + "value='" + esc(bibEtat.texte) + "' "
+    + "style='flex:1;min-width:180px;padding:5px 8px;font:12px var(--f-mono)'>"
+    + "<select id='bibOrigine'>" + opt(f.origines, bibEtat.origine, "toutes origines") + "</select>"
+    + "<select id='bibRarete'>" + opt(b.raretes, bibEtat.rarete_min, "toute rareté") + "</select>"
+    + "<select id='bibTri'>"
+    + "<option value='rarete'" + (bibEtat.trie_par === "rarete" ? " selected" : "") + ">tri : rareté</option>"
+    + "<option value='note'" + (bibEtat.trie_par === "note" ? " selected" : "") + ">tri : note</option>"
+    + "<option value='vs_buy_hold'" + (bibEtat.trie_par === "vs_buy_hold" ? " selected" : "") + ">tri : vs B&amp;H</option>"
+    + "<option value='rendement'" + (bibEtat.trie_par === "rendement" ? " selected" : "") + ">tri : rendement</option>"
+    + "</select></div>";
+
+  const majeur = () => {
+    bibEtat.texte = $("bibTexte").value;
+    bibEtat.origine = $("bibOrigine").value;
+    bibEtat.rarete_min = $("bibRarete").value;
+    bibEtat.trie_par = $("bibTri").value;
+    chargerBiblio();
+  };
+  $("bibTexte").addEventListener("input", majeur);
+  for (const id of ["bibOrigine", "bibRarete", "bibTri"])
+    $(id).addEventListener("change", majeur);
+
+  const l = b.cartes || [];
+  $("biblio").innerHTML = l.length
+    ? "<table><thead><tr><th>Stratégie</th><th>Act</th><th>TF</th>"
+      + "<th>Note</th><th>Rareté</th><th>%/an</th><th>vs B&amp;H</th>"
+      + "<th>Trades</th><th>Épreuve</th><th>Testé</th><th>Provenance</th>"
+      + "</tr></thead><tbody>"
+      + l.map((c) =>
+        "<tr><td class='name'>" + esc(c.strategie) + "</td>"
+        + "<td>" + esc(c.actif) + "</td><td>" + esc(c.intervalle) + "</td>"
+        + "<td>" + (c.note === null || c.note === undefined ? "—"
+            : "<span class='tag " + (c.deployable ? "ok" : "ko") + "'>"
+              + Number(c.note).toFixed(1) + "</span>") + "</td>"
+        + "<td title='" + esc(c.rarete_motif || "") + "'>" + esc(c.rarete) + "</td>"
+        + "<td>" + (c.annualise_pct === null || c.annualise_pct === undefined
+            ? "—" : Number(c.annualise_pct).toFixed(1) + " %") + "</td>"
+        + "<td style='color:" + ((c.vs_buy_hold || 0) > 0 ? "var(--ok)" : "var(--crit)") + "'>"
+        + (c.vs_buy_hold === null || c.vs_buy_hold === undefined
+            ? "—" : Number(c.vs_buy_hold).toFixed(1)) + "</td>"
+        + "<td>" + (c.trades === null || c.trades === undefined ? "—" : c.trades) + "</td>"
+        + "<td><span class='tag " + (c.epreuve === "RETENUE" ? "ok" : "ko") + "'>"
+        + esc(c.epreuve || "—") + "</span></td>"
+        + "<td class='sansobjet'>"
+        + ((c.tests && c.tests.cellules)
+            ? c.tests.cellules + " cellule(s) · " + c.tests.campagnes + " camp."
+            : "—") + "</td>"
+        + "<td class='sansobjet'>" + esc(c.origine)
+        + (c.auteur ? " · " + esc(c.auteur) : "") + "</td></tr>").join("")
+      + "</tbody></table>"
+    : '<div class="empty">Aucune carte ne correspond.</div>';
+}
+
+async function chargerBiblio() {
+  const q = new URLSearchParams();
+  for (const [k, v] of Object.entries(bibEtat)) if (v) q.set(k, v);
+  try {
+    const r = await fetch("/api/bibliotheque?" + q.toString());
+    if (r.ok) rendreBiblio(await r.json());
+  } catch (e) { /* le panneau garde son contenu */ }
 }
 
 function rendreVols(v) {

@@ -653,7 +653,7 @@ PLAFOND_STOP_CAMPAGNE_BPS = 5000
 
 # Combien de barres font un jour, par intervalle. Sert a convertir en barres
 # des regles ecrites en jours.
-BARRES_PAR_JOUR = {"1d": 1, "4h": 6, "1h": 24, "15m": 96}
+BARRES_PAR_JOUR = {"1d": 1, "12h": 2, "8h": 3, "4h": 6, "1h": 24, "15m": 96}
 
 
 def parametres(nom: str, interval: str) -> dict:
@@ -678,6 +678,25 @@ def parametres(nom: str, interval: str) -> dict:
     if nom == "tsmom":
         # Quatre semaines, le haut de la fourchette ou l'effet est mesure.
         return {"lookback": 28 * n, "atr_period": 20 * n}
+    # Les trois regles de l'agent externe et le squelette de range comptent
+    # leurs time-stops en HEURES : le rapport dit « time-stop 72h » et
+    # « time 48h », pas « 72 barres ». Soixante-douze barres valent bien 72
+    # heures en 1 h, mais 72 JOURS en journalier et 36 jours en 12 h.
+    #
+    # Sans cette conversion, comparer une meme regle sur deux echelles
+    # compare deux regles differentes, et le verdict croise ne veut rien dire.
+    # C'est exactement le piege decrit plus haut pour `turtle` et `tsmom`,
+    # deplace d'une famille a l'autre.
+    heures = 24 // n if n else 24            # duree d'une barre, en heures
+    if nom == "supertrend":
+        return {"time_stop": max(1, 72 // heures)}
+    if nom in ("donchian_ema_be", "range_bollinger_adx"):
+        return {"time_stop": max(1, 48 // heures)}
+    if nom == "momentum_residuel":
+        # Lookback 12 h et time-stop ~30 h, tels qu'ecrits dans le rapport.
+        return {"lookback": max(1, 12 // heures),
+                "time_stop": max(1, 30 // heures),
+                "intervalle": interval}
     # EmaCross, RsiReversion et TrendFollowerATR utilisent des periodes
     # conventionnelles en BARRES (20/50, 14, 21/50/200), appliquees telles
     # quelles a toute echelle : c'est ainsi qu'elles sont employees et
@@ -1168,3 +1187,58 @@ class RangeBollingerAdx:
 
 
 BASELINES["range_bollinger_adx"] = RangeBollingerAdx
+
+
+class Inverse:
+    """Prend une strategie et inverse le sens de toutes ses entrees.
+
+    C'est la derivation la plus brutale du generateur, et la plus instructive :
+    une regle de suivi de tendance qui perd devient une regle de retour a la
+    moyenne, et reciproquement.
+
+    **Elle echoue presque toujours, et c'est precisement ce qu'elle apprend.**
+    Une strategie qui perd 100 $ n'a pas une inverse qui gagne 100 $ : les
+    deux paient les memes frais et le meme glissement, sur le meme nombre
+    d'allers-retours. L'inverse d'une regle qui perd juste un peu perd aussi.
+    Seule une regle qui perd BEAUCOUP plus que ses frais a une inverse qui
+    peut gagner — et ca se verifie plutot que ca ne se suppose.
+
+    Les SORTIES ne sont pas inversees. Sortir est une reduction de risque ;
+    une sortie inversee signifierait « rester quand la regle veut sortir »,
+    ce qui n'est pas l'inverse d'une strategie, c'est l'absence de strategie.
+    """
+
+    def __init__(self, interne) -> None:
+        self.interne = interne
+        self.name = f"inverse_{getattr(interne, 'name', 'inconnue')}"
+
+    def prepare(self, bars: list[Bar]) -> None:
+        self.interne.prepare(bars)
+
+    def on_bar(self, i: int, bars: list[Bar], in_position: Side | None) -> Signal:
+        # La strategie interne raisonne sur SA position, qui est l'opposee de
+        # celle du desk. Lui passer la position du desk telle quelle lui ferait
+        # croire qu'elle est longue alors qu'elle est courte, et ses sorties
+        # partiraient a l'envers.
+        vue = (None if in_position is None
+               else (Side.SHORT if in_position is Side.LONG else Side.LONG))
+        sig = self.interne.on_bar(i, bars, vue)
+        if sig.side is None:
+            return sig
+        close = bars[i].close
+        # Le stop se reflete autour du prix d'entree : une distance de risque
+        # ne change pas de taille quand on change de sens.
+        stop = None
+        if sig.stop_price is not None:
+            stop = close + (close - sig.stop_price)
+        cible = None
+        if sig.target_price is not None:
+            cible = close + (close - sig.target_price)
+        if stop is not None and stop <= 0:
+            return FLAT
+        return Signal(
+            side=Side.SHORT if sig.side is Side.LONG else Side.LONG,
+            stop_price=stop,
+            target_price=cible if (cible is None or cible > 0) else None,
+            exit_now=sig.exit_now, note=f"inverse : {sig.note}",
+        )

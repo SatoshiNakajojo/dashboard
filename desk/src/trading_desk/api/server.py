@@ -212,6 +212,28 @@ def create_app(state: DeskState) -> FastAPI:
             racine_collecte=state.settings.enregistreur_racine,
         )
 
+    @app.get("/api/bibliotheque")
+    def bibliotheque_filtree(
+        texte: str = "", origine: str = "", rarete_min: str = "",
+        epreuve: str = "", actif: str = "", intervalle: str = "",
+        trie_par: str = "rarete", note_min: float | None = None,
+        deployable: bool | None = None,
+    ) -> dict[str, Any]:
+        """La bibliothèque, filtrée par les critères de l'écran.
+
+        Synchrone pour la meme raison que `/api/recherche` : elle lit des
+        fichiers, et un `def` la fait tourner dans le pool de threads plutot
+        que sur la boucle d'evenements.
+
+        **Aucun de ces parametres n'atteint une ligne de commande.** Ils
+        filtrent une liste deja en memoire ; c'est la seule forme sous
+        laquelle une entree du navigateur a le droit d'exister dans ce desk.
+        """
+        return recherche.bibliotheque(
+            texte=texte, origine=origine, rarete_min=rarete_min,
+            epreuve=epreuve, actif=actif, intervalle=intervalle,
+            trie_par=trie_par, note_min=note_min, deployable=deployable)
+
     @app.get("/api/courbe")
     def courbe(strategie: str, actif: str = "BTC", intervalle: str = "1d",
                equite: float = 1000.0) -> dict[str, Any]:

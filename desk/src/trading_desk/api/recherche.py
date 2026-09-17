@@ -492,6 +492,133 @@ def _resume_deblocages() -> str:
             "Réglage : DESK_DEBLOCAGES_ADOSSES=true")
 
 
+def generateur() -> dict[str, Any]:
+    """Le panneau du générateur : ses sources, et ce qu'il a produit EN TOUT.
+
+    **Le chiffre à lire en premier est `produits`, pas `retenus`.** Un
+    générateur qui sort cinq cents variantes et en garde trois n'a pas trouvé
+    trois stratégies, il a tiré cinq cents fois.
+
+    Les sources sont sondées sans réseau ici : la sonde coûte plusieurs
+    secondes et cet appel sert un écran qui se rafraîchit. L'état réel se lit
+    avec `python scripts/generateur.py --sources`.
+    """
+    from .. import generateur as gen
+
+    return {
+        "sources": [{"cle": s.cle, "quoi": s.quoi,
+                     "disponible": s.disponible, "sondee": s.sondee,
+                     "motif": s.motif}
+                    for s in gen.sources(sonder=False)],
+        "derivations": list(gen.DERIVATIONS),
+        "bilan": gen.bilan(),
+        "lots": [
+            {k: l.get(k) for k in ("genere_ms", "source", "parent",
+                                   "derivation", "produits", "retenus",
+                                   "ecartes", "motifs_ecart")}
+            for l in sorted(gen.lots(), key=lambda x: -(x.get("genere_ms") or 0))[:40]
+        ],
+    }
+
+
+def testeur() -> dict[str, Any]:
+    """Le panneau du testeur : les quatre étages, et les campagnes lancées.
+
+    Les étages que le testeur refuse portent leur motif. Un écran qui
+    afficherait quatre étages sans dire lesquels tournent laisserait croire
+    que « real trading » est à un clic.
+    """
+    from .. import testeur as ts
+    from ..backtest.strategies import BASELINES
+
+    par_strat = ts.par_strategie()
+    return {
+        "etages": [
+            {"cle": "backtest", "quoi": "rejouée sur l'historique",
+             "tourne": True,
+             "reserve": "en échantillon si les données ont servi à la trouver"},
+            {"cle": "hors_echantillon",
+             "quoi": "borné aux barres postérieures à une déclaration",
+             "tourne": True,
+             "reserve": "exige une date de déclaration, sinon il ne prouve rien"},
+            {"cle": "paper", "quoi": "le desk tourne, exécution simulée",
+             "tourne": False,
+             "reserve": "se lance en mode PAPER, pas depuis le testeur"},
+            {"cle": "reel", "quoi": "argent réel",
+             "tourne": False,
+             "reserve": "refusé : un second chemin vers l'argent réel est un "
+                        "chemin de trop"},
+        ],
+        "strategies": sorted(BASELINES),
+        "actifs_defaut": list(ts.ACTIFS_DEFAUT),
+        "intervalles_defaut": list(ts.INTERVALLES_DEFAUT),
+        "par_strategie": [
+            {"strategie": k, **v} for k, v in
+            sorted(par_strat.items(), key=lambda kv: -kv[1]["derniere_ms"])
+        ],
+        "campagnes": len(ts.campagnes()),
+        "denominateur_total": sum(v["denominateur"] for v in par_strat.values()),
+    }
+
+
+def bibliotheque(texte: str = "", origine: str = "", rarete_min: str = "",
+                 deployable: bool | None = None, epreuve: str = "",
+                 note_min: float | None = None, actif: str = "",
+                 intervalle: str = "", trie_par: str = "rarete"
+                 ) -> dict[str, Any]:
+    """La bibliothèque, filtrée, avec ce qui a été testé sur chaque recette.
+
+    Le tri par défaut est la RARETÉ et non le rendement : la colonne qui donne
+    envie est celle qui ne doit pas décider de l'ordre.
+    """
+    import json as _json
+
+    from .. import atelier as ate
+    from .. import biblio as bib
+    from .. import testeur as ts
+
+    essais = ate.lire()
+    lignes = ate.dernier_par_signature(essais)
+    tickets = bib.lire()
+    tests = ts.par_strategie()
+
+    par_recette: dict[str, set[str]] = {}
+    for t in tickets:
+        cle = f"{t.strategie}:{_json.dumps(t.parametres, sort_keys=True)}"
+        par_recette.setdefault(cle, set()).add(t.actif)
+
+    cartes = []
+    for t in tickets:
+        e = next((x for x in lignes
+                  if x.get("strategie") == t.strategie
+                  and x.get("actif") == t.actif
+                  and x.get("intervalle") == t.intervalle
+                  and x.get("parametres") == t.parametres), None)
+        if e is None:
+            continue
+        v = ate.juger(e, essais=essais)
+        cle = f"{t.strategie}:{_json.dumps(t.parametres, sort_keys=True)}"
+        c = bib.carte(t, e, v.etat,
+                      actifs_independants=len(par_recette.get(cle, {t.actif})))
+        # Ce qui a ete teste sur cette strategie, toutes campagnes confondues.
+        c["tests"] = tests.get(t.strategie, {})
+        c["auteur"] = t.auteur
+        cartes.append(c)
+
+    filtrees = bib.chercher(
+        cartes, texte=texte, origine=origine, rarete_min=rarete_min,
+        deployable=deployable, epreuve=epreuve, note_min=note_min,
+        actif=actif, intervalle=intervalle, trie_par=trie_par)
+
+    return {
+        "total": len(cartes), "filtrees": len(filtrees),
+        "colonnes": [{"cle": k, "titre": v} for k, v in bib.COLONNES],
+        "facettes": bib.facettes(cartes),
+        "raretes": list(bib.RARETES),
+        "cartes": filtrees[:200],
+    }
+
+
 def _dimensionnement() -> dict[str, Any]:
     """Ce que le desk prend vraiment, contre ce que la validation suppose.
 
@@ -1335,6 +1462,13 @@ def tout(store: Any = None, racine_collecte: Path | str | None = None) -> dict[s
         "consommation": conso,
         "vols": v,
         "glissement": glissement(store),
+        # Les trois modules de la fabrique. `bibliotheque()` est servi ici
+        # SANS filtre — l'ecran recharge avec ses criteres via sa propre
+        # route. Le filtrer cote serveur des le premier appel obligerait a
+        # deviner ce que l'utilisateur cherche.
+        "generateur": generateur(),
+        "testeur": testeur(),
+        "bibliotheque": bibliotheque(),
         "prevol": prevol(telemetrie_=tel, navigation_=nav, consommation_=conso,
                          vols_=v, campagnes_=camp),
     }

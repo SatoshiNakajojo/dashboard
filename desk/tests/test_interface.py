@@ -321,7 +321,31 @@ def test_le_panneau_complet_ne_touche_ni_reseau_ni_modele(client, monkeypatch):
     d = r.json()
     assert set(d) == {"campagnes", "strategies", "atelier", "regles_figees",
                       "telemetrie", "navigation", "consommation", "vols",
-                      "glissement", "prevol"}
+                      "glissement", "prevol",
+                      # La fabrique : générateur, testeur, bibliothèque.
+                      "generateur", "testeur", "bibliotheque"}
+
+    # Le générateur SONDE des sources réseau — mais jamais depuis l'écran :
+    # `sources(sonder=False)` ici, `--sources` en ligne de commande pour
+    # l'état réel. Un panneau qui sonderait à chaque rafraîchissement
+    # ajouterait plusieurs secondes de latence et ferait dépendre l'affichage
+    # d'un mandataire de sortie. Que ce test passe AVEC `urlopen` interdit est
+    # la preuve que la séparation tient.
+    assert d["generateur"]["sources"], "les sources sont listées"
+    assert all(s["motif"] for s in d["generateur"]["sources"]), (
+        "chacune dit pourquoi elle est disponible ou non — une source qui "
+        "rendrait une liste vide se lirait comme « rien trouvé »")
+    assert any(not s["disponible"] for s in d["generateur"]["sources"]), (
+        "sans sonde, les sources réseau sont déclarées indisponibles plutôt "
+        "que supposées joignables")
+
+    # Le testeur doit dire lesquels de ses quatre étages tournent. Les lister
+    # sans le dire laisserait croire que « argent réel » est à un clic.
+    etages = {e["cle"]: e for e in d["testeur"]["etages"]}
+    assert set(etages) == {"backtest", "hors_echantillon", "paper", "reel"}
+    assert etages["reel"]["tourne"] is False, "le testeur ne passe aucun ordre réel"
+    assert etages["paper"]["tourne"] is False
+
     assert d["prevol"], "la checklist n'est jamais vide"
     for ligne in d["prevol"]:
         assert ligne["etat"] in {"ok", "attente", "bloc"}
