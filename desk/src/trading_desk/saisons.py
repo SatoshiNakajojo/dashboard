@@ -1,0 +1,265 @@
+"""Les saisons de marche, DECLAREES avant d'avoir regarde le moindre rendement.
+
+L'idee vient d'une conversation du 17 septembre 2026 :
+
+    « Il y a des strategies surement plus efficaces en bear market, d'autres
+      en bull market, d'autres en range. Du coup est-ce qu'il ne faudrait pas
+      les classer par saison ? Le desk analyse dans quelle saison on se situe,
+      puis applique la strategie la plus efficace dans ce scenario. »
+
+L'intuition est juste et elle est partagee par a peu pres tout le monde qui
+regarde une courbe. Elle est aussi **la forme la plus dangereuse de ce que ce
+depot passe son temps a refuser**, et les deux tiennent ensemble.
+
+────────────────────────────────────────────────────────────────────────────
+  POURQUOI C'EST LA PLUS DANGEREUSE
+────────────────────────────────────────────────────────────────────────────
+
+« Choisir la meilleure strategie par saison » est une recherche sur la grille
+strategie x saison. Onze strategies au catalogue et trois saisons font
+trente-trois cellules, et prendre le maximum de trente-trois tirages bruites
+produit toujours un gagnant — c'est exactement la machine qui a coute quatre
+cents cellules a ce depot.
+
+Pire : si les BORNES des saisons sont choisies en regardant ou les resultats
+s'ameliorent, le decoupage devient un parametre de plus, ajuste jusqu'a ce
+qu'il plaise, et plus personne — pas meme son auteur — ne peut distinguer
+apres coup une saison d'un surajustement.
+
+D'ou ce fichier. **Il ne mesure rien.** Il declare le decoupage, l'actif de
+reference, le retard, le nul et le denominateur. La mesure vit ailleurs,
+ecrite apres, et l'historique git en fait foi.
+
+────────────────────────────────────────────────────────────────────────────
+  LE HALVING : CE QUI A ETE DEMANDE, ET CE QUE LA DONNEE PERMET
+────────────────────────────────────────────────────────────────────────────
+
+La demande etait : « trouve la fourchette de jours depuis le halving ou il y a
+un changement de saison en moyenne sur les 4 derniers cycles ».
+
+Mesure faite AVANT d'ecrire ce fichier, le 17 septembre 2026 :
+
+    BTC 1 j sur cette machine : 2 209 bougies, du 2020-08-19 au 2026-09-05
+    halving 2012-11-28   hors historique
+    halving 2016-07-09   hors historique
+    halving 2020-05-11   hors historique (les donnees commencent au jour 100)
+    halving 2024-04-19   couvert
+
+    cycle 3 : couvert du jour 100 au jour 1439
+    cycle 4 : couvert du jour 0 au jour 869, en cours
+
+Soit **1,6 cycle**, pas quatre. Et aucune autre source de prix n'est joignable
+depuis cette machine : CoinGecko, Yahoo, Binance, Kraken, Coinbase et
+blockchain.info rendent tous 000 (refus de politique reseau), seul
+`api.hyperliquid.xyz` repond — et Hyperliquid n'a pas d'historique avant 2020.
+
+Une moyenne sur quatre cycles n'est donc pas calculable ici. Elle ne le serait
+d'ailleurs qu'a peine avec les quatre : estimer une borne a partir de quatre
+observations donne un ecart-type qu'aucune decision ne devrait franchir.
+
+**Consequence sur ce module.** Le jour depuis le halving n'est PAS ce qui
+definit les saisons. Il est declare comme un observable inscrit A COTE de
+chaque barre, pour qu'on puisse plus tard demander « les saisons tombent-elles
+ou le cycle le voudrait ? » sans l'avoir utilise pour les definir. C'est la
+seule facon de garder la question posable.
+
+Si un historique BTC journalier depuis 2010 arrive un jour dans `data/`, la
+question redevient mesurable et ce module n'a pas besoin de changer : la
+declaration ne depend pas de la profondeur de l'historique.
+
+────────────────────────────────────────────────────────────────────────────
+  LE DECOUPAGE, ET POURQUOI IL EST BANAL EXPRES
+────────────────────────────────────────────────────────────────────────────
+
+    bull   cloture au-dessus de la moyenne 200 j ET moyenne en hausse sur 20 j
+    bear   cloture en dessous de la moyenne 200 j ET moyenne en baisse sur 20 j
+    range  tout le reste
+
+C'est la definition la plus rebattue qui existe, et c'est precisement pour ca
+qu'elle est retenue. Une definition tunee sur nos six annees serait un
+parametre de plus ; une definition que tout le monde utilisait avant nous ne
+peut pas avoir ete choisie pour nous plaire. Les trois nombres — 200, 20, et
+le signe de la pente — ne sont pas des reglages a optimiser. Les bouger
+exigera d'incrementer `VERSION`, ce qui repart d'un denominateur neuf.
+
+**L'actif de reference est BTC**, declare ici et pas choisi apres. Le reste du
+marche perp crypto le suit : la mesure des marches effectifs le dit, BTC, ETH
+et SOL ne font que 1,5 marche independant sur 2 182 barres journalieres. Une
+saison par actif reviendrait a compter 28 saisons la ou il y en a une et
+demie.
+
+**Le retard est d'une barre.** La saison qui s'applique a la barre `t` est
+celle calculee sur les cloture jusqu'a `t-1`. Sans ce retard, la saison est
+lue sur la barre qu'elle est censee expliquer, et la meilleure strategie « par
+saison » gagne simplement parce qu'elle connait la cloture.
+
+────────────────────────────────────────────────────────────────────────────
+  LE NUL, ET LE PIEGE DE LA VERSION 1 DU VOCABULAIRE
+────────────────────────────────────────────────────────────────────────────
+
+Les saisons viennent par longues plages : une annee de bull, deux ans de bear.
+Un nul qui tirerait une saison au hasard barre par barre casserait cette
+structure et validerait n'importe quoi — c'est la meme faute que le nul par
+date des cotations.
+
+Le nul est donc un **decalage circulaire commun de la serie d'etiquettes** :
+les saisons gardent leurs longueurs et leur ordre, mais ne tombent plus en
+face des memes rendements.
+
+Et il faut en tirer la lecon de la version 2 du vocabulaire d'evenements : le
+plancher de p d'un nul par decalage n'est pas fixe par le nombre de tirages,
+il est fixe par le nombre de DECALAGES DISTINCTS disponibles. Tirer cinq mille
+fois dans une plage de deux cents decalages ne produit pas cinq mille nuls.
+
+Un decalage plus court que la plus longue plage de saison laisse d'ailleurs
+l'etiquette decalee recouvrir l'originale. `DECALAGE_MIN_EN_PLAGES` l'exclut,
+et la mesure DOIT rendre la plage effective : une plage degeneree rend le
+criblage aveugle, et son « zero survivant » ne dirait rien du marche.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import json
+from datetime import date
+
+VERSION = 1
+FIGE_LE = "2026-09-17"
+
+# ─────────────────────────────────────────────────────── le decoupage
+
+BULL, BEAR, RANGE = "bull", "bear", "range"
+SAISONS = (BULL, BEAR, RANGE)
+
+# L'actif dont la saison vaut pour tout le marche. Declare, pas choisi apres.
+REFERENCE = "BTC"
+ECHELLE_REFERENCE = "1d"
+
+# Les trois nombres du decoupage. Ce ne sont pas des reglages a optimiser :
+# les bouger exige d'incrementer VERSION.
+MOYENNE_BARRES = 200          # la moyenne longue, en barres journalieres
+PENTE_BARRES = 20             # sur combien de barres on lit sa pente
+# En dessous, la pente n'est pas un signe, c'est du bruit d'arrondi.
+PENTE_MIN_PCT = 0.0
+
+# La saison de la barre t est calculee sur les cloture jusqu'a t-1.
+RETARD_BARRES = 1
+
+# ────────────────────────────────────────────── l'observable « halving »
+
+# Declares pour que le jour du cycle soit calculable a toute date, y compris
+# hors de l'historique present. Les trois premiers ne sont pas couverts par
+# les donnees de cette machine ; ils sont inscrits quand meme, pour que
+# l'ajout d'un historique plus profond n'exige pas de toucher a ce fichier.
+HALVINGS = (
+    date(2012, 11, 28),
+    date(2016, 7, 9),
+    date(2020, 5, 11),
+    date(2024, 4, 19),
+)
+
+# Ce que la donnee de cette machine couvre reellement, inscrit ici pour qu'un
+# lecteur n'ait pas a le redecouvrir.
+CYCLES_COMPLETS_DISPONIBLES = 1
+CYCLES_DEMANDES = 4
+
+# ───────────────────────────────────────────────────────────── le nul
+
+# Un decalage doit depasser la plus longue plage de saison, sinon l'etiquette
+# decalee recouvre l'originale et le controle devient inerte.
+DECALAGE_MIN_EN_PLAGES = 1.0
+TIRAGES = 2000
+
+# En dessous, une saison n'a pas assez de barres pour qu'un rendement moyen
+# veuille dire quelque chose.
+BARRES_MIN_PAR_SAISON = 120
+
+# ──────────────────────────────────────────────────── le denominateur
+
+# Onze strategies au catalogue x trois saisons. C'est le nombre d'hypotheses
+# que « la meilleure strategie par saison » teste, et il est annonce AVANT de
+# regarder laquelle gagne.
+STRATEGIES_AU_CATALOGUE = 11
+DENOMINATEUR = STRATEGIES_AU_CATALOGUE * len(SAISONS)
+
+ORIGINE = "saisons"
+
+
+def jour_du_cycle(quand: date) -> int | None:
+    """Jours ecoules depuis le dernier halving, ou None avant le premier."""
+    passes = [h for h in HALVINGS if h <= quand]
+    return (quand - passes[-1]).days if passes else None
+
+
+def cycle_de(quand: date) -> int | None:
+    """Le rang du cycle (1 pour le premier halving), ou None avant."""
+    passes = [h for h in HALVINGS if h <= quand]
+    return len(passes) or None
+
+
+def declaration() -> dict[str, object]:
+    """Tout ce qui est fige, en un objet. C'est ce que l'empreinte scelle."""
+    return {
+        "version": VERSION,
+        "fige_le": FIGE_LE,
+        "saisons": list(SAISONS),
+        "reference": REFERENCE,
+        "echelle_reference": ECHELLE_REFERENCE,
+        "moyenne_barres": MOYENNE_BARRES,
+        "pente_barres": PENTE_BARRES,
+        "pente_min_pct": PENTE_MIN_PCT,
+        "retard_barres": RETARD_BARRES,
+        "halvings": [h.isoformat() for h in HALVINGS],
+        "cycles_complets_disponibles": CYCLES_COMPLETS_DISPONIBLES,
+        "cycles_demandes": CYCLES_DEMANDES,
+        "decalage_min_en_plages": DECALAGE_MIN_EN_PLAGES,
+        "tirages": TIRAGES,
+        "barres_min_par_saison": BARRES_MIN_PAR_SAISON,
+        "strategies_au_catalogue": STRATEGIES_AU_CATALOGUE,
+        "denominateur": DENOMINATEUR,
+        "origine": ORIGINE,
+    }
+
+
+def empreinte() -> str:
+    """L'empreinte de TOUTE la declaration. Un test la verrouille.
+
+    Changer un seul nombre change l'empreinte et casse le test, ce qui oblige
+    a incrementer `VERSION` — donc a repartir d'un denominateur neuf plutot
+    que d'ajuster le decoupage jusqu'a ce qu'il plaise.
+    """
+    charge = json.dumps(declaration(), sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(charge.encode()).hexdigest()[:16]
+
+
+def plancher_de_p(plage_decalages: int) -> float:
+    """1/(plage+1) — le plancher d'un nul par decalage.
+
+    La resolution vient du nombre de decalages DISTINCTS, pas du nombre de
+    tirages. C'est la lecon que la version 1 du vocabulaire d'evenements a
+    apprise en se piegeant elle-meme.
+    """
+    if plage_decalages <= 0:
+        raise ValueError("plage de decalages vide : le nul est inerte")
+    return 1.0 / (plage_decalages + 1)
+
+
+def plage_requise(alpha: float = 0.05, denominateur: int | None = None) -> int:
+    """Combien de decalages distincts il FAUT pour qu'une cellule puisse
+    survivre seule au rang 1.
+
+    Calcule a la declaration, donc avant la mesure : c'est une precondition
+    verifiable, pas une excuse trouvee apres coup. A 33 hypotheses et
+    alpha = 0,05 il en faut 657. Si la serie n'en offre pas autant, le
+    criblage est aveugle et son « zero survivant » ne dit rien du marche —
+    il faudra le dire, pas le taire.
+    """
+    m = denominateur or DENOMINATEUR
+    return int(m / alpha) - 1
+
+
+def criblage_possible(plage_decalages: int, alpha: float = 0.05,
+                      denominateur: int | None = None) -> bool:
+    """Le criblage peut-il voir quoi que ce soit a cette resolution ?"""
+    m = denominateur or DENOMINATEUR
+    return plancher_de_p(plage_decalages) <= alpha / m
