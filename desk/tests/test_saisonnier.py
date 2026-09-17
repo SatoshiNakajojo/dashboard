@@ -144,3 +144,78 @@ def test_la_serie_reelle_porte_l_empreinte_de_la_declaration():
     d = sr.serie_de_reference().en_dict()
     assert d["empreinte"] == S.empreinte()
     assert d["version"] == S.VERSION
+
+
+# ──────────────────────────────── la grille strategie x saison
+
+def test_la_saison_est_EN_VIGUEUR_pas_a_un_instant():
+    """Un défaut attrapé en faisant tourner la grille en 4 h.
+
+    La première version cherchait l'horodatage exact dans l'index des barres
+    étiquetées. Ça marchait tant que la stratégie tournait sur la même
+    échelle que les saisons ; en 4 h aucun horodatage ne tombe sur une borne
+    journalière, et la grille aurait rendu zéro trade attribué — un résultat
+    vide qui se lit comme un résultat.
+    """
+    s = sr.serie_de_reference()
+    bornes = s.bornes_etiquetees
+    # un instant entre deux bornes journalières
+    milieu = bornes[10] + 4 * 3600 * 1000
+    assert milieu not in s.index_etiquetees
+    assert s.rang_en_vigueur(milieu) == 10
+    assert sr.saison_a(s, milieu) == s.etiquettes_compactes[10]
+
+
+def test_la_saison_en_vigueur_ne_regarde_jamais_devant():
+    """« À ou avant », jamais après."""
+    s = sr.serie_de_reference()
+    bornes = s.bornes_etiquetees
+    assert s.rang_en_vigueur(bornes[0] - 1) is None
+    assert s.rang_en_vigueur(bornes[5]) == 5
+    assert s.rang_en_vigueur(bornes[5] - 1) == 4
+
+
+def test_le_decalage_redistribue_sans_rien_creer():
+    """Le total d'une stratégie est fixe ; le nul ne fait que le déplacer.
+
+    C'est ce qui rend la question posable : « la saison prédit-elle OÙ la
+    stratégie gagne », et non « la stratégie gagne-t-elle ».
+    """
+    etiq = [S.BULL] * 40 + [S.BEAR] * 40 + [S.RANGE] * 40
+    rangs = [(i, float(i)) for i in range(0, 120, 3)]
+    total = sum(n for _, n in rangs)
+    for decalage in (0, 17, 55, 119):
+        par = sr._par_saison(etiq, rangs, decalage)
+        assert sum(v[0] for v in par.values()) == len(rangs)
+        assert sum(v[1] for v in par.values()) == pytest.approx(total)
+
+
+def test_la_grille_compte_33_cellules_comme_declare():
+    """Le dénominateur est annoncé avant la mesure ; la grille doit lui
+    correspondre, sinon l'un des deux ment."""
+    g = sr.grille(intervalle="4h")
+    assert len(g) == S.DENOMINATEUR
+    assert len({(c.strategie, c.saison) for c in g}) == S.DENOMINATEUR
+
+
+def test_les_cellules_maigres_comptent_au_denominateur():
+    """Les retirer rendrait la correction plus laxiste : elles ont bien été
+    testées, elles sont juste ininterprétables."""
+    g = sr.grille(intervalle="4h")
+    maigres = [c for c in g if not c.interpretable]
+    assert maigres, "la grille en a forcément"
+    assert len(g) == S.DENOMINATEUR
+
+
+def test_le_nul_est_le_meme_pour_toutes_les_cellules():
+    """Deux jeux de décalages différents rendraient des p qui ne se comparent
+    plus, et Benjamini-Hochberg porterait sur des choses différentes."""
+    a = {(c.strategie, c.saison): c.p for c in sr.grille(intervalle="4h")}
+    b = {(c.strategie, c.saison): c.p for c in sr.grille(intervalle="4h")}
+    assert a == b, "la grille doit être reproductible d'une exécution à l'autre"
+
+
+def test_la_grille_refuse_une_plage_de_decalages_vide():
+    vide = sr.Serie(horodatages=[], etiquettes=[])
+    with pytest.raises(ValueError, match="inerte"):
+        sr.grille(serie=vide)

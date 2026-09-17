@@ -40,6 +40,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from decimal import Decimal
 from pathlib import Path
 from typing import Any, Sequence
 
@@ -79,6 +80,45 @@ class Serie:
     @property
     def etiquetees(self) -> int:
         return sum(1 for e in self.etiquettes if e)
+
+    @property
+    def etiquettes_compactes(self) -> list[str]:
+        """Les etiquettes non nulles, dans l'ordre. C'est sur CELLES-LA que
+        porte le decalage : inclure les barres de chauffe ferait tourner du
+        vide dans le nul."""
+        return [e for e in self.etiquettes if e]
+
+    @property
+    def index_etiquetees(self) -> dict[int, int]:
+        """Horodatage -> rang dans `etiquettes_compactes`."""
+        return {t: k for k, (t, e) in enumerate(
+            (t, e) for t, e in zip(self.horodatages, self.etiquettes) if e)}
+
+    @property
+    def bornes_etiquetees(self) -> list[int]:
+        """Les horodatages etiquetes, tries. Pour chercher par bisection.
+
+        Une saison est EN VIGUEUR sur un intervalle, elle n'existe pas a un
+        instant. Chercher l'egalite exacte marchait tant que la strategie
+        tournait sur la meme echelle que les saisons ; en 4 h aucun
+        horodatage ne tombe sur une borne journaliere, et la grille aurait
+        rendu zero trade attribue — un resultat vide qui se lit comme un
+        resultat.
+        """
+        return [t for t, e in zip(self.horodatages, self.etiquettes) if e]
+
+    def rang_en_vigueur(self, ts_ms: int) -> int | None:
+        """Le rang de la derniere etiquette a ou avant `ts_ms`.
+
+        « A ou avant » et jamais apres : l'etiquette du jour J est calculee
+        sur les clotures jusqu'a J-1, donc une barre de 4 h du jour J lit une
+        saison qui ne connait rien de J. La causalite tient.
+        """
+        import bisect
+
+        bornes = self.bornes_etiquetees
+        k = bisect.bisect_right(bornes, int(ts_ms)) - 1
+        return k if k >= 0 else None
 
     @property
     def repartition(self) -> dict[str, int]:
@@ -231,3 +271,146 @@ def bascules(serie: Serie, *, barres_min: int = 60) -> list[Plage]:
     que dans `etiqueter` garde la mesure intacte.
     """
     return [p for p in serie.plages if p.barres >= barres_min]
+
+
+# ────────────────────────────────── la grille strategie x saison
+
+@dataclass(frozen=True)
+class Cellule:
+    """Une strategie dans une saison : ce qu'elle y fait, et si c'est du bruit."""
+
+    strategie: str
+    saison: str
+    trades: int
+    net_usd: float
+    net_par_trade: float
+    p: float | None = None
+    nul_moyen: float | None = None
+
+    @property
+    def interpretable(self) -> bool:
+        return self.trades >= TRADES_MIN_PAR_CELLULE
+
+    def en_dict(self) -> dict[str, Any]:
+        return {
+            "strategie": self.strategie, "saison": self.saison,
+            "trades": self.trades, "net_usd": round(self.net_usd, 2),
+            "net_par_trade": round(self.net_par_trade, 4),
+            "p": self.p, "nul_moyen": self.nul_moyen,
+            "interpretable": self.interpretable,
+        }
+
+
+# En dessous, une moyenne par trade n'est pas une moyenne. Repris du plancher
+# d'interpretabilite de l'epreuve plutot que redefini : deux seuils
+# divergeraient, et l'ecart se lirait comme une grille incoherente.
+from .epreuves import TRADES_MIN as TRADES_MIN_PAR_CELLULE  # noqa: E402
+
+
+def saison_a(serie: Serie, ts_ms: int, decalage: int = 0) -> str | None:
+    """La saison en vigueur a cet horodatage, eventuellement decalee.
+
+    Le decalage est CIRCULAIRE et COMMUN a toute la serie : les saisons
+    gardent leurs longueurs et leur ordre, elles ne tombent plus en face des
+    memes barres. Un tirage saison par saison casserait la structure de
+    plages, et validerait n'importe quoi — meme faute que le nul par date.
+
+    Commode pour une question isolee ; `grille` ne passe PAS par ici — elle
+    hisse l'index et les etiquettes hors de ses boucles, sinon deux mille
+    tirages fois quelques centaines de trades reconstruiraient le dictionnaire
+    un demi-million de fois.
+    """
+    rang = serie.rang_en_vigueur(ts_ms)
+    if rang is None:
+        return None
+    etiq = serie.etiquettes_compactes
+    return etiq[(rang + decalage) % len(etiq)]
+
+
+def grille(strategies: Sequence[str] | None = None, *,
+           serie: Serie | None = None,
+           actif: str | None = None, intervalle: str | None = None,
+           equite: float = 1000.0,
+           tirages: int | None = None,
+           dossier: Path | None = None) -> list[Cellule]:
+    """Chaque strategie, dans chaque saison, contre le nul par decalage.
+
+    **Un seul backtest par strategie.** Les trades sont ensuite attribues a la
+    saison de leur ENTREE. Le nul rejoue la meme attribution sur des
+    etiquettes decalees : la question n'est donc pas « la strategie
+    gagne-t-elle », mais « la saison predit-elle OU elle gagne ». Le total
+    d'une strategie est fixe, le nul ne fait que le redistribuer.
+
+    C'est ce qui permet a une strategie perdante d'avoir malgre tout une
+    saison ou elle gagne — exactement l'hypothese qu'on teste.
+    """
+    import bisect
+    import random
+
+    from .atelier import BASELINES, defauts
+    from .backtest.data import load_from_file
+    from .backtest.engine import run_backtest
+    from .risk.limits import RiskLimits
+
+    a = actif or S.REFERENCE
+    i = intervalle or S.ECHELLE_REFERENCE
+    d = tirages or S.TIRAGES
+    base = dossier or DONNEES
+    serie = serie or serie_de_reference(base)
+    if not serie.plage_decalages:
+        raise ValueError("plage de decalages vide : le nul serait inerte")
+
+    barres = load_from_file(str(base / f"{a}_{i}_real.json"), a, i)
+    noms = list(strategies) if strategies else sorted(BASELINES)
+
+    # Les decalages tires une seule fois, partages par toutes les strategies :
+    # le nul doit etre le MEME d'une cellule a l'autre, sinon les p ne se
+    # comparent plus et Benjamini-Hochberg porte sur des choses differentes.
+    rng = random.Random(20260917)
+    mini = serie.plus_longue_plage
+    maxi = serie.etiquetees - 1
+    decalages = [rng.randint(mini, maxi) for _ in range(d)]
+
+    # Hisses une seule fois : ce sont eux qui rendent la grille calculable.
+    etiq = serie.etiquettes_compactes
+    bornes = serie.bornes_etiquetees
+
+    out: list[Cellule] = []
+    for nom in noms:
+        res = run_backtest(barres, BASELINES[nom](**defauts(nom, i)),
+                           limits=RiskLimits(), interval=i,
+                           initial_equity_usd=Decimal(str(equite)))
+        # Les rangs plutot que les horodatages : l'attribution se reduit alors
+        # a une addition modulo, faite deux mille fois par strategie. La
+        # bisection place chaque trade sous la saison EN VIGUEUR, ce qui
+        # permet de trader en 4 h sous des saisons journalieres.
+        rangs = []
+        for t in res.trades:
+            k = bisect.bisect_right(bornes, int(t.entry_ts_ms)) - 1
+            if k >= 0:
+                rangs.append((k, float(t.net_pnl_usd)))
+        observe = _par_saison(etiq, rangs, 0)
+        nuls = [_par_saison(etiq, rangs, k) for k in decalages]
+
+        for s in S.SAISONS:
+            n, net = observe[s]
+            moyenne = net / n if n else 0.0
+            echantillon = [(x[s][1] / x[s][0] if x[s][0] else 0.0) for x in nuls]
+            p = ((sum(1 for v in echantillon if v >= moyenne) + 1) / (d + 1)
+                 if n else None)
+            out.append(Cellule(
+                strategie=nom, saison=s, trades=n, net_usd=net,
+                net_par_trade=moyenne, p=p,
+                nul_moyen=round(sum(echantillon) / len(echantillon), 4)))
+    return out
+
+
+def _par_saison(etiquettes: Sequence[str], rangs: Sequence[tuple[int, float]],
+                decalage: int) -> dict[str, tuple[int, float]]:
+    n = len(etiquettes)
+    out = {s: [0, 0.0] for s in S.SAISONS}
+    for rang, net in rangs:
+        s = etiquettes[(rang + decalage) % n]
+        out[s][0] += 1
+        out[s][1] += net
+    return {s: (v[0], v[1]) for s, v in out.items()}
