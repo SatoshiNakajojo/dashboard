@@ -1121,7 +1121,27 @@ function rendreAtelier(a) {
      tableau donne les nombres exacts et reste la vue accessible. */
   window.__coupes = cps;
   const elG = $("atCoupesGraphe");
-  if (elG) elG.innerHTML = grapheCoupes(cps);
+  /* Les deux corrections n'ont PAS la même portée, et le taire rendrait la
+     colonne « survivantes » plus forte qu'elle n'est. Une coupe corrige sur
+     ses propres cellules — une règle, une échelle. L'épreuve corrige sur
+     TOUT le registre de même origine : six balayages sous « balayage » font
+     un dénominateur de cent cinquante-sept familles, pas de vingt-six. Une
+     cellule peut donc survivre à sa coupe et tomber à la porte, et c'est le
+     cas normal, pas une incohérence. */
+  const balayage = (a.par_origine || []).find((o) => o.origine === "balayage");
+  if (elG) {
+    elG.innerHTML = grapheCoupes(cps)
+      + (cps.length
+        ? "<div class='sansobjet' style='margin-top:8px'>La coupe corrige sur "
+          + "ses propres cellules ; <b>l'épreuve corrige sur toute l'origine</b>"
+          + (balayage
+              ? " — " + balayage.familles + " famille(s) sous « balayage », "
+                + "soit un seuil au rang 1 de "
+                + num(0.05 / Math.max(1, balayage.familles), 5)
+              : "")
+          + ". Survivre à sa coupe ne suffit donc pas à passer la porte.</div>"
+        : "");
+  }
   const elCoupes = $("atCoupes");
   if (elCoupes) {
     elCoupes.innerHTML = cps.length
@@ -1328,13 +1348,25 @@ function grapheCoupes(cps) {
     const court = ret > 0 ? texte : (sur > 0 ? sur + " surv., 0 ret." : "");
     if (texte) {
       const xEtiq = xs(fam) + 10;
-      const place = x1 + DROITE - 28 - xEtiq;   // jusqu'au bord de « marchés »
-      const choisi = CPG_CAR * texte.length <= place ? texte
-        : (CPG_CAR * court.length <= place ? court : "");
-      if (choisi) {
+      /* La place libre s'arrête où commence la colonne des marchés, pas au
+         bord du panneau — la première version comptait jusqu'au bord et
+         « 4 surv., 0 ret. » venait barrer le tiret des marchés. */
+      const droite = x1 + 6 - xEtiq;
+      const dedans = xs(fam) - xs(sur) - 20;   // la part de piste sans barre
+      const lg = (t) => CPG_CAR * t.length;
+      if (lg(texte) <= droite || lg(court) <= droite) {
         g += '<text class="val" x="' + xEtiq + '" y="' + (yc + 4) + '">'
-          + choisi + "</text>";
+          + (lg(texte) <= droite ? texte : court) + "</text>";
+      } else if (lg(court) <= dedans) {
+        /* Sinon, à l'intérieur de la piste, calée sur son bout : il y a la
+           place, et le texte y reste sur la piste seule — jamais sur la barre
+           grise, où l'encre secondaire ne contrasterait pas. */
+        g += '<text class="val" x="' + (xs(fam) - 10) + '" y="' + (yc + 4)
+          + '" text-anchor="end">' + court + "</text>";
       }
+      /* Si rien ne rentre, pas d'étiquette : la bulle et le tableau portent
+         tous les nombres, donc rien n'est perdu — alors qu'un texte rogné
+         coupe des caractères et ment. */
     }
     /* Colonne séparée : ce n'est pas un nombre d'actifs. */
     g += (mrc == null)
