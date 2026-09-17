@@ -1117,6 +1117,11 @@ function rendreAtelier(a) {
      actifs » se lit « tient sur un marché et demi ». Sans ces deux colonnes,
      le nombre de survivantes se lit comme une découverte. */
   const cps = a.coupes || [];
+  /* Le graphe d'abord, le tableau ensuite : le graphe donne la forme, le
+     tableau donne les nombres exacts et reste la vue accessible. */
+  window.__coupes = cps;
+  const elG = $("atCoupesGraphe");
+  if (elG) elG.innerHTML = grapheCoupes(cps);
   const elCoupes = $("atCoupes");
   if (elCoupes) {
     elCoupes.innerHTML = cps.length
@@ -1228,6 +1233,178 @@ async function atLancer() {
   atSuivi = setInterval(atSuivre, 1500);
   atSuivre();
 }
+
+/* ---------- LE GRAPHE DES COUPES ----------
+
+   Une ligne par règle × échelle. Trois épaisseurs qui s'emboîtent, parce que
+   les quantités s'emboîtent vraiment : retenues ⊆ survivantes ⊆ testées.
+
+   UN SEUL AXE, et c'est ce qui décide de la mise en page. Le nombre de
+   marchés indépendants n'est pas un nombre d'actifs — c'est 1,5 pour trois
+   perps corrélés — donc il ne peut pas partager l'échelle sans mentir. Il
+   part dans sa propre colonne, à droite, en texte.
+
+   Le trait vertical est l'attendu du hasard : `alpha × testées`. Sans lui,
+   « seize cellules sous alpha » se lit comme une trouvaille ; avec lui on
+   voit qu'il en fallait 1,2 pour rien.
+
+   Les valeurs ne sont pas peintes aux couleurs des barres : le texte porte
+   les jetons d'encre, et l'identité vient de la barre à côté. */
+
+const CPG = { W: 1000, GAUCHE: 196, DROITE: 116, HAUT: 28, BAS: 28, RANG: 34 };
+/* Largeur d'un caractere de `.val` (12px mono) dans le repere interne.
+   Mesuree plutot que devinee : Chromium rend JetBrains Mono a 0,6 em. */
+const CPG_CAR = 7.3;
+
+/* Un rectangle dont SEUL le bout de donnée est arrondi ; la base reste
+   carrée sur la ligne zéro, sinon la barre a l'air de flotter. */
+function cpgBarre(x, y, w, h, r) {
+  const rr = Math.max(0, Math.min(r, w, h / 2));
+  if (w <= 0) return "";
+  return "M" + x + "," + y + "h" + (w - rr)
+    + "a" + rr + "," + rr + " 0 0 1 " + rr + "," + rr
+    + "v" + (h - 2 * rr)
+    + "a" + rr + "," + rr + " 0 0 1 " + (-rr) + "," + rr
+    + "H" + x + "z";
+}
+
+/* Des graduations sur des nombres ronds : elles portent les valeurs qu'on n'a
+   pas étiquetées. */
+function cpgTicks(max) {
+  if (max <= 0) return [0];
+  const brut = max / 4;
+  const ordre = Math.pow(10, Math.floor(Math.log10(brut)));
+  const pas = [1, 2, 5, 10].map((m) => m * ordre).find((v) => v >= brut) || ordre * 10;
+  const out = [];
+  for (let v = 0; v <= max + 1e-9; v += pas) out.push(Math.round(v));
+  return out;
+}
+
+function grapheCoupes(cps) {
+  if (!cps.length) return "";
+  const { W, GAUCHE, DROITE, HAUT, BAS, RANG } = CPG;
+  const x0 = GAUCHE, x1 = W - DROITE, large = x1 - x0;
+  const max = Math.max(...cps.map((c) => c.familles || 0), 1);
+  const xs = (v) => x0 + (large * Math.max(0, Math.min(v, max))) / max;
+  const HT = HAUT + cps.length * RANG + BAS;
+
+  const ticks = cpgTicks(max);
+  const grille = ticks.map((t) =>
+    '<line class="' + (t === 0 ? "axe" : "grille") + '" x1="' + xs(t)
+    + '" y1="' + HAUT + '" x2="' + xs(t) + '" y2="' + (HT - BAS + 6) + '"/>'
+    + '<text class="tick" x="' + xs(t) + '" y="' + (HT - BAS + 20)
+    + '" text-anchor="middle">' + t + "</text>").join("");
+
+  const rangs = cps.map((c, i) => {
+    const yc = HAUT + i * RANG + RANG / 2;
+    const fam = c.familles || 0;
+    const sur = (c.survivantes || []).length;
+    const ret = (c.retenues || []).length;
+    const has = c.attendu_au_hasard || 0;
+    const mrc = c.marches;
+
+    let g = '<g class="rang">';
+    g += '<path class="piste" d="' + cpgBarre(x0, yc - 9, xs(fam) - x0, 18, 4) + '"/>';
+    if (sur > 0) g += '<path class="surv" d="' + cpgBarre(x0, yc - 9, xs(sur) - x0, 18, 4) + '"/>';
+    if (ret > 0) g += '<path class="ret" d="' + cpgBarre(x0, yc - 5, xs(ret) - x0, 10, 3) + '"/>';
+    if (has > 0) {
+      g += '<line class="hasard" x1="' + xs(has) + '" y1="' + (yc - 13)
+        + '" x2="' + xs(has) + '" y2="' + (yc + 13) + '"/>';
+    }
+    g += '<text class="nom" x="0" y="' + (yc - 1) + '">' + esc(c.strategie) + "</text>";
+    g += '<text class="tf" x="0" y="' + (yc + 12) + '">' + esc(c.intervalle)
+      + " · " + fam + " actifs</text>";
+    /* Une étiquette au bout de la barre qui porte l'histoire, et seulement
+       elle. Un nombre sur chaque marque ne se lit pas. */
+    /* Une étiquette qui ne rentre pas n'est pas rognée : on la MESURE avant
+       de la poser. Au-delà de la place libre entre le bout de la piste et la
+       colonne des marchés, elle passait sous cette colonne — « 15
+       survivantes, 0 retenue » sur un rang à 25 actifs. Trop longue, elle se
+       raccourcit ; encore trop longue, elle s'efface et c'est la bulle et le
+       tableau qui la portent, où rien n'est perdu. */
+    const texte = ret > 0
+      ? ret + " retenue" + (ret > 1 ? "s" : "")
+      : (sur > 0 ? sur + " survivante" + (sur > 1 ? "s" : "") + ", 0 retenue" : "");
+    const court = ret > 0 ? texte : (sur > 0 ? sur + " surv., 0 ret." : "");
+    if (texte) {
+      const xEtiq = xs(fam) + 10;
+      const place = x1 + DROITE - 28 - xEtiq;   // jusqu'au bord de « marchés »
+      const choisi = CPG_CAR * texte.length <= place ? texte
+        : (CPG_CAR * court.length <= place ? court : "");
+      if (choisi) {
+        g += '<text class="val" x="' + xEtiq + '" y="' + (yc + 4) + '">'
+          + choisi + "</text>";
+      }
+    }
+    /* Colonne séparée : ce n'est pas un nombre d'actifs. */
+    g += (mrc == null)
+      ? '<text class="mrc-nd" x="' + (x1 + 16) + '" y="' + (yc + 4) + '">—</text>'
+      : '<text class="mrc" x="' + (x1 + 16) + '" y="' + (yc + 4) + '">'
+        + mrc.toFixed(1) + "</text>";
+    g += '<rect class="zone" x="0" y="' + (yc - RANG / 2) + '" width="' + W
+      + '" height="' + RANG + '" data-i="' + i + '"/>';
+    return g + "</g>";
+  }).join("");
+
+  const cle = '<div class="coupe-cle">'
+    + '<span class="k-piste"><i></i>actifs testés</span>'
+    + '<span class="k-surv"><i></i>survivantes BH</span>'
+    + '<span class="k-ret"><i></i>retenues par l’épreuve</span>'
+    + '<span class="k-has"><i></i>attendu du hasard</span>'
+    + "</div>";
+
+  return cle
+    + '<svg class="coupeg" viewBox="0 0 ' + W + " " + HT + '" '
+    + 'preserveAspectRatio="xMinYMin meet" role="img" '
+    + 'aria-label="Par règle et échelle : actifs testés, survivantes à la '
+    + 'correction, retenues par l’épreuve, et nombre de marchés '
+    + 'indépendants. Le tableau qui suit porte les mêmes nombres.">'
+    + grille + rangs
+    + '<text class="tick" x="' + (x1 + 16) + '" y="' + (HAUT - 2)
+    + '">marchés</text>'
+    + '<text class="tick" x="' + (x1 + 16) + '" y="' + (HAUT + 10)
+    + '">indép.</text>'
+    + "</svg>";
+}
+
+/* La bulle. Un graphe HTML EST interactif : sans survol, les nombres qui ne
+   sont pas étiquetés — dont « sous alpha » et les maigres — ne sont lisibles
+   que dans le tableau. */
+let cpgBulle = null;
+function cpgSurvol(ev) {
+  const zone = ev.target.closest ? ev.target.closest(".coupeg .zone") : null;
+  if (!cpgBulle) {
+    cpgBulle = document.createElement("div");
+    cpgBulle.className = "coupe-bulle";
+    document.body.appendChild(cpgBulle);
+  }
+  if (!zone) { cpgBulle.style.opacity = "0"; return; }
+  const c = (window.__coupes || [])[Number(zone.dataset.i)];
+  if (!c) { cpgBulle.style.opacity = "0"; return; }
+  const maigres = (c.maigres || []).length;
+  cpgBulle.innerHTML =
+    '<span class="t">' + esc(c.strategie) + " · " + esc(c.intervalle) + "</span>"
+    + "<b>" + c.familles + "</b> actifs testés<br>"
+    + "<b>" + c.sous_alpha + "</b> sous alpha, quand le hasard en donnerait <b>"
+    + num(c.attendu_au_hasard, 1) + "</b>"
+    + (maigres ? '<br><span style="color:var(--warn)">dont <b>' + maigres
+        + "</b> sur moins de 30 aller-retours</span>" : "")
+    + "<br><b>" + (c.survivantes || []).length + "</b> survivent ensemble"
+    + "<br><b>" + (c.retenues || []).length + "</b> retenue(s) par l’épreuve"
+    + ((c.retenues || []).length ? " : " + esc(c.retenues.join(" ")) : "")
+    + "<br>" + (c.marches == null
+        ? '<span class="sansobjet">marchés indépendants : '
+          + esc(c.motif_marches || "non mesurés") + "</span>"
+        : "<b>" + num(c.marches, 1) + "</b> marché(s) indépendant(s)");
+  cpgBulle.style.opacity = "1";
+  const dx = 16, dy = 14;
+  const l = Math.min(ev.clientX + dx, window.innerWidth - cpgBulle.offsetWidth - 8);
+  const t = Math.min(ev.clientY + dy, window.innerHeight - cpgBulle.offsetHeight - 8);
+  cpgBulle.style.left = Math.max(8, l) + "px";
+  cpgBulle.style.top = Math.max(8, t) + "px";
+}
+document.addEventListener("mousemove", cpgSurvol);
+
 
 /* ---------- CONSOMMATION ---------- */
 /* Le seuil de rentabilité d'une couche d'IA permanente.

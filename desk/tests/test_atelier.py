@@ -535,3 +535,68 @@ def test_la_decomposition_mensuelle_est_inscrite_au_registre():
     # La somme des mois est le net : si elle dérivait, le retrait mesurerait
     # une part d'autre chose.
     assert sum(ligne["mois"].values()) == pytest.approx(ligne["net_usd"], abs=1e-6)
+
+
+# ─────────────────────────────────────────── le graphe des coupes
+
+def _bloc_coupes() -> str:
+    """Le style du graphe des coupes, isolé de la feuille."""
+    css = _ui("desk.css")
+    return css[css.index("/* ---------- LE GRAPHE DES COUPES ----------"):]
+
+
+def test_le_graphe_des_coupes_ne_code_en_dur_aucune_couleur():
+    """Le thème sombre est relevé sur les images du poste, et le clair est la
+    vue de lecture : une couleur écrite en dur ne suivrait ni l'un ni l'autre.
+
+    Elle ne se verrait pas non plus — elle aurait l'air d'une pièce rapportée
+    dans un seul des deux thèmes, celui qu'on regarde le moins.
+    """
+    import re
+    bloc = _bloc_coupes()
+    en_dur = re.findall(r"#[0-9A-Fa-f]{3,8}\b", bloc)
+    assert not en_dur, f"couleurs écrites en dur dans le graphe : {en_dur}"
+    assert "var(--ok)" in bloc and "var(--muted)" in bloc
+
+
+def test_les_survivantes_ne_portent_jamais_la_couleur_de_ce_qui_passe():
+    """La règle d'emphase, verrouillée dans la feuille de style.
+
+    Deux mesures l'imposent. Le validateur de palette : l'accent du desk et
+    son vert sont à ΔE 9,0 en clair et 12,8 en sombre, sous le plancher de 15,
+    donc difficiles à distinguer même en vision normale. Et un balayage réel :
+    quinze survivantes pour zéro retenue. Les survivantes sont du contexte,
+    pas une série — elles portent le gris de mise en retrait.
+    """
+    bloc = _bloc_coupes()
+    surv = next(l for l in bloc.splitlines() if l.strip().startswith(".coupeg .surv"))
+    assert "--ok" not in surv and "--accent" not in surv, (
+        f"les survivantes ne doivent porter ni le vert ni l'accent : {surv}")
+    ret = next(l for l in bloc.splitlines() if l.strip().startswith(".coupeg .ret"))
+    assert "var(--ok)" in ret
+
+
+def test_le_graphe_mesure_ses_etiquettes_avant_de_les_poser():
+    """Une étiquette rognée est pire qu'une étiquette absente : elle coupe les
+    premiers ou derniers caractères, donc elle ment.
+
+    « 15 survivantes, 0 retenue » sur un rang à 25 actifs passait sous la
+    colonne des marchés. Le tableau qui suit porte de toute façon tous les
+    nombres, donc rien n'est perdu à effacer.
+    """
+    js = _ui("desk.js")
+    assert "CPG_CAR" in js, "la largeur d'un caractère doit être déclarée"
+    assert "overflow: hidden" not in js and "overflow:hidden" not in js
+
+
+def test_le_nombre_de_marches_ne_partage_pas_l_axe_des_actifs():
+    """Un seul axe. 1,5 marché pour trois perps corrélés n'est pas un nombre
+    d'actifs : le poser sur la même échelle en ferait un.
+    """
+    js = _ui("desk.js")
+    bloc = js[js.index("function grapheCoupes("):js.index("/* La bulle.")]
+    # La colonne des marchés est posée A DROITE du tracé, pas via `xs`.
+    marches = [l for l in bloc.splitlines() if "mrc" in l and "<text" in l]
+    assert marches, "la colonne des marchés doit exister"
+    assert all("xs(" not in l for l in marches), (
+        "le nombre de marchés ne doit pas passer par l'échelle des actifs")
