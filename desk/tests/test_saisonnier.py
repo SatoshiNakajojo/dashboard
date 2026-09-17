@@ -193,7 +193,7 @@ def test_le_decalage_redistribue_sans_rien_creer():
 def test_la_grille_compte_33_cellules_comme_declare():
     """Le dénominateur est annoncé avant la mesure ; la grille doit lui
     correspondre, sinon l'un des deux ment."""
-    g = sr.grille(intervalle="4h")
+    g = sr.grille(intervalle="4h", actifs=["BTC"])
     assert len(g) == S.DENOMINATEUR
     assert len({(c.strategie, c.saison) for c in g}) == S.DENOMINATEUR
 
@@ -201,7 +201,7 @@ def test_la_grille_compte_33_cellules_comme_declare():
 def test_les_cellules_maigres_comptent_au_denominateur():
     """Les retirer rendrait la correction plus laxiste : elles ont bien été
     testées, elles sont juste ininterprétables."""
-    g = sr.grille(intervalle="4h")
+    g = sr.grille(intervalle="4h", actifs=["BTC"])
     maigres = [c for c in g if not c.interpretable]
     assert maigres, "la grille en a forcément"
     assert len(g) == S.DENOMINATEUR
@@ -210,9 +210,61 @@ def test_les_cellules_maigres_comptent_au_denominateur():
 def test_le_nul_est_le_meme_pour_toutes_les_cellules():
     """Deux jeux de décalages différents rendraient des p qui ne se comparent
     plus, et Benjamini-Hochberg porterait sur des choses différentes."""
-    a = {(c.strategie, c.saison): c.p for c in sr.grille(intervalle="4h")}
-    b = {(c.strategie, c.saison): c.p for c in sr.grille(intervalle="4h")}
+    a = {(c.strategie, c.saison): c.p for c in sr.grille(intervalle="4h", actifs=["BTC"])}
+    b = {(c.strategie, c.saison): c.p for c in sr.grille(intervalle="4h", actifs=["BTC"])}
     assert a == b, "la grille doit être reproductible d'une exécution à l'autre"
+
+
+def test_la_mise_en_commun_multiplie_les_trades_sans_toucher_au_denominateur():
+    """LE test de la version 3.
+
+    Le dénominateur reste à trente-trois — une cellule par actif en ferait
+    858 et rendrait le criblage aveugle. C'est le nombre de trades PAR cellule
+    qui monte, et c'est exactement ce qui manquait : quinze cellules lisibles
+    sur BTC seul, trente en mettant l'univers en commun.
+    """
+    seul = sr.grille(intervalle="4h", actifs=["BTC"])
+    commun = sr.grille(intervalle="4h", actifs=["BTC", "ETH", "SOL"])
+    assert len(seul) == len(commun) == S.DENOMINATEUR
+
+    par_cle = {(c.strategie, c.saison): c for c in seul}
+    plus = [c for c in commun
+            if c.trades > par_cle[(c.strategie, c.saison)].trades]
+    assert plus, "mettre trois actifs en commun doit augmenter des cellules"
+    lisibles = lambda g: sum(1 for c in g if c.interpretable)
+    assert lisibles(commun) > lisibles(seul)
+
+
+def test_le_panier_rend_deux_nombres_qui_ne_se_remplacent_pas():
+    """Le compte d'actifs dit combien de backtests alimentent une cellule ; le
+    nombre de marchés dit combien d'information il y a derrière. N'afficher
+    que le premier ferait passer le volume pour de la puissance."""
+    pan = sr.panier()
+    d = pan.en_dict()
+    assert d["nombre"] == S.UNIVERS_AU_GEL
+    assert d["marches"] is not None
+    assert d["minimum"] == S.MARCHES_EFFECTIFS_MIN
+    assert d["tient_la_precondition"] == (d["marches"] >= d["minimum"])
+
+
+def test_vingt_six_perps_ne_font_pas_deux_marches():
+    """La précondition déclarée AVANT la mesure, et son verdict.
+
+    Elle échoue, et ce n'est pas un test à corriger : c'est le résultat. Cinq,
+    dix, quinze ou vingt-six perps donnent tous entre 1,6 et 1,9 marché
+    effectif, sur fenêtre courte comme sur cinq mille barres. Ajouter des
+    actifs crypto n'ajoute pas de marchés — la mise en commun achète des
+    trades, pas de l'information.
+    """
+    pan = sr.panier()
+    assert pan.marches < S.MARCHES_EFFECTIFS_MIN
+    assert not pan.tient_la_precondition
+
+
+def test_la_grille_refuse_un_univers_vide(tmp_path):
+    (tmp_path / "data").mkdir()
+    with pytest.raises(ValueError, match="univers vide"):
+        sr.grille(serie=sr.serie_de_reference(), dossier=tmp_path / "data")
 
 
 def test_la_grille_refuse_une_plage_de_decalages_vide():

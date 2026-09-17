@@ -721,6 +721,11 @@ def saisons_panneau(intervalle: str = "4h") -> dict[str, Any]:
                              f"{S.ECHELLE_REFERENCE}_real.json")}
 
     d = serie.en_dict()
+    # Le panier AVANT la grille : vingt-six actifs qui font moins de deux
+    # marches donnent vingt-six fois plus de trades et presque pas plus de
+    # matiere. Une precondition declaree qui ne s'afficherait pas serait
+    # decorative.
+    pan = sr.panier(intervalle).en_dict()
     grille = [c.en_dict() for c in sr.grille(serie=serie, intervalle=intervalle)]
     avec_p = [c for c in grille if c["p"] is not None]
     garde = benjamini_hochberg([c["p"] for c in avec_p], ALPHA_DEFAUT)
@@ -734,6 +739,7 @@ def saisons_panneau(intervalle: str = "4h") -> dict[str, Any]:
         "reference": S.REFERENCE, "echelle_saison": S.ECHELLE_REFERENCE,
         "intervalle_strategies": intervalle,
         "serie": d,
+        "panier": pan,
         "plages": [{"saison": p.saison, "barres": p.barres,
                     "debut": p.debut, "fin": p.fin,
                     "debut_ms": p.debut_ms, "fin_ms": p.fin_ms,

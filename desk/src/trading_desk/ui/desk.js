@@ -1514,7 +1514,26 @@ function rendreSaisons(sz) {
     + (d.criblage_possible
         ? "le criblage peut voir"
         : "<b style='color:var(--crit)'>criblage aveugle</b>")
-    + "</div>";
+    + "</div>"
+    /* Les DEUX nombres du panier, jamais le premier seul. Vingt-six actifs
+       qui font moins de deux marchés donnent vingt-six fois plus de trades et
+       presque pas plus de matière : n'afficher que le compte d'actifs ferait
+       passer le volume pour de la puissance. Et la précondition déclarée
+       s'affiche même — surtout — quand elle échoue. */
+    + (sz.panier
+      ? "<div class='sansobjet' style='margin-top:4px'>Panier mis en commun : <b>"
+        + sz.panier.nombre + "</b> actifs, "
+        + (sz.panier.marches == null
+            ? "marchés indépendants non mesurés"
+            : "<b" + (sz.panier.tient_la_precondition ? "" : " style='color:var(--warn)'")
+              + ">" + num(sz.panier.marches, 2) + "</b> marché(s) indépendant(s)"
+              + " pour " + num(sz.panier.minimum, 1) + " déclaré(s) au minimum"
+              + (sz.panier.tient_la_precondition
+                  ? ""
+                  : " — <b style='color:var(--warn)'>précondition non tenue</b> :"
+                    + " la mise en commun ajoute des trades, pas de l'information"))
+        + "</div>"
+      : "");
 
   $("saisonsGrille").innerHTML = grapheGrilleSaisons(sz);
 }

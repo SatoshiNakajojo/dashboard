@@ -40,6 +40,16 @@ def afficher_serie(serie: sr.Serie) -> None:
     print(f"  {d['plage_decalages']} decalages utilisables pour "
           f"{d['plage_requise']} requis — le criblage {etat} "
           f"(plancher de p {d['plancher_de_p']:.5f})")
+    # Le panier : deux nombres, jamais le premier seul.
+    pan = sr.panier()
+    d2 = pan.en_dict()
+    marches = ("non mesures" if d2["marches"] is None
+               else f"{d2['marches']:.2f} marche(s) independant(s) pour "
+                    f"{d2['minimum']:.1f} declare(s) au minimum")
+    print(f"  Panier mis en commun : {d2['nombre']} actifs, {marches}"
+          + ("" if d2["tient_la_precondition"]
+             else "  <- PRECONDITION NON TENUE : la mise en commun ajoute des "
+                  "trades, pas de l'information"))
     print()
     for p in serie.plages:
         print(f"    {p.saison:6}{p.barres:5} j   {p.debut} -> {p.fin}"

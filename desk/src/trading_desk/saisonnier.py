@@ -327,22 +327,91 @@ def saison_a(serie: Serie, ts_ms: int, decalage: int = 0) -> str | None:
     return etiq[(rang + decalage) % len(etiq)]
 
 
+@dataclass(frozen=True)
+class Panier:
+    """L'univers mis en commun, et ce qu'il vaut en information.
+
+    Deux nombres qui ne se remplacent pas. Le nombre d'ACTIFS dit combien de
+    backtests alimentent chaque cellule ; le nombre de MARCHES dit combien
+    d'informations independantes il y a derriere. Vingt-six actifs qui font
+    1,85 marche donnent vingt-six fois plus de trades et presque pas plus de
+    matiere — et n'afficher que le premier ferait passer le volume pour de la
+    puissance.
+    """
+
+    actifs: tuple[str, ...]
+    marches: float | None
+    recouvrement: int
+    motif: str = ""
+
+    @property
+    def tient_la_precondition(self) -> bool:
+        return (self.marches is not None
+                and self.marches >= S.MARCHES_EFFECTIFS_MIN)
+
+    def en_dict(self) -> dict[str, Any]:
+        return {
+            "actifs": list(self.actifs), "nombre": len(self.actifs),
+            "marches": self.marches, "recouvrement": self.recouvrement,
+            "minimum": S.MARCHES_EFFECTIFS_MIN,
+            "tient_la_precondition": self.tient_la_precondition,
+            "motif": self.motif,
+        }
+
+
+def panier(intervalle: str | None = None,
+           dossier: Path | None = None) -> Panier:
+    """L'univers, avec le nombre de marches independants qu'il represente."""
+    from . import transversal as tr
+
+    i = intervalle or S.ECHELLE_STRATEGIES
+    actifs = univers(i, dossier)
+    if not actifs:
+        return Panier((), None, 0, f"aucun actif en {i}")
+    lien = tr.lien_des_actifs(actifs, i, dossier)
+    return Panier(tuple(actifs), tr.marches_effectifs(lien),
+                  lien.recouvrement, lien.motif)
+
+
+def univers(intervalle: str | None = None,
+            dossier: Path | None = None) -> list[str]:
+    """La REGLE de l'univers, appliquee : tous les actifs qui ont des barres.
+
+    Une liste ecrite en dur serait une selection, donc une hypothese de plus,
+    et invisible dans le denominateur. On lit donc ce qui est la.
+    """
+    i = intervalle or S.ECHELLE_STRATEGIES
+    base = dossier or DONNEES
+    suffixe = f"_{i}_real.json"
+    return sorted(c.name[: -len(suffixe)] for c in base.glob(f"*{suffixe}"))
+
+
 def grille(strategies: Sequence[str] | None = None, *,
            serie: Serie | None = None,
-           actif: str | None = None, intervalle: str | None = None,
+           actif: str | None = None, actifs: Sequence[str] | None = None,
+           intervalle: str | None = None,
            equite: float = 1000.0,
            tirages: int | None = None,
            dossier: Path | None = None) -> list[Cellule]:
     """Chaque strategie, dans chaque saison, contre le nul par decalage.
 
-    **Un seul backtest par strategie.** Les trades sont ensuite attribues a la
-    saison de leur ENTREE. Le nul rejoue la meme attribution sur des
-    etiquettes decalees : la question n'est donc pas « la strategie
-    gagne-t-elle », mais « la saison predit-elle OU elle gagne ». Le total
-    d'une strategie est fixe, le nul ne fait que le redistribuer.
+    **Un backtest par strategie et par actif, puis MISE EN COMMUN.** Les
+    trades de tout l'univers tombent dans la meme cellule (strategie, saison) :
+    le denominateur reste a trente-trois, seul le nombre de trades par cellule
+    monte. Une cellule par actif ferait 858 hypotheses et rendrait le criblage
+    aveugle — `saisons.py` porte l'arithmetique.
 
-    C'est ce qui permet a une strategie perdante d'avoir malgre tout une
-    saison ou elle gagne — exactement l'hypothese qu'on teste.
+    Les trades sont attribues a la saison de leur ENTREE. Le nul rejoue la
+    meme attribution sur des etiquettes decalees : la question n'est donc pas
+    « la strategie gagne-t-elle », mais « la saison predit-elle OU elle
+    gagne ». Le total d'une strategie est fixe, le nul ne fait que le
+    redistribuer. C'est ce qui permet a une strategie perdante d'avoir malgre
+    tout une saison ou elle gagne — exactement l'hypothese qu'on teste.
+
+    **Le decalage est UN SEUL, partage par tous les actifs.** Les saisons sont
+    definies sur la reference et valent pour le marche entier ; en decaler
+    chacun separement casserait la dependance transversale et validerait
+    n'importe quoi.
     """
     import bisect
     import random
@@ -360,7 +429,12 @@ def grille(strategies: Sequence[str] | None = None, *,
     if not serie.plage_decalages:
         raise ValueError("plage de decalages vide : le nul serait inerte")
 
-    barres = load_from_file(str(base / f"{a}_{i}_real.json"), a, i)
+    panier = ([actif] if actif else
+              (list(actifs) if actifs is not None else univers(i, base)))
+    if not panier:
+        raise ValueError(f"univers vide en {i} : rien a mesurer")
+    barres = {x: load_from_file(str(base / f"{x}_{i}_real.json"), x, i)
+              for x in panier}
     noms = list(strategies) if strategies else sorted(BASELINES)
 
     # Les decalages tires une seule fois, partages par toutes les strategies :
@@ -377,18 +451,19 @@ def grille(strategies: Sequence[str] | None = None, *,
 
     out: list[Cellule] = []
     for nom in noms:
-        res = run_backtest(barres, BASELINES[nom](**defauts(nom, i)),
-                           limits=RiskLimits(), interval=i,
-                           initial_equity_usd=Decimal(str(equite)))
         # Les rangs plutot que les horodatages : l'attribution se reduit alors
         # a une addition modulo, faite deux mille fois par strategie. La
         # bisection place chaque trade sous la saison EN VIGUEUR, ce qui
         # permet de trader en 4 h sous des saisons journalieres.
         rangs = []
-        for t in res.trades:
-            k = bisect.bisect_right(bornes, int(t.entry_ts_ms)) - 1
-            if k >= 0:
-                rangs.append((k, float(t.net_pnl_usd)))
+        for x in panier:
+            res = run_backtest(barres[x], BASELINES[nom](**defauts(nom, i)),
+                               limits=RiskLimits(), interval=i,
+                               initial_equity_usd=Decimal(str(equite)))
+            for t in res.trades:
+                k = bisect.bisect_right(bornes, int(t.entry_ts_ms)) - 1
+                if k >= 0:
+                    rangs.append((k, float(t.net_pnl_usd)))
         observe = _par_saison(etiq, rangs, 0)
         nuls = [_par_saison(etiq, rangs, k) for k in decalages]
 
