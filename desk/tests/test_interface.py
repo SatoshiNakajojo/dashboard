@@ -644,7 +644,11 @@ def test_le_snapshot_annonce_le_catalogue_et_le_refus(client):
     pourquoi. Un refus découvert après coup ressemble à une panne."""
     d = client.get("/api/campagnes").json()
     assert {c["cle"] for c in d["catalogue"]} == {
-        "grille", "declencheurs", "deblocages", "cotations", "journal"}
+        "grille", "declencheurs", "deblocages", "cotations", "journal",
+        # Les séquences d'événements : déclarées le 16 septembre, mesurées le
+        # même jour, et invisibles jusqu'au 17. Une étude qu'on ne peut pas
+        # relancer depuis le cockpit est une étude que personne ne relancera.
+        "sequences"}
     for c in d["catalogue"]:
         assert c["quoi"] and c["duree"], f"{c['cle']} n'annonce pas sa question"
     assert d["en_cours"] is False and d["refus"] is None
@@ -1418,3 +1422,32 @@ def test_l_ecran_dit_que_le_stop_n_est_pas_valide():
     écran qui ne le dit pas laisse comparer deux choses différentes."""
     assert "stop_valide" in _ui("desk.js")
     assert "garde-fou opérationnel" in _ui("desk.js")
+
+
+def test_toute_etude_pre_enregistree_est_lancable_depuis_le_cockpit():
+    """Une étude mesurée qui n'existe que dans un fichier JSON et un message de
+    commit est une étude que personne ne relancera.
+
+    Les séquences d'événements ont été déclarées le 16 septembre, mesurées le
+    même jour, et n'apparaissaient nulle part — ni dans l'API, ni à l'écran.
+    """
+    from trading_desk.api.campagnes import CATALOGUE
+
+    assert "sequences" in CATALOGUE
+    assert CATALOGUE["sequences"].script == "valider_sequences.py"
+
+
+def test_une_campagne_a_nul_exhaustif_n_offre_aucun_curseur():
+    """Offrir un réglage de tirages laisserait croire qu'on peut acheter de la
+    résolution. Sur un nul par bloc exhaustif elle est fixée par la DONNÉE —
+    le nombre d'offsets disponibles — et aucun curseur ne la change.
+
+    C'est la faute que la version 1 du vocabulaire avait commise contre
+    elle-même : vérifier `1/(tirages+1)` là où le plancher valait
+    `1/(offsets+1)`.
+    """
+    from trading_desk.api.campagnes import CATALOGUE
+    from trading_desk.sentinelle import vocabulaire_evenements as voc
+
+    assert voc.NUL_EXHAUSTIF is True
+    assert CATALOGUE["sequences"].parametres == {}

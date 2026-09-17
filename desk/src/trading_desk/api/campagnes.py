@@ -120,6 +120,22 @@ CATALOGUE: dict[str, Campagne] = {
             parametres={"tirages": (2000, 500, 20000)},
         ),
         Campagne(
+            "sequences", "Séquences d'événements",
+            "Huit événements datés — cassures, volume, amplitude, écarts, "
+            "séries — contre un nul PAR BLOC exhaustif, sur l'univers sans "
+            "biais du survivant. Le vocabulaire a été figé AVANT la mesure, "
+            "et l'historique git en fait foi.",
+            "valider_sequences.py",
+            args=("--out", "baselines/sequences.json"),
+            duree="2 à 5 min",
+            # AUCUN paramètre réglable, et ce n'est pas un oubli : le nul est
+            # EXHAUSTIF. On énumère les 172 offsets de la plage au lieu d'en
+            # tirer, donc il n'y a ni nombre de tirages ni graine — donc pas
+            # de question « et si on avait tiré autrement ». Offrir un curseur
+            # ici laisserait croire qu'on peut acheter de la résolution ;
+            # elle est fixée par la DONNÉE.
+        ),
+        Campagne(
             "journal", "Journal hors échantillon",
             "Inscrit les déblocages dont la fenêtre s'ouvre. À lancer une "
             "fois par semaine — c'est la validation qui compte vraiment.",
