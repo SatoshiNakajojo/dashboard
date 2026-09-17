@@ -99,3 +99,73 @@ def test_la_declaration_dit_ce_que_la_donnee_ne_permet_pas():
     """
     assert saisons.CYCLES_DEMANDES == 4
     assert saisons.CYCLES_COMPLETS_DISPONIBLES == 1
+
+
+# ──────────────────────────────────────────── ce que l'écran a le droit de dire
+
+def _ui(nom: str) -> str:
+    from pathlib import Path
+    racine = Path(__file__).resolve().parents[1]
+    return (racine / "src" / "trading_desk" / "ui" / nom).read_text(encoding="utf-8")
+
+
+def test_la_bande_des_saisons_ne_porte_ni_rouge_ni_vert():
+    """Deux raisons se rejoignent, et aucune n'est esthétique.
+
+    Le rouge et le vert sont réservés à la sévérité dans tout ce poste. Et
+    « bull = vert » dirait « bull = bien », ce qui est faux pour un desk qui
+    peut vendre à découvert : une saison n'est pas un état de santé.
+    """
+    css = _ui("desk.css")
+    bloc = css[css.index("/* ---------- LES SAISONS ----------"):]
+    for classe in (".sz-bull", ".sz-bear", ".sz-range"):
+        ligne = next(l for l in bloc.splitlines() if l.strip().startswith(classe))
+        assert "--ok" not in ligne and "--crit" not in ligne, ligne
+        assert "--warn" not in ligne, ligne
+
+
+def test_la_grille_des_saisons_n_est_pas_une_carte_de_chaleur():
+    """Trente-trois cases qui scintillent en deux couleurs invitent à chercher
+    des motifs dans du bruit, et le résultat mesuré est que rien ne franchit
+    le seuil. Le validateur de palette refusait d'ailleurs la paire rouge/vert
+    en thème clair : ΔE 5,6 en deutéranopie, sous le plancher.
+
+    La grille porte donc des POINTS sur l'axe des p, dont un seul est coloré —
+    les cellules trop maigres sont creuses.
+    """
+    css = _ui("desk.css")
+    bloc = css[css.index("/* La grille : un point par cellule"):]
+    pt = next(l for l in bloc.splitlines() if l.strip().startswith(".grilleg .pt "))
+    maigre = next(l for l in bloc.splitlines() if ".pt-mgr" in l)
+    assert "var(--accent)" in pt
+    assert "fill:none" in maigre, "une cellule maigre doit être creuse, pas colorée"
+    assert "--ok" not in bloc and "--crit" not in bloc
+
+
+def test_l_ecran_affiche_toujours_la_version_et_l_empreinte():
+    """Une mesure qui ne dirait pas sous quelle déclaration elle a été faite ne
+    serait pas comparable à la suivante."""
+    js = _ui("desk.js")
+    bloc = js[js.index("function rendreSaisons("):js.index("const GS = {")]
+    assert "sz.empreinte" in bloc and "sz.version" in bloc
+    assert "sz.fige_le" in bloc
+
+
+def test_l_ecran_annonce_la_resolution_avant_les_resultats():
+    """Un criblage aveugle rend un « zéro survivant » qui ne dit rien du
+    marché. Ça se lit avant le tableau, pas après."""
+    js = _ui("desk.js")
+    bloc = js[js.index("function rendreSaisons("):js.index("const GS = {")]
+    assert "plage_decalages" in bloc and "plage_requise" in bloc
+    assert "criblage_possible" in bloc
+
+
+def test_l_ecran_dit_ce_que_le_hasard_donnerait():
+    """« Une cellule sous alpha » se lit comme une trouvaille ; « quand le
+    hasard en donnerait 1,65 » se lit comme ce que c'est."""
+    js = _ui("desk.js")
+    bloc = js[js.index("function grapheGrilleSaisons("):]
+    assert "attendu_au_hasard" in bloc
+    assert "maigres_sous_alpha" in bloc, (
+        "une cellule sous alpha absente du graphe parce qu'elle est maigre "
+        "doit être nommée, pas laissée chercher")

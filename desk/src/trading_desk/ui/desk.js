@@ -437,6 +437,7 @@ function rendreRecherche(d) {
   rendreVols(d.vols);
   rendreGlissement(d.glissement);
   rendrePoussee((d.vols || {}).poussee);
+  rendreSaisons(d.saisons);
   rendreGenerateur(d.generateur);
   rendreTesteur(d.testeur);
   rendreBiblio(d.bibliotheque);
@@ -1436,6 +1437,168 @@ function cpgSurvol(ev) {
   cpgBulle.style.top = Math.max(8, t) + "px";
 }
 document.addEventListener("mousemove", cpgSurvol);
+
+
+/* ---------- LES SAISONS ----------
+
+   Deux formes, choisies par le travail que le lecteur doit faire.
+
+   La BANDE répond à « quand ». Des plages labellisées, larges à proportion de
+   leur durée. Ni rouge ni vert : ils sont réservés à la sévérité dans tout ce
+   poste, et « bull = vert » dirait « bull = bien », ce qui est faux pour un
+   desk qui peut vendre à découvert.
+
+   La GRILLE répond à « est-ce que ça dit quelque chose ». Un point par
+   cellule sur l'axe des p, en trois petits multiples — un par saison. PAS une
+   carte de chaleur : trente-trois cases qui scintillent en deux couleurs
+   invitent à chercher des motifs dans du bruit, alors que le résultat mesuré
+   est que rien ne franchit le seuil. Le validateur de palette refusait
+   d'ailleurs la paire rouge/vert en thème clair — ΔE 5,6 en deutéranopie,
+   sous le plancher.
+
+   Les cellules trop maigres sont CREUSES, pas absentes : elles comptent au
+   dénominateur, elles ne sont juste pas lisibles. */
+
+function rendreSaisons(sz) {
+  const badge = $("saisonBadge");
+  if (!sz || !sz.disponible) {
+    if (badge) badge.textContent = "—";
+    if ($("saisonsSerie")) {
+      $("saisonsSerie").innerHTML = sz && sz.raison
+        ? "<div class='empty'>" + esc(sz.raison)
+          + (sz.commande ? " <code>" + esc(sz.commande) + "</code>" : "") + "</div>"
+        : "";
+    }
+    if ($("saisonsGrille")) $("saisonsGrille").innerHTML = "";
+    return;
+  }
+
+  const d = sz.serie || {};
+  if (badge) {
+    badge.textContent = "v" + sz.version + " · " + (sz.plages || []).length + " plages";
+    badge.style.color = d.criblage_possible ? "var(--ok)" : "var(--crit)";
+  }
+
+  const total = (sz.plages || []).reduce((a, p) => a + p.barres, 0) || 1;
+  const bandes = (sz.plages || []).map((p) => {
+    const pct = (100 * p.barres) / total;
+    /* Le nom n'est écrit que s'il tient : un texte rogné coupe des
+       caractères, donc il ment. Le seuil est descendu de 5 % à 3 % parce
+       qu'au-dessus, la moitié des plages restaient muettes et un lecteur ne
+       pouvait pas distinguer une saison étroite d'un séparateur. La bulle
+       native porte le détail dans tous les cas. */
+    const texte = pct >= 3 ? esc(p.saison) : "";
+    return "<div class='sz-" + esc(p.saison) + "' style='width:" + pct.toFixed(3)
+      + "%' title='" + esc(p.saison) + " · " + p.barres + " barres · "
+      + esc(p.debut) + " → " + esc(p.fin) + " · jour " + p.jour_du_cycle
+      + " du cycle " + p.cycle + "'>" + texte + "</div>";
+  }).join("");
+
+  const r = d.repartition || {};
+  $("saisonsSerie").innerHTML =
+    "<div class='saison-bande'>" + bandes + "</div>"
+    + "<div class='saison-cle'>"
+    + "<span><i class='sz-bull'></i>bull "
+    + (r.bull || 0) + " j</span>"
+    + "<span><i style='background:var(--surface-3)'></i>range " + (r.range || 0) + " j</span>"
+    + "<span><i style='background:color-mix(in oklab, var(--accent) 72%, var(--surface))'></i>bear "
+    + (r.bear || 0) + " j</span>"
+    + "</div>"
+    /* La résolution AVANT les résultats : un criblage aveugle rend un « zéro
+       survivant » qui ne dit rien du marché. */
+    + "<div class='sansobjet' style='margin-top:8px'>"
+    + "Découpage figé le " + esc(sz.fige_le) + ", empreinte <b>" + esc(sz.empreinte)
+    + "</b> · saisons sur " + esc(sz.reference) + " " + esc(sz.echelle_saison)
+    + ", stratégies en " + esc(sz.intervalle_strategies) + " · "
+    + d.plage_decalages + " décalages pour " + d.plage_requise + " requis — "
+    + (d.criblage_possible
+        ? "le criblage peut voir"
+        : "<b style='color:var(--crit)'>criblage aveugle</b>")
+    + "</div>";
+
+  $("saisonsGrille").innerHTML = grapheGrilleSaisons(sz);
+}
+
+/* DROITE n'est pas de la marge décorative : un point à p = 0,99 est centré
+   sur le bord du dernier panneau, donc son rayon et l'étiquette « 1 » de son
+   axe sortaient du viewBox et se faisaient rogner. On réserve de quoi les
+   contenir. ECART s'ouvre pour la même raison, entre le « 1 » d'un panneau et
+   le « 0 » du suivant. */
+const GS = { W: 1000, NOMS: 178, DROITE: 14, HAUT: 40, BAS: 26, RANG: 20,
+             ECART: 26 };
+
+function grapheGrilleSaisons(sz) {
+  const cells = sz.grille || [];
+  if (!cells.length) return "";
+  const { W, NOMS, DROITE, HAUT, BAS, RANG, ECART } = GS;
+  const saisons = ["bull", "range", "bear"];
+  const noms = [...new Set(cells.map((c) => c.strategie))].sort();
+  const large = (W - NOMS - DROITE - ECART * (saisons.length - 1)) / saisons.length;
+  const HT = HAUT + noms.length * RANG + BAS;
+  const par = {};
+  cells.forEach((c) => { par[c.strategie + "|" + c.saison] = c; });
+
+  let g = "";
+  saisons.forEach((s, k) => {
+    const gx = NOMS + k * (large + ECART);
+    const xs = (p) => gx + large * Math.max(0, Math.min(1, p));
+    g += "<text class='lab' x='" + gx + "' y='" + (HAUT - 16) + "'>" + esc(s) + "</text>";
+    [0, 0.5, 1].forEach((t) => {
+      g += "<line class='" + (t === 0 ? "axe2" : "grille2") + "' x1='" + xs(t)
+        + "' y1='" + (HAUT - 6) + "' x2='" + xs(t) + "' y2='" + (HT - BAS + 4) + "'/>"
+        + "<text class='tick2' x='" + xs(t) + "' y='" + (HT - BAS + 18)
+        + "' text-anchor='middle'>" + t + "</text>";
+    });
+    /* Le seuil d'alpha, tracé là où il tombe vraiment : tout à gauche. C'est
+       le message — les points sont loin, pas près. */
+    g += "<line class='seuil' x1='" + xs(0.05) + "' y1='" + (HAUT - 6)
+      + "' x2='" + xs(0.05) + "' y2='" + (HT - BAS + 4) + "'/>";
+    /* L'étiquette du seuil va SOUS l'axe, pas au-dessus : en haut elle
+       tombait sur le titre du panneau. */
+    if (k === 0) {
+      g += "<text class='sub' x='" + (xs(0.05) + 5) + "' y='" + (HT - BAS + 18)
+        + "'>α</text>";
+    }
+    noms.forEach((nom, i) => {
+      const c = par[nom + "|" + s];
+      if (!c || c.p == null) return;
+      const y = HAUT + i * RANG + RANG / 2;
+      g += "<circle class='" + (c.interpretable ? "pt" : "pt-mgr") + "' cx='"
+        + xs(c.p) + "' cy='" + y + "' r='4.5'><title>" + esc(nom) + " · " + esc(s)
+        + "\n" + c.trades + " aller-retours" + (c.interpretable ? "" : " (trop peu)")
+        + "\np = " + c.p.toFixed(4)
+        + "\n" + c.net_par_trade.toFixed(2) + " $/trade contre "
+        + c.nul_moyen.toFixed(2) + " au nul</title></circle>";
+    });
+  });
+  noms.forEach((nom, i) => {
+    g += "<text class='sub' x='0' y='" + (HAUT + i * RANG + RANG / 2 + 4)
+      + "'>" + esc(nom) + "</text>";
+  });
+
+  return "<svg class='grilleg' viewBox='0 0 " + W + " " + HT + "' "
+    + "preserveAspectRatio='xMinYMin meet' role='img' aria-label='p de chaque "
+    + "cellule stratégie par saison, en trois petits multiples'>" + g + "</svg>"
+    + "<div class='saison-cle'>"
+    + "<span><svg width='14' height='14' style='vertical-align:-3px'>"
+    + "<circle class='pt' cx='7' cy='7' r='4.5' fill='var(--accent)'/></svg>"
+    + " au moins " + sz.trades_min + " aller-retours</span>"
+    + "<span><svg width='14' height='14' style='vertical-align:-3px'>"
+    + "<circle cx='7' cy='7' r='4.5' fill='none' stroke='var(--muted)' "
+    + "stroke-width='1.5'/></svg> trop maigre — comptée au dénominateur, "
+    + "pas lisible</span></div>"
+    + "<div class='sansobjet' style='margin-top:6px'>"
+    + sz.denominateur + " cellules · <b>" + sz.sous_alpha + "</b> sous alpha "
+    + "quand le hasard en donnerait <b>" + num(sz.attendu_au_hasard, 2)
+    + "</b> · <b>" + sz.survivantes + "</b> survivante(s) à Benjamini-Hochberg "
+    + "(seuil au rang 1 : " + num(sz.seuil_rang1, 5) + ")"
+    + ((sz.maigres_sous_alpha || []).length
+        ? "<br>La ou les cellules sous alpha sont maigres : "
+          + esc(sz.maigres_sous_alpha.join(", "))
+          + " — nul dégénéré, pas un résultat."
+        : "")
+    + "</div>";
+}
 
 
 /* ---------- CONSOMMATION ---------- */

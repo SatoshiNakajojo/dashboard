@@ -661,6 +661,8 @@ def _mediane(valeurs: list[float]) -> float | None:
 # Une coupe n'est lisible qu'a partir de quelques actifs : sur deux cellules,
 # « une survit » ne se distingue pas du hasard, et l'afficher inviterait a lire
 # un resultat la ou il n'y a pas d'echantillon.
+ALPHA_DEFAUT = 0.05
+
 COUPE_MIN = 3
 
 
@@ -690,6 +692,65 @@ def _coupes(lignes: list[dict[str, Any]],
     return sorted(out, key=lambda d: (-len(d["retenues"]),
                                       -len(d["survivantes"]),
                                       -(d["marches"] or 0.0)))
+
+
+def saisons_panneau(intervalle: str = "4h") -> dict[str, Any]:
+    """Les saisons : la serie, la grille, et ce que la grille ne dit pas.
+
+    Le decoupage est FIGE dans `trading_desk/saisons.py`, commite avant
+    qu'une ligne de mesure n'existe. Ce panneau affiche donc TOUJOURS la
+    version et l'empreinte : une mesure qui ne dirait pas sous quelle
+    declaration elle a ete faite ne serait pas comparable a la suivante.
+
+    Il affiche aussi la resolution du criblage AVANT les resultats. Un
+    criblage aveugle rend un « zero survivant » qui ne dit rien du marche, et
+    ca se lit avant le tableau, pas apres.
+    """
+    from .. import saisonnier as sr
+    from .. import saisons as S
+    from ..sentinelle.validation import benjamini_hochberg
+
+    try:
+        serie = sr.serie_de_reference()
+    except (FileNotFoundError, OSError) as exc:
+        return {"disponible": False,
+                "raison": f"barres de {S.REFERENCE} absentes : {exc}",
+                "commande": (f"python scripts/fetch_candles.py --asset "
+                             f"{S.REFERENCE} --interval {S.ECHELLE_REFERENCE} "
+                             f"--days 833 --out data/{S.REFERENCE}_"
+                             f"{S.ECHELLE_REFERENCE}_real.json")}
+
+    d = serie.en_dict()
+    grille = [c.en_dict() for c in sr.grille(serie=serie, intervalle=intervalle)]
+    avec_p = [c for c in grille if c["p"] is not None]
+    garde = benjamini_hochberg([c["p"] for c in avec_p], ALPHA_DEFAUT)
+    for c, k in zip(avec_p, garde):
+        c["survivante"] = bool(k)
+
+    sous_alpha = [c for c in avec_p if c["p"] <= ALPHA_DEFAUT]
+    return {
+        "disponible": True,
+        "version": S.VERSION, "empreinte": S.empreinte(), "fige_le": S.FIGE_LE,
+        "reference": S.REFERENCE, "echelle_saison": S.ECHELLE_REFERENCE,
+        "intervalle_strategies": intervalle,
+        "serie": d,
+        "plages": [{"saison": p.saison, "barres": p.barres,
+                    "debut": p.debut, "fin": p.fin,
+                    "debut_ms": p.debut_ms, "fin_ms": p.fin_ms,
+                    "jour_du_cycle": p.jour_du_cycle, "cycle": p.cycle}
+                   for p in serie.plages],
+        "grille": grille,
+        "denominateur": S.DENOMINATEUR,
+        "seuil_rang1": ALPHA_DEFAUT / S.DENOMINATEUR,
+        "attendu_au_hasard": ALPHA_DEFAUT * S.DENOMINATEUR,
+        "sous_alpha": len(sous_alpha),
+        # Les maigres sous alpha sont nommees : une cellule a deux trades peut
+        # passer sous alpha par nul degenere, et le tableau ne la montre pas.
+        "maigres_sous_alpha": [c["strategie"] + " / " + c["saison"]
+                               for c in sous_alpha if not c["interpretable"]],
+        "survivantes": sum(1 for c in avec_p if c.get("survivante")),
+        "trades_min": sr.TRADES_MIN_PAR_CELLULE,
+    }
 
 
 def atelier(registre: Path | None = None) -> dict[str, Any]:
@@ -1527,6 +1588,7 @@ def tout(store: Any = None, racine_collecte: Path | str | None = None) -> dict[s
         "campagnes": camp,
         "strategies": strategies(),
         "atelier": atelier(),
+        "saisons": saisons_panneau(),
         "regles_figees": regles_figees(),
         "telemetrie": tel,
         "navigation": nav,

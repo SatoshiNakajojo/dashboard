@@ -323,7 +323,10 @@ def test_le_panneau_complet_ne_touche_ni_reseau_ni_modele(client, monkeypatch):
                       "telemetrie", "navigation", "consommation", "vols",
                       "glissement", "prevol",
                       # La fabrique : générateur, testeur, bibliothèque.
-                      "generateur", "testeur", "bibliotheque"}
+                      "generateur", "testeur", "bibliotheque",
+                      # Les saisons : elles ne lisent que des barres locales,
+                      # et ce test le vérifie en même temps que leur présence.
+                      "saisons"}
 
     # Le générateur SONDE des sources réseau — mais jamais depuis l'écran :
     # `sources(sonder=False)` ici, `--sources` en ligne de commande pour
