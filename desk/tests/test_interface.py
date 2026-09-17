@@ -1451,3 +1451,33 @@ def test_une_campagne_a_nul_exhaustif_n_offre_aucun_curseur():
 
     assert voc.NUL_EXHAUSTIF is True
     assert CATALOGUE["sequences"].parametres == {}
+
+
+def test_toute_unite_systemd_livree_est_installee():
+    """Une unité dans `deploy/` que l'installeur ne copie pas est une unité que
+    personne n'aura sur sa machine — et qui donnera l'illusion d'être déployée
+    parce qu'elle est dans le dépôt."""
+    from pathlib import Path as _P
+
+    racine = _P(__file__).resolve().parents[1]
+    installeur = (racine / "deploy" / "installer.sh").read_text()
+    for unite in sorted((racine / "deploy").glob("*.service")):
+        assert unite.name in installeur, f"{unite.name} n'est pas installé"
+    for timer in sorted((racine / "deploy").glob("*.timer")):
+        assert timer.name in installeur, f"{timer.name} n'est pas installé"
+
+
+def test_la_ferme_cede_le_pas_a_l_enregistreur():
+    """L'enregistreur lit un flux temps réel : un message raté est perdu pour
+    toujours, alors qu'une cellule de balayage retardée est juste retardée.
+
+    Sans ces deux directives, huit processus de backtest prennent la machine
+    et l'historique se troue en silence — le genre de panne qui ne se voit que
+    des semaines plus tard.
+    """
+    from pathlib import Path as _P
+
+    unite = (_P(__file__).resolve().parents[1] / "deploy" / "ferme.service").read_text()
+    assert "Nice=" in unite and "CPUWeight=" in unite
+    assert "Restart=" not in unite, (
+        "un oneshot qui échoue doit RESTER en échec")

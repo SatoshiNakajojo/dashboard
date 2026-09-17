@@ -77,19 +77,27 @@ ok "a jour"
 
 bleu "3. Dossiers de travail"
 # `.cache` sert au telechargement de bougies du journal des regles ; `data`
-# porte les deux journaux. Les unites systemd les declarent en ReadWritePaths,
-# et un chemin declare qui n'existe pas fait echouer le demarrage.
-for d in "$RACINE/data" "$RACINE/.cache" /var/lib/desk/enregistrement; do
+# porte les deux journaux ; `baselines` recoit les artefacts de campagne, dont
+# ceux de la ferme. Les unites systemd les declarent en ReadWritePaths, et un
+# chemin declare qui n'existe pas fait echouer le demarrage — avec un message
+# qui ne dit pas lequel.
+for d in "$RACINE/data" "$RACINE/.cache" "$RACINE/baselines" \
+         /var/lib/desk/enregistrement; do
     mkdir -p "$d"
     chown -R "$UTILISATEUR:$UTILISATEUR" "$d"
     ok "$d"
 done
 
 bleu "4. Unites systemd"
+# `ferme.service` n'a PAS de timer, et ce n'est pas un oubli : un balayage
+# ajoute des hypotheses au denominateur de son origine, donc c'est une
+# decision, pas une routine. Il est installe mais jamais active — on le lance
+# a la main par `systemctl start ferme`.
 for u in enregistreur.service \
          rituel-deblocages.service rituel-deblocages.timer \
          regles-figees.service regles-figees.timer \
-         regles-llm.service regles-llm.timer; do
+         regles-llm.service regles-llm.timer \
+         ferme.service; do
     install -m 0644 "$RACINE/deploy/$u" "/etc/systemd/system/$u"
     ok "$u"
 done

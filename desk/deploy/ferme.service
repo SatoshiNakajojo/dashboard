@@ -1,0 +1,67 @@
+# /etc/systemd/system/ferme.service
+#
+# PAS DE TIMER, et c'est deliberé. Un balayage est une DECISION — il ajoute des
+# hypotheses au denominateur de son origine — pas une routine. On le lance a la
+# main :
+#
+#   sudo systemctl start ferme
+#   journalctl -u ferme -f
+#
+# Voir deploy/README.md et docs/RUNBOOK-ferme.md.
+#
+[Unit]
+Description=Balaye les regles sur tout le panier, en parallele
+Documentation=https://github.com/SatoshiNakajojo/dashboard
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=desk
+Group=desk
+WorkingDirectory=/opt/desk/src/desk
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/opt/desk/.venv/bin/python scripts/ferme.py --intervalle 4h
+
+# Une nuit. Onze regles sur vingt-six actifs prennent 1,7 h sur un seul cœur ;
+# un catalogue elargi sur une machine modeste peut depasser six heures, et un
+# TimeoutStartSec trop court tuerait le travail a 90 % sans rien inscrire de
+# plus — le registre est en ajout, donc ce qui est fait est garde, mais la
+# reprise coute une relance.
+TimeoutStartSec=28800
+
+# Pas de Restart : un oneshot qui echoue doit RESTER en echec. Un service qui
+# se relance efface la trace de la panne.
+
+# LA FERME CEDE LE PAS A L'ENREGISTREUR. Celui-ci lit un flux temps reel :
+# un message rate est perdu pour toujours, alors qu'une cellule de balayage
+# retardee est juste une cellule retardee. Sans ces deux lignes, huit
+# processus de backtest prennent la machine et l'enregistreur perd des
+# messages en silence — le genre de panne qui ne se voit que des semaines plus
+# tard, dans un historique troue.
+Nice=10
+CPUWeight=20
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/desk/src/desk/data /opt/desk/src/desk/baselines /opt/desk/src/desk/.cache
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+
+# Un ouvrier charge les barres d'un actif et rejoue deux mille backtests.
+# Mesure : ~200 Mo par ouvrier en 4 h sur 5 000 bougies. 4 Go laisse de la
+# marge pour huit ouvriers ET le reste du desk. Si la ferme se fait tuer par
+# l'OOM, baisser --coeurs avant de monter cette valeur : la memoire par
+# ouvrier ne depend pas du nombre d'ouvriers, mais le total si.
+MemoryMax=4G
+
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=ferme
+
+[Install]
+WantedBy=multi-user.target
