@@ -99,6 +99,62 @@ liberte de plus est exactement ce qu'on ne peut pas se permettre sur un
 decoupage qui decide de trente-trois hypotheses.
 
 ────────────────────────────────────────────────────────────────────────────
+  VERSION 3 : IL MANQUAIT DE LA PUISSANCE, PAS DU SIGNAL
+────────────────────────────────────────────────────────────────────────────
+
+Mesure du 17 septembre 2026, sous la version 2, sur BTC en 4 h : **dix-huit
+cellules sur trente-trois sous trente aller-retours**, donc ininterpretables.
+Le plus petit p des quinze lisibles valait 0,1274, et zero cellule ne passait
+sous alpha quand le hasard en donnerait 1,65.
+
+Ce n'est pas un resultat contraire, c'est un echantillon trop mince : un seul
+actif, coupe en trois saisons, ne laisse pas assez de trades par case. La
+version 3 ne change donc RIEN au decoupage — les memes 200, 20, 20 et le meme
+retard. Elle change l'UNIVERS.
+
+**LE PIEGE DE LA VERSION 3, ET POURQUOI ELLE NE LE PREND PAS.** Le reflexe est
+de faire une cellule par (strategie, saison, actif). Onze fois trois fois
+vingt-six font 858 hypotheses, et l'arithmetique tue l'idee avant qu'on la
+mesure :
+
+    m = 858    seuil au rang 1   0,0000583
+               plancher de p     0,0006105   (1 637 decalages disponibles)
+               -> criblage AVEUGLE
+
+Il faudrait 17 159 decalages distincts pour qu'une cellule puisse survivre
+seule, et la serie en offre 1 637. Aucune cellule ne pourrait passer, quelle
+que soit la donnee, et son « zero survivant » ne dirait rien du marche.
+Multiplier les actifs par reflexe aurait rendu le criblage inerte tout en
+ayant l'air de le renforcer.
+
+**CE QU'ELLE FAIT A LA PLACE : ELLE MET LES ACTIFS EN COMMUN.** Une cellule
+reste (strategie, saison) — trente-trois, comme avant — mais ses trades
+viennent de TOUT l'univers. Le denominateur ne bouge pas, le nombre de trades
+par case est multiplie. C'est exactement ce qui manquait.
+
+La question posee y gagne d'ailleurs en sens : « cette strategie est-elle
+meilleure dans cette saison » se demande une fois pour le marche, pas une fois
+par actif.
+
+**LE NUL RESTE UN SEUL DECALAGE, PARTAGE PAR TOUS LES ACTIFS.** Les saisons
+sont definies sur BTC et valent pour le marche entier ; decaler chaque actif
+separement casserait la dependance transversale et validerait n'importe quoi —
+c'est la lecon du nul par bloc des cotations, appliquee ici avant de se faire
+avoir.
+
+**ET VINGT-SIX ACTIFS NE FONT PAS VINGT-SIX MARCHES.** Le nombre de trades est
+multiplie par vingt-six ; l'information independante, non. La mesure des
+marches effectifs le dit : dix perps en font 2,44. `MARCHES_EFFECTIFS_MIN`
+inscrit la borne en dessous de laquelle la mise en commun ajoute des trades
+sans ajouter d'information — deux, parce que sous deux marches effectifs,
+« a travers le marche » veut dire un seul marche.
+
+**CE QUE CA COUTE A CALCULER**, mesure avant de declarer : 1,5 s par actif pour
+la grille entiere, soit environ quarante secondes pour vingt-six. La version 3
+n'est pas bornee par le calcul. Elle est bornee par l'information, et aucune
+machine n'en fabrique.
+
+────────────────────────────────────────────────────────────────────────────
   LE DECOUPAGE, ET POURQUOI IL EST BANAL EXPRES
 ────────────────────────────────────────────────────────────────────────────
 
@@ -154,7 +210,7 @@ import hashlib
 import json
 from datetime import date
 
-VERSION = 2
+VERSION = 3
 FIGE_LE = "2026-09-17"
 
 # ─────────────────────────────────────────────────────── le decoupage
@@ -221,6 +277,34 @@ BARRES_MIN_PAR_SAISON = 120
 STRATEGIES_AU_CATALOGUE = 11
 DENOMINATEUR = STRATEGIES_AU_CATALOGUE * len(SAISONS)
 
+# ───────────────────────────────────────────────────────── l'univers
+
+# L'echelle a laquelle tournent les STRATEGIES. Les saisons restent
+# journalieres (ECHELLE_REFERENCE) : une saison est une chose lente, et la
+# lire en 4 h en ferait autre chose. Declaree ici plutot que passee en
+# argument, parce qu'elle fait partie de ce qui est mesure.
+ECHELLE_STRATEGIES = "4h"
+
+# L'univers est une REGLE, pas une liste : « tous les actifs qui ont des
+# barres a ECHELLE_STRATEGIES sur cette machine ». Une liste serait une
+# selection, donc une hypothese de plus, et invisible dans le denominateur.
+UNIVERS_REGLE = "tous les actifs disposant de barres a l'echelle des strategies"
+
+# Le compte au moment de figer. Il ne sert PAS a selectionner — il sert a
+# rendre visible une derive : si l'univers a change entre la declaration et la
+# mesure, il faut le savoir plutot que de comparer deux choses differentes.
+UNIVERS_AU_GEL = 26
+
+# Les trades de tous les actifs tombent dans la MEME cellule (strategie,
+# saison). Le denominateur ne bouge pas ; c'est le nombre de trades par
+# cellule qui monte.
+MISE_EN_COMMUN = True
+
+# Sous ce nombre de marches effectifs, « a travers le marche » veut dire un
+# seul marche : la mise en commun ajoute alors des trades sans ajouter
+# d'information, et il faut le dire au lieu de compter les trades.
+MARCHES_EFFECTIFS_MIN = 2.0
+
 ORIGINE = "saisons"
 
 
@@ -249,6 +333,11 @@ def declaration() -> dict[str, object]:
         "pente_min_pct": PENTE_MIN_PCT,
         "retard_barres": RETARD_BARRES,
         "confirmation_barres": CONFIRMATION_BARRES,
+        "echelle_strategies": ECHELLE_STRATEGIES,
+        "univers_regle": UNIVERS_REGLE,
+        "univers_au_gel": UNIVERS_AU_GEL,
+        "mise_en_commun": MISE_EN_COMMUN,
+        "marches_effectifs_min": MARCHES_EFFECTIFS_MIN,
         "halvings": [h.isoformat() for h in HALVINGS],
         "cycles_complets_disponibles": CYCLES_COMPLETS_DISPONIBLES,
         "cycles_demandes": CYCLES_DEMANDES,

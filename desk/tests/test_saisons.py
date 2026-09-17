@@ -22,11 +22,11 @@ from trading_desk import saisons
 
 def test_l_empreinte_de_la_declaration_est_figee():
     """LE test de ce module."""
-    assert saisons.empreinte() == "e938a665ab53e1de", (
+    assert saisons.empreinte() == "69acde471e53f453", (
         "la déclaration des saisons a changé sans que VERSION soit "
         "incrémentée — c'est exactement le geste qui transforme un découpage "
         "en paramètre ajusté")
-    assert saisons.VERSION == 2
+    assert saisons.VERSION == 3
     assert saisons.FIGE_LE == "2026-09-17"
 
 
@@ -39,6 +39,65 @@ def test_le_denominateur_est_annonce_avant_la_mesure():
         "le catalogue a bougé : le dénominateur déclaré ne correspond plus, "
         "et c'est une raison d'incrémenter VERSION, pas de le corriger")
     assert saisons.DENOMINATEUR == len(BASELINES) * len(saisons.SAISONS)
+
+
+def test_une_cellule_par_actif_rendrait_le_criblage_aveugle():
+    """LE test de la version 3, et il verrouille un raisonnement, pas un chiffre.
+
+    Le réflexe, pour gagner de la puissance, est de faire une cellule par
+    (stratégie, saison, actif). L'arithmétique tue l'idée avant la mesure :
+    onze fois trois fois vingt-six font 858 hypothèses, il faudrait 17 159
+    décalages distincts pour qu'une seule survive au rang 1, et la série en
+    offre 1 637.
+
+    Aucune cellule ne pourrait passer, quelle que soit la donnée. Multiplier
+    les actifs par réflexe aurait rendu le criblage inerte tout en ayant l'air
+    de le renforcer — c'est la pire forme d'erreur, celle qui se déguise en
+    rigueur.
+    """
+    par_actif = (saisons.STRATEGIES_AU_CATALOGUE * len(saisons.SAISONS)
+                 * saisons.UNIVERS_AU_GEL)
+    assert par_actif == 858
+    assert saisons.plage_requise(denominateur=par_actif) == 17159
+    assert not saisons.criblage_possible(1637, denominateur=par_actif)
+    # La mise en commun, elle, laisse le denominateur ou il est.
+    assert saisons.MISE_EN_COMMUN is True
+    assert saisons.DENOMINATEUR == 33
+    assert saisons.criblage_possible(1637)
+
+
+def test_l_univers_est_une_regle_pas_une_liste():
+    """Une liste d'actifs serait une sélection, donc une hypothèse de plus, et
+    invisible dans le dénominateur. Le compte au gel ne sélectionne rien — il
+    rend visible une dérive entre la déclaration et la mesure."""
+    assert isinstance(saisons.UNIVERS_REGLE, str)
+    assert not hasattr(saisons, "UNIVERS")
+    assert isinstance(saisons.UNIVERS_AU_GEL, int)
+
+
+def test_l_univers_au_gel_correspond_aux_donnees_presentes():
+    """Si l'écart apparaît, c'est une information, pas un test à corriger :
+    l'univers a bougé depuis le gel, et deux mesures ne se comparent plus."""
+    from pathlib import Path as _P
+    donnees = _P(__file__).resolve().parents[1] / "data"
+    present = len(list(donnees.glob(f"*_{saisons.ECHELLE_STRATEGIES}_real.json")))
+    assert present == saisons.UNIVERS_AU_GEL, (
+        f"{present} actifs en {saisons.ECHELLE_STRATEGIES} contre "
+        f"{saisons.UNIVERS_AU_GEL} au gel de la declaration")
+
+
+def test_les_saisons_restent_plus_lentes_que_les_strategies():
+    """Une saison est une chose lente. La lire à l'échelle des stratégies en
+    ferait autre chose."""
+    assert saisons.ECHELLE_REFERENCE == "1d"
+    assert saisons.ECHELLE_STRATEGIES != saisons.ECHELLE_REFERENCE
+
+
+def test_vingt_six_actifs_ne_font_pas_vingt_six_marches():
+    """La borne sous laquelle la mise en commun ajoute des trades sans ajouter
+    d'information. Deux, parce que sous deux marchés effectifs, « à travers le
+    marché » veut dire un seul marché."""
+    assert saisons.MARCHES_EFFECTIFS_MIN == 2.0
 
 
 def test_la_confirmation_ne_cree_aucun_degre_de_liberte():
