@@ -68,6 +68,37 @@ question redevient mesurable et ce module n'a pas besoin de changer : la
 declaration ne depend pas de la profondeur de l'historique.
 
 ────────────────────────────────────────────────────────────────────────────
+  VERSION 2 : LA VERSION 1 CHANGEAIT D'AVIS TOUS LES TROIS JOURS
+────────────────────────────────────────────────────────────────────────────
+
+Mesure du 17 septembre 2026, sous la version 1, sur 1 988 barres etiquetees :
+**63 plages**, dont beaucoup d'une a trois jours. La definition battait autour
+de la moyenne. « Appliquer la strategie la plus efficace de la saison » aurait
+voulu dire changer de strategie tous les trois jours, ce que les frais
+mangent avant toute autre consideration.
+
+**Ce defaut a ete vu sans regarder un seul rendement**, et c'est ce qui rend
+cette version 2 defendable. Il repond a la structure des etiquettes, pas a la
+performance : aucune mesure de rendement n'a jamais ete faite sous la version
+1, donc l'incrementer ne jette aucun resultat et n'absout rien.
+
+La correction est une **confirmation**, pas une longueur minimale de plage.
+La difference est decisive : une longueur minimale ne se connait qu'une fois
+la plage terminee, donc l'appliquer reviendrait a lire l'avenir. Une
+confirmation est causale — la saison ne change qu'apres que la nouvelle
+condition a tenu `CONFIRMATION_BARRES` barres d'affilee.
+
+Elle a un cout, inscrit ici pour qu'il ne soit pas decouvert plus tard : un
+vrai retournement met vingt barres a etre enregistre. On paie du retard pour
+ne plus payer de frais de va-et-vient, et c'est un arbitrage, pas un gain.
+
+**Le nombre n'est pas nouveau.** `CONFIRMATION_BARRES` vaut 20, comme
+`PENTE_BARRES` qui etait deja declare. Reutiliser une constante du decoupage
+plutot qu'en introduire une n'ajoute aucun degre de liberte — et un degre de
+liberte de plus est exactement ce qu'on ne peut pas se permettre sur un
+decoupage qui decide de trente-trois hypotheses.
+
+────────────────────────────────────────────────────────────────────────────
   LE DECOUPAGE, ET POURQUOI IL EST BANAL EXPRES
 ────────────────────────────────────────────────────────────────────────────
 
@@ -123,7 +154,7 @@ import hashlib
 import json
 from datetime import date
 
-VERSION = 1
+VERSION = 2
 FIGE_LE = "2026-09-17"
 
 # ─────────────────────────────────────────────────────── le decoupage
@@ -144,6 +175,14 @@ PENTE_MIN_PCT = 0.0
 
 # La saison de la barre t est calculee sur les cloture jusqu'a t-1.
 RETARD_BARRES = 1
+
+# La saison ne change qu'apres que la nouvelle condition a tenu ce nombre de
+# barres d'affilee. Causale, donc applicable en direct — une longueur minimale
+# de plage ne se connaitrait qu'une fois la plage finie.
+#
+# Vaut PENTE_BARRES a dessein : reutiliser une constante deja declaree
+# n'ajoute aucun degre de liberte au decoupage.
+CONFIRMATION_BARRES = PENTE_BARRES
 
 # ────────────────────────────────────────────── l'observable « halving »
 
@@ -209,6 +248,7 @@ def declaration() -> dict[str, object]:
         "pente_barres": PENTE_BARRES,
         "pente_min_pct": PENTE_MIN_PCT,
         "retard_barres": RETARD_BARRES,
+        "confirmation_barres": CONFIRMATION_BARRES,
         "halvings": [h.isoformat() for h in HALVINGS],
         "cycles_complets_disponibles": CYCLES_COMPLETS_DISPONIBLES,
         "cycles_demandes": CYCLES_DEMANDES,

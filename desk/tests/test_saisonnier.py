@@ -30,10 +30,44 @@ def serie(cours):
 
 
 def test_la_chauffe_ne_devine_aucune_etiquette():
-    """None dit « je ne sais pas » ; une étiquette dirait « je sais »."""
+    """None dit « je ne sais pas » ; une étiquette dirait « je sais ».
+
+    Et « je ne sais pas » n'est pas « range » : les confondre ferait entrer
+    les barres de démarrage dans une saison qu'elles n'ont pas.
+    """
     s = sr.etiqueter(serie([100.0] * 100))
     assert all(e is None for e in s.etiquettes)
     assert s.etiquetees == 0
+    assert S.RANGE not in s.etiquettes
+
+
+def test_la_confirmation_absorbe_les_allers_retours():
+    """LE test de la version 2.
+
+    Sous la version 1, la définition battait autour de la moyenne : 63 plages
+    sur 1 988 barres, dont beaucoup d'un à trois jours. Changer de stratégie
+    tous les trois jours est mangé par les frais avant toute autre
+    considération.
+
+    Une montée franche interrompue par une chute brève ne doit produire
+    qu'une seule plage : la chute ne tient pas assez pour être confirmée.
+    """
+    besoin = S.MOYENNE_BARRES + S.PENTE_BARRES + S.CONFIRMATION_BARRES + 120
+    cours = [100.0 * (1.004 ** i) for i in range(besoin)]
+    # un trou de cinq barres, trop court pour être confirmé
+    creux = besoin - 40
+    for k in range(creux, creux + 5):
+        cours[k] *= 0.80
+    s = sr.etiqueter(serie(cours))
+    assert len(s.plages) == 1, [(p.saison, p.barres) for p in s.plages]
+    assert s.plages[0].saison == S.BULL
+
+
+def test_aucune_plage_n_est_plus_courte_que_la_confirmation():
+    """Par construction, et vérifié sur la vraie série."""
+    s = sr.serie_de_reference()
+    courtes = [p for p in s.plages[1:] if p.barres < S.CONFIRMATION_BARRES]
+    assert not courtes, [(p.saison, p.barres, p.debut) for p in courtes]
 
 
 def test_l_etiquette_ne_lit_jamais_la_barre_qu_elle_explique():
@@ -43,7 +77,7 @@ def test_l_etiquette_ne_lit_jamais_la_barre_qu_elle_explique():
     Avec un retard d'une barre, ce saut ne peut pas avoir change l'étiquette
     de cette barre-là — il ne sera lu qu'à la suivante, qui n'existe pas.
     """
-    besoin = S.MOYENNE_BARRES + S.PENTE_BARRES + 5
+    besoin = S.MOYENNE_BARRES + S.PENTE_BARRES + S.CONFIRMATION_BARRES + 5
     montante = [100.0 * (1.003 ** i) for i in range(besoin)]
     a = sr.etiqueter(serie(montante))
     b = sr.etiqueter(serie(montante[:-1] + [montante[-1] * 0.4]))
@@ -53,7 +87,7 @@ def test_l_etiquette_ne_lit_jamais_la_barre_qu_elle_explique():
 
 
 def test_une_montee_franche_est_un_bull_et_une_chute_un_bear():
-    besoin = S.MOYENNE_BARRES + S.PENTE_BARRES + 60
+    besoin = S.MOYENNE_BARRES + S.PENTE_BARRES + S.CONFIRMATION_BARRES + 60
     haut = sr.etiqueter(serie([100.0 * (1.004 ** i) for i in range(besoin)]))
     bas = sr.etiqueter(serie([100.0 * (0.996 ** i) for i in range(besoin)]))
     assert haut.etiquettes[-1] == S.BULL

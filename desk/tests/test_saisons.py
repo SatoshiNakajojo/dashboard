@@ -22,11 +22,11 @@ from trading_desk import saisons
 
 def test_l_empreinte_de_la_declaration_est_figee():
     """LE test de ce module."""
-    assert saisons.empreinte() == "536d3d40846084d8", (
+    assert saisons.empreinte() == "e938a665ab53e1de", (
         "la déclaration des saisons a changé sans que VERSION soit "
         "incrémentée — c'est exactement le geste qui transforme un découpage "
         "en paramètre ajusté")
-    assert saisons.VERSION == 1
+    assert saisons.VERSION == 2
     assert saisons.FIGE_LE == "2026-09-17"
 
 
@@ -39,6 +39,17 @@ def test_le_denominateur_est_annonce_avant_la_mesure():
         "le catalogue a bougé : le dénominateur déclaré ne correspond plus, "
         "et c'est une raison d'incrémenter VERSION, pas de le corriger")
     assert saisons.DENOMINATEUR == len(BASELINES) * len(saisons.SAISONS)
+
+
+def test_la_confirmation_ne_cree_aucun_degre_de_liberte():
+    """La version 2 corrige un défaut du découpage sans ajouter de nombre.
+
+    `CONFIRMATION_BARRES` vaut `PENTE_BARRES`, déjà déclaré. Sur un découpage
+    qui décide de trente-trois hypothèses, un degré de liberté de plus est
+    exactement ce qu'on ne peut pas se permettre — et « vingt parce que ça
+    marche mieux » serait un réglage, pas une déclaration.
+    """
+    assert saisons.CONFIRMATION_BARRES == saisons.PENTE_BARRES
 
 
 def test_la_saison_est_calculee_avec_un_retard():

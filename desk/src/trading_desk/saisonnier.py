@@ -145,7 +145,16 @@ def etiqueter(barres: Sequence[Any]) -> Serie:
     cours = [float(b.close) for b in barres]
     besoin = S.MOYENNE_BARRES + S.PENTE_BARRES
 
+    # L'etat CONFIRME, et le candidat qui essaie de le remplacer. Tout est
+    # causal : a la barre i on ne lit que les clotures jusqu'a i - RETARD, et
+    # la bascule n'a lieu qu'apres CONFIRMATION_BARRES barres consecutives.
+    # Une longueur minimale de plage ne se connaitrait qu'une fois la plage
+    # finie ; l'appliquer reviendrait a lire l'avenir.
     etiquettes: list[str | None] = []
+    confirmee: str | None = None
+    candidate: str | None = None
+    compte = 0
+
     for i in range(len(cours)):
         j = i - S.RETARD_BARRES
         if j < besoin:
@@ -156,11 +165,25 @@ def etiqueter(barres: Sequence[Any]) -> Serie:
         pente = (ma - ma_avant) / ma_avant * 100.0 if ma_avant else 0.0
         c = cours[j]
         if c > ma and pente > S.PENTE_MIN_PCT:
-            etiquettes.append(S.BULL)
+            brute = S.BULL
         elif c < ma and pente < -S.PENTE_MIN_PCT:
-            etiquettes.append(S.BEAR)
+            brute = S.BEAR
         else:
-            etiquettes.append(S.RANGE)
+            brute = S.RANGE
+
+        if brute == confirmee:
+            candidate, compte = None, 0
+        else:
+            if brute == candidate:
+                compte += 1
+            else:
+                candidate, compte = brute, 1
+            if compte >= S.CONFIRMATION_BARRES:
+                confirmee, candidate, compte = brute, None, 0
+        # None tant que rien n'est confirme : ne rien savoir n'est pas etre
+        # en range, et le confondre ferait entrer les barres de demarrage dans
+        # une saison qu'elles n'ont pas.
+        etiquettes.append(confirmee)
 
     serie = Serie(horodatages=ts, etiquettes=etiquettes)
     serie.plages = _plages(ts, etiquettes)
