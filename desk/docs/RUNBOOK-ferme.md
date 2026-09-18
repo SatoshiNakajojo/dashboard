@@ -22,23 +22,46 @@ donne pas. Chaque cellule entre au dénominateur de son origine : six balayages
 ont déjà porté `balayage` à 157 familles, soit un seuil au rang 1 de 0,00032.
 La ferme pose les questions **plus vite**, elle n'en rend aucune plus facile.
 
-## D'abord : le dépôt appartient à `desk`, pas à vous
+## D'abord : on ne DEVIENT pas `desk`, on exécute EN TANT QUE `desk`
 
-L'installeur crée l'arbre sous `/opt/desk/src/desk` et le donne à
-l'utilisateur **`desk`**. Un `cd` depuis un autre compte rend `Permission
-denied` — ce qui ressemble à « le dossier n'existe pas » alors qu'il existe
-très bien. La différence se lit dans le message : *Permission denied* veut
-dire qu'il est là, *No such file or directory* qu'il ne l'est pas.
+Trois choses à savoir avant la première commande. Elles ont chacune coûté un
+message d'erreur trompeur.
+
+**`desk` est un compte SYSTÈME, sans shell de connexion.** Il est créé par
+`useradd --system`, donc `sudo -i -u desk` répond *This account is currently
+not available* — et c'est voulu, pas cassé : un compte de service qui ne peut
+pas ouvrir de session est une surface d'attaque en moins. On n'ouvre donc pas
+de session, on exécute une commande à la fois :
 
 ```bash
-# Où est-ce, à qui, et est-ce bien un dépôt git ?
-sudo ls -ld /opt/desk/src/desk
-sudo git -C /opt/desk/src/desk rev-parse --abbrev-ref HEAD
-
-# Devenir l'utilisateur qui possède l'arbre. Tout le reste part de là.
-sudo -i -u desk
-cd /opt/desk/src/desk
+sudo -u desk <commande>
 ```
+
+C'est exactement ce que fait `installer.sh`, ligne par ligne.
+
+**Le dépôt git est `/opt/desk/src`, pas `/opt/desk/src/desk`.** Le second est
+le sous-dossier du desk À L'INTÉRIEUR du dépôt. Pointer git sur le mauvais
+fait remonter l'arbre jusqu'au vrai et rend un message qui parle d'autre
+chose.
+
+**Ne lancez pas git en root.** `sudo git …` sur un arbre appartenant à `desk`
+déclenche *detected dubious ownership*, et la solution que git propose
+(`safe.directory`) traite le symptôme : la vraie réponse est de ne pas être
+root. En `sudo -u desk`, la question ne se pose pas.
+
+```bash
+# Où est-ce, et à qui ?
+sudo ls -ld /opt/desk /opt/desk/src /opt/desk/src/desk
+
+# Est-ce bien un dépôt, et sur quelle branche ?
+sudo -u desk git -C /opt/desk/src rev-parse --abbrev-ref HEAD
+sudo -u desk git -C /opt/desk/src status --short
+```
+
+Si `cd` depuis votre compte rend *Permission denied* alors que le dossier
+final est en `drwxr-xr-x`, c'est un PARENT qui bloque la traversée.
+`namei -l /opt/desk/src/desk` montre lequel en une ligne. Ça ne gêne en rien :
+`sudo -u desk` ne traverse pas depuis votre compte.
 
 Si `ls -ld` répond *No such file or directory*, l'installeur n'a jamais tourné
 sur cette machine : voir `deploy/README.md`, section Installation.
@@ -108,21 +131,29 @@ est perdu, la donnée l'est aussi.
 que `desk` (voir plus haut), et sans supposer que les fichiers sont là :
 
 ```bash
-sudo -i -u desk
-cd /opt/desk/src/desk
-
 # 1. Est-ce que la donnée existe, et sous quel nom ?
-ls -lh data/ baselines/ 2>/dev/null
-sudo find / -name 'unlocks*.json' -not -path '*/proc/*' 2>/dev/null
+sudo ls -lh /opt/desk/src/desk/data/ /opt/desk/src/desk/baselines/
+sudo find / -name 'unlocks*.json' -not -path '/proc/*' 2>/dev/null
 
 # 2. Le rituel a-t-il seulement tourné ?
 systemctl status rituel-deblocages.service --no-pager
 journalctl -u rituel-deblocages -n 50 --no-pager
 
-# 3. S'ils sont là, les rapatrier. `-f` parce que `data/` peut être ignoré.
-git add -f data/unlocks.json baselines/unlocks.json
-git commit -m "Rapatrie la donnee des deblocages : elle n'existait que sur le VPS"
-git push origin claude/trading-desk-p3-launch-e16cdi
+# 3. S'ils sont là, les rapatrier. Les chemins sont RELATIFS à /opt/desk/src,
+#    la racine du dépôt — donc préfixés par `desk/`. Et `-f` parce que `data/`
+#    peut être ignoré.
+sudo -u desk git -C /opt/desk/src add -f desk/data/unlocks.json desk/baselines/unlocks.json
+sudo -u desk git -C /opt/desk/src commit -m "Rapatrie la donnee des deblocages"
+sudo -u desk git -C /opt/desk/src push origin claude/trading-desk-p3-launch-e16cdi
+```
+
+Le `push` demandera de quoi s'authentifier auprès de GitHub. Si `desk` n'a pas
+d'identifiants — c'est le cas par défaut, l'installeur ne fait que `fetch` —
+la voie la plus simple reste de copier les deux fichiers hors de l'arbre et de
+les pousser depuis votre compte :
+
+```bash
+sudo cp /opt/desk/src/desk/data/unlocks.json ~/ && sudo chown "$USER" ~/unlocks.json
 ```
 
 Si l'étape 1 ne trouve rien et que l'étape 2 montre un service en échec, alors
