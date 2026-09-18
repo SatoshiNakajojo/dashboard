@@ -22,10 +22,31 @@ donne pas. Chaque cellule entre au dénominateur de son origine : six balayages
 ont déjà porté `balayage` à 157 familles, soit un seuil au rang 1 de 0,00032.
 La ferme pose les questions **plus vite**, elle n'en rend aucune plus facile.
 
+## D'abord : le dépôt appartient à `desk`, pas à vous
+
+L'installeur crée l'arbre sous `/opt/desk/src/desk` et le donne à
+l'utilisateur **`desk`**. Un `cd` depuis un autre compte rend `Permission
+denied` — ce qui ressemble à « le dossier n'existe pas » alors qu'il existe
+très bien. La différence se lit dans le message : *Permission denied* veut
+dire qu'il est là, *No such file or directory* qu'il ne l'est pas.
+
+```bash
+# Où est-ce, à qui, et est-ce bien un dépôt git ?
+sudo ls -ld /opt/desk/src/desk
+sudo git -C /opt/desk/src/desk rev-parse --abbrev-ref HEAD
+
+# Devenir l'utilisateur qui possède l'arbre. Tout le reste part de là.
+sudo -i -u desk
+cd /opt/desk/src/desk
+```
+
+Si `ls -ld` répond *No such file or directory*, l'installeur n'a jamais tourné
+sur cette machine : voir `deploy/README.md`, section Installation.
+
 ## Lancer
 
 ```bash
-sudo bash /opt/desk/src/desk/deploy/installer.sh   # idempotent
+sudo bash /opt/desk/src/desk/deploy/installer.sh   # idempotent, à lancer en root
 sudo systemctl start ferme
 journalctl -u ferme -f
 ```
@@ -83,12 +104,28 @@ Conséquence : cette règle n'est pas reproductible ailleurs que sur le VPS, et
 `api.llama.fi/emissions` répond désormais **402 Payment Required**. Si le VPS
 est perdu, la donnée l'est aussi.
 
-**C'est le premier travail à faire sur le VPS, avant tout balayage :**
+**C'est le premier travail à faire sur le VPS, avant tout balayage.** En tant
+que `desk` (voir plus haut), et sans supposer que les fichiers sont là :
 
 ```bash
+sudo -i -u desk
 cd /opt/desk/src/desk
-ls -lh data/unlocks.json baselines/unlocks.json
+
+# 1. Est-ce que la donnée existe, et sous quel nom ?
+ls -lh data/ baselines/ 2>/dev/null
+sudo find / -name 'unlocks*.json' -not -path '*/proc/*' 2>/dev/null
+
+# 2. Le rituel a-t-il seulement tourné ?
+systemctl status rituel-deblocages.service --no-pager
+journalctl -u rituel-deblocages -n 50 --no-pager
+
+# 3. S'ils sont là, les rapatrier. `-f` parce que `data/` peut être ignoré.
 git add -f data/unlocks.json baselines/unlocks.json
 git commit -m "Rapatrie la donnee des deblocages : elle n'existait que sur le VPS"
-git push origin <branche>
+git push origin claude/trading-desk-p3-launch-e16cdi
 ```
+
+Si l'étape 1 ne trouve rien et que l'étape 2 montre un service en échec, alors
+la donnée n'existe nulle part — et la seule règle validée du projet repose sur
+une mesure que plus personne ne peut reproduire. Le dire est plus utile que de
+chercher un fichier qui n'a jamais été écrit.
