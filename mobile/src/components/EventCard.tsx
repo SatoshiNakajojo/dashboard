@@ -1,0 +1,188 @@
+import { useState } from 'react';
+import { Pressable, Text, View } from 'react-native';
+import { LinearGradient } from 'expo-linear-gradient';
+
+import { PotluckList } from '@/components/PotluckList';
+import { Avatar } from '@/components/ui/Avatar';
+import { Micro } from '@/components/ui/Micro';
+import { formatTime, splitEventDate } from '@/lib/format';
+import { CLUB_SIZE } from '@/mocks/members';
+import { a, c, cardGradient, f, radius } from '@/theme/tokens';
+import type { Member } from '@/types/domain';
+import type { EventWithAttendance } from '@/features/nights/useEvents';
+
+export interface EventCardProps {
+  event: EventWithAttendance;
+  currentUserId: string | null;
+  membersById: Map<string, Member>;
+  defaultExpanded?: boolean;
+  onToggleRsvp: (eventId: string) => void;
+}
+
+const MAX_STACKED_AVATARS = 5;
+
+/** Carte d'une Crypto Night : en-tête dépliable + checklist potluck. */
+export function EventCard({
+  event,
+  currentUserId,
+  membersById,
+  defaultExpanded = false,
+  onToggleRsvp,
+}: EventCardProps) {
+  const [expanded, setExpanded] = useState(defaultExpanded);
+
+  const { day, month } = splitEventDate(event.startsAt);
+  const going = currentUserId !== null && event.attendeeIds.includes(currentUserId);
+  const stacked = event.attendeeIds.slice(0, MAX_STACKED_AVATARS);
+
+  return (
+    <LinearGradient
+      colors={[...cardGradient]}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 0, y: 1 }}
+      style={{
+        borderRadius: radius.card,
+        borderWidth: 1,
+        borderColor: expanded ? a.cardBorderOpen : c.border,
+        overflow: 'hidden',
+      }}
+    >
+      <Pressable
+        accessibilityRole="button"
+        accessibilityState={{ expanded }}
+        onPress={() => setExpanded((open) => !open)}
+        style={{ paddingTop: 16, paddingHorizontal: 16, paddingBottom: 14 }}
+      >
+        <View className="flex-row items-start" style={{ gap: 15 }}>
+          <View
+            className="items-center border-r border-borderStrong"
+            style={{ paddingRight: 15 }}
+          >
+            <Text
+              style={{
+                fontFamily: f.serif,
+                fontSize: 26,
+                lineHeight: 26,
+                color: expanded ? c.gold : c.ivory,
+              }}
+            >
+              {day}
+            </Text>
+            <Micro size={8} tracking={1.6} style={{ marginTop: 5 }}>
+              {month}
+            </Micro>
+          </View>
+
+          <View className="flex-1">
+            <Micro tracking={1.98} style={{ color: c.goldMuted }}>
+              {event.tag}
+            </Micro>
+            <Text
+              style={{
+                fontFamily: f.serif,
+                fontSize: 19,
+                lineHeight: 23,
+                color: c.ivory,
+                marginTop: 6,
+              }}
+            >
+              {event.theme}
+            </Text>
+            <Text
+              style={{
+                fontFamily: f.sans,
+                fontSize: 11,
+                lineHeight: 17,
+                color: c.sepia,
+                marginTop: 5,
+              }}
+            >
+              {`${event.location} · ${formatTime(event.startsAt)}`}
+            </Text>
+          </View>
+        </View>
+
+        <View className="flex-row items-center justify-between" style={{ marginTop: 14 }}>
+          <View className="flex-row items-center">
+            {stacked.map((id, index) => {
+              const member = membersById.get(id);
+              return (
+                <View
+                  key={id}
+                  style={{ marginRight: -6, zIndex: MAX_STACKED_AVATARS - index }}
+                >
+                  <Avatar
+                    initials={member?.initials ?? '··'}
+                    color={member?.color ?? c.dial}
+                    size={22}
+                    ringColor={c.surfaceDeep}
+                  />
+                </View>
+              );
+            })}
+            <Micro tracking={1} style={{ color: c.sepiaMuted, marginLeft: 14 }}>
+              {`${event.attendeeIds.length} / ${CLUB_SIZE} PRÉSENTS`}
+            </Micro>
+          </View>
+
+          <Micro tracking={1.8} style={{ color: c.goldMuted }}>
+            {expanded ? 'RÉDUIRE' : 'DÉTAILS'}
+          </Micro>
+        </View>
+      </Pressable>
+
+      {expanded ? (
+        <View style={{ paddingHorizontal: 16, paddingBottom: 18 }}>
+          <View className="flex-row" style={{ gap: 10, marginBottom: 18 }}>
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => onToggleRsvp(event.id)}
+              style={{
+                flex: 1,
+                alignItems: 'center',
+                paddingVertical: 11,
+                borderRadius: radius.button,
+                borderWidth: 1,
+                backgroundColor: going ? a.rsvpSageBg : a.rsvpGoldBg,
+                borderColor: going ? a.rsvpSageBorder : a.rsvpGoldBorder,
+              }}
+            >
+              <Text
+                style={{
+                  fontFamily: f.monoMed,
+                  fontSize: 10,
+                  letterSpacing: 1.8,
+                  color: going ? c.sage : c.gold,
+                }}
+              >
+                {going ? 'VOUS Y ÊTES' : 'JE VIENS'}
+              </Text>
+            </Pressable>
+
+            <View
+              style={{
+                paddingVertical: 11,
+                paddingHorizontal: 15,
+                borderRadius: radius.button,
+                borderWidth: 1,
+                borderColor: c.borderLift,
+              }}
+            >
+              <Text
+                style={{ fontFamily: f.monoMed, fontSize: 10, letterSpacing: 1.8, color: c.sepia }}
+              >
+                PLAN
+              </Text>
+            </View>
+          </View>
+
+          <PotluckList
+            eventId={event.id}
+            currentUserId={currentUserId}
+            membersById={membersById}
+          />
+        </View>
+      ) : null}
+    </LinearGradient>
+  );
+}

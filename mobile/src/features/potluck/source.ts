@@ -1,0 +1,203 @@
+/**
+ * Source de données du potluck.
+ *
+ * Une seule interface, deux implémentations : Supabase et un magasin mémoire.
+ * `PotluckList` ne connaît que l'interface — c'est ce qui permet de livrer le
+ * composant avec ses mocks sans écrire une ligne jetable.
+ *
+ * La règle métier tient dans la valeur de retour de `claim` :
+ * **`false` n'est pas une erreur**, c'est « quelqu'un a été plus rapide ».
+ * Les deux implémentations doivent la respecter à l'identique.
+ */
+
+import { supabase } from '@/lib/supabase';
+import { MOCK_POTLUCK_ITEMS } from '@/mocks/events';
+import type { PotluckItem } from '@/types/domain';
+
+export type ChangeType = 'INSERT' | 'UPDATE' | 'DELETE';
+
+export interface PotluckChange {
+  type: ChangeType;
+  item: PotluckItem;
+}
+
+export interface PotluckSource {
+  list(eventId: string, signal?: AbortSignal): Promise<PotluckItem[]>;
+  /** `true` si la ligne a été prise, `false` si un autre membre l'a devancé. */
+  claim(itemId: string, userId: string): Promise<boolean>;
+  /** `true` si la ligne a été libérée, `false` si elle ne nous appartenait plus. */
+  release(itemId: string, userId: string): Promise<boolean>;
+  /** S'abonne aux changements de l'événement. Renvoie la fonction de désabonnement. */
+  subscribe(eventId: string, onChange: (change: PotluckChange) => void): () => void;
+}
+
+// ---------------------------------------------------------------------------
+// Supabase
+// ---------------------------------------------------------------------------
+
+interface Row {
+  id: string;
+  event_id: string;
+  item_name: string;
+  assigned_user_id: string | null;
+  position: number;
+}
+
+function fromRow(row: Row): PotluckItem {
+  return {
+    id: row.id,
+    eventId: row.event_id,
+    itemName: row.item_name,
+    assignedUserId: row.assigned_user_id,
+    position: row.position,
+  };
+}
+
+const COLUMNS = 'id, event_id, item_name, assigned_user_id, position';
+
+function createSupabaseSource(client: NonNullable<typeof supabase>): PotluckSource {
+  return {
+    async list(eventId, signal) {
+      let query = client
+        .from('potluck_items')
+        .select(COLUMNS)
+        .eq('event_id', eventId)
+        .order('position', { ascending: true })
+        .order('created_at', { ascending: true });
+
+      if (signal) query = query.abortSignal(signal);
+
+      const { data, error } = await query;
+      if (error) throw error;
+      return (data ?? []).map(fromRow);
+    },
+
+    async claim(itemId, userId) {
+      // `.is('assigned_user_id', null)` double la politique RLS côté requête :
+      // la ligne n'est prise que si elle était encore libre à cet instant.
+      // Zéro ligne renvoyée = un autre membre a gagné la course.
+      const { data, error } = await client
+        .from('potluck_items')
+        .update({ assigned_user_id: userId })
+        .eq('id', itemId)
+        .is('assigned_user_id', null)
+        .select('id');
+
+      if (error) throw error;
+      return (data?.length ?? 0) > 0;
+    },
+
+    async release(itemId, userId) {
+      const { data, error } = await client
+        .from('potluck_items')
+        .update({ assigned_user_id: null })
+        .eq('id', itemId)
+        .eq('assigned_user_id', userId)
+        .select('id');
+
+      if (error) throw error;
+      return (data?.length ?? 0) > 0;
+    },
+
+    subscribe(eventId, onChange) {
+      const channel = client
+        .channel(`potluck:${eventId}`)
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'potluck_items',
+            filter: `event_id=eq.${eventId}`,
+          },
+          (payload) => {
+            const row = (payload.eventType === 'DELETE' ? payload.old : payload.new) as
+              | Row
+              | undefined;
+            // Un DELETE sans REPLICA IDENTITY FULL n'expose que la clé ;
+            // sans `event_id` on ne saurait pas à quelle liste il appartient.
+            if (!row?.id) return;
+            onChange({ type: payload.eventType as ChangeType, item: fromRow(row) });
+          },
+        )
+        .subscribe();
+
+      return () => {
+        void client.removeChannel(channel);
+      };
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Mock — magasin mémoire, mêmes garanties de concurrence
+// ---------------------------------------------------------------------------
+
+type Listener = (change: PotluckChange) => void;
+
+/** Latence simulée : sans elle, l'écriture optimiste ne serait jamais visible. */
+const MOCK_LATENCY_MS = 220;
+
+function delay(ms: number) {
+  return new Promise<void>((resolve) => setTimeout(resolve, ms));
+}
+
+function createMockSource(): PotluckSource {
+  const store = new Map<string, PotluckItem>(MOCK_POTLUCK_ITEMS.map((i) => [i.id, { ...i }]));
+  const listeners = new Map<string, Set<Listener>>();
+
+  function emit(eventId: string, change: PotluckChange) {
+    listeners.get(eventId)?.forEach((listener) => listener(change));
+  }
+
+  return {
+    async list(eventId) {
+      await delay(MOCK_LATENCY_MS);
+      return [...store.values()]
+        .filter((item) => item.eventId === eventId)
+        .sort((a, b) => a.position - b.position)
+        .map((item) => ({ ...item }));
+    },
+
+    async claim(itemId, userId) {
+      await delay(MOCK_LATENCY_MS);
+      const item = store.get(itemId);
+      if (!item) return false;
+      // Même sémantique que la politique RLS : une ligne déjà prise refuse.
+      if (item.assignedUserId !== null) return false;
+
+      const next = { ...item, assignedUserId: userId };
+      store.set(itemId, next);
+      emit(item.eventId, { type: 'UPDATE', item: next });
+      return true;
+    },
+
+    async release(itemId, userId) {
+      await delay(MOCK_LATENCY_MS);
+      const item = store.get(itemId);
+      if (!item || item.assignedUserId !== userId) return false;
+
+      const next = { ...item, assignedUserId: null };
+      store.set(itemId, next);
+      emit(item.eventId, { type: 'UPDATE', item: next });
+      return true;
+    },
+
+    subscribe(eventId, onChange) {
+      const set = listeners.get(eventId) ?? new Set<Listener>();
+      set.add(onChange);
+      listeners.set(eventId, set);
+      return () => {
+        set.delete(onChange);
+        if (set.size === 0) listeners.delete(eventId);
+      };
+    },
+  };
+}
+
+/** Instance unique : le magasin mock doit survivre aux démontages d'écran. */
+const mockSource = createMockSource();
+
+export function getPotluckSource(): PotluckSource {
+  return supabase ? createSupabaseSource(supabase) : mockSource;
+}
