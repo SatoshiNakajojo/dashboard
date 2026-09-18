@@ -165,9 +165,13 @@ Schéma
     → appliquez supabase/migrations/20260905120000_init.sql
 ```
 
-Elle n'écrit rien, n'affiche aucune clé, et se contente de la clé `anon`.
-Ajoutez `SUPABASE_SERVICE_ROLE_KEY=…` dans `.env` — **sans** le préfixe
+Elle n'affiche aucune clé et se contente de la clé `anon`. Ajoutez
+`SUPABASE_SERVICE_ROLE_KEY=…` dans `.env` — **sans** le préfixe
 `EXPO_PUBLIC_`, qui la publierait — pour qu'elle compte aussi les membres.
+
+Une seule écriture possible, et elle est sans conséquence : tant que
+`REFRESH_SECRET` n'est pas configuré (§1.4), sonder `refresh-prices` la fait
+tourner pour de bon. C'est exactement ce que fait la planification horaire.
 
 Trois choses lui restent hors de portée, et elle vous le dit en terminant : le
 gabarit de courriel (§1.6), le SMTP (§1.5), et les tables publiées en temps
