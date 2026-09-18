@@ -19,15 +19,18 @@ import {
   interpretColumn,
   interpretFunction,
   interpretMembers,
-  interpretRest,
+  interpretReachable,
   interpretSettings,
   interpretTable,
+  needsSecretKey,
+  schemaNote,
   leakedPublicSecrets,
   parseCount,
   parseEnv,
   projectRef,
   secretsInText,
   summarize,
+  TABLES,
 } from '../supabase-checks.mjs';
 
 const b64 = (value) => Buffer.from(JSON.stringify(value)).toString('base64url');
@@ -160,15 +163,53 @@ describe('fuite de secret', () => {
   });
 });
 
-describe('API REST', () => {
+describe('joignabilité du projet', () => {
+  it('accepte une réponse des paramètres d’authentification', () => {
+    assert.equal(interpretReachable({ status: 200, body: { external: {} } }).level, 'ok');
+  });
+
   it('conclut à un projet en pause sur une 5xx', () => {
-    const check = interpretRest({ status: 503, body: null });
+    const check = interpretReachable({ status: 503, body: null });
     assert.equal(check.level, 'fail');
     assert.match(check.remedy, /Restore/);
   });
 
   it('conclut à une clé refusée sur une 401', () => {
-    assert.equal(interpretRest({ status: 401, body: { message: 'Invalid API key' } }).level, 'fail');
+    assert.equal(
+      interpretReachable({ status: 401, body: { message: 'Invalid API key' } }).level,
+      'fail',
+    );
+  });
+
+  it('n’accuse pas la clé quand c’est le point d’entrée qui exige un secret', () => {
+    // Message réel d'un projet sain sondé sur la racine PostgREST avec une clé
+    // `sb_publishable_`. La clé est bonne ; c'était la sonde qui était fausse.
+    const refused = { status: 401, body: { message: 'Secret API key required' } };
+    assert.equal(needsSecretKey(refused.body), true);
+    assert.match(interpretReachable(refused).detail, /n’est pas en cause/);
+  });
+
+  it('distingue une API de données fermée aux clés publiables d’une table absente', () => {
+    const refused = { status: 401, body: { message: 'Secret API key required' } };
+    const check = interpretTable('events', refused);
+    assert.match(check.detail, /clés secrètes/);
+    assert.match(check.remedy, /Data API/);
+  });
+});
+
+describe('lecture d’ensemble du schéma', () => {
+  it('ne conclut pas à sept oublis quand rien ne répond', () => {
+    const absent = { status: 404, body: { code: 'PGRST205' } };
+    const checks = TABLES.map((table) => interpretTable(table, absent));
+    assert.match(schemaNote(checks), /API de données est désactivée/);
+  });
+
+  it('se tait dès qu’une table répond', () => {
+    const checks = [
+      interpretTable('profiles', { status: 200, body: [] }),
+      interpretTable('events', { status: 404, body: { code: 'PGRST205' } }),
+    ];
+    assert.equal(schemaNote(checks), undefined);
   });
 });
 

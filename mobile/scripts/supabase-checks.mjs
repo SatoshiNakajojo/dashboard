@@ -251,19 +251,47 @@ function pgMessage(body) {
   return '';
 }
 
-/** Le point d'entrée PostgREST : il répond même sans droit sur aucune table. */
-export function interpretRest({ status, body }) {
-  if (status === 200) return ok('API REST', 'joignable');
+/**
+ * Un refus qui parle de clé **secrète** ne dit pas « votre clé est fausse ».
+ *
+ * Supabase réserve certains points d'entrée aux clés secrètes — la racine
+ * PostgREST, qui sert le schéma OpenAPI, en fait partie. Une clé publiable y
+ * est refusée par construction, projet parfaitement sain. Sonder cette racine
+ * était mon erreur ; reconnaître le message reste utile ailleurs.
+ */
+export function needsSecretKey(body) {
+  return /secret\s+api\s+key/i.test(pgMessage(body));
+}
+
+/**
+ * Le projet répond-il ?
+ *
+ * On interroge `/auth/v1/settings`, public et accessible aux deux générations
+ * de clés. Il prouve d'un coup que l'hôte résout, que le projet existe et que
+ * la clé est acceptée — sans rien exiger de plus qu'un visiteur.
+ */
+export function interpretReachable({ status, body }) {
+  if (status === 200) return ok('Projet', 'joignable, clé acceptée');
+  if (needsSecretKey(body)) {
+    return fail(
+      'Projet',
+      'ce point d’entrée exige une clé secrète — la clé publiable n’est pas en cause',
+    );
+  }
   if (status === 401 || status === 403) {
-    return fail('API REST', `clé refusée — ${pgMessage(body) || 'vérifiez la clé anon'}`);
+    return fail('Projet', `clé refusée — ${pgMessage(body) || 'vérifiez la clé anon'}`);
   }
   if (status === 404) {
-    return fail('API REST', 'introuvable — l’URL ne désigne pas un projet Supabase');
+    return fail('Projet', 'introuvable — l’URL ne désigne pas un projet Supabase');
   }
   if (status >= 500) {
-    return fail('API REST', `le projet répond ${status} — en pause ou en cours de démarrage ?`, 'Supabase → Home → Restore project');
+    return fail(
+      'Projet',
+      `réponse ${status} — en pause ou en cours de démarrage ?`,
+      'Supabase → Home → Restore project',
+    );
   }
-  return warn('API REST', `réponse inattendue (${status})`);
+  return warn('Projet', `réponse inattendue (${status})`);
 }
 
 /**
@@ -287,6 +315,13 @@ export function interpretTable(table, { status, body }) {
   if (status === 404 || pgCode(body) === 'PGRST205' || pgCode(body) === '42P01') {
     return fail(table, 'absente', 'appliquez supabase/migrations/20260905120000_init.sql');
   }
+  if (needsSecretKey(body)) {
+    return fail(
+      table,
+      'l’API de données n’accepte que les clés secrètes',
+      'Supabase → Project Settings → Data API : autoriser les clés publiables',
+    );
+  }
   if (pgCode(body) === '42501') {
     // Le rôle anon n'a même pas le droit de lecture. Plus fermé que prévu, donc
     // sans danger : les membres passent par le rôle authenticated.
@@ -296,6 +331,19 @@ export function interpretTable(table, { status, body }) {
     return fail(table, `accès refusé — ${pgMessage(body) || 'clé invalide'}`);
   }
   return warn(table, `réponse inattendue (${status})`);
+}
+
+/**
+ * Sept tables absentes d'un coup ne se lisent pas comme sept oublis.
+ *
+ * Soit la migration n'est jamais passée, soit l'API de données est coupée et
+ * répond 404 à tout. Le script ne peut pas trancher, mais il peut nommer les
+ * deux hypothèses plutôt que de laisser conclure à la première.
+ */
+export function schemaNote(checks) {
+  const missing = checks.filter((check) => check.detail === 'absente');
+  if (missing.length < checks.length || checks.length === 0) return undefined;
+  return 'Aucune table ne répond : soit la migration n’est jamais passée, soit l’API de données est désactivée (Project Settings → Data API).';
 }
 
 export function interpretColumn({ table, column, migration }, { status, body }) {

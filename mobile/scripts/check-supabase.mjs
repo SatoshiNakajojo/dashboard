@@ -30,9 +30,10 @@ import {
   interpretColumn,
   interpretFunction,
   interpretMembers,
-  interpretRest,
+  interpretReachable,
   interpretSettings,
   interpretTable,
+  schemaNote,
   leakedPublicSecrets,
   parseCount,
   parseEnv,
@@ -170,13 +171,17 @@ async function main() {
   if (!blocked) {
     const anon = { apikey: anonKey, authorization: `Bearer ${anonKey}` };
 
-    const restRoot = await probe(`${url}/rest/v1/`, { headers: anon });
-    const rest = guard('API REST', restRoot, interpretRest);
+    // Un seul appel pour deux usages : `/auth/v1/settings` est public, accepté
+    // par les deux générations de clés, et prouve d'un coup que l'hôte résout,
+    // que le projet existe et que la clé passe. La racine PostgREST, elle,
+    // exige une clé secrète : la sonder accusait à tort une clé publiable.
+    const settings = await probe(`${url}/auth/v1/settings`, { headers: anon });
+    const reachable = guard('Projet', settings, interpretReachable);
 
-    const connection = { title: 'Connexion', checks: [rest] };
+    const connection = { title: 'Connexion', checks: [reachable] };
     sections.push(connection);
 
-    if (rest.level === 'fail') {
+    if (reachable.level === 'fail') {
       connection.note = 'Le reste du diagnostic est suspendu : rien d’autre ne peut répondre.';
     } else {
       // --- schéma -----------------------------------------------------------
@@ -196,17 +201,13 @@ async function main() {
       sections.push({
         title: 'Schéma',
         checks: [...tables, ...columns],
-        note: '« fermée aux visiteurs » veut dire que la RLS répond : sans session, aucune ligne ne sort.',
+        note:
+          schemaNote(tables) ??
+          '« fermée aux visiteurs » veut dire que la RLS répond : sans session, aucune ligne ne sort.',
       });
 
       // --- authentification -------------------------------------------------
-      const settings = await probe(`${url}/auth/v1/settings`, { headers: anon });
-      sections.push({
-        title: 'Authentification',
-        checks: settings.error
-          ? [{ level: 'fail', label: 'Authentification', detail: describeNetworkError(settings.error) }]
-          : interpretSettings(settings),
-      });
+      sections.push({ title: 'Authentification', checks: interpretSettings(settings) });
 
       // --- fonctions Edge ---------------------------------------------------
       // `quote` s'arrête à la vérification de session : sonder ne coûte aucun
