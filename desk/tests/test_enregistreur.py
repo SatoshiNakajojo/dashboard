@@ -443,12 +443,15 @@ def test_le_plafond_par_flux_ne_borne_pas_la_memoire_totale(tmp_path):
 
 
 def test_le_plafond_global_vide_avant_que_l_OOM_killer_ne_frappe(tmp_path):
-    """LE test de ce garde-fou, et sa raison est plus grave que la mémoire.
+    """LE test de ce garde-fou, qui est une PRÉVENTION et non une réparation.
 
-    Un OOM kill est un SIGKILL : il ne passe PAS par le vidage des tampons
-    prévu pour SIGTERM. Chaque mort emporte donc jusqu'à cinq minutes de
-    collecte sur vingt-huit files, en silence — et `Restart=always` remet le
-    service en « active (running) » dix secondes plus tard.
+    Sur le VPS au 18 septembre 2026, `NRestarts=0` : le service n'a jamais été
+    tué. Il a été comprimé contre son plafond, pas abattu.
+
+    Mais s'il l'était, un OOM kill est un SIGKILL : il ne passe PAS par le
+    vidage prévu pour SIGTERM. Jusqu'à cinq minutes de collecte sur
+    vingt-huit files partiraient en silence, et `Restart=always` remettrait
+    le service en « active (running) » dix secondes plus tard.
     """
     e = EcrivainParquet(tmp_path, max_lignes=10_000, max_lignes_total=200)
     for coin in ("BTC", "ETH", "SOL"):

@@ -47,21 +47,35 @@ MIN_LIBRE_MO = 2_000.0
 #
 # `max_lignes` borne chaque tampon SEPAREMENT. Vingt-huit tampons — sept
 # actifs fois quatre flux — peuvent donc detenir 560 000 lignes avant qu'aucun
-# n'atteigne son seuil. Mesure sur le VPS le 18 septembre 2026 : 883 Mo
-# residents pour un `MemoryMax=1G`, avec « peak: 1G » au compteur systemd. Le
-# plafond avait deja ete touche.
+# n'atteigne son seuil. Rien ne bornait le total : `vider_expires` ne vide que
+# par AGE.
 #
-# CE QUE COUTE UN DEPASSEMENT, et c'est la vraie raison de ce garde-fou : un
-# OOM kill est un SIGKILL. Il ne passe PAS par le vidage des tampons prevu
-# pour SIGTERM. Chaque mort emporte donc jusqu'a cinq minutes de collecte sur
-# vingt-huit files, en silence — et `Restart=always` remet le service en
-# « active (running) » dix secondes plus tard, si bien que `systemctl status`
-# affiche exactement la meme chose que si tout allait bien.
+# CE GARDE-FOU EST UNE PREVENTION, PAS UNE REPARATION, et la nuance a ete
+# etablie apres coup. Mesure sur le VPS le 18 septembre 2026 :
 #
-# C'est la classe de defaut habituelle du depot : un ecran qui dit que tout va
-# bien pendant qu'on perd de la donnee. Ici elle mord sur la seule donnee
-# irremplacable du projet — la microstructure ne se backteste pas, elle
-# s'enregistre en avant, et ce qui est perdu l'est pour toujours.
+#     Memory: 883.4M (max: 1G, available: 140.5M, peak: 1G)
+#     NRestarts=0
+#
+# J'avais lu « peak: 1G » comme la preuve d'un OOM kill et annonce de la
+# donnee perdue. C'etait faux. `NRestarts=0` dit que le service n'a JAMAIS ete
+# tue depuis son demarrage du 10 septembre : sous cgroup v2, toucher
+# `memory.max` declenche d'abord une recuperation, et l'OOM killer ne frappe
+# que si elle echoue. Le service a donc ete comprime contre son plafond, pas
+# tue, et aucune ligne n'a ete perdue.
+#
+# CE QUI JUSTIFIE QUAND MEME LE PLAFOND. Cent quarante megaoctets de marge sur
+# un service dont le debit peut etre multiplie par dix a cent pendant une
+# cascade de liquidations — c'est `deploy/README.md` qui le dit, pas moi. Et
+# si l'OOM killer frappait, ce serait un SIGKILL : il ne passe PAS par le
+# vidage prevu pour SIGTERM, donc jusqu'a cinq minutes de collecte sur
+# vingt-huit files partiraient en silence, et `Restart=always` remettrait le
+# service en « active (running) » dix secondes plus tard. `systemctl status`
+# afficherait exactement la meme chose que si tout allait bien.
+#
+# Ce serait la classe de defaut habituelle du depot — un ecran qui dit que
+# tout va bien pendant qu'on perd de la donnee — sur la SEULE donnee
+# irremplacable du projet : la microstructure ne se backteste pas, elle
+# s'enregistre en avant. On la borne avant que ca arrive.
 MAX_LIGNES_TOTAL = 150_000
 
 
