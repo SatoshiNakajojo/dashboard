@@ -25,6 +25,7 @@ accent rare, sur fond encre chaude. Référence : `Bitcoin Club v2.dc.html`.
 npm install
 npm start        # développement
 npm run build:web && npm run deploy   # publier la PWA
+npm run check:supabase                # dit ce qui manque au backend
 ```
 
 **Aucune configuration n'est nécessaire pour voir l'app tourner.** Sans variables
@@ -98,7 +99,7 @@ de 4 unités — et borné dans le repère.
 
 ## Ce qui a été vérifié
 
-- `npm run typecheck`, `npm run lint`, `npm test` — propres (57 tests).
+- `npm run typecheck`, `npm run lint`, `npm test` — propres (133 tests).
 - **Règles pures** : bornes et inversibilité du repère, monotonie du tracé,
   écart à la courbe réelle, espaces insécables du formatage français, perf vs ₿
   comme ratio et non soustraction, seuils et tri des deux classements.

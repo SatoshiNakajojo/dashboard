@@ -141,6 +141,47 @@ courriel de votre quota. Si le courriel arrive malgré tout vide, prenez
 https://<votre-compte>.github.io/dashboard/club/
 ```
 
+### 1.8 Vérifier, plutôt que de chercher
+
+Sept écrans du tableau de bord viennent d'être touchés. Une case oubliée ne se
+voit pas tout de suite : elle se manifeste plus tard, par un courriel qui
+n'arrive pas ou une liste vide. Une commande pose toutes les questions à votre
+place :
+
+```bash
+cd mobile
+npm run check:supabase
+```
+
+Elle lit le même `.env` que la build — ce qu'elle teste est donc exactement ce
+que l'app utilisera — et répond point par point : tables présentes, RLS active,
+connexion par courriel ouverte, inscription fermée, fonctions déployées. Chaque
+manque arrive avec son remède.
+
+```
+Schéma
+  ✓ profiles                présente, fermée aux visiteurs
+  ✗ predictions             absente
+    → appliquez supabase/migrations/20260905120000_init.sql
+```
+
+Elle n'écrit rien, n'affiche aucune clé, et se contente de la clé `anon`.
+Ajoutez `SUPABASE_SERVICE_ROLE_KEY=…` dans `.env` — **sans** le préfixe
+`EXPO_PUBLIC_`, qui la publierait — pour qu'elle compte aussi les membres.
+
+Trois choses lui restent hors de portée, et elle vous le dit en terminant : le
+gabarit de courriel (§1.6), le SMTP (§1.5), et les tables publiées en temps
+réel — pour celles-ci, collez dans le **SQL Editor** :
+
+```sql
+select tablename from pg_publication_tables where pubname = 'supabase_realtime';
+```
+
+Attendu : `potluck_items`, `event_attendees`, `ticker_votes`, `tickers`.
+
+Lancez-la aussi après chaque déploiement : elle relit `club/` pour s'assurer
+qu'aucune clé secrète n'est partie en ligne.
+
 ---
 
 ## 2. Publier (à refaire à chaque nouvelle version)
@@ -266,6 +307,7 @@ La version *maskable* est volontairement plus petite : Android rogne jusqu'à
 | « Cette adresse n'est pas sur la liste du club. » | Aucun compte pour cette adresse → §1.3. Le club est fermé, personne ne s'auto-inscrit |
 | « Trop de codes demandés. Réessayez dans une heure. » | Les 3 courriels/heure du serveur partagé sont épuisés. Brancher un SMTP (§1.5) lève le blocage **immédiatement**, sans attendre |
 | Aucun courriel, aucune erreur | Regardez **Authentication → Logs** dans Supabase : l'envoi y apparaît, réussi ou non |
+| Une liste reste vide alors que la base contient des lignes | `npm run check:supabase` (§1.8) : le plus souvent une migration non appliquée, ou la connexion qui n'a jamais abouti |
 | Connecté dans Safari, mais l'app installée redemande le code | Deux stockages distincts. C'est normal, et c'est pourquoi le code prime sur le lien |
 | L'app s'ouvre avec une barre d'adresse | Le document publié n'a pas ses balises PWA. `npm run deploy` le vérifie et refuse désormais de publier sans |
 | Écran blanc sur l'Oracle | CanvasKit n'a pas pu se charger. Vérifiez que `canvaskit.wasm` est bien dans `club/` |
