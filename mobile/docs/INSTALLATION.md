@@ -67,25 +67,61 @@ navigateur, Yahoo est bloqué par CORS, et cette fonction est le relais.
 
 Planifiez le rafraîchissement : voir `supabase/functions/README.md`.
 
-### 1.5 Le gabarit de courriel — **l'étape qu'on oublie**
+### 1.5 Un vrai serveur d'envoi — **à faire avant d'essayer de se connecter**
+
+Supabase limite son serveur partagé à **3 courriels par heure, tous membres
+confondus**. Deux essais ratés et vous êtes bloqué une heure, avec
+« email rate limit exceeded ». Pour sept membres qui s'inscrivent le même soir,
+c'est intenable.
+
+Ce quota ne s'applique **qu'au serveur partagé** : brancher le vôtre le supprime
+immédiatement. Avec [Resend](https://resend.com) — gratuit jusqu'à 3 000
+courriels par mois, sans carte bancaire :
+
+1. Créez un compte, puis une **API key**.
+2. Sans nom de domaine, gardez l'expéditeur de test `onboarding@resend.dev` —
+   suffisant pour démarrer. Avec un domaine, vérifiez-le d'abord.
+3. Supabase → **Project Settings** → **Authentication** → **SMTP Settings** →
+   *Enable Custom SMTP* :
+
+   | Champ | Valeur |
+   |---|---|
+   | Host | `smtp.resend.com` |
+   | Port | `465` |
+   | Username | `resend` |
+   | Password | votre clé API Resend |
+   | Sender email | `onboarding@resend.dev` (ou votre domaine) |
+   | Sender name | `Cryptos Club` |
+
+4. Plus bas, **Rate Limits** → passez l'envoi de courriels à 30 par heure.
+
+Le blocage saute dès l'enregistrement — pas besoin d'attendre la fin de l'heure.
+
+### 1.6 Le gabarit de courriel — **l'étape qu'on oublie**
 
 **Authentication** → **Emails** → gabarit **Magic Link**.
 
 Le gabarit par défaut de Supabase contient `{{ .ConfirmationURL }}` : il envoie
 un **lien**. L'app attend un **code à six chiffres**, soit `{{ .Token }}`.
 
-Tant que ce n'est pas changé, le membre reçoit un lien qui ne le connecte pas,
-et l'écran attend six chiffres qu'il n'a jamais reçus.
+Collez le contenu de `supabase/templates/magic-link.html` — **le balisage seul**,
+sans commentaire d'en-tête : le moteur de gabarits traite tout, y compris ce qui
+est entre `<!-- -->`. Sujet : `Votre code d'entrée au Cryptos Club`.
 
-Collez `supabase/templates/magic-link.html` dans le corps du gabarit, et mettez
-en sujet : `Votre code d'entrée au Cryptos Club`.
+**Regardez l'aperçu avant de sauvegarder.** Chaque essai raté consomme un
+courriel de votre quota. Si le courriel arrive malgré tout vide, prenez
+`magic-link-minimal.html` : trois lignes, rien qui puisse casser.
+
+> Un courriel n'est pas une page web : les clients de messagerie réécrivent le
+> HTML qu'ils reçoivent. D'où la mise en page en tableaux et les `bgcolor` en
+> attribut — voir `supabase/templates/README.md`.
 
 > **Pourquoi le code plutôt que le lien** — sur iOS, un lien de courriel s'ouvre
 > dans Safari, jamais dans une app installée sur l'écran d'accueil. La session
 > atterrirait dans le stockage de Safari, que la PWA ne voit pas : le membre se
 > croirait connecté et retomberait sur l'écran d'entrée.
 
-### 1.6 Autoriser votre adresse de publication
+### 1.7 Autoriser votre adresse de publication
 
 **Authentication** → **URL Configuration** → ajoutez dans *Redirect URLs* :
 
@@ -175,11 +211,8 @@ l'app occupe l'écran, encoche comprise.
 Saisir son adresse → un code à six chiffres arrive par courriel → le saisir. Au
 tout premier accès, l'app demande un prénom et crée le profil.
 
-> **Le code n'arrive pas ?** Supabase limite les envois à **3 courriels par
-> heure** avec son serveur de test. Pour sept membres qui s'inscrivent le même
-> soir, c'est trop peu : configurez un vrai serveur SMTP dans
-> **Authentication → Emails** (Resend, Postmark, Brevo — l'offre gratuite suffit
-> largement pour sept personnes).
+> **Le code n'arrive pas ?** Voyez « Quand ça coince » plus bas, et
+> **Authentication → Logs** dans Supabase : chaque envoi y apparaît, réussi ou non.
 
 ---
 
@@ -216,9 +249,10 @@ La version *maskable* est volontairement plus petite : Android rogne jusqu'à
 
 | Ce que vous voyez | Ce qui se passe |
 |---|---|
-| Le courriel contient un **lien**, pas un code | Le gabarit Magic Link est resté celui par défaut → §1.5 |
+| Le courriel contient un **lien**, pas un code | Le gabarit Magic Link est resté celui par défaut → §1.6 |
+| Le courriel arrive **vide** | Le gabarit a été réécrit par le client de messagerie. Prenez `magic-link-minimal.html`, et ne collez jamais le commentaire d'en-tête |
 | « Cette adresse n'est pas sur la liste du club. » | Aucun compte pour cette adresse → §1.3. Le club est fermé, personne ne s'auto-inscrit |
-| « Trop de codes demandés. Réessayez dans une heure. » | Les 3 courriels/heure du serveur de test Supabase sont épuisés → branchez un SMTP |
+| « Trop de codes demandés. Réessayez dans une heure. » | Les 3 courriels/heure du serveur partagé sont épuisés. Brancher un SMTP (§1.5) lève le blocage **immédiatement**, sans attendre |
 | Aucun courriel, aucune erreur | Regardez **Authentication → Logs** dans Supabase : l'envoi y apparaît, réussi ou non |
 | Connecté dans Safari, mais l'app installée redemande le code | Deux stockages distincts. C'est normal, et c'est pourquoi le code prime sur le lien |
 | L'app s'ouvre avec une barre d'adresse | Le document publié n'a pas ses balises PWA. `npm run deploy` le vérifie et refuse désormais de publier sans |

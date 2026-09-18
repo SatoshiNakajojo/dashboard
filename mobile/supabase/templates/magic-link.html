@@ -1,41 +1,39 @@
-<!--
-  Gabarit « Magic Link » — Supabase → Authentication → Emails.
+<table width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#0A0806" style="background-color:#0A0806;margin:0;padding:0">
+  <tr>
+    <td align="center" style="padding:32px 12px">
 
-  ⚠️ Le gabarit par défaut de Supabase contient `{{ .ConfirmationURL }}`, donc un
-  LIEN. L'app attend un CODE à six chiffres : c'est `{{ .Token }}` qu'il faut.
+      <table width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:440px">
+        <tr>
+          <td bgcolor="#12100C" style="background-color:#12100C;border:1px solid #1E1811;padding:32px 28px">
 
-  Pourquoi le code plutôt que le lien, pour une app installée sur l'écran
-  d'accueil : sur iOS, un lien ouvre **Safari**, pas la PWA. La session
-  atterrirait dans le stockage de Safari, que l'app installée ne voit pas — le
-  membre se croirait connecté et retomberait sur l'écran d'entrée.
+            <p style="margin:0;font-family:Courier,monospace;font-size:12px;color:#8C7F68;letter-spacing:2px">
+              CRYPTOS CLUB
+            </p>
 
-  Le code, lui, se tape dans l'app. Il marche aussi quand le courriel est ouvert
-  sur un autre appareil que le téléphone.
--->
-<div style="margin:0;padding:32px 16px;background:#0A0806;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif">
-  <div style="max-width:420px;margin:0 auto;background:#12100C;border:1px solid #1E1811;border-radius:4px;padding:32px 28px">
+            <p style="margin:16px 0 0;font-family:Georgia,serif;font-size:26px;color:#F2EBDD">
+              Votre code d'entrée
+            </p>
 
-    <div style="font:400 11px/1 'JetBrains Mono',ui-monospace,monospace;color:#8C7F68;letter-spacing:2.3px;text-transform:uppercase">
-      Cryptos Club
-    </div>
+            <table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin:26px 0">
+              <tr>
+                <td align="center" bgcolor="#0D0B08" style="background-color:#0D0B08;padding:20px 8px">
+                  <span style="font-family:Courier,monospace;font-size:34px;font-weight:bold;color:#F2EBDD;letter-spacing:8px">{{ .Token }}</span>
+                </td>
+              </tr>
+            </table>
 
-    <div style="font:400 26px/1.15 Georgia,'Times New Roman',serif;color:#F2EBDD;margin-top:14px">
-      Votre code d’entrée
-    </div>
+            <p style="margin:0;font-family:Arial,sans-serif;font-size:14px;line-height:22px;color:#9A8F7B">
+              Saisissez-le dans l'app. Il expire dans une heure et ne sert qu'une fois.
+            </p>
 
-    <div style="margin:28px 0;padding:18px 0;border-top:1px solid #1A1510;border-bottom:1px solid #1A1510;text-align:center">
-      <div style="font:600 34px/1 ui-monospace,'SF Mono',Menlo,monospace;color:#F2EBDD;letter-spacing:10px">
-        {{ .Token }}
-      </div>
-    </div>
+            <p style="margin:22px 0 0;font-family:Arial,sans-serif;font-size:12px;line-height:19px;color:#5C5446">
+              Vous n'avez rien demandé&nbsp;? Ignorez ce message — sans ce code, personne n'entre.
+            </p>
 
-    <div style="font:400 13px/1.7 -apple-system,sans-serif;color:#9A8F7B">
-      Saisissez-le dans l’app. Il expire dans une heure et ne sert qu’une fois.
-    </div>
+          </td>
+        </tr>
+      </table>
 
-    <div style="font:400 11px/1.6 -apple-system,sans-serif;color:#5C5446;margin-top:22px">
-      Vous n’avez rien demandé ? Ignorez ce message — sans ce code, personne
-      n’entre.
-    </div>
-  </div>
-</div>
+    </td>
+  </tr>
+</table>
