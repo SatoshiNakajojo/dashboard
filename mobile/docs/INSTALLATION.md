@@ -67,7 +67,25 @@ navigateur, Yahoo est bloqué par CORS, et cette fonction est le relais.
 
 Planifiez le rafraîchissement : voir `supabase/functions/README.md`.
 
-### 1.5 Autoriser votre adresse de publication
+### 1.5 Le gabarit de courriel — **l'étape qu'on oublie**
+
+**Authentication** → **Emails** → gabarit **Magic Link**.
+
+Le gabarit par défaut de Supabase contient `{{ .ConfirmationURL }}` : il envoie
+un **lien**. L'app attend un **code à six chiffres**, soit `{{ .Token }}`.
+
+Tant que ce n'est pas changé, le membre reçoit un lien qui ne le connecte pas,
+et l'écran attend six chiffres qu'il n'a jamais reçus.
+
+Collez `supabase/templates/magic-link.html` dans le corps du gabarit, et mettez
+en sujet : `Votre code d'entrée au Cryptos Club`.
+
+> **Pourquoi le code plutôt que le lien** — sur iOS, un lien de courriel s'ouvre
+> dans Safari, jamais dans une app installée sur l'écran d'accueil. La session
+> atterrirait dans le stockage de Safari, que la PWA ne voit pas : le membre se
+> croirait connecté et retomberait sur l'écran d'entrée.
+
+### 1.6 Autoriser votre adresse de publication
 
 **Authentication** → **URL Configuration** → ajoutez dans *Redirect URLs* :
 
@@ -193,6 +211,18 @@ La version *maskable* est volontairement plus petite : Android rogne jusqu'à
 20 % de l'icône, et sans cette marge « CRYPTOS CLUB » se ferait couper.
 
 ---
+
+## Quand ça coince
+
+| Ce que vous voyez | Ce qui se passe |
+|---|---|
+| Le courriel contient un **lien**, pas un code | Le gabarit Magic Link est resté celui par défaut → §1.5 |
+| « Cette adresse n'est pas sur la liste du club. » | Aucun compte pour cette adresse → §1.3. Le club est fermé, personne ne s'auto-inscrit |
+| « Trop de codes demandés. Réessayez dans une heure. » | Les 3 courriels/heure du serveur de test Supabase sont épuisés → branchez un SMTP |
+| Aucun courriel, aucune erreur | Regardez **Authentication → Logs** dans Supabase : l'envoi y apparaît, réussi ou non |
+| Connecté dans Safari, mais l'app installée redemande le code | Deux stockages distincts. C'est normal, et c'est pourquoi le code prime sur le lien |
+| L'app s'ouvre avec une barre d'adresse | Le document publié n'a pas ses balises PWA. `npm run deploy` le vérifie et refuse désormais de publier sans |
+| Écran blanc sur l'Oracle | CanvasKit n'a pas pu se charger. Vérifiez que `canvaskit.wasm` est bien dans `club/` |
 
 ## Limites connues de la PWA
 

@@ -8,6 +8,7 @@
  */
 
 import 'react-native-url-polyfill/auto';
+import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import type { Database } from '@/types/database';
@@ -24,8 +25,19 @@ export const supabase: SupabaseClient<Database> | null = isSupabaseConfigured
         storage: AsyncStorage,
         autoRefreshToken: true,
         persistSession: true,
-        // Pas de session dans l'URL : on n'est pas dans un navigateur.
-        detectSessionInUrl: false,
+        /**
+         * Une PWA **est** un navigateur.
+         *
+         * Le club se connecte par code à six chiffres, et c'est le bon choix
+         * pour une app installée : sur iOS, un lien magique s'ouvre dans
+         * Safari, pas dans l'app de l'écran d'accueil — la session atterrirait
+         * dans un stockage que l'app ne voit pas.
+         *
+         * Reste qu'un membre cliquera le lien depuis un onglet ordinaire. Là,
+         * consommer les jetons de l'URL le connecte au lieu de le laisser
+         * devant un écran qui l'ignore.
+         */
+        detectSessionInUrl: Platform.OS === 'web',
       },
       realtime: {
         // Plafond de messages par seconde — le potluck est bavard à plusieurs.
