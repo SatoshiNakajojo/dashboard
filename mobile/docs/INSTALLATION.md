@@ -16,9 +16,21 @@ données dans son coin.
 
 ### 1.1 Créer le projet
 
-Sur [supabase.com](https://supabase.com) → **New project**. Région : Europe
-(Francfort ou Paris) — le club est ici, la latence s'en ressent. Notez le mot de
-passe de la base, il ne réapparaît plus.
+Sur [supabase.com](https://supabase.com) → **New project**.
+
+**Région : `ap-southeast-2` — Oceania (Sydney).** Le club est en
+Nouvelle-Calédonie, et le câble sous-marin de Nouméa atterrit à Sydney : c'est
+littéralement le premier endroit où vos paquets touchent terre. Comptez 30 à
+50 ms, contre 200 et plus pour Mumbai, Singapour ou l'Europe — qui passent tous
+par Sydney de toute façon, avant de repartir à l'autre bout du monde.
+
+Ça se voit sur la checklist potluck, faite pour réagir au doigt et se
+synchroniser entre sept personnes dans la même pièce.
+
+**La région ne se change pas après coup** : il faut recréer le projet. Autant
+la choisir juste maintenant, quand la base est vide.
+
+Notez le mot de passe de la base, il ne réapparaît plus.
 
 ### 1.2 Appliquer le schéma
 
