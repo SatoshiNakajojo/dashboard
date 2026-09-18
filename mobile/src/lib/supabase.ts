@@ -34,21 +34,4 @@ export const supabase: SupabaseClient<Database> | null = isSupabaseConfigured
     })
   : null;
 
-/**
- * Message d'erreur lisible par un humain à partir de ce que renvoie Supabase.
- * On ne remonte jamais un code Postgres brut à l'écran.
- */
-export function describeError(error: unknown): string {
-  if (!error) return 'Erreur inconnue';
-  if (typeof error === 'object' && 'message' in error) {
-    const message = String((error as { message: unknown }).message);
-    if (message.includes('violates row-level security')) {
-      return 'Cette ligne ne vous appartient pas.';
-    }
-    if (message.includes('Failed to fetch') || message.includes('Network request failed')) {
-      return 'Connexion indisponible.';
-    }
-    return message;
-  }
-  return String(error);
-}
+export { describeError } from './errorMessages';
