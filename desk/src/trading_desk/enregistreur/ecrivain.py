@@ -43,6 +43,27 @@ MAX_LIGNES = 20_000
 MAX_SECONDES = 300.0
 MIN_LIBRE_MO = 2_000.0
 
+# Le plafond GLOBAL, toutes files confondues.
+#
+# `max_lignes` borne chaque tampon SEPAREMENT. Vingt-huit tampons — sept
+# actifs fois quatre flux — peuvent donc detenir 560 000 lignes avant qu'aucun
+# n'atteigne son seuil. Mesure sur le VPS le 18 septembre 2026 : 883 Mo
+# residents pour un `MemoryMax=1G`, avec « peak: 1G » au compteur systemd. Le
+# plafond avait deja ete touche.
+#
+# CE QUE COUTE UN DEPASSEMENT, et c'est la vraie raison de ce garde-fou : un
+# OOM kill est un SIGKILL. Il ne passe PAS par le vidage des tampons prevu
+# pour SIGTERM. Chaque mort emporte donc jusqu'a cinq minutes de collecte sur
+# vingt-huit files, en silence — et `Restart=always` remet le service en
+# « active (running) » dix secondes plus tard, si bien que `systemctl status`
+# affiche exactement la meme chose que si tout allait bien.
+#
+# C'est la classe de defaut habituelle du depot : un ecran qui dit que tout va
+# bien pendant qu'on perd de la donnee. Ici elle mord sur la seule donnee
+# irremplacable du projet — la microstructure ne se backteste pas, elle
+# s'enregistre en avant, et ce qui est perdu l'est pour toujours.
+MAX_LIGNES_TOTAL = 150_000
+
 
 def jour_utc(ms: int) -> str:
     return datetime.fromtimestamp(ms / 1000, UTC).strftime("%Y-%m-%d")
@@ -57,11 +78,17 @@ class EcrivainParquet:
 
     def __init__(self, racine: Path, *, max_lignes: int = MAX_LIGNES,
                  max_secondes: float = MAX_SECONDES,
-                 min_libre_mo: float = MIN_LIBRE_MO) -> None:
+                 min_libre_mo: float = MIN_LIBRE_MO,
+                 max_lignes_total: int = MAX_LIGNES_TOTAL) -> None:
         self.racine = Path(racine)
         self.max_lignes = max_lignes
         self.max_secondes = max_secondes
         self.min_libre_mo = min_libre_mo
+        self.max_lignes_total = max_lignes_total
+        # Combien de fois le plafond global a mordu. Un compteur a zero dit
+        # que le garde-fou ne sert a rien ; un compteur qui monte dit qu'il
+        # tient la memoire a la place de l'OOM killer.
+        self.vidages_sous_pression = 0
         self._tampons: dict[tuple[str, str], list[dict]] = {}
         self._depuis: dict[tuple[str, str], float] = {}
         self.lignes_ecrites = 0
@@ -98,6 +125,24 @@ class EcrivainParquet:
             self._depuis[cle] = time.monotonic()
         tampon.extend(lignes)
         if len(tampon) >= self.max_lignes:
+            self.vider_un(cle)
+        elif self.en_attente >= self.max_lignes_total:
+            self._vider_sous_pression()
+
+    def _vider_sous_pression(self) -> None:
+        """Vide les plus GROS tampons jusqu'a repasser sous le plafond global.
+
+        Les plus gros d'abord, parce qu'ils rendent le plus de memoire par
+        segment ecrit. On redescend a soixante-quinze pour cent du plafond
+        plutot qu'a quatre-vingt-dix-neuf : viser le plafond exact ferait
+        repartir le vidage a la ligne suivante, et l'enregistreur passerait
+        son temps a ecrire des segments minuscules.
+        """
+        self.vidages_sous_pression += 1
+        cible = int(self.max_lignes_total * 0.75)
+        for cle in sorted(self._tampons, key=lambda k: -len(self._tampons[k])):
+            if self.en_attente <= cible:
+                return
             self.vider_un(cle)
 
     def vider_expires(self) -> None:

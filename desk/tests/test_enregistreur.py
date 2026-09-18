@@ -423,3 +423,74 @@ async def test_le_journal_detat_fonctionne_contre_le_VRAI_client(tmp_path):
     c = Collecteur(["BTC", "ETH"], tmp_path)
     c.journaliser_etat()          # doit passer sans connexion
     assert c._tout_gele() is False
+
+
+# ─────────────────────────── le plafond GLOBAL de mémoire
+
+def test_le_plafond_par_flux_ne_borne_pas_la_memoire_totale(tmp_path):
+    """Le défaut mesuré sur le VPS le 18 septembre 2026.
+
+    `max_lignes` borne chaque tampon SÉPARÉMENT. Vingt-huit tampons — sept
+    actifs × quatre flux — peuvent donc détenir 560 000 lignes sans qu'aucun
+    n'atteigne son seuil. Sur le VPS : 883 Mo résidents pour `MemoryMax=1G`,
+    et « peak: 1G » au compteur systemd.
+    """
+    e = EcrivainParquet(tmp_path, max_lignes=100, max_lignes_total=10_000_000)
+    for coin in ("BTC", "ETH", "SOL", "DOGE"):
+        e.ajouter("trades", coin, _lignes_trades(99))
+    assert e.segments_ecrits == 0, "aucun tampon n'atteint son seuil"
+    assert e.en_attente == 396, "et pourtant la mémoire porte quatre fois 99"
+
+
+def test_le_plafond_global_vide_avant_que_l_OOM_killer_ne_frappe(tmp_path):
+    """LE test de ce garde-fou, et sa raison est plus grave que la mémoire.
+
+    Un OOM kill est un SIGKILL : il ne passe PAS par le vidage des tampons
+    prévu pour SIGTERM. Chaque mort emporte donc jusqu'à cinq minutes de
+    collecte sur vingt-huit files, en silence — et `Restart=always` remet le
+    service en « active (running) » dix secondes plus tard.
+    """
+    e = EcrivainParquet(tmp_path, max_lignes=10_000, max_lignes_total=200)
+    for coin in ("BTC", "ETH", "SOL"):
+        e.ajouter("trades", coin, _lignes_trades(90))
+    assert e.segments_ecrits > 0, "le plafond global doit avoir mordu"
+    assert e.vidages_sous_pression >= 1
+    assert e.en_attente <= 200
+
+
+def test_la_memoire_ne_depasse_jamais_le_plafond(tmp_path):
+    """L'invariante qui compte : à aucun moment l'attente ne passe au-dessus.
+
+    Le seuil de 75 % s'applique AU MOMENT du vidage, pas après chaque ajout
+    suivant — viser le plafond exact ferait repartir le vidage à la ligne
+    d'après, et l'enregistreur passerait son temps à écrire des segments
+    minuscules.
+    """
+    e = EcrivainParquet(tmp_path, max_lignes=10_000, max_lignes_total=1000)
+    hauts = []
+    for tour in range(6):
+        for coin in ("BTC", "ETH", "SOL", "DOGE", "XRP"):
+            e.ajouter("trades", coin, _lignes_trades(300))
+            hauts.append(e.en_attente)
+    assert max(hauts) < 1000 + 300, (
+        f"l'attente a culminé à {max(hauts)} pour un plafond de 1000")
+    assert e.vidages_sous_pression >= 3, "le garde-fou doit mordre plusieurs fois"
+
+
+def test_un_vidage_sous_pression_redescend_a_75_pourcent(tmp_path):
+    """Mesuré juste après le vidage, là où la règle s'applique."""
+    e = EcrivainParquet(tmp_path, max_lignes=10_000, max_lignes_total=1000)
+    for coin in ("BTC", "ETH", "SOL"):
+        e.ajouter("trades", coin, _lignes_trades(300))
+    assert e.vidages_sous_pression == 0, "900 lignes, on est encore sous 1000"
+    e.ajouter("trades", "DOGE", _lignes_trades(300))
+    assert e.vidages_sous_pression == 1
+    assert e.en_attente <= 750
+
+
+def test_le_compteur_de_pression_dit_si_le_garde_fou_sert(tmp_path):
+    """Un compteur à zéro dit que le garde-fou ne sert à rien ; un compteur
+    qui monte dit qu'il tient la mémoire à la place de l'OOM killer."""
+    e = EcrivainParquet(tmp_path, max_lignes=10_000, max_lignes_total=10_000_000)
+    e.ajouter("trades", "BTC", _lignes_trades(50))
+    assert e.vidages_sous_pression == 0
