@@ -210,18 +210,28 @@ ici — elle contourne la RLS.
 
 ### 2.2 Construire et déployer
 
+Depuis n'importe quel dossier du dépôt :
+
 ```bash
-npm run build:web
-npm run deploy
+cd "$(git rev-parse --show-toplevel)" && git pull && npm --prefix mobile install
+npm --prefix mobile run build:web && npm --prefix mobile run deploy
 ```
 
-Le premier construit l'app dans `dist/` ; le second la copie dans `club/` à la
-racine du dépôt. Puis :
+La première ligne n'est pas une politesse : sans elle, on reconstruit le code
+qu'on a déjà publié, `club/` ressort identique, et `git commit` répond
+« nothing added to commit » — ce qui ressemble à un déploiement réussi.
+
+`build:web` construit l'app dans `mobile/dist/` ; `deploy` la copie dans
+`club/`, à la racine du dépôt, et refuse de publier un document sans ses
+balises PWA. Relisez, puis :
 
 ```bash
-cd ..
 git add club && git commit -m "Club : nouvelle version" && git push
 ```
+
+Si `git commit` répond « nothing added to commit », c'est que rien n'a changé
+depuis la dernière publication — remontez d'une étape, le `git pull` a-t-il
+bien tourné ?
 
 ### 2.3 Activer GitHub Pages (une fois)
 
