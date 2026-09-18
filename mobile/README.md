@@ -99,7 +99,7 @@ de 4 unités — et borné dans le repère.
 
 ## Ce qui a été vérifié
 
-- `npm run typecheck`, `npm run lint`, `npm test` — propres (133 tests).
+- `npm run typecheck`, `npm run lint`, `npm test` — propres (139 tests).
 - **Règles pures** : bornes et inversibilité du repère, monotonie du tracé,
   écart à la courbe réelle, espaces insécables du formatage français, perf vs ₿
   comme ratio et non soustraction, seuils et tri des deux classements.
@@ -119,9 +119,16 @@ de 4 unités — et borné dans le repère.
   ligne de potluck libre (2 libres → 1, compteur `4 / 6` → `5 / 6`), libération
   au re-tap, ligne d'un autre membre inerte. Tracé de l'Oracle au doigt,
   verrouillage, passage en lecture seule, `FIGÉ · HASH 8F2A`, écarts colorés.
-  Publication d'un `$SOL` (10 cartes → 11). Avec Supabase configuré : la garde
-  mène à la porte, l'adresse invalide est refusée, la panne réseau se lit
-  « Connexion indisponible » et non en trace technique.
+  Publication d'un `$SOL` (10 cartes → 11). Sélecteur de place : absent sur un
+  call BTC, présent sur `ACTION`, `$AI` suivi comme `AI` puis `AI.PA` après un
+  tap sur Paris, place remise aux États-Unis au retour sur une crypto. Avec
+  Supabase configuré : la garde mène à la porte, l'adresse invalide est
+  refusée, la panne réseau se lit « Connexion indisponible » et non en trace
+  technique.
+- **Diagnostic backend** : `npm run check:supabase` exécuté contre un faux
+  projet Supabase, sain puis cassé — table absente, RLS inactive, migration
+  partielle, fonction non déployée, inscription ouverte — et contre un projet
+  injoignable. Chaque cas produit le bon verdict et le bon remède.
 
 ---
 
@@ -210,18 +217,31 @@ Deux différences assumées avec le dashboard :
   lire la devise déclarée évite d'avoir à tenir cette liste. Londres cote en
   pence (`GBp`) : l'oublier multiplierait une position par cent.
 
+### La place de cotation fait partie du ticker
+
+`$AI` est C3.ai à New York **et** Air Liquide à Paris. Un composer qui ne
+demande pas la place propose donc le prix d'une société pour un call sur
+l'autre, sans que rien ne le signale.
+
+Le composer affiche un sélecteur de place dès que la classe d'actif est
+`ACTION` ou `ETF`, et écrit sous les puces le symbole réellement interrogé —
+*« Suivi comme AI.PA sur Yahoo Finance. »* C'est cette ligne qui fait le
+travail : elle transforme une erreur silencieuse en erreur visible, avant
+publication plutôt qu'au premier relevé de performance.
+
+La place n'est pas stockée : `tickers.yahoo_symbol` porte déjà `AI.PA`.
+
 ---
 
 ## Ce qui reste à faire
 
 Rien ne bloque. Ce qui suit est du confort :
 
-- **Autocomplétion du ticker** dans le composer. `resolveCoingeckoId()` et
-  `fetchStockQuote()` existent et tournent déjà à la saisie et à la
-  publication ; il manque la liste déroulante.
-- **Places de cotation.** Le composer ne demande pas la place, donc un titre
-  européen est publié sans suffixe Yahoo et devra être corrigé en base
-  (`AI` → `AI.PA`). La table des suffixes est écrite et testée.
+- **Autocomplétion du ticker** dans le composer. Il faudrait relayer
+  `v1/finance/search` de Yahoo par une fonction Edge, comme on l'a fait pour
+  les cotations : le membre choisirait « Air Liquide » plutôt que d'écrire
+  `$AI` et de cocher Paris. Le sélecteur de place couvre le besoin en
+  attendant, et reste le repli quand la recherche ne répond pas.
 - **Taille de position.** La colonne existe et les cartes l'affichent, mais le
   composer ne la collecte pas — le design ne lui donne pas de champ.
 - **Saison de l'Oracle** figée à `2026-S3` dans `src/mocks/oracle.ts` ; en

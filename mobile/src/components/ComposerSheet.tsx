@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import { Modal, Pressable, Text, TextInput, View } from 'react-native';
+import { Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 
 import { Micro } from '@/components/ui/Micro';
 import { useSuggestedPrice } from '@/features/bag/useSuggestedPrice';
 import { formatUsd } from '@/lib/format';
+import { DEFAULT_EXCHANGE, EXCHANGES, providerFor, type ExchangeKey } from '@/lib/quotes';
 import {
   ASSET_CLASSES,
   a,
@@ -23,6 +24,8 @@ export interface CallDraft {
   symbol: string;
   entryPrice: number;
   thesis: string;
+  /** Place de cotation, pour les actions et ETF hors États-Unis. */
+  exchange: ExchangeKey;
 }
 
 export interface ComposerSheetProps {
@@ -48,10 +51,14 @@ export function ComposerSheet({
   const [symbol, setSymbol] = useState('$BTC');
   const [entry, setEntry] = useState('');
   const [thesis, setThesis] = useState('');
+  const [exchange, setExchange] = useState<ExchangeKey>(DEFAULT_EXCHANGE);
+
+  /** Seuls les titres ont une place de cotation ; un jeton se négocie partout. */
+  const isStock = providerFor(assetClass) === 'yahoo';
 
   // Le cours proposé dépend de l'actif : spot BTC pour un call bitcoin, Yahoo
   // pour une action ou un ETF, rien pour un alt — plutôt qu'un prix faux.
-  const suggested = useSuggestedPrice(assetClass, symbol);
+  const suggested = useSuggestedPrice(assetClass, symbol, exchange);
 
   /** Le prix saisi, ou le cours proposé à défaut. */
   const entryPrice = (() => {
@@ -65,10 +72,17 @@ export function ComposerSheet({
     setSymbol('$BTC');
     setEntry('');
     setThesis('');
+    setExchange(DEFAULT_EXCHANGE);
   };
 
   const submit = async () => {
-    const sent = await onPublish({ assetClass, symbol, entryPrice, thesis: thesis.trim() });
+    const sent = await onPublish({
+      assetClass,
+      symbol,
+      entryPrice,
+      thesis: thesis.trim(),
+      exchange,
+    });
     // Sur échec, on garde la saisie : le membre ne doit pas réécrire sa thèse.
     if (sent) reset();
   };
@@ -151,7 +165,13 @@ export function ComposerSheet({
                     key={key}
                     accessibilityRole="button"
                     accessibilityState={{ selected: on }}
-                    onPress={() => setAssetClass(key)}
+                    onPress={() => {
+                      setAssetClass(key);
+                      // Une place retenue d'un call précédent n'a aucun sens
+                      // sur un jeton, et fausserait le symbole d'un retour aux
+                      // actions.
+                      if (providerFor(key) !== 'yahoo') setExchange(DEFAULT_EXCHANGE);
+                    }}
                     style={{
                       flex: 1,
                       alignItems: 'center',
@@ -232,6 +252,62 @@ export function ComposerSheet({
               />
             </View>
           </View>
+
+          {isStock && (
+            <View>
+              <Micro style={{ marginBottom: 10 }}>PLACE DE COTATION</Micro>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{ gap: 8, paddingRight: 22 }}
+              >
+                {EXCHANGES.map(({ key, label }) => {
+                  const on = exchange === key;
+                  const style = on ? assetClassStyle[assetClass] : assetClassIdle;
+                  return (
+                    <Pressable
+                      key={key}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: on }}
+                      onPress={() => setExchange(key)}
+                      style={{
+                        paddingHorizontal: 12,
+                        paddingVertical: 8,
+                        borderRadius: radius.button,
+                        borderWidth: 1,
+                        borderColor: style.border,
+                        backgroundColor: style.bg,
+                      }}
+                    >
+                      <Text
+                        style={{
+                          fontFamily: f.monoMed,
+                          fontSize: 9,
+                          letterSpacing: 1.08,
+                          color: style.fg,
+                        }}
+                      >
+                        {label.toUpperCase()}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+              <Text
+                style={{
+                  fontFamily: f.sans,
+                  fontSize: 10,
+                  lineHeight: 16,
+                  color: c.sepiaFaint,
+                  marginTop: 9,
+                }}
+              >
+                {suggested.symbol
+                  ? `Suivi comme ${suggested.symbol} sur Yahoo Finance.`
+                  : 'Hors des États-Unis, Yahoo suffixe le ticker : AI.PA, pas AI.'}
+              </Text>
+            </View>
+          )}
 
           <View>
             <Micro size={8.5} tracking={1.7} style={{ color: c.sepiaMuted }}>
