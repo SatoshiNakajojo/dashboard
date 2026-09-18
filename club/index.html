@@ -3,7 +3,6 @@
   <head>
     <meta charset="utf-8" />
     <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
     <title>Cryptos Club</title>
     <!-- The `react-native-web` recommended style reset: https://necolas.github.io/react-native-web/docs/setup/#root-element -->
     <style id="expo-reset">
@@ -24,7 +23,30 @@
       }
     </style>
   <link rel="icon" href="/dashboard/club/favicon.ico"/><link rel="preload" href="/dashboard/club/_expo/static/css/web-9cdcffd3ebc196398120a2d5dd63b3ce.css" as="style">
-<link rel="stylesheet" href="/dashboard/club/_expo/static/css/web-9cdcffd3ebc196398120a2d5dd63b3ce.css"></head>
+<link rel="stylesheet" href="/dashboard/club/_expo/static/css/web-9cdcffd3ebc196398120a2d5dd63b3ce.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Cryptos Club" />
+    <meta name="application-name" content="Cryptos Club" />
+    <meta name="theme-color" content="#0A0806" />
+    <meta name="color-scheme" content="dark" />
+    <link rel="manifest" href="manifest.json" />
+    <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png" />
+    <style>
+      html, body, #root { background-color: #0A0806; height: 100%; }
+      body { margin: 0; overscroll-behavior-y: none; -webkit-tap-highlight-color: transparent; }
+      #root { -webkit-user-select: none; user-select: none; }
+    </style>
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function () {
+          navigator.serviceWorker.register('sw.js').catch(function () {});
+        });
+      }
+    </script>
+</head>
 
   <body>
     <!-- Use static rendering with Expo Router to support running without JavaScript. -->
@@ -33,6 +55,6 @@
     </noscript>
     <!-- The root element for your Expo app. -->
     <div id="root"></div>
-  <script src="/dashboard/club/_expo/static/js/web/__expo-metro-runtime-1f8f5d3ca6b7f58204d51e14506d73fb.js" defer></script><script src="/dashboard/club/_expo/static/js/web/__common-c5532be975940abdddf4d9e4dc4c5fab.js" defer></script><script src="/dashboard/club/_expo/static/js/web/entry-776f36bea9b35756c09ab435f19d47cd.js" defer></script>
+  <script src="/dashboard/club/_expo/static/js/web/__expo-metro-runtime-1f8f5d3ca6b7f58204d51e14506d73fb.js" defer></script><script src="/dashboard/club/_expo/static/js/web/__common-322d96fecd687558e236d6254270ba15.js" defer></script><script src="/dashboard/club/_expo/static/js/web/entry-ffc542c03f5477bb2baffdec0efe141b.js" defer></script>
 </body>
 </html>
