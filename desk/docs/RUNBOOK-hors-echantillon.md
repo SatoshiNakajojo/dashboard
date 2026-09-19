@@ -47,30 +47,51 @@ nécessaire pour deux choses que rien d'autre ne fait :
    rapproche la conclusion, et c'est le seul levier qui existe ;
 2. **relever les fenêtres closes**.
 
+### Le service tourne depuis `/opt/desk/src`, et ce n'est pas négociable
+
+L'unité contient **`ProtectHome=true`** : systemd rend `/home` entièrement
+invisible au service. Un `WorkingDirectory=/home/trader/dashboard/desk`
+échouerait, et l'y forcer demanderait de désactiver précisément la
+protection qui empêche un service de collecte de lire les fichiers
+personnels de l'exploitant.
+
+`/opt/desk/src` n'est donc pas un chemin à corriger. C'est le dépôt que le
+service lit, et c'est l'installateur qui le met à jour — pas `git pull` dans
+le clone personnel. Les deux coexistent :
+
+| | à quoi il sert | qui l'écrit |
+|---|---|---|
+| `/opt/desk/src` | ce que les services systemd exécutent | `installer.sh`, user `desk` |
+| `~/dashboard` | lecture, bricolage, coups d'œil | toi, user `trader` |
+
 ### Installation
 
-L'installateur pose déjà les deux unités et active le timer. Sur le VPS,
-dans le clone de travail :
+Une seule commande. Elle est **idempotente** : on la relance après chaque
+changement de code.
 
 ```bash
-cd ~/dashboard && git pull origin claude/trading-desk-p3-launch-e16cdi
 sudo bash ~/dashboard/desk/deploy/installer.sh
 ```
 
-Si l'installateur refuse parce que `/opt/desk/src` porte des modifications
-locales ou n'est pas à jour, les deux unités s'installent aussi à la main :
+L'installateur met `/opt/desk/src` à jour depuis `origin`, réinstalle les
+unités et active les timers. Il **refuse de commencer** si `/opt/desk/src`
+porte des modifications locales, plutôt que de les écraser en silence ; il
+affiche alors la commande pour les voir.
+
+Pas besoin de `git pull` dans `~/dashboard` au préalable : l'installateur
+n'utilise ce clone que pour se lire lui-même, et il n'a pas changé.
+
+### Premier passage, à la main
+
+Le timer tire le lundi. Ne pas attendre lundi pour découvrir qu'il échoue :
 
 ```bash
-sudo cp ~/dashboard/desk/deploy/rituel-deblocages.{service,timer} /etc/systemd/system/
-sudo systemctl daemon-reload
-sudo systemctl enable --now rituel-deblocages.timer
-systemctl list-timers --no-pager rituel-deblocages.timer
+sudo systemctl start rituel-deblocages.service
+journalctl -u rituel-deblocages -n 80 --no-pager
 ```
 
-> Le fichier d'unité pointe sur `/opt/desk/src/desk`. Si le clone de travail
-> est ailleurs, corriger `WorkingDirectory=`, `ExecStart=` et
-> `ReadWritePaths=` **avant** le `daemon-reload` — sinon systemd refuse de
-> démarrer avec un message qui ne nomme pas le chemin fautif.
+Les trois étapes doivent afficher `code 0`. La première — le calendrier —
+est la seule fatale : sans elle, rien n'est inscrit, et c'est voulu.
 
 ### Vérifier qu'il a réellement tourné
 
@@ -88,15 +109,23 @@ Le service est `Type=oneshot` **sans `Restart=`** : un échec doit RESTER en
 
 ### Renvoyer le journal
 
-Le journal vit sur la machine qui le remplit. Pour qu'il compte, il doit
-revenir dans git :
+Le journal vit sur la machine qui le remplit, et c'est **`/opt/desk/src`**
+qui le remplit — pas le clone personnel. Pour qu'il compte, il doit revenir
+dans git, en tant que `desk` puisque c'est lui qui possède ces fichiers :
 
 ```bash
-cd ~/dashboard
-git add desk/data/journal_unlocks.jsonl desk/data/unlocks.json
-git commit -m "Releve hebdomadaire des deblocages"
-git push origin claude/trading-desk-p3-launch-e16cdi
+sudo -u desk git -C /opt/desk/src add desk/data/journal_unlocks.jsonl desk/data/unlocks.json
+sudo -u desk git -C /opt/desk/src commit -m "Releve hebdomadaire des deblocages"
+sudo -u desk git -C /opt/desk/src push origin claude/trading-desk-p3-launch-e16cdi
 ```
+
+> `sudo -u desk <cmd>`, jamais `sudo -i -u desk` : le compte est un compte
+> système sans shell de connexion, et `-i` répond « This account is
+> currently not available ».
+
+Si git refuse avec *« detected dubious ownership »*, c'est que la commande
+tourne sous un autre utilisateur que le propriétaire du dépôt. La réponse
+est de repasser par `sudo -u desk`, pas d'ajouter le dépôt aux exceptions.
 
 ---
 
