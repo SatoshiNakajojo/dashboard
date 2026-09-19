@@ -68,20 +68,29 @@ connexion, quand ils saisissent leur prénom. Rien à faire à la main.
 
 ### 1.4 Publier les fonctions
 
+Depuis `mobile/`, **une ligne à la fois** — le sélecteur de projet est
+interactif et avalerait les lignes collées à sa suite. `<ref>` est
+l'identifiant qui figure dans l'URL du projet.
+
 ```bash
-npx supabase functions deploy refresh-prices
-npx supabase functions deploy quote
-npx supabase secrets set REFRESH_SECRET="$(openssl rand -hex 24)"
+cd "$(git rev-parse --show-toplevel)/mobile"
+
+npx supabase functions deploy refresh-prices --project-ref <ref>
+npx supabase functions deploy quote --project-ref <ref>
+
+REFRESH_SECRET="$(openssl rand -hex 24)"; echo "$REFRESH_SECRET"
+npx supabase secrets set REFRESH_SECRET="$REFRESH_SECRET" --project-ref <ref>
 ```
 
 `refresh-prices` met à jour les cours (CoinGecko pour les cryptos, Yahoo pour
 les actions et ETF). `quote` sert la suggestion de prix du composer — dans un
 navigateur, Yahoo est bloqué par CORS, et cette fonction est le relais.
 
-La troisième ligne n'est pas facultative : sans ce secret, `refresh-prices`
-refuse de tourner. Elle écrit en base et appelle deux API externes ; la laisser
-joignable avec la seule clé anon, qui est publiée dans le bundle, reviendrait à
-offrir le point d'entrée. Notez la valeur, la planification en a besoin.
+Le secret n'est pas facultatif : sans lui, `refresh-prices` refuse de tourner.
+Elle écrit en base et appelle deux API externes ; la laisser joignable avec la
+seule clé anon, qui est publiée dans le bundle, reviendrait à offrir le point
+d'entrée. D'où le `echo` : la planification a besoin de la valeur en clair, et
+`supabase secrets list` ne montre qu'une empreinte.
 
 Planifiez le rafraîchissement : voir `supabase/functions/README.md`.
 

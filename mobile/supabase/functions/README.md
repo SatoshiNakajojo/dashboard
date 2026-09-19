@@ -42,24 +42,41 @@ liste à jour.
 
 ### Déployer
 
-```bash
-npx supabase functions deploy refresh-prices
+Depuis `mobile/` — la CLI cherche `supabase/functions/<nom>/index.ts` sous le
+dossier courant — et **une commande à la fois** : le sélecteur de projet est
+interactif, et coller plusieurs lignes d'un coup lui fait avaler les suivantes
+comme des frappes clavier.
 
-# Secret d'appel — obligatoire, la fonction refuse de tourner sans lui
-npx supabase secrets set REFRESH_SECRET="$(openssl rand -hex 24)"
+`--project-ref` évite ce sélecteur. L'identifiant est celui de l'URL du projet.
+
+```bash
+cd "$(git rev-parse --show-toplevel)/mobile"
+
+npx supabase functions deploy refresh-prices --project-ref <ref>
+npx supabase functions deploy quote --project-ref <ref>
+```
+
+Puis le secret d'appel. **Générez-le en l'affichant** : la planification
+ci-dessous en a besoin en clair, et `supabase secrets list` ne montre qu'une
+empreinte.
+
+```bash
+REFRESH_SECRET="$(openssl rand -hex 24)"; echo "$REFRESH_SECRET"
+npx supabase secrets set REFRESH_SECRET="$REFRESH_SECRET" --project-ref <ref>
 
 # Clé CoinGecko — facultative, elle relève seulement le quota
-npx supabase secrets set COINGECKO_API_KEY=...
+npx supabase secrets set COINGECKO_API_KEY=... --project-ref <ref>
 ```
+
+La valeur passe par l'historique du shell et reste dans le défilement du
+terminal. Pour un club de sept c'est acceptable ; si ça ne vous va pas,
+régénérez-la après avoir posé la planification.
 
 `REFRESH_SECRET` n'est pas une option. Sans lui, `refresh-prices` serait un
 point d'entrée qui écrit en base et appelle deux API externes, joignable avec
 la clé anon — qui est publiée dans le bundle de l'app. La fonction répond donc
 500 tant qu'il n'est pas posé : une configuration inachevée n'est pas une
 permission.
-
-Notez la valeur, elle ne réapparaît pas : la planification ci-dessous en a
-besoin.
 
 `SUPABASE_URL` et `SUPABASE_SERVICE_ROLE_KEY` sont injectés par la plateforme.
 La clé de service ne sort jamais du serveur : elle contourne RLS, c'est
@@ -89,10 +106,16 @@ select cron.schedule(
 );
 ```
 
-Les deux secrets se posent une fois avec
-`alter database postgres set app.refresh_secret = '...'`. Ne pas les écrire en
-clair dans la définition du cron : `cron.job` est lisible par tout rôle ayant
-accès au schéma.
+Les deux secrets se posent une fois, dans le **SQL Editor**, avec la valeur
+affichée plus haut :
+
+```sql
+alter database postgres set app.refresh_secret  = 'la-valeur-de-REFRESH_SECRET';
+alter database postgres set app.service_role_key = 'la-clé-service-role';
+```
+
+Ne pas les écrire en clair dans la définition du cron : `cron.job` est lisible
+par tout rôle ayant accès au schéma.
 
 ### Ce qu'elle ne fait pas
 
