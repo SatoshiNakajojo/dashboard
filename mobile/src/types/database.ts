@@ -110,6 +110,7 @@ export type Database = {
     Functions: {
       is_member: { Args: Record<string, never>; Returns: boolean };
       is_valid_path: { Args: { path: unknown }; Returns: boolean };
+      taken_profile_colors: { Args: Record<string, never>; Returns: string[] };
     };
     Enums: {
       asset_class: AssetClassRow;

@@ -99,7 +99,7 @@ de 4 unités — et borné dans le repère.
 
 ## Ce qui a été vérifié
 
-- `npm run typecheck`, `npm run lint`, `npm test` — propres (171 tests).
+- `npm run typecheck`, `npm run lint`, `npm test` — propres (172 tests).
 - **Règles pures** : bornes et inversibilité du repère, monotonie du tracé,
   écart à la courbe réelle, espaces insécables du formatage français, perf vs ₿
   comme ratio et non soustraction, seuils et tri des deux classements.
@@ -111,7 +111,9 @@ de 4 unités — et borné dans le repère.
 - **Plan de rafraîchissement** : on n'efface jamais un prix connu, on ne
   réécrit jamais un prix inchangé.
 - **Schéma** : migration appliquée à un PostgreSQL 16 réel, réexécutée pour
-  l'idempotence, puis `supabase/tests/schema_test.sql` — 12 assertions passent.
+  l'idempotence, puis `supabase/tests/schema_test.sql` — 13 assertions passent,
+  dont celle qui manquait : un membre lit les couleurs déjà prises **avant**
+  d'être membre, là où la RLS lui refuse toute ligne.
   Le seed reproduit exactement les pourcentages du design (`+14,9 %`, `+12,4 %`,
   `+21,8 %`, `+11,2 %`, `-61,0 %`) et les perfs vs ₿ (`-2,5 %`, `+6,9 %`,
   `-3,7 %`, `-66,4 %`).

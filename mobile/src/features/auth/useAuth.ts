@@ -167,8 +167,11 @@ export function useProfileBootstrap(userId: string | null): ProfileBootstrap {
         return false;
       }
 
-      const { data: existing } = await client.from('profiles').select('color');
-      const color = pickColor((existing ?? []).map((row) => row.color));
+      // Pas un `select` sur `profiles` : la RLS le refuserait à qui n'est pas
+      // encore membre — c'est-à-dire à tout le monde, ici. La fonction rend les
+      // couleurs et rien d'autre.
+      const { data: taken } = await client.rpc('taken_profile_colors');
+      const color = pickColor(taken ?? []);
 
       const { error: cause } = await client.from('profiles').insert({
         id: userId,

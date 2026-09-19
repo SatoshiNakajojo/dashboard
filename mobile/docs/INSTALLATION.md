@@ -37,10 +37,13 @@ Notez le mot de passe de la base, il ne réapparaît plus.
 ```bash
 cd mobile
 npx supabase link --project-ref <ref-du-projet>
-npx supabase db push          # applique les deux migrations
+npx supabase db push          # applique les migrations de supabase/migrations/
 ```
 
 `<ref-du-projet>` est la suite de lettres dans l'URL du tableau de bord.
+
+`db push` est à relancer après chaque `git pull` qui apporte une migration —
+`npm run check:supabase` (§1.8) signale une table ou une colonne manquante.
 
 Pour charger les données de démonstration (les trois Crypto Nights, les calls,
 les classements) — pratique pour voir l'app vivante avant d'y mettre les vraies :

@@ -159,6 +159,42 @@ begin
   raise notice 'ok · predictions : le verrouillage est définitif';
 end $$;
 
+-- ============================================================================
+-- Couleurs de membres — le cas qui avait échappé aux tests
+--
+-- Un membre crée son profil **avant** d'être membre. `profiles_select` exige
+-- `is_member()`, donc la RLS lui refuse toute ligne, la palette se croit
+-- vierge, et les sept membres du club sortaient de la même couleur. La
+-- fonction `taken_profile_colors()` doit répondre là où le `select` ne peut
+-- pas.
+--
+-- On se met dans la peau de ce nouveau venu : un identifiant sans profil.
+-- ============================================================================
+
+do $$ begin create role anon; exception when duplicate_object then null; end $$;
+
+create or replace function auth.uid() returns uuid language sql stable
+  as $$ select '99999999-9999-4999-8999-999999999999'::uuid $$;
+
+do $$
+begin
+  assert not public.is_member(), 'le témoin ne doit justement pas être membre';
+
+  set local role authenticated;
+  assert (select count(*) from public.profiles) = 0,
+    'la RLS doit bien lui refuser toute ligne — c’est l’origine du défaut';
+  assert array_length(public.taken_profile_colors(), 1) >= 2,
+    'les couleurs prises doivent rester visibles à qui n’est pas encore membre';
+  reset role;
+  raise notice 'ok · profiles : les couleurs sont lisibles avant l’adhésion';
+
+  assert not has_function_privilege('anon', 'public.taken_profile_colors()', 'execute'),
+    'un visiteur anonyme n’a rien à demander à cette fonction';
+  assert has_function_privilege('authenticated', 'public.taken_profile_colors()', 'execute'),
+    'un membre connecté doit pouvoir l’appeler';
+  raise notice 'ok · profiles : la fonction reste fermée aux visiteurs';
+end $$;
+
 rollback;
 
 \echo 'Tous les tests de schéma sont passés.'
