@@ -158,13 +158,27 @@ courriel de votre quota. Si le courriel arrive malgré tout vide, prenez
 > atterrirait dans le stockage de Safari, que la PWA ne voit pas : le membre se
 > croirait connecté et retomberait sur l'écran d'entrée.
 
-### 1.7 Autoriser votre adresse de publication
+### 1.7 Dire à Supabase où vit l'app
 
-**Authentication** → **URL Configuration** → ajoutez dans *Redirect URLs* :
+**Authentication** → **URL Configuration**. Deux champs, et le premier est
+celui qu'on oublie.
+
+**Site URL** — remplacez `http://localhost:3000` par :
 
 ```
 https://<votre-compte>.github.io/dashboard/club/
 ```
+
+C'est là que Supabase renvoie quiconque clique un lien de courriel. Laissé au
+défaut, le membre reçoit un courriel parfaitement valide dont le lien ouvre
+`localhost` sur son téléphone : rien. Aucune erreur, aucune trace, et le
+courriel a l'air d'être le coupable alors qu'il est irréprochable.
+
+**Redirect URLs** — ajoutez la même adresse.
+
+> Avec le gabarit de §1.6, l'app se connecte par code et le lien ne sert plus.
+> Réglez quand même le *Site URL* : un membre cliquera le lien, et il vaut
+> mieux qu'il arrive quelque part.
 
 ### 1.8 Vérifier, plutôt que de chercher
 
@@ -351,6 +365,7 @@ La version *maskable* est volontairement plus petite : Android rogne jusqu'à
 | Ce que vous voyez | Ce qui se passe |
 |---|---|
 | Le courriel contient un **lien**, pas un code | Le gabarit Magic Link est resté celui par défaut → §1.6 |
+| Le lien du courriel ne mène nulle part | *Site URL* est resté sur `http://localhost:3000` → §1.7. `npm run check:supabase` le lit et le signale |
 | Le courriel arrive **vide** | Le gabarit a été réécrit par le client de messagerie. Prenez `magic-link-minimal.html`, et ne collez jamais le commentaire d'en-tête |
 | « Cette adresse n'est pas sur la liste du club. » | Aucun compte pour cette adresse → §1.3. Le club est fermé, personne ne s'auto-inscrit |
 | « Trop de codes demandés. Réessayez dans une heure. » | Les 3 courriels/heure du serveur partagé sont épuisés. Brancher un SMTP (§1.5) lève le blocage **immédiatement**, sans attendre |

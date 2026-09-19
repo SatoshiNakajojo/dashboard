@@ -389,6 +389,41 @@ export function interpretSettings({ status, body }) {
 }
 
 /**
+ * Où mène le lien d'un courriel de connexion.
+ *
+ * GoTrue renvoie un jeton invalide vers le *Site URL* du projet, avec l'erreur
+ * en fragment. Un jeton volontairement faux révèle donc cette adresse sans
+ * consommer le moindre courriel — et c'est la seule façon de la lire depuis
+ * l'extérieur, elle n'apparaît dans aucune API publique.
+ *
+ * Sur un projet neuf elle vaut `http://localhost:3000`. Le membre reçoit alors
+ * un courriel parfaitement valide dont le lien ne mène nulle part depuis un
+ * téléphone — une panne qui n'a l'air d'en être une nulle part ailleurs.
+ */
+export function interpretSiteUrl({ status, headers }) {
+  const location = headers?.get?.('location') ?? '';
+  if (status < 300 || status >= 400 || !location) {
+    return warn('Site URL', 'non vérifiable depuis ici', 'Authentication → URL Configuration');
+  }
+
+  let origin;
+  try {
+    origin = new URL(location).origin;
+  } catch {
+    return warn('Site URL', `redirection illisible (${location.slice(0, 40)})`);
+  }
+
+  if (/^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])/.test(origin)) {
+    return fail(
+      'Site URL',
+      `${origin} — les liens des courriels ne mènent nulle part depuis un téléphone`,
+      'Authentication → URL Configuration → Site URL : l’adresse publiée de l’app',
+    );
+  }
+  return ok('Site URL', origin);
+}
+
+/**
  * Les fonctions Edge du club, et le refus qui prouve qu'elles tournent.
  *
  * `refusal` est le message que la fonction produit **elle-même** quand elle

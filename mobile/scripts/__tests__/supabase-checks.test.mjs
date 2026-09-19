@@ -22,6 +22,7 @@ import {
   interpretMembers,
   interpretReachable,
   interpretSettings,
+  interpretSiteUrl,
   interpretTable,
   needsSecretKey,
   schemaNote,
@@ -271,6 +272,31 @@ describe('paramètres d’authentification', () => {
   it('valide un club fermé', () => {
     const checks = interpretSettings({ status: 200, body: { external: { email: true }, disable_signup: true } });
     assert.deepEqual(checks.map((c) => c.level), ['ok', 'ok']);
+  });
+});
+
+describe('où mène le lien d’un courriel', () => {
+  const redirect = (location) => ({
+    status: 302,
+    headers: new Headers(location ? { location } : {}),
+  });
+
+  it('refuse le localhost par défaut d’un projet neuf', () => {
+    const check = interpretSiteUrl(redirect('http://localhost:3000/#error=invalid'));
+    assert.equal(check.level, 'fail');
+    assert.match(check.detail, /ne mènent nulle part/);
+    assert.match(check.remedy, /Site URL/);
+  });
+
+  it('accepte une adresse publiée et la montre', () => {
+    const check = interpretSiteUrl(redirect('https://moi.github.io/dashboard/club/#error=x'));
+    assert.equal(check.level, 'ok');
+    assert.equal(check.detail, 'https://moi.github.io');
+  });
+
+  it('doute plutôt que de conclure quand il n’y a pas de redirection', () => {
+    assert.equal(interpretSiteUrl({ status: 200, headers: new Headers() }).level, 'warn');
+    assert.equal(interpretSiteUrl(redirect('')).level, 'warn');
   });
 });
 

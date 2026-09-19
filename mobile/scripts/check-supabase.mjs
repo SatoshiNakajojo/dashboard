@@ -33,6 +33,7 @@ import {
   interpretMembers,
   interpretReachable,
   interpretSettings,
+  interpretSiteUrl,
   interpretTable,
   schemaNote,
   leakedPublicSecrets,
@@ -208,7 +209,16 @@ async function main() {
       });
 
       // --- authentification -------------------------------------------------
-      sections.push({ title: 'Authentification', checks: interpretSettings(settings) });
+      // Jeton volontairement invalide : GoTrue le renvoie vers le Site URL, ce
+      // qui révèle l'adresse sans envoyer de courriel.
+      const verify = await probe(`${url}/auth/v1/verify?token=diagnostic&type=magiclink`, {
+        headers: anon,
+        redirect: 'manual',
+      });
+      sections.push({
+        title: 'Authentification',
+        checks: [...interpretSettings(settings), guard('Site URL', verify, interpretSiteUrl)],
+      });
 
       // --- fonctions Edge ---------------------------------------------------
       // Les deux fonctions s'arrêtent avant tout appel sortant : `quote` à la
