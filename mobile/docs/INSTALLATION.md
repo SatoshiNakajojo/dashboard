@@ -245,6 +245,16 @@ La première ligne n'est pas une politesse : sans elle, on reconstruit le code
 qu'on a déjà publié, `club/` ressort identique, et `git commit` répond
 « nothing added to commit » — ce qui ressemble à un déploiement réussi.
 
+**Et construisez depuis la branche que GitHub Pages sert**, `main` (§2.3). Si
+le travail est sur une autre branche, fusionnez-la d'abord : sinon `git pull`
+réussit, la build réussit, le commit réussit — et le site ne bouge pas, parce
+que Pages ne regarde pas cette branche.
+
+```bash
+git checkout main && git pull
+git merge origin/<la-branche-de-travail> && git push
+```
+
 `build:web` construit l'app dans `mobile/dist/` ; `deploy` la copie dans
 `club/`, à la racine du dépôt, et refuse de publier un document sans ses
 balises PWA. Relisez, puis :
@@ -347,6 +357,7 @@ La version *maskable* est volontairement plus petite : Android rogne jusqu'à
 | Aucun courriel, aucune erreur | Regardez **Authentication → Logs** dans Supabase : l'envoi y apparaît, réussi ou non |
 | Une liste reste vide alors que la base contient des lignes | `npm run check:supabase` (§1.8) : le plus souvent une migration non appliquée, ou la connexion qui n'a jamais abouti |
 | Connecté dans Safari, mais l'app installée redemande le code | Deux stockages distincts. C'est normal, et c'est pourquoi le code prime sur le lien |
+| Tout a réussi, mais le site ne change pas | Vous avez construit depuis une branche que GitHub Pages ne sert pas. Fusionnez dans `main`, puis reconstruisez → §2.2 |
 | L'app s'ouvre avec une barre d'adresse | Le document publié n'a pas ses balises PWA. `npm run deploy` le vérifie et refuse désormais de publier sans |
 | Écran blanc sur l'Oracle | CanvasKit n'a pas pu se charger. Vérifiez que `canvaskit.wasm` est bien dans `club/` |
 
