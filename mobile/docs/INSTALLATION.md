@@ -72,6 +72,16 @@ Depuis `mobile/`, **une ligne à la fois** — le sélecteur de projet est
 interactif et avalerait les lignes collées à sa suite. `<ref>` est
 l'identifiant qui figure dans l'URL du projet.
 
+Si vous ne savez plus où est le dépôt, cette commande le trouve depuis
+n'importe où :
+
+```bash
+find ~ -maxdepth 5 -type d -name mobile -not -path '*/node_modules/*' 2>/dev/null
+```
+
+Puis, **depuis ce dossier** (le raccourci ci-dessous suppose que vous y êtes
+déjà, ou ailleurs dans le dépôt) :
+
 ```bash
 cd "$(git rev-parse --show-toplevel)/mobile"
 

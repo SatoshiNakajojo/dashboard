@@ -49,6 +49,13 @@ comme des frappes clavier.
 
 `--project-ref` évite ce sélecteur. L'identifiant est celui de l'URL du projet.
 
+Le raccourci ci-dessous ne marche que **depuis** le dépôt : `git rev-parse`
+échoue ailleurs, et `cd /mobile` derrière lui aussi. Perdu ? `find ~ -maxdepth
+5 -type d -name mobile -not -path '*/node_modules/*'` retrouve le dossier.
+
+`WARNING: Docker is not running` est sans conséquence : le déploiement se fait
+côté serveur.
+
 ```bash
 cd "$(git rev-parse --show-toplevel)/mobile"
 
