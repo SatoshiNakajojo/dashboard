@@ -99,7 +99,7 @@ de 4 unités — et borné dans le repère.
 
 ## Ce qui a été vérifié
 
-- `npm run typecheck`, `npm run lint`, `npm test` — propres (139 tests).
+- `npm run typecheck`, `npm run lint`, `npm test` — propres (155 tests).
 - **Règles pures** : bornes et inversibilité du repère, monotonie du tracé,
   écart à la courbe réelle, espaces insécables du formatage français, perf vs ₿
   comme ratio et non soustraction, seuils et tri des deux classements.
@@ -121,8 +121,11 @@ de 4 unités — et borné dans le repère.
   verrouillage, passage en lecture seule, `FIGÉ · HASH 8F2A`, écarts colorés.
   Publication d'un `$SOL` (10 cartes → 11). Sélecteur de place : absent sur un
   call BTC, présent sur `ACTION`, `$AI` suivi comme `AI` puis `AI.PA` après un
-  tap sur Paris, place remise aux États-Unis au retour sur une crypto. Avec
-  Supabase configuré : la garde mène à la porte, l'adresse invalide est
+  tap sur Paris, place remise aux États-Unis au retour sur une crypto. Choix du
+  jeton : `$WIF` propose dogwifhat (#62) devant ses deux homonymes hors rang,
+  le choix s'épingle (« Suivi comme… »), se dégrafe dès que le ticker change,
+  et `$WIFX` annonce qu'aucun jeton ne correspond ; liste absente en BTC comme
+  en ACTION. Avec Supabase configuré : la garde mène à la porte, l'adresse invalide est
   refusée, la panne réseau se lit « Connexion indisponible » et non en trace
   technique.
 - **Diagnostic backend** : `npm run check:supabase` exécuté contre un faux
@@ -231,17 +234,40 @@ publication plutôt qu'au premier relevé de performance.
 
 La place n'est pas stockée : `tickers.yahoo_symbol` porte déjà `AI.PA`.
 
+### Côté crypto, le même problème sous une autre forme
+
+CoinGecko connaît trois `$WIF` et une bonne poignée de `$SOL`. À la
+publication, le club retenait le mieux classé — bon choix presque toujours, et
+quand il se trompait, il se trompait en silence. Pire : un ticker ne
+correspondant exactement à aucun jeton publiait un call **sans fournisseur**,
+dont la carte restait figée au prix d'entrée pour toujours, sans un mot.
+
+Le composer propose donc les jetons pendant la frappe, avec leur nom et leur
+rang, et annonce ce qu'il va suivre. Quand rien ne correspond, il le dit aussi
+— c'est le cas qui était muet. Le choix du membre est transmis à la
+publication, qui ne re-résout pas : ce serait remplacer sa décision par le
+classement qu'il venait de contredire.
+
+Deux garanties tiennent l'ensemble (`src/lib/coinSearch.ts`, testé) :
+
+- La recherche **ne lève jamais**. Sans réseau, la liste est vide et le membre
+  tape son ticker comme avant. Une autocomplétion est une commodité, pas une
+  condition.
+- `bestCoin`, qui tranche quand personne ne choisit, n'accepte qu'un symbole
+  **exact** — jamais une ressemblance de nom. Publier sans fournisseur laisse
+  une carte visiblement figée ; publier avec le mauvais jeton affiche un cours
+  faux et crédible, que personne ne remet en question.
+
 ---
 
 ## Ce qui reste à faire
 
 Rien ne bloque. Ce qui suit est du confort :
 
-- **Autocomplétion du ticker** dans le composer. Il faudrait relayer
-  `v1/finance/search` de Yahoo par une fonction Edge, comme on l'a fait pour
-  les cotations : le membre choisirait « Air Liquide » plutôt que d'écrire
-  `$AI` et de cocher Paris. Le sélecteur de place couvre le besoin en
-  attendant, et reste le repli quand la recherche ne répond pas.
+- **Autocomplétion des titres.** Les cryptos ont leur liste — CoinGecko
+  autorise les appels navigateur. Les actions n'en ont pas : il faudrait
+  relayer `v1/finance/search` de Yahoo par une fonction Edge, comme pour les
+  cotations. Le sélecteur de place couvre le besoin en attendant.
 - **Taille de position.** La colonne existe et les cartes l'affichent, mais le
   composer ne la collecte pas — le design ne lui donne pas de champ.
 - **Saison de l'Oracle** figée à `2026-S3` dans `src/mocks/oracle.ts` ; en

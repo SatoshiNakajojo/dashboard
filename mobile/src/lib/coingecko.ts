@@ -9,6 +9,7 @@
 
 import { getJson } from './http';
 import { withCache } from './cache';
+import { bestCoin, normalizeTicker, rankCoins, type CoinMatch, type RawCoin } from './coinSearch';
 import { MOCK_TODAY_INDEX } from '@/mocks/oracle';
 import type { BtcSpot, MarketPoint } from '@/types/domain';
 import { DAYS } from './chart';
@@ -131,7 +132,38 @@ export async function fetchBlockHeight(signal?: AbortSignal): Promise<number | n
 }
 
 interface SearchResponse {
-  coins?: { id: string; symbol: string; market_cap_rank: number | null }[];
+  coins?: RawCoin[];
+}
+
+/** Une recherche vaut pour la session : les jetons ne changent pas d'identifiant. */
+const SEARCH_TTL_MS = 30 * 86_400_000;
+
+/** Un seul appel réseau, deux usages : proposer et résoudre. */
+async function searchRaw(query: string, signal?: AbortSignal): Promise<RawCoin[]> {
+  const result = await withCache(`coingecko.search.${query}`, SEARCH_TTL_MS, async () => {
+    const payload = await getJson<SearchResponse>(url('/search', { query }), {
+      signal,
+      attempts: 2,
+    });
+    return payload.coins ?? [];
+  });
+  return result.value;
+}
+
+/**
+ * Jetons proposés au composer pour une saisie partielle.
+ *
+ * Ne lève jamais : sans réseau, la liste est vide et le membre tape son ticker
+ * comme avant. Une autocomplétion est une commodité, pas une condition.
+ */
+export async function searchCoins(query: string, signal?: AbortSignal): Promise<CoinMatch[]> {
+  const clean = normalizeTicker(query);
+  if (clean.length < 2) return [];
+  try {
+    return rankCoins(await searchRaw(clean, signal), clean);
+  } catch {
+    return [];
+  }
 }
 
 /**
@@ -148,24 +180,13 @@ export async function resolveCoingeckoId(
   symbol: string,
   signal?: AbortSignal,
 ): Promise<string | null> {
-  const clean = symbol.replace(/^\$/, '').trim().toLowerCase();
+  const clean = normalizeTicker(symbol);
   if (!clean) return null;
 
   try {
-    const result = await withCache(`coingecko.resolve.${clean}`, 30 * 86_400_000, async () => {
-      const payload = await getJson<SearchResponse>(url('/search', { query: clean }), {
-        signal,
-        attempts: 2,
-      });
-      const exact = (payload.coins ?? []).filter((coin) => coin.symbol.toLowerCase() === clean);
-      if (exact.length === 0) return { id: null };
-
-      exact.sort(
-        (a, b) => (a.market_cap_rank ?? Number.MAX_SAFE_INTEGER) - (b.market_cap_rank ?? Number.MAX_SAFE_INTEGER),
-      );
-      return { id: exact[0]!.id };
-    });
-    return result.value.id;
+    // Même requête, même cache que `searchCoins` : ouvrir le composer a déjà
+    // payé l'aller-retour que la publication aurait fait.
+    return bestCoin(await searchRaw(clean, signal), clean)?.id ?? null;
   } catch {
     // Une résolution ratée ne doit pas empêcher de publier un call.
     return null;

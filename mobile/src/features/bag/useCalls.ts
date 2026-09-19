@@ -15,6 +15,8 @@ export interface PublishInput {
   thesis: string;
   /** Place de cotation, pour suffixer le symbole Yahoo d'un titre non américain. */
   exchange?: string | null;
+  /** Jeton choisi dans le composer ; à défaut, on résout le ticker nous-mêmes. */
+  coingeckoId?: string | null;
 }
 
 export interface CallsState {
@@ -151,7 +153,11 @@ export function useCalls(
         // Les deux peuvent échouer sans empêcher la publication — le call
         // partira sans fournisseur, et son cours restera à saisir.
         const yahooSymbol = yahoo ? toYahooSymbol(input.symbol, input.exchange) : null;
-        const coingeckoId = yahoo ? null : await resolveCoingeckoId(input.symbol);
+
+        // Un jeton choisi dans la liste fait foi : le re-résoudre reviendrait à
+        // remplacer la décision du membre par un classement de capitalisation,
+        // ce qu'il venait précisément de contredire.
+        const coingeckoId = yahoo ? null : (input.coingeckoId ?? (await resolveCoingeckoId(input.symbol)));
 
         const ticker = await source.publish(
           { ...input, btcSpot: spot.usd, coingeckoId, yahooSymbol },
