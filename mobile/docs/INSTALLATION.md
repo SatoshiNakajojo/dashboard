@@ -104,22 +104,29 @@ d'entrée. D'où le `echo` : la planification a besoin de la valeur en clair, et
 
 Planifiez le rafraîchissement : voir `supabase/functions/README.md`.
 
-### 1.5 Un vrai serveur d'envoi — **à faire avant d'essayer de se connecter**
+### 1.5 Un vrai serveur d'envoi — **rien d'autre ne marche sans lui**
 
-Supabase limite son serveur partagé à **3 courriels par heure, tous membres
-confondus**. Deux essais ratés et vous êtes bloqué une heure, avec
-« email rate limit exceeded ». Pour sept membres qui s'inscrivent le même soir,
-c'est intenable.
+Ce n'est pas une optimisation, c'est un verrou. Tant que le serveur partagé de
+Supabase est en place, **les gabarits de courriel sont en lecture seule** :
 
-Ce quota ne s'applique **qu'au serveur partagé** : brancher le vôtre le supprime
-immédiatement. Avec [Resend](https://resend.com) — gratuit jusqu'à 3 000
-courriels par mois, sans carte bancaire :
+> Set up custom SMTP to edit templates. Emails will be sent using the default
+> templates.
+
+Les champs *Subject* et *Body* de §1.6 sont grisés, et Supabase envoie son
+gabarit par défaut — celui qui contient un **lien**. L'app attend un code. Sans
+SMTP, la connexion du club ne peut donc pas fonctionner, quoi qu'on colle dans
+l'écran des gabarits.
+
+Le serveur partagé plafonne par ailleurs à **3 courriels par heure**, tous
+membres confondus : deux essais ratés et vous êtes bloqué une heure, avec
+« email rate limit exceeded ». Ce quota ne s'applique qu'à lui.
+
+Avec [Resend](https://resend.com) — gratuit jusqu'à 3 000 courriels par mois,
+sans carte bancaire :
 
 1. Créez un compte, puis une **API key**.
-2. Sans nom de domaine, gardez l'expéditeur de test `onboarding@resend.dev` —
-   suffisant pour démarrer. Avec un domaine, vérifiez-le d'abord.
-3. Supabase → **Project Settings** → **Authentication** → **SMTP Settings** →
-   *Enable Custom SMTP* :
+2. Supabase → **Authentication** → **Emails** → bouton *Set up SMTP* (ou
+   l'onglet **SMTP**) → *Enable Custom SMTP* :
 
    | Champ | Valeur |
    |---|---|
@@ -127,16 +134,35 @@ courriels par mois, sans carte bancaire :
    | Port | `465` |
    | Username | `resend` |
    | Password | votre clé API Resend |
-   | Sender email | `onboarding@resend.dev` (ou votre domaine) |
+   | Sender email | voir ci-dessous |
    | Sender name | `Cryptos Club` |
 
-4. Plus bas, **Rate Limits** → passez l'envoi de courriels à 30 par heure.
+3. Plus bas, **Rate Limits** → passez l'envoi de courriels à 30 par heure.
+
+#### L'expéditeur décide qui peut recevoir
+
+`onboarding@resend.dev` est l'expéditeur de test de Resend. Il fonctionne sans
+nom de domaine, mais **Resend ne le laisse écrire qu'à l'adresse du titulaire
+du compte**. Vous recevrez vos codes ; les six autres membres n'en recevront
+aucun, sans erreur visible de votre côté.
+
+Pour ouvrir le club à tout le monde, il faut un domaine vérifié dans Resend
+(**Domains** → *Add domain*, puis trois enregistrements DNS) et un expéditeur
+du type `club@votredomaine.fr`.
+
+Sans domaine sous la main, n'importe quel SMTP qui écrit à tout le monde fera
+l'affaire — un compte Gmail avec un *mot de passe d'application*
+(`smtp.gmail.com`, port 465, votre adresse en nom d'utilisateur) suffit
+largement pour sept membres.
 
 Le blocage saute dès l'enregistrement — pas besoin d'attendre la fin de l'heure.
 
 ### 1.6 Le gabarit de courriel — **l'étape qu'on oublie**
 
 **Authentication** → **Emails** → gabarit **Magic Link**.
+
+> Les champs sont grisés et un bandeau réclame un SMTP&nbsp;? Revenez à §1.5 :
+> sans serveur d'envoi à vous, ce gabarit ne s'édite pas.
 
 Le gabarit par défaut de Supabase contient `{{ .ConfirmationURL }}` : il envoie
 un **lien**. L'app attend un **code à six chiffres**, soit `{{ .Token }}`.
@@ -364,7 +390,8 @@ La version *maskable* est volontairement plus petite : Android rogne jusqu'à
 
 | Ce que vous voyez | Ce qui se passe |
 |---|---|
-| Le courriel contient un **lien**, pas un code | Le gabarit Magic Link est resté celui par défaut → §1.6 |
+| Le courriel contient un **lien**, pas un code | Le gabarit Magic Link est resté celui par défaut → §1.6. Et s'il refuse de se modifier, c'est le SMTP qui manque → §1.5 |
+| Vous recevez vos codes, pas les autres membres | L'expéditeur `onboarding@resend.dev` n'écrit qu'au titulaire du compte Resend. Vérifiez un domaine → §1.5 |
 | Le lien du courriel ne mène nulle part | *Site URL* est resté sur `http://localhost:3000` → §1.7. `npm run check:supabase` le lit et le signale |
 | Le courriel arrive **vide** | Le gabarit a été réécrit par le client de messagerie. Prenez `magic-link-minimal.html`, et ne collez jamais le commentaire d'en-tête |
 | « Cette adresse n'est pas sur la liste du club. » | Aucun compte pour cette adresse → §1.3. Le club est fermé, personne ne s'auto-inscrit |
