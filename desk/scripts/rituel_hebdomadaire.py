@@ -8,8 +8,8 @@ nulle part :
 
 1. `fetch_unlocks.py`  — le calendrier des déblocages, depuis le miroir
    statique de DefiLlama ;
-2. `journal_unlocks.py` — inscrire les positions dont la fenêtre s'ouvre
-   dans les trente jours, dans le fichier en AJOUT SEUL ;
+2. `journal_unlocks.py` — inscrire TOUT l'avenir du calendrier dans le
+   fichier en AJOUT SEUL ;
 3. `journal_unlocks.py --resoudre` — relever le résultat des fenêtres déjà
    closes.
 
@@ -76,11 +76,24 @@ class Etape:
         return code
 
 
-def etapes(horizon: int) -> list[Etape]:
+def etapes(horizon: int | None = None) -> list[Etape]:
+    """Les trois étapes. **Sans horizon par défaut, et c'est le point.**
+
+    Le rituel bornait l'inscription aux trente prochains jours. Cela faisait
+    dépendre la pré-inscription de sa propre régularité : trois semaines
+    d'arrêt — ce qui est arrivé, le service n'ayant jamais été installé — et
+    les positions de ces trois semaines n'étaient inscrites nulle part. Or
+    c'est exactement ce que le journal existe pour empêcher.
+
+    Depuis la v3, l'inscription prend tout l'avenir du calendrier à chaque
+    passage. Un oubli ne coûte plus une prédiction : il coûte un retard de
+    relevé, ce qui ne se rattrape pas moins bien.
+    """
+    inscription = () if horizon is None else ("--horizon", str(horizon))
     return [
         Etape("1/3  Calendrier des déblocages", "fetch_unlocks.py"),
         Etape("2/3  Inscription des positions à venir", "journal_unlocks.py",
-              ("--horizon", str(horizon))),
+              inscription),
         Etape("3/3  Relevé des fenêtres closes", "journal_unlocks.py",
               ("--resoudre",), fatale=False),
     ]
@@ -88,8 +101,10 @@ def etapes(horizon: int) -> list[Etape]:
 
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__)
-    p.add_argument("--horizon", type=int, default=30,
-                   help="jours à l'avance pour inscrire les positions")
+    p.add_argument("--horizon", type=int, default=None,
+                   help="borner l'inscription aux N prochains jours. Par "
+                        "défaut tout l'avenir du calendrier est inscrit : "
+                        "un oubli du rituel ne doit pas coûter de prédiction.")
     p.add_argument("--sans-calendrier", action="store_true",
                    help="sauter le téléchargement et travailler sur le "
                         "data/unlocks.json déjà présent. À n'utiliser que "

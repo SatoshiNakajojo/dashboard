@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """La seule question qu'aucun test historique ne peut trancher.
 
-    python3 scripts/journal_unlocks.py                  # enregistrer
+    python3 scripts/journal_unlocks.py                  # inscrire
     python3 scripts/journal_unlocks.py --resoudre       # relever le score
 
 Six contrôles ont survécu : dénominateurs aberrants, jackknife par jeton,
 coupe temporelle, neutralisation du marché, décalage calendaire brut, et
 décalage calendaire sur le rendement net. C'est tout ce qu'on peut demander
-à 852 événements passés.
+à 886 événements passés.
 
 **Et ils partagent tous le même défaut, qui ne se corrige pas.** Ils ont été
 construits, ajustés et relus en connaissant les données. Chaque décision de
@@ -23,7 +23,7 @@ Il écrit les positions à prendre AVANT que la fenêtre ne s'ouvre, dans un
 fichier qui ne se réécrit pas. Puis, des semaines plus tard, il relève ce
 qui s'est passé.
 
-C'est délibérément primitif, et deux propriétés comptent plus que le
+C'est délibérément primitif, et trois propriétés comptent plus que le
 confort :
 
 **Le journal est en AJOUT SEUL.** Une prédiction inscrite compte, gagnante
@@ -36,28 +36,63 @@ semaines, les anciennes prédictions gardent l'ancienne règle et le score
 reste comparable. Sans ça, « ajuster légèrement le seuil » suffirait à
 transformer rétroactivement un échec en succès.
 
+**Le protocole de notation est figé LUI AUSSI**, dans `trading_desk.pronostic`,
+et son empreinte est recopiée dans chaque ligne. C'est la moitié qui manquait
+: savoir d'avance ce qu'on inscrit ne sert à rien si l'on choisit après coup
+comment le compter.
+
+## Ce qui a changé en v3, et pourquoi
+
+**On inscrit TOUT l'avenir du calendrier, plus seulement les trente
+prochains jours.** L'horizon de trente jours faisait dépendre la
+pré-inscription d'un rituel hebdomadaire qui, sur le VPS, n'a jamais tourné :
+un oubli de trois semaines et les positions de ces trois semaines n'étaient
+inscrites nulle part. Inscrire tout l'avenir d'un coup rend la preuve
+indépendante de la régularité de l'exploitant — la date du commit git en
+fait foi.
+
+Le prix à payer est réel et il est noté dans chaque ligne : `horizon_j`, le
+nombre de jours entre l'inscription et l'entrée. Un déblocage annoncé pour
+2028 peut être repoussé, et sa part de l'offre recalculée. Cela ajoute du
+BRUIT, jamais du biais — une date qui bouge ne bouge pas dans le sens du
+prix — donc l'effet est de diluer, pas de flatter. Le relevé affiche le
+détail par horizon pour que la dilution se voie.
+
 ## Ce qu'il faudra pour conclure
 
-Le résultat historique est de +290 bps par événement sur la tranche 2-5 %,
-avec un écart-type de 1 050 bps. Pour distinguer +290 de zéro avec une
-confiance raisonnable, il faut de l'ordre de **cinquante à cent
-événements** — soit six mois à un an de collecte, au rythme observé.
+Le repère n'est PAS zéro, et c'est le point le plus important de ce fichier.
+Vendre à découvert un altcoin au hasard pendant six jours, couvert en BTC,
+rapportait +123,5 bps sur la période historique. Un relevé qui compare la
+moyenne du journal à zéro mesure la dérive des altcoins, pas les déblocages.
+`trading_desk.pronostic` porte le bras de hasard qui sert de repère, et le
+relevé ci-dessous le recalcule sur la période que le journal a réellement
+traversée.
 
-C'est long, et c'est le prix. Toute conclusion tirée de dix trades sera du
-bruit, quelle que soit son allure. Le rapport le dit à chaque relevé plutôt
-que de laisser l'enthousiasme faire le calcul.
+L'excès à battre est de +218,9 bps, avec un écart-type de 1 131 bps par
+position. Il faut donc **103 positions closes pour avoir une chance sur
+deux de conclure, et 210 pour en avoir quatre sur cinq**. L'ancien chiffre
+annoncé ici — « cinquante » — répondait à une question plus facile.
+
+Et le calendrier du 18 septembre 2026 ne contient que 176 événements futurs
+éligibles. Quatre chances sur cinq sont donc hors d'atteinte sans élargir la
+couverture : 68 jetons au calendrier, 234 perpétuels cotés. C'est le rituel
+hebdomadaire qui rafraîchit ce calendrier, et c'est pour ça qu'il compte.
 """
 
 from __future__ import annotations
 
 import argparse
+import datetime as dt
+import hashlib
 import json
+import statistics as st
 import sys
 import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
+from trading_desk import pronostic
 from trading_desk.backtest.data import fetch_hyperliquid
 from trading_desk.sentinelle.triggers import (
     DEBLOCAGE_AVANCE_J,
@@ -72,8 +107,8 @@ JOUR_MS = 86_400_000
 # La règle, figée. Toute modification incrémente la VERSION, et les entrées
 # des versions antérieures restent jugées sur la leur — sinon « ajuster
 # légèrement le seuil » transformerait un échec passé en succès.
-VERSION = 2
-REFERENCE = "BTC"
+VERSION = 3
+REFERENCE = pronostic.REFERENCE
 
 # **La règle n'est PAS définie ici.** Elle vient de
 # `sentinelle.triggers`, qui en est la seule source. Ce script inscrit des
@@ -91,9 +126,27 @@ ENTREE_J = -DEBLOCAGE_AVANCE_J
 SORTIE_J = ENTREE_J + DEBLOCAGE_DUREE_J
 
 
-def a_prendre(unlocks: dict, maintenant_ms: int, horizon_j: int,
+def empreinte_calendrier(unlocks: dict) -> str:
+    """De QUEL calendrier cette prédiction est sortie.
+
+    Un déblocage lointain peut être reporté. Sans cette empreinte, on ne
+    saurait pas, dans deux ans, si l'entrée vient d'un calendrier qui
+    annonçait déjà cette date ou d'une révision ultérieure — et « la date
+    avait bougé » deviendrait une excuse disponible après coup pour écarter
+    les positions perdantes.
+    """
+    charge = json.dumps(unlocks, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(charge.encode()).hexdigest()[:16]
+
+
+def a_prendre(unlocks: dict, maintenant_ms: int, horizon_j: int | None = None,
               univers: set[str] | None = None) -> list[dict]:
-    """Les déblocages dont la fenêtre d'entrée s'ouvre dans les jours à venir.
+    """Les déblocages dont la fenêtre d'entrée n'est pas encore ouverte.
+
+    `horizon_j` à `None` prend TOUT l'avenir du calendrier : c'est le mode
+    normal depuis la v3. Le borner ne servait qu'à limiter la taille du
+    fichier, et coûtait la pré-inscription de tout ce qui tombait pendant un
+    oubli du rituel.
 
     On ne retient QUE les événements encore à venir. Un déblocage dont
     l'entrée est déjà passée serait une prédiction faite après coup, ce qui
@@ -106,13 +159,17 @@ def a_prendre(unlocks: dict, maintenant_ms: int, horizon_j: int,
     là où la stratégie validée n'en prend qu'une, et le score hors
     échantillon porterait sur autre chose que ce qui a été mesuré.
     """
+    calendrier = empreinte_calendrier(unlocks)
+    protocole = pronostic.empreinte()
     out = []
     for symbole, bruts in sorted(unlocks.items()):
         if univers is not None and symbole not in univers:
             continue
         for e in deblocages_retenus(bruts):
             entree = e["ts_ms"] + ENTREE_J * JOUR_MS
-            if not maintenant_ms < entree <= maintenant_ms + horizon_j * JOUR_MS:
+            if entree <= maintenant_ms:
+                continue
+            if horizon_j is not None and entree > maintenant_ms + horizon_j * JOUR_MS:
                 continue
             out.append({
                 "version": VERSION, "symbole": symbole,
@@ -120,6 +177,13 @@ def a_prendre(unlocks: dict, maintenant_ms: int, horizon_j: int,
                 "entree_ms": entree, "sortie_ms": e["ts_ms"] + SORTIE_J * JOUR_MS,
                 "sens": "COURT", "reference": REFERENCE,
                 "inscrit_ms": maintenant_ms,
+                # Le nombre de jours de préavis. Une prédiction écrite sept
+                # jours à l'avance et une écrite huit cents jours à l'avance
+                # sont toutes deux hors échantillon, mais pas de la même
+                # qualité : le relevé les sépare.
+                "horizon_j": (entree - maintenant_ms) // JOUR_MS,
+                "calendrier": calendrier,
+                "protocole": protocole,
             })
     return out
 
@@ -187,6 +251,11 @@ def inscrire(nouvelles: list[dict], journal: Path) -> int:
     La clé d'unicité est (version, jeton, date de déblocage) : relancer le
     script deux fois le même jour ne doit pas dupliquer une position, mais
     ne doit pas non plus effacer ce qui est déjà inscrit.
+
+    Un déblocage REPORTÉ arrive donc sous une autre clé et s'ajoute, sans
+    effacer l'ancienne ligne. Les deux comptent. C'est volontaire : retirer
+    la ligne devenue caduque supposerait de décider, après avoir vu le prix,
+    laquelle des deux dates était la bonne.
     """
     lignes = []
     if journal.exists():
@@ -194,121 +263,256 @@ def inscrire(nouvelles: list[dict], journal: Path) -> int:
     connues = {(x["version"], x["symbole"], x["deblocage_ms"]) for x in lignes}
     ajouts = [n for n in nouvelles
               if (n["version"], n["symbole"], n["deblocage_ms"]) not in connues]
+    journal.parent.mkdir(parents=True, exist_ok=True)
     with journal.open("a") as f:
         for n in ajouts:
             f.write(json.dumps(n, ensure_ascii=False) + "\n")
     return len(ajouts)
 
 
-def _cloture(symbole: str, jour: int) -> float | None:
-    """Le cours de clôture d'un jour UTC, ou `None` s'il n'est pas connu."""
-    # Le releve ne doit jamais tomber : un jeton delisté, un reseau coupe ou
-    # une reponse inattendue rendent une ligne incalculable, pas le journal
-    # entier illisible. `resoudre` compte ces cas et les annonce.
-    try:
-        bars = fetch_hyperliquid(symbole, "1d", days=400)
-    except Exception:
-        return None
-    for b in bars:
-        if b.ts_ms // JOUR_MS == jour:
-            return float(b.close)
-    return None
-
-
-def resoudre(journal: Path) -> None:
-    """Relève ce que les prédictions closes ont réellement donné.
-
-    Les entrées non résolues ne sont PAS écartées : elles sont comptées et
-    annoncées. Un relevé qui ne montre que les positions dont on a pu
-    calculer le résultat serait un relevé de survivants.
-    """
+def lire(journal: Path) -> list[dict]:
     if not journal.exists():
-        print(f"\n  {journal} n'existe pas encore. Lancez le script sans "
+        return []
+    out = []
+    for ligne in journal.read_text(encoding="utf-8").splitlines():
+        ligne = ligne.strip()
+        if ligne:
+            try:
+                out.append(json.loads(ligne))
+            except ValueError:
+                # Une ligne illisible est ignorée, jamais fatale : le journal
+                # est la preuve, et une preuve qu'on ne peut plus ouvrir du
+                # tout serait pire qu'une preuve amputée d'une ligne.
+                continue
+    return out
+
+
+def carnets(symboles: set[str], jours: int) -> dict[str, dict[int, float]]:
+    """Un carnet de clôtures par jeton, un seul appel réseau chacun.
+
+    **Le cache disque de `fetch_hyperliquid` n'expire jamais** : sa clé est
+    (actif, échelle, nombre de jours), donc deux relevés du même jeton au
+    même horizon relisent indéfiniment le premier téléchargement. Pour un
+    relevé hebdomadaire c'est un piège parfait — il continuerait à noter les
+    positions sur les prix du jour où on l'a lancé la première fois, sans
+    que rien ne le signale. D'où un dossier de cache DATÉ : frais chaque
+    jour, gratuit si l'on relance dans la journée.
+    """
+    jour = dt.datetime.now(dt.UTC).strftime("%Y-%m-%d")
+    cache = Path(".cache") / f"journal-{jour}"
+    out: dict[str, dict[int, float]] = {}
+    for s in sorted(symboles):
+        try:
+            bars = fetch_hyperliquid(s, "1d", days=jours, cache_dir=cache)
+        except Exception:
+            # Jeton délisté, réseau coupé, réponse inattendue : la ligne
+            # devient incalculable, pas le relevé entier impossible.
+            # `noter` compte les absents et les annonce.
+            continue
+        out[s] = {b.ts_ms // JOUR_MS: float(b.close) for b in bars}
+    return out
+
+
+def noter(lignes: list[dict], carnets_: dict[str, dict[int, float]],
+          maintenant_ms: int) -> dict:
+    """Le score, comparé au bras de hasard de la période traversée.
+
+    Le repère n'est pas zéro. Une vente à découvert d'altcoin couverte en
+    BTC gagne ou perd de l'argent selon le marché traversé, déblocage ou
+    pas : `pronostic.bras_de_hasard` prend les mêmes jetons, le même
+    effectif, la même durée, et tire les dates DANS LA FENÊTRE QUE LE
+    JOURNAL A TRAVERSÉE. C'est ça que la règle doit battre.
+
+    Un jeton dont la période offre moins de `JOURS_MIN_POUR_LE_HASARD` jours
+    cotés est écarté des DEUX bras. L'écarter d'un seul comparerait deux
+    portefeuilles différents.
+    """
+    closes = [x for x in lignes if int(x.get("sortie_ms", 0)) <= maintenant_ms]
+    if not closes:
+        return {"closes": 0, "notees": 0, "sans_prix": 0, "mesures": {}}
+
+    jours = [int(x["entree_ms"]) // JOUR_MS for x in closes]
+    bornes = (min(jours), max(int(x["sortie_ms"]) // JOUR_MS for x in closes))
+    ref = carnets_.get(REFERENCE)
+
+    resultats: dict[str, dict] = {}
+    for mesure in (pronostic.BRUT, pronostic.NET):
+        couverture = ref if mesure == pronostic.NET else None
+        if mesure == pronostic.NET and not couverture:
+            continue
+        obs: list[tuple[dict, float]] = []
+        candidats = []
+        sans_prix = 0
+        for x in closes:
+            prix = carnets_.get(x["symbole"])
+            if not prix:
+                sans_prix += 1
+                continue
+            elig = pronostic.jours_eligibles(prix, reference=couverture,
+                                             bornes=bornes)
+            if len(elig) < pronostic.JOURS_MIN_POUR_LE_HASARD:
+                sans_prix += 1
+                continue
+            r = pronostic.rendement(prix, int(x["entree_ms"]) // JOUR_MS,
+                                    reference=couverture)
+            if r is None:
+                sans_prix += 1
+                continue
+            obs.append((x, r))
+            candidats.append((prix, elig))
+        if not obs:
+            resultats[mesure] = {"n": 0, "sans_prix": sans_prix}
+            continue
+        valeurs = [r for _, r in obs]
+        nuls = pronostic.bras_de_hasard(candidats, reference=couverture)
+        moyenne = sum(valeurs) / len(valeurs)
+        hasard = sum(nuls) / len(nuls) if nuls else 0.0
+        resultats[mesure] = {
+            "n": len(valeurs), "sans_prix": sans_prix,
+            "observe_bps": moyenne, "hasard_bps": hasard,
+            "exces_bps": moyenne - hasard,
+            "p": pronostic.p_unilateral(moyenne, nuls),
+            "ecart_type_bps": st.stdev(valeurs) if len(valeurs) > 1 else 0.0,
+            "part_gagnante": sum(1 for v in valeurs if v > 0) / len(valeurs),
+            "lignes": obs,
+        }
+    return {"closes": len(closes), "bornes": bornes, "mesures": resultats}
+
+
+def _par_horizon(obs: list[tuple[dict, float]]) -> list[tuple[str, int, float]]:
+    """Le détail par préavis. Une prédiction à huit cents jours dilue.
+
+    Les bornes sont rondes et posées ici une fois pour toutes : les choisir
+    au vu des résultats reviendrait à découper jusqu'à trouver la tranche
+    qui gagne.
+    """
+    tranches = [("≤ 30 j", 0, 30), ("31-180 j", 31, 180),
+                ("181-365 j", 181, 365), ("> 365 j", 366, 10**9)]
+    out = []
+    for nom, bas, haut in tranches:
+        lot = [r for x, r in obs if bas <= int(x.get("horizon_j", 0)) <= haut]
+        if lot:
+            out.append((nom, len(lot), sum(lot) / len(lot)))
+    return out
+
+
+def resoudre(journal: Path, *, jours: int = 400) -> None:
+    """Relève ce que les prédictions closes ont réellement donné."""
+    lignes = lire(journal)
+    if not lignes:
+        print(f"\n  {journal} est vide ou absent. Lancez le script sans "
               "`--resoudre` pour inscrire les premières positions.\n")
         return
-    lignes = [json.loads(x) for x in journal.read_text().splitlines() if x.strip()]
     maintenant = int(time.time() * 1000)
-    closes = [x for x in lignes if x["sortie_ms"] < maintenant]
+    closes = [x for x in lignes if int(x.get("sortie_ms", 0)) <= maintenant]
+    attendu = pronostic.attendu()
 
-    print(f"\n  JOURNAL HORS ÉCHANTILLON — règle v{VERSION}")
+    print(f"\n  JOURNAL HORS ÉCHANTILLON — règle v{VERSION}, "
+          f"protocole {pronostic.empreinte()}")
     print("  " + "=" * 74)
-    print(f"  {'positions inscrites':<32} {len(lignes):>6}")
-    print(f"  {'dont la fenêtre est close':<32} {len(closes):>6}")
+    print(f"  {'positions inscrites':<34} {len(lignes):>6}")
+    print(f"  {'dont la fenêtre est close':<34} {len(closes):>6}")
     if not closes:
+        prochaine = min(int(x["sortie_ms"]) for x in lignes)
+        quand = dt.datetime.fromtimestamp(prochaine / 1000, dt.UTC)
+        print(f"  {'première clôture':<34} {quand:%Y-%m-%d}")
         print("\n  Rien à relever pour l'instant. C'est normal et c'est le "
               "principe :\n  une prédiction ne compte que lorsqu'elle est "
               "faite avant les faits.\n")
         return
 
-    resultats, manquants = [], 0
-    for x in closes:
-        e = _cloture(x["symbole"], x["entree_ms"] // JOUR_MS)
-        s = _cloture(x["symbole"], x["sortie_ms"] // JOUR_MS)
-        if e is None or s is None or e <= 0:
-            manquants += 1
-            continue
-        brut = -1 * (s - e) / e * 10_000
-        re_ = _cloture(x["reference"], x["entree_ms"] // JOUR_MS)
-        rs = _cloture(x["reference"], x["sortie_ms"] // JOUR_MS)
-        net = brut + ((rs - re_) / re_ * 10_000) if re_ and rs and re_ > 0 else None
-        resultats.append((x, brut, net))
-
-    print(f"  {'dont le prix est connu':<32} {len(resultats):>6}")
-    if manquants:
-        print(f"  {'prix indisponibles':<32} {manquants:>6}")
-    if not resultats:
-        # Toutes les fenêtres closes peuvent être incalculables : jetons
-        # délistés, réseau coupé, journal de test. Le relevé doit le dire et
-        # s'arrêter là, pas diviser par zéro — un outil qui tombe le jour où
-        # l'on veut connaître son score ne sert à rien.
+    symboles = {x["symbole"] for x in closes} | {REFERENCE}
+    score = noter(closes, carnets(symboles, jours), maintenant)
+    mesures = score["mesures"]
+    # LES POSITIONS PERDUES SE COMPTENT, TOUJOURS. Un relevé qui n'afficherait
+    # que celles qu'il a su valoriser serait un relevé de survivants : un
+    # jeton délisté après une chute est précisément le cas où la position
+    # aurait gagné, et le taire flatterait ou plomberait le score sans qu'on
+    # puisse savoir lequel.
+    perdues = max((m.get("sans_prix", 0) for m in mesures.values()), default=len(closes))
+    if not mesures or all(m.get("n", 0) == 0 for m in mesures.values()):
+        print(f"  {'prix indisponibles':<34} {perdues:>6}")
         print("\n  Aucune position n'a pu être valorisée. Vérifiez l'accès à\n"
               "  api.hyperliquid.xyz, puis relancez.\n")
         return
+
+    principal = mesures.get(pronostic.MESURE_PRIMAIRE) or {}
+    if not principal.get("n"):
+        # La mesure primaire est le net de BTC : sans le carnet de la
+        # référence elle n'existe pas. Le brut s'afficherait quand même, et le
+        # verdict porterait alors sur zéro position tout en montrant douze
+        # lignes — l'écran dirait deux choses contradictoires.
+        print(f"\n  La mesure primaire ({pronostic.MESURE_PRIMAIRE}) est "
+              f"indisponible : le carnet de\n  {REFERENCE} manque, et sans lui "
+              "la couverture ne se calcule pas. Rien n'est\n  conclu — le brut "
+              "seul n'est pas la mesure déclarée.\n")
+        return
+    obs = principal.get("lignes") or []
+    if obs:
+        print("  " + "-" * 74)
+        for x, r in obs[-15:]:
+            jour = dt.datetime.fromtimestamp(x["entree_ms"] / 1000, dt.UTC)
+            print(f"  {x['symbole']:<9} {x['part_offre']:>6.1%}  "
+                  f"{jour:%Y-%m-%d}  préavis {int(x.get('horizon_j', 0)):>4} j"
+                  f"  {r:>+9.1f} bps")
+        if len(obs) > 15:
+            print(f"  … {len(obs) - 15} plus anciennes non affichées")
+
     print("  " + "-" * 74)
-    for x, brut, net in resultats[-20:]:
-        n = f"{net:>+8.1f}" if net is not None else "       —"
-        print(f"  {x['symbole']:<9} {x['part_offre']:>6.1%}  "
-              f"brut {brut:>+8.1f}  net {n}  bps")
-    if len(resultats) > 20:
-        print(f"  … {len(resultats) - 20} plus anciennes non affichées")
+    for mesure in (pronostic.NET, pronostic.BRUT):
+        m = mesures.get(mesure)
+        if not m or not m.get("n"):
+            continue
+        marque = "  <- primaire" if mesure == pronostic.MESURE_PRIMAIRE else ""
+        print(f"  {mesure.upper():<10} n={m['n']:<4} observé "
+              f"{m['observe_bps']:>+8.1f}   hasard {m['hasard_bps']:>+8.1f}   "
+              f"excès {m['exces_bps']:>+8.1f} bps{marque}")
+        print(f"  {'':<10} p={m['p']:.4f}   gagnantes {m['part_gagnante']:.1%}"
+              f"   écart-type {m['ecart_type_bps']:.0f} bps")
+        if m.get("sans_prix"):
+            print(f"  {'':<10} {m['sans_prix']} position(s) sans prix "
+                  "exploitable — comptées nulle part")
+
+    detail = _par_horizon(obs)
+    if len(detail) > 1:
+        print("  " + "-" * 74)
+        print("  par préavis (le préavis long dilue, il ne biaise pas)")
+        for nom, n, moy in detail:
+            print(f"    {nom:<12} n={n:<4} {moy:>+9.1f} bps")
+
+    print("  " + "-" * 74)
+    print(f"  attendu (en échantillon, même bande, même fenêtre) "
+          f"{attendu['exces_bps']:>+8.1f} bps")
+    n = principal.get("n", 0)
+    print(f"  avancement  {n}/{attendu['n_pour_50']} pour une chance sur deux"
+          f"   ·   {n}/{attendu['n_pour_80']} pour quatre sur cinq")
     print("  " + "-" * 74)
 
-    bruts = [b for _, b, _ in resultats]
-    nets = [n for _, _, n in resultats if n is not None]
-    moy = sum(bruts) / len(bruts)
-    print(f"  {'moyenne brute':<32} {moy:>+8.1f} bps")
-    if nets:
-        print(f"  {'moyenne nette de ' + REFERENCE:<32} "
-              f"{sum(nets) / len(nets):>+8.1f} bps")
-    print(f"  {'part gagnante':<32} "
-          f"{sum(1 for b in bruts if b > 0) / len(bruts):>8.1%}")
-    print(f"  {'attendu (historique, 2-5 %)':<32} {'+290.4':>8} bps")
-    print("  " + "-" * 74)
-
-    # L'ordre de grandeur nécessaire, rappelé à chaque relevé. Sans lui, dix
-    # trades gagnants passeraient pour une confirmation.
-    besoin = 50
-    if len(resultats) < besoin:
-        print(f"  VERDICT : AUCUN. {len(resultats)} événements sur ~{besoin} "
-              "nécessaires.")
-        print("  Avec un écart-type de 1 050 bps, distinguer +290 de zéro")
-        print(f"  demande de l'ordre de {besoin} à 100 observations. Tout ce")
-        print("  qui se lit ci-dessus est du bruit, quelle que soit son "
-              "allure.\n")
+    if n < attendu["n_pour_50"]:
+        print(f"  VERDICT : AUCUN. {n} positions sur {attendu['n_pour_50']} "
+              "nécessaires pour avoir\n  ne serait-ce qu'une chance sur deux "
+              "de trancher. Avec un écart-type de\n  "
+              f"{attendu['ecart_type_bps']:.0f} bps par position, tout ce qui "
+              "se lit ci-dessus est du bruit,\n  quelle que soit son allure.\n")
+    elif principal.get("p", 1.0) <= pronostic.ALPHA:
+        print(f"  VERDICT : l'excès sur le hasard tient hors échantillon "
+              f"(p={principal['p']:.4f}).\n  C'est le seul résultat de ce "
+              "dépôt qui n'ait pas été mesuré en\n  connaissant les données.\n")
     else:
-        erreur = (sum((b - moy) ** 2 for b in bruts) / (len(bruts) - 1)) ** 0.5
-        erreur /= len(bruts) ** 0.5
-        print(f"  moyenne {moy:+.1f} ± {1.96 * erreur:.1f} bps (95 %)")
-        print("  L'intervalle contient-il zéro ? Si oui, l'effet n'est pas "
-              "confirmé.\n")
+        print(f"  VERDICT : l'excès ne se distingue pas du hasard "
+              f"(p={principal.get('p', 1.0):.4f}) sur\n  {n} positions. "
+              "L'effet historique ne s'est pas reproduit.\n")
 
 
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--unlocks", default="data/unlocks.json")
     p.add_argument("--journal", default="data/journal_unlocks.jsonl")
-    p.add_argument("--horizon", type=int, default=30,
-                   help="jours à l'avance pour inscrire les positions")
+    p.add_argument("--horizon", type=int, default=None,
+                   help="borner l'inscription aux N prochains jours. Par "
+                        "défaut tout l'avenir du calendrier est inscrit.")
+    p.add_argument("--jours", type=int, default=400,
+                   help="profondeur d'historique à télécharger au relevé")
     p.add_argument("--resoudre", action="store_true",
                    help="relever le résultat des fenêtres closes")
     p.add_argument("--purger-version", type=int, default=None,
@@ -318,7 +522,7 @@ def main() -> int:
 
     journal = Path(args.journal)
     if args.resoudre:
-        resoudre(journal)
+        resoudre(journal, jours=args.jours)
         return 0
     if args.purger_version is not None:
         ok, message = purger_version(journal, args.purger_version)
@@ -341,8 +545,9 @@ def main() -> int:
     prises = a_prendre(unlocks, maintenant, args.horizon, univers)
     ajouts = inscrire(prises, journal)
 
-    print(f"\n  POSITIONS À VENIR — règle v{VERSION}, "
-          f"{args.horizon} prochains jours")
+    portee = (f"{args.horizon} prochains jours" if args.horizon is not None
+              else "tout l'avenir du calendrier")
+    print(f"\n  POSITIONS À VENIR — règle v{VERSION}, {portee}")
     print("  " + "=" * 74)
     # La règle active, imprimée à chaque exécution. Elle est lue depuis
     # `sentinelle.triggers`, donc ce qui s'affiche est ce qui s'applique —
@@ -351,16 +556,21 @@ def main() -> int:
           f"adossé à {REFERENCE}.")
     print(f"  Déblocages retenus : de {DEBLOCAGE_PART_MIN:.0%} à "
           f"{DEBLOCAGE_PART_MAX:.0%} de l'offre, un seul par "
-          f"{DEBLOCAGE_DUREE_J} jours.\n")
+          f"{DEBLOCAGE_DUREE_J} jours.")
+    print(f"  Protocole de notation {pronostic.empreinte()} — "
+          f"{pronostic.attendu()['n_pour_50']} positions pour une chance sur "
+          "deux de conclure.\n")
     if not prises:
-        print("  Aucun déblocage de plus de 2 % dans la fenêtre.\n")
+        print("  Aucun déblocage éligible à venir dans le calendrier.\n")
         return 0
-    import datetime as dt
-    for x in sorted(prises, key=lambda v: v["entree_ms"]):
+    for x in sorted(prises, key=lambda v: v["entree_ms"])[:25]:
         d = dt.datetime.fromtimestamp(x["entree_ms"] / 1000, dt.UTC)
         f = dt.datetime.fromtimestamp(x["sortie_ms"] / 1000, dt.UTC)
         print(f"  {x['symbole']:<9} {x['part_offre']:>6.1%}   "
-              f"entrée {d:%Y-%m-%d}   sortie {f:%Y-%m-%d}")
+              f"entrée {d:%Y-%m-%d}   sortie {f:%Y-%m-%d}   "
+              f"préavis {x['horizon_j']:>4} j")
+    if len(prises) > 25:
+        print(f"  … {len(prises) - 25} autres, plus lointaines")
     print("  " + "-" * 74)
     print(f"  {len(prises)} position(s), dont {ajouts} nouvellement inscrite(s) "
           f"dans\n  {journal} (ajout seul).\n")

@@ -987,7 +987,8 @@ def test_chaque_ligne_fige_la_REGLE_qui_la_produit(tmp_path):
     assert x["sortie_ms"] - x["entree_ms"] == 6 * JOUR_MS, "fenêtre J-7 → J-1"
 
 
-def test_le_releve_refuse_de_conclure_sur_trop_peu_devenements(tmp_path, capsys):
+def test_le_releve_refuse_de_conclure_sur_trop_peu_devenements(tmp_path, capsys,
+                                                               monkeypatch):
     """Dix trades gagnants ne confirment rien avec un écart-type de
     1 050 bps. Le rapport doit le dire lui-même — laisser le lecteur faire
     le calcul, c'est le laisser ne pas le faire."""
@@ -997,6 +998,9 @@ def test_le_releve_refuse_de_conclure_sur_trop_peu_devenements(tmp_path, capsys)
         "version": 1, "symbole": "T", "deblocage_ms": vieux,
         "part_offre": 0.03, "entree_ms": vieux, "sortie_ms": vieux,
         "sens": "COURT", "reference": "BTC", "inscrit_ms": vieux}) + "\n")
+    # Pas de reseau dans un test : un carnet vide est exactement le cas
+    # « aucun prix connu » que l'on veut voir rapporte.
+    monkeypatch.setattr(journal_mod, "carnets", lambda symboles, jours: {})
     journal_mod.resoudre(j)
     sortie = capsys.readouterr().out
     assert "prix indisponibles" in sortie, sortie
@@ -1005,7 +1009,7 @@ def test_le_releve_refuse_de_conclure_sur_trop_peu_devenements(tmp_path, capsys)
 
 def test_un_journal_vide_ne_plante_pas(tmp_path, capsys):
     journal_mod.resoudre(tmp_path / "absent.jsonl")
-    assert "n'existe pas encore" in capsys.readouterr().out
+    assert "est vide ou absent" in capsys.readouterr().out
 
 
 def test_le_verdict_reste_AUCUN_sous_cinquante_evenements(tmp_path, capsys,
@@ -1016,20 +1020,34 @@ def test_le_verdict_reste_AUCUN_sous_cinquante_evenements(tmp_path, capsys,
     import time as _t
 
     vieux = 1_000 * JOUR_MS
-    lignes = [{"version": 1, "symbole": "T", "deblocage_ms": vieux + i,
-               "part_offre": 0.03, "entree_ms": vieux, "sortie_ms": vieux,
-               "sens": "COURT", "reference": "BTC", "inscrit_ms": vieux}
+    # Douze positions ETALEES : le bras de hasard tire ses dates dans la
+    # periode traversee par le journal, donc douze entrees le meme jour ne
+    # lui laisseraient qu'une seule date a tirer.
+    lignes = [{"version": 3, "symbole": "T",
+               "deblocage_ms": vieux + (i * 10 + 7) * JOUR_MS,
+               "part_offre": 0.03, "entree_ms": vieux + i * 10 * JOUR_MS,
+               "sortie_ms": vieux + (i * 10 + 6) * JOUR_MS,
+               "sens": "COURT", "reference": "BTC", "inscrit_ms": vieux,
+               "horizon_j": 20}
               for i in range(12)]
     chemin = tmp_path / "j.jsonl"
     chemin.write_text("\n".join(json.dumps(x) for x in lignes))
-    # Des prix connus, pour atteindre le bloc de verdict.
-    monkeypatch.setattr(journal_mod, "_cloture",
-                        lambda s, j: 100.0 if s == "T" else 50.0)
-    monkeypatch.setattr(_t, "time", lambda: (vieux + JOUR_MS) / 1000)
+    # Des carnets complets et sans intérêt : douze positions valorisables,
+    # donc le bloc de verdict est atteint. Le point du test n'est pas le
+    # chiffre, c'est le REFUS de conclure dessus.
+    import random as _r
+    alea = _r.Random(3)
+    carnet = {j: 100 * (1 + alea.gauss(0, 0.02)) for j in range(900, 1100)}
+    monkeypatch.setattr(journal_mod, "carnets",
+                        lambda symboles, jours: {s: dict(carnet) for s in symboles})
+    monkeypatch.setattr(_t, "time", lambda: (vieux + 200 * JOUR_MS) / 1000)
     journal_mod.resoudre(chemin)
     sortie = capsys.readouterr().out
     assert "VERDICT : AUCUN" in sortie, sortie
-    assert "12 événements" in sortie, sortie
+    # Le seuil affiché vient de la declaration figée, pas d'un « 50 » écrit
+    # dans le rapport : c'est 103, et il repond a la question annoncee.
+    from trading_desk import pronostic
+    assert f"{pronostic.attendu()['n_pour_50']} nécessaires" in sortie, sortie
 
 
 def test_deux_deblocages_rapproches_ne_font_QU_UNE_position():

@@ -26,10 +26,12 @@ pour de vrai — `baselines/grille.json` a ete produit a 200 tirages.
 from __future__ import annotations
 
 import json
+import math
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from .. import pronostic
 from ..sentinelle.validation import benjamini_hochberg
 
 RACINE = Path(__file__).resolve().parents[3]
@@ -1058,6 +1060,36 @@ def glissement(store: Any = None) -> dict[str, Any]:
 
 # -------------------------------------------------------------- navigation
 
+def _cumul_par_mois(entrees: list[dict], maintenant_ms: int) -> list[dict]:
+    """Combien de fenetres seront closes, mois par mois, en cumule.
+
+    C'est la seule courbe qui reponde a la question que tout le monde pose
+    devant un journal hors echantillon : **quand est-ce qu'on saura ?** Les
+    seuils sont horizontaux, le cumul monte, et l'intersection se lit.
+
+    Le passe et l'avenir sont distingues (`close`), parce qu'une fenetre deja
+    close est un fait et une fenetre a venir est une promesse du calendrier —
+    un deblocage lointain peut etre repousse.
+    """
+    par_mois: dict[str, list[int]] = {}
+    for e in entrees:
+        try:
+            fin = int(e["sortie_ms"])
+        except (KeyError, TypeError, ValueError):
+            continue
+        mois = datetime.fromtimestamp(fin / 1000, UTC).strftime("%Y-%m")
+        par_mois.setdefault(mois, [0, 0])
+        par_mois[mois][0 if fin <= maintenant_ms else 1] += 1
+    out, total = [], 0
+    for mois in sorted(par_mois):
+        closes, a_venir = par_mois[mois]
+        total += closes + a_venir
+        out.append({"mois": mois, "closes": closes, "a_venir": a_venir,
+                    "cumul": total,
+                    "passe": bool(closes) and not a_venir})
+    return out
+
+
 def navigation(chemin: Path | None = None) -> dict[str, Any]:
     """Le journal hors echantillon des deblocages.
 
@@ -1086,6 +1118,8 @@ def navigation(chemin: Path | None = None) -> dict[str, Any]:
             continue
 
     maintenant = int(datetime.now(UTC).timestamp() * 1000)
+    attendu = pronostic.attendu()
+    cumul = _cumul_par_mois(entrees, maintenant)
     ouvertes = [e for e in entrees if int(e.get("sortie_ms", 0)) > maintenant]
     closes = [e for e in entrees if int(e.get("sortie_ms", 0)) <= maintenant]
     a_venir = [e for e in ouvertes if int(e.get("entree_ms", 0)) > maintenant]
@@ -1107,6 +1141,11 @@ def navigation(chemin: Path | None = None) -> dict[str, Any]:
             "inscrit": _jour(e.get("inscrit_ms")),
             "reference": e.get("reference"),
             "version": e.get("version"),
+            # Le preavis : une prediction ecrite sept jours a l'avance et une
+            # ecrite huit cents jours a l'avance sont toutes deux hors
+            # echantillon, mais pas de la meme qualite. L'afficher evite de
+            # les confondre en lisant le tableau.
+            "horizon_j": e.get("horizon_j"),
             "etat": ("close" if int(e.get("sortie_ms", 0)) <= maintenant
                      else "en cours" if int(e.get("entree_ms", 0)) <= maintenant
                      else "à venir"),
@@ -1127,10 +1166,25 @@ def navigation(chemin: Path | None = None) -> dict[str, Any]:
         # repondre en millisecondes et rester utilisable hors ligne. Le journal
         # affiche donc les positions et leur etat ; le verdict reste au script.
         "resolution": "python scripts/journal_unlocks.py --resoudre",
-        # Sous 50 fenetres closes, `--resoudre` REFUSE de conclure. L'interface
-        # affiche la meme barre : elle ne doit pas laisser croire qu'un verdict
-        # approche quand il est encore hors de portee.
-        "seuil_conclusion": 50,
+        # LES SEUILS VIENNENT DE LA DECLARATION FIGEE, jamais d'une constante
+        # ecrite ici. L'ecran affichait « 50 » — un chiffre qui repondait a une
+        # question plus facile que celle qu'il annoncait : celle ou l'on se
+        # contente que l'intervalle evite zero SI l'effet futur vaut exactement
+        # l'effet passe. C'est une piece a pile ou face, pas une conclusion.
+        #
+        # `pronostic` porte les deux, mesures : 103 positions pour une chance
+        # sur deux, 210 pour quatre sur cinq. Les lire ici plutot que de les
+        # recopier evite qu'un ecran finisse par promettre un verdict que le
+        # script refuse de rendre.
+        "protocole": pronostic.empreinte(),
+        "attendu": attendu,
+        "seuil_conclusion": attendu["n_pour_50"],
+        "seuil_confortable": attendu["n_pour_80"],
+        # Le repere n'est pas zero : vendre un altcoin au hasard six jours,
+        # couvert en BTC, rapportait deja +123,5 bps. L'ecran doit le dire,
+        # sinon la moyenne du journal se lira comme un resultat.
+        "hasard_bps": attendu["hasard_bps"],
+        "calendrier_cumule": cumul,
         "prochaine_fermeture": min((_jour(e.get("sortie_ms")) for e in ouvertes),
                                    default=None),
         "versions": sorted({e.get("version") for e in entrees if e.get("version")}),
@@ -1581,6 +1635,39 @@ def prevol(*, verdict_risque: dict[str, Any] | None = None,
     return lignes
 
 
+def json_sur(valeur: Any) -> Any:
+    """Remplace les flottants non finis par `None`, recursivement.
+
+    **Sans ca, un seul `inf` quelque part eteint tout l'ecran.** Starlette
+    rend ses reponses avec `allow_nan=False` : `Infinity` et `NaN` ne sont
+    pas du JSON, donc l'endpoint leve et `/api/recherche` repond 500.
+    L'interface affiche alors « Panneaux indisponibles : le serveur n'a pas
+    repondu » — un message qui accuse le reseau pour un defaut de donnee, et
+    l'atelier, les saisons, le journal et la bibliotheque sont muets tous les
+    quatre.
+
+    Ce n'est pas theorique : le 19 septembre 2026, deux cellules de l'atelier
+    portaient un facteur de profit infini — une strategie sans aucun trade
+    perdant — et le volet recherche etait entierement noir.
+
+    Le defaut est corrige a la source (`scorer.en_dict` rend `None`), mais le
+    registre est en AJOUT SEUL : les lignes ecrites avant le correctif
+    contiennent toujours `Infinity`, et elles seront relues pendant des mois.
+    D'ou ce garde-fou a la frontiere, qui vaut aussi pour la prochaine valeur
+    non finie, qui ne sera pas dans le meme champ.
+
+    `None` plutot qu'un grand nombre : l'ecran affiche « — », ce qui est la
+    verite. Un plafond arbitraire se lirait comme une mesure.
+    """
+    if isinstance(valeur, float):
+        return valeur if math.isfinite(valeur) else None
+    if isinstance(valeur, dict):
+        return {k: json_sur(v) for k, v in valeur.items()}
+    if isinstance(valeur, list):
+        return [json_sur(v) for v in valeur]
+    return valeur
+
+
 def tout(store: Any = None, racine_collecte: Path | str | None = None) -> dict[str, Any]:
     """L'ensemble des panneaux, en un appel. Aucun effet de bord, aucun réseau."""
     camp = campagnes()
@@ -1590,7 +1677,7 @@ def tout(store: Any = None, racine_collecte: Path | str | None = None) -> dict[s
     v = vols(store) if store is not None else {"aucun_vol": True, "executions": 0,
                                                "mandats": 0, "courbe": [],
                                                "pourquoi": "aucun stockage attaché"}
-    return {
+    return json_sur({
         "campagnes": camp,
         "strategies": strategies(),
         "atelier": atelier(),
@@ -1610,4 +1697,4 @@ def tout(store: Any = None, racine_collecte: Path | str | None = None) -> dict[s
         "bibliotheque": bibliotheque(),
         "prevol": prevol(telemetrie_=tel, navigation_=nav, consommation_=conso,
                          vols_=v, campagnes_=camp),
-    }
+    })

@@ -535,6 +535,106 @@ function rendreTelemetrie(t) {
 }
 
 /* ---------- NAVIGATION ---------- */
+/* Géométrie de la courbe « quand est-ce qu'on saura ? ». La marge droite
+   porte les étiquettes des deux seuils, qui sont le sujet du graphe : les
+   poser dans l'aire de tracé les ferait croiser la courbe. */
+const JN = { W: 1000, H: 250, GAUCHE: 46, DROITE: 212, HAUT: 16, BAS: 38 };
+
+function jnTicks(max) {
+  /* Des paliers ronds, jamais plus de six : un axe qui compte de 10 en 10
+     jusqu'à 210 rend vingt-deux graduations illisibles. */
+  const pas = max <= 60 ? 20 : max <= 150 ? 50 : 100;
+  const out = [];
+  for (let v = 0; v <= max; v += pas) out.push(v);
+  return out;
+}
+
+/* Un mois « AAAA-MM » en rang absolu. L'AXE EST TEMPOREL, PAS INDEXÉ.
+   Espacer les points à intervalle constant donnait la même largeur au saut
+   de dix-neuf mois entre novembre 2028 et mars 2030 qu'à un mois ordinaire :
+   la courbe semblait alors monter régulièrement jusqu'en 2030, alors qu'elle
+   est plate pendant un an et demi. Sur un graphe dont toute la question est
+   « quand est-ce qu'on saura », déformer le temps est le seul mensonge qui
+   compte. */
+function jnMois(m) {
+  const [a, b] = String(m).split("-").map(Number);
+  return a * 12 + (b - 1);
+}
+
+/* La courbe cumulée des fenêtres closes, et les deux seuils qui décident.
+   C'est la seule image qui réponde à la question que pose un journal hors
+   échantillon : quand est-ce qu'on saura ? Le cumul monte, les seuils sont
+   horizontaux, l'intersection se lit.
+
+   Deux traits gris, un seul en couleur : ce qui est CLOS est un fait, le
+   reste est une promesse de calendrier — un déblocage lointain peut être
+   repoussé, et rien ne garantit que la courbe grise se réalise. */
+function grapheJournal(n) {
+  const serie = n.calendrier_cumule || [];
+  if (serie.length < 2) return "";
+  const { W, H, GAUCHE, DROITE, HAUT, BAS } = JN;
+  const x0 = GAUCHE, x1 = W - DROITE, y0 = H - BAS, y1 = HAUT;
+  const s50 = n.seuil_conclusion || 0, s80 = n.seuil_confortable || 0;
+  /* L'échelle monte jusqu'au seuil le plus haut MÊME s'il est hors
+     d'atteinte : c'est précisément l'information. Le tronquer au maximum du
+     calendrier ferait disparaître le fait que 210 positions n'existent pas. */
+  const max = Math.max(serie[serie.length - 1].cumul, s80, 1) * 1.08;
+  const m0 = jnMois(serie[0].mois), m1 = jnMois(serie[serie.length - 1].mois);
+  const etendue = Math.max(1, m1 - m0);
+  const xs = (m) => x0 + ((x1 - x0) * (jnMois(m) - m0)) / etendue;
+  const ys = (v) => y0 - ((y0 - y1) * v) / max;
+
+  let clos = 0;
+  const pointsClos = [];
+  serie.forEach((m) => {
+    if (m.closes) { clos += m.closes; pointsClos.push([xs(m.mois), ys(clos)]); }
+  });
+
+  const ligne = (pts) => pts.map((p, i) => (i ? "L" : "M") + p[0].toFixed(1)
+    + " " + p[1].toFixed(1)).join(" ");
+  const tous = serie.map((m) => [xs(m.mois), ys(m.cumul)]);
+  const aire = ligne(tous) + " L" + x1.toFixed(1) + " " + y0 + " L" + x0 + " " + y0 + " Z";
+
+  const ticks = jnTicks(Math.ceil(max)).map((v) =>
+    '<line class="grille" x1="' + x0 + '" y1="' + ys(v) + '" x2="' + x1
+    + '" y2="' + ys(v) + '"/><text class="tick" x="' + (x0 - 8) + '" y="'
+    + (ys(v) + 4) + '" text-anchor="end">' + v + "</text>").join("");
+
+  /* Les graduations de temps sont calculées sur l'ÉTENDUE, pas sur les mois
+     présents : janvier 2029 n'a aucun déblocage, et sans lui l'axe s'arrête
+     visuellement en 2028 alors que la courbe va jusqu'en 2030. */
+  let mois = "";
+  for (let m = Math.ceil(m0 / 12) * 12; m <= m1; m += 12) {
+    const libelle = Math.floor(m / 12);
+    mois += '<text class="tick" x="' + xs(libelle + "-01") + '" y="' + (y0 + 18)
+      + '" text-anchor="middle">' + libelle + "</text>";
+  }
+
+  const seuil = (v, titre, sous, atteignable) =>
+    '<line class="seuil' + (atteignable ? "" : " hors") + '" x1="' + x0
+    + '" y1="' + ys(v) + '" x2="' + (x1 + 8) + '" y2="' + ys(v) + '"/>'
+    + '<text class="sn" x="' + (x1 + 14) + '" y="' + (ys(v) - 2) + '">'
+    + v + " · " + titre + "</text>"
+    + '<text class="ss" x="' + (x1 + 14) + '" y="' + (ys(v) + 12) + '">'
+    + sous + "</text>";
+
+  const atteint80 = serie[serie.length - 1].cumul >= s80;
+  return '<svg class="jng" viewBox="0 0 ' + W + " " + H + '" role="img" '
+    + 'aria-label="Cumul des fenêtres closes et seuils de conclusion">'
+    + ticks + mois
+    + '<path class="promesse" d="' + aire + '"/>'
+    + '<path class="trace" d="' + ligne(tous) + '"/>'
+    + (pointsClos.length ? '<path class="fait" d="' + ligne(pointsClos) + '"/>' : "")
+    + '<line class="axe" x1="' + x0 + '" y1="' + y0 + '" x2="' + x1 + '" y2="' + y0 + '"/>'
+    + seuil(s50, "une chance sur deux", "de trancher", true)
+    + seuil(s80, "quatre sur cinq", atteint80 ? "de trancher"
+        : "hors d’atteinte", atteint80)
+    + "</svg>"
+    + '<div class="coupe-cle"><span class="k-promesse"><i></i>inscrit, pas encore '
+    + 'clos — une promesse du calendrier</span><span class="k-fait"><i></i>'
+    + "fenêtres closes — des faits</span></div>";
+}
+
 function rendreNavigation(n) {
   n = n || {};
   if (!n.disponible) {
@@ -546,26 +646,43 @@ function rendreNavigation(n) {
   $("navBadge").textContent = n.inscrites + " inscrites · " + n.closes + " closes";
   marquer("navigation", n.ouvertes, "ok");
 
+  const a = n.attendu || {};
   const reste = Math.max(0, n.seuil_conclusion - n.closes);
+  /* CE QUE LA RÈGLE DOIT BATTRE N'EST PAS ZÉRO, et c'est la première phrase
+     du bandeau parce que c'est le seul endroit où l'écran peut mentir sans
+     qu'on s'en aperçoive : vendre un altcoin au hasard six jours, couvert en
+     BTC, rapportait déjà +123,5 bps sur la période historique. Une moyenne de
+     journal affichée seule se lirait comme un résultat. */
   const barre = '<div class="verdict"><span class="gros">'
     + n.closes + " / " + n.seuil_conclusion + " fenêtres closes</span>"
+    + "Le repère n’est pas zéro : la même position prise à des "
+    + "<b>dates tirées au hasard</b> rapportait " + (a.hasard_bps || 0).toFixed(0)
+    + " bps. C’est cet écart-là — <b>+" + (a.exces_bps || 0).toFixed(0)
+    + " bps</b> en échantillon — que le journal doit reproduire."
     + (reste
-      ? "Le journal <b>refuse de conclure</b> sous " + n.seuil_conclusion
-        + " événements résolus : il en manque " + reste
-        + ". Conclure plus tôt reviendrait à lire du bruit."
-        + (n.prochaine_fermeture ? " Prochaine fermeture le <b>" + esc(n.prochaine_fermeture) + "</b>." : "")
-      : "Le seuil est atteint : le verdict est calculable.")
+      ? "<br><br>Le relevé <b>refuse de conclure</b> sous " + n.seuil_conclusion
+        + " fenêtres closes"
+        + (n.closes ? " ; il en manque " + reste : "")
+        + ". Avec un écart-type de " + (a.ecart_type_bps || 0).toFixed(0)
+        + " bps par position, conclure plus tôt reviendrait à lire du bruit."
+        + (n.prochaine_fermeture ? " Prochaine fermeture le <b>"
+          + esc(n.prochaine_fermeture) + "</b>." : "")
+      : "<br><br>Le seuil est atteint : le verdict est calculable.")
     + '<br><br><code style="font-family:var(--f-mono);font-size:11px">'
-    + esc(n.resolution) + "</code></div>";
+    + esc(n.resolution) + "</code>"
+    + '<div class="jn-proto">protocole figé <b>' + esc(n.protocole || "?")
+    + "</b> · mesure primaire : net de " + esc(n.positions.length
+      ? n.positions[0].reference || "BTC" : "BTC") + "</div></div>";
 
-  $("navigation").innerHTML = barre + '<div class="tscroll"><table><thead><tr>'
+  $("navigation").innerHTML = barre + grapheJournal(n)
+    + '<div class="tscroll jn-table"><table><thead><tr>'
     + "<th>Jeton</th><th>Sens</th><th>Part offre</th><th>Déblocage</th>"
-    + "<th>Entrée</th><th>Sortie</th><th>Réf</th><th>État</th></tr></thead><tbody>"
+    + "<th>Entrée</th><th>Sortie</th><th>Préavis</th><th>État</th></tr></thead><tbody>"
     + n.positions.map((p) =>
       "<tr><td class='name'>" + esc(p.symbole) + "</td><td>" + esc(p.sens) + "</td>"
       + "<td>" + pct(p.part_offre * 100) + "</td><td>" + esc(p.deblocage) + "</td>"
       + "<td>" + esc(p.entree) + "</td><td>" + esc(p.sortie) + "</td>"
-      + "<td>" + esc(p.reference) + "</td>"
+      + "<td>" + (p.horizon_j == null ? "—" : p.horizon_j + " j") + "</td>"
       + "<td><span class='tag'>" + esc(p.etat) + "</span></td></tr>").join("")
     + "</tbody></table></div>";
 }

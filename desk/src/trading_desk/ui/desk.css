@@ -1116,3 +1116,41 @@ body::before {
 .grilleg .lab     { fill:var(--ink); font:600 12px var(--f-ui) }
 .grilleg .sub     { fill:var(--muted); font:500 10px var(--f-mono) }
 .grilleg .tick2   { fill:var(--muted); font:500 11px var(--f-mono) }
+
+/* ---------- LA COURBE DU JOURNAL HORS ECHANTILLON ----------
+   Meme forme « emphase » que le graphe des coupes, et pour la meme raison :
+   une seule couleur, sur la seule serie qui soit un FAIT. Le calendrier a
+   venir est gris parce qu'il n'est pas acquis — un deblocage annonce pour
+   2028 peut etre repousse.
+
+   Les deux seuils sont des traits, pas des series : le pointille dit « ligne
+   de decision », et la variante `.hors` — plus pale, plus fine — dit qu'un
+   seuil est hors d'atteinte du calendrier actuel sans avoir a l'ecrire deux
+   fois. */
+.jng { width:100%; height:auto; display:block; font-family:var(--f-ui);
+  margin:6px 0 2px }
+.jng .promesse { fill:var(--surface-3) }
+.jng .trace    { fill:none; stroke:var(--muted); stroke-width:1.5 }
+.jng .fait     { fill:none; stroke:var(--ok); stroke-width:2.5;
+  stroke-linejoin:round; stroke-linecap:round }
+.jng .grille   { stroke:var(--line-soft); stroke-width:1 }
+.jng .axe      { stroke:var(--line); stroke-width:1 }
+.jng .tick     { fill:var(--muted); font:500 11px var(--f-mono) }
+.jng .seuil    { stroke:var(--ink-2); stroke-width:1.5; stroke-dasharray:5 4 }
+.jng .seuil.hors { stroke:var(--muted); stroke-width:1; stroke-dasharray:2 4 }
+.jng .sn       { fill:var(--ink); font:600 12px var(--f-ui) }
+.jng .ss       { fill:var(--muted); font:500 11px var(--f-ui) }
+.coupe-cle .k-promesse i { background:var(--surface-3) }
+.coupe-cle .k-fait i     { background:var(--ok) }
+
+/* L'empreinte du protocole, en pied de bandeau : un pari note selon une
+   regle ecrite apres coup ne vaut rien, donc la regle porte un numero qu'on
+   peut comparer. */
+/* Cent soixante-quinze positions inscrites d'un coup : sans plafond, le
+   tableau faisait quinze mille pixels de haut et le graphe disparaissait
+   au-dessus. Le tableau garde sa hauteur, le panneau reste lisible. */
+.jn-table { max-height:440px; overflow-y:auto }
+
+.jn-proto { margin-top:10px; padding-top:8px; border-top:1px solid var(--line-soft);
+  font:500 11px var(--f-ui); color:var(--muted) }
+.jn-proto b { font:700 11px var(--f-mono); color:var(--ink-2) }

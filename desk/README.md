@@ -1859,10 +1859,57 @@ cas où l'ajout seul cède — encadré par le code, pas par une promesse :
 close**. Tant que rien n'est arrivé, il n'existe aucun résultat sur lequel
 sélectionner. Une seconde après la première clôture, le refus est définitif.
 
-Le relevé **refuse de conclure sous cinquante événements** et le dit à
-chaque fois. Avec un écart-type de 1 050 bps, distinguer +290 de zéro en
-demande cinquante à cent — soit six mois à un an. Dix trades gagnants ne
-sont que du bruit, quelle que soit leur allure.
+### v3 — le pari est écrit en entier, et le repère n'est pas zéro
+
+Deux défauts restaient, et aucun des deux ne se voyait dans les chiffres.
+
+**Le relevé comparait à zéro.** La position est une vente à découvert
+d'altcoin tenue six jours, couverte en BTC. Prise à des **dates tirées au
+hasard**, sur la même période historique, elle rapportait déjà **+123,5 bps**
+— un altcoin moyen baisse contre BTC, et vendre n'importe lequel n'importe
+quand payait sans qu'aucun déblocage n'y soit pour quelque chose. Un relevé
+comparé à zéro mesure cette dérive : en marché baissier il confirmerait la
+règle, en marché haussier il la refuterait, et dans les deux cas il parlerait
+d'autre chose. `trading_desk.pronostic` porte donc le bras de hasard, figé
+avec le reste du protocole, et le relevé le recalcule **sur la période que le
+journal a réellement traversée**.
+
+**« Cinquante » répondait à une question plus facile.** Le chiffre venait du
+calcul qui demande seulement que l'intervalle de confiance évite zéro *si*
+l'effet futur vaut exactement l'effet passé — une pièce à pile ou face. Sur
+la bande réellement inscrite (2 à 25 %, la même que le déclencheur), la
+mesure donne **+342,4 bps observés contre +123,5 au hasard, soit +218,9 bps
+d'excès, écart-type 1 131 bps par position**. Il faut donc :
+
+| positions closes | ce que ça donne |
+|---|---|
+| 103 | une chance sur deux de trancher |
+| 210 | quatre chances sur cinq |
+
+La normalisation par le risque a été essayée avant de figer quoi que ce soit,
+et **rejetée sur mesure** : 449 positions pour quatre chances sur cinq. L'effet
+est concentré sur les jetons les plus volatils, et diviser par la volatilité
+jette ce qui porte le signal.
+
+**Les 175 positions à venir sont inscrites d'un coup**, plus seulement celles
+des trente prochains jours. L'horizon court faisait dépendre la
+pré-inscription de la régularité du rituel — qui, sur le VPS, n'a jamais
+tourné : le service n'était pas installé. Un oubli de trois semaines et les
+prédictions de ces trois semaines n'existaient nulle part. Chaque ligne porte
+désormais son `horizon_j`, l'empreinte du calendrier dont elle sort et celle
+du protocole qui la notera ; le commit git fait foi de la date.
+
+Le prix à payer est nommé : un déblocage annoncé pour 2028 peut être
+repoussé. Cela ajoute du **bruit, pas du biais** — une date qui bouge ne
+bouge pas dans le sens du prix — donc l'effet est de diluer. Le relevé
+affiche le détail par préavis pour que la dilution se voie.
+
+**Et le fait qui compte le plus : le calendrier ne contient que 176
+événements futurs éligibles, jusqu'en 2030.** Quatre chances sur cinq sont
+hors d'atteinte ; une chance sur deux tombe vers le milieu de 2027. Le levier
+est unique et connu — 68 jetons au calendrier quand Hyperliquid en cote 234.
+C'est le rituel hebdomadaire qui rafraîchit ce calendrier, et c'est pour ça
+qu'il compte.
 
 ### L'edge est branché dans le desk
 

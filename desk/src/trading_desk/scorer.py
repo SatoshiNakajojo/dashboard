@@ -139,7 +139,26 @@ class Note:
             "esperance_r": round(self.esperance_r, 3),
             "esperance_r_mediane": round(self.esperance_r_mediane, 3),
             "win_rate": round(self.win_rate, 3),
-            "profit_factor": round(self.profit_factor, 3),
+            # `None`, PAS `inf`, ET LA NUANCE A MIS TOUT L'ECRAN PAR TERRE.
+            #
+            # Une strategie sans aucun trade perdant a un facteur de profit
+            # infini. `json.dumps` l'ecrit `Infinity`, qui n'est pas du JSON
+            # valide ; Starlette sert ses reponses avec `allow_nan=False`,
+            # donc l'endpoint LEVE et `/api/recherche` rend un 500. Tout le
+            # volet recherche du desk — atelier, saisons, journal, biblio —
+            # devient muet d'un coup, et le seul symptome visible est
+            # « Panneaux indisponibles : le serveur n'a pas repondu ».
+            #
+            # Mesure du 19 septembre 2026 : deux cellules de l'atelier
+            # portaient un facteur infini, et l'ecran etait effectivement
+            # noir. `backtest/report.py` faisait deja le bon choix depuis le
+            # debut — `None` des que la perte est nulle — mais le scorer
+            # avait sa propre copie, et c'est celle-la qui sortait.
+            #
+            # `None` est aussi le plus juste : « aucun trade perdant » n'est
+            # pas un ratio enorme, c'est un ratio qui n'existe pas encore.
+            "profit_factor": (round(self.profit_factor, 3)
+                              if math.isfinite(self.profit_factor) else None),
             "repli_max_pct": round(self.repli_max_pct, 2),
             "trades": self.trades,
             "jours": round(self.jours, 1),

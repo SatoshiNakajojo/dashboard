@@ -30,9 +30,17 @@ def test_le_calendrier_vient_avant_l_inscription():
     assert noms[2] == ("journal_unlocks.py", ("--resoudre",))
 
 
-def test_l_horizon_est_transmis_a_l_inscription():
-    inscription = etapes(45)[1]
-    assert inscription.args == ("--horizon", "45")
+def test_sans_horizon_le_rituel_inscrit_tout_l_avenir():
+    """La pré-inscription ne doit pas dépendre de la régularité du rituel.
+
+    Avec un horizon de trente jours, trois semaines d'arrêt — ce qui est
+    arrivé, le service n'ayant jamais été installé sur le VPS — laissaient
+    les positions de ces trois semaines inscrites nulle part. C'est
+    exactement ce que le journal existe pour empêcher.
+    """
+    assert etapes()[1].args == ()
+    assert etapes(45)[1].args == ("--horizon", "45"), (
+        "borner reste possible, mais ce n'est plus le défaut")
 
 
 def test_le_releve_n_est_pas_fatal_mais_la_collecte_l_est():

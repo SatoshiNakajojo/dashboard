@@ -190,7 +190,18 @@ def test_le_journal_classe_les_positions_par_etat(tmp_path):
     assert n["closes"] == 1 and n["a_venir"] == 1
     etats = {p["symbole"]: p["etat"] for p in n["positions"]}
     assert etats == {"AAA": "close", "BBB": "à venir"}
-    assert n["seuil_conclusion"] == 50, "le journal refuse de conclure sous 50"
+    # LE SEUIL VIENT DE LA DECLARATION FIGEE, pas d'une constante ecrite dans
+    # l'ecran. Il valait 50 — un chiffre qui repondait a une question plus
+    # facile : celle ou l'intervalle evite zero SI l'effet futur vaut
+    # exactement l'effet passe, c'est-a-dire une chance sur deux. L'ecran
+    # annoncait donc un verdict la ou il n'y avait qu'une piece a lancer.
+    from trading_desk import pronostic
+    attendu = pronostic.attendu()
+    assert n["seuil_conclusion"] == attendu["n_pour_50"]
+    assert n["seuil_confortable"] == attendu["n_pour_80"]
+    assert n["protocole"] == pronostic.empreinte()
+    assert n["hasard_bps"] > 50, (
+        "le repere affiche ne doit pas etre zero : vendre au hasard rapportait")
 
 
 def test_le_journal_ne_conclut_pas_sous_le_seuil(tmp_path):
@@ -1481,3 +1492,65 @@ def test_la_ferme_cede_le_pas_a_l_enregistreur():
     assert "Nice=" in unite and "CPUWeight=" in unite
     assert "Restart=" not in unite, (
         "un oneshot qui échoue doit RESTER en échec")
+
+
+# --------------------------------------------------------------------------
+#  Le payload doit pouvoir SORTIR du serveur
+# --------------------------------------------------------------------------
+
+def test_le_panneau_de_recherche_est_du_JSON_valide():
+    """Un seul `inf` quelque part, et tout le volet recherche devient muet.
+
+    Starlette rend ses reponses avec `allow_nan=False` : `Infinity` et `NaN`
+    ne sont pas du JSON, donc l'endpoint LEVE et `/api/recherche` rend un
+    500. L'ecran affiche alors « Panneaux indisponibles : le serveur n'a pas
+    repondu » — un message qui accuse le reseau pour un defaut de donnee.
+
+    C'est arrive : le 19 septembre 2026, deux cellules de l'atelier avaient
+    un facteur de profit infini (aucun trade perdant), et l'atelier, les
+    saisons, le journal et la bibliotheque etaient noirs tous les quatre.
+
+    Ce test verifie le payload REEL du depot, pas un echantillon construit :
+    c'est la seule facon d'attraper la prochaine valeur non finie, qui ne
+    sera pas dans le meme champ.
+    """
+    import math
+
+    from starlette.responses import JSONResponse
+
+    payload = recherche.tout()
+    non_finis = []
+
+    def visiter(o, chemin=""):
+        if isinstance(o, dict):
+            for k, v in o.items():
+                visiter(v, f"{chemin}.{k}")
+        elif isinstance(o, list):
+            for i, v in enumerate(o):
+                visiter(v, f"{chemin}[{i}]")
+        elif isinstance(o, float) and not math.isfinite(o):
+            non_finis.append(f"{chemin} = {o}")
+
+    visiter(payload)
+    assert not non_finis, (
+        "valeurs non finies dans /api/recherche — l'endpoint rendra un 500 "
+        "et tout le volet recherche sera muet :\n  " + "\n  ".join(non_finis))
+    JSONResponse(payload).render(payload)
+
+
+def test_un_facteur_de_profit_infini_sort_en_None():
+    """Aucun trade perdant n'est pas un ratio enorme : c'est un ratio absent.
+
+    `backtest/report.py` rendait deja `None` ; le scorer avait sa propre
+    copie et laissait passer l'infini. Une definition dupliquee derive, et
+    la derive ne se voit pas dans les chiffres — elle se voit dans un ecran
+    noir, des semaines plus tard.
+    """
+    from trading_desk.scorer import Note
+
+    note = Note(portes=[], annualise_pct=1.0, annualise_usd=1.0,
+                buy_hold_annualise_pct=0.0, esperance_r=0.1,
+                esperance_r_mediane=0.1, win_rate=1.0,
+                profit_factor=float("inf"), repli_max_pct=0.0, trades=5,
+                jours=30.0, stop_sur_atr=True, relief=None, note_sur_10=9.0)
+    assert note.en_dict()["profit_factor"] is None

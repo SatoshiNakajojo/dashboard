@@ -193,7 +193,15 @@ def test_la_grille_des_saisons_n_est_pas_une_carte_de_chaleur():
     les cellules trop maigres sont creuses.
     """
     css = _ui("desk.css")
-    bloc = css[css.index("/* La grille : un point par cellule"):]
+    # La tranche s'arrete a la section SUIVANTE, pas a la fin du fichier.
+    # Ouverte, elle affirmait une propriete de tout ce qui viendrait ensuite :
+    # la courbe du journal hors echantillon, ajoutee en fin de feuille, a
+    # casse ce test en peignant ses faits en `--ok` — ce qui est exactement
+    # ce qu'elle doit faire. Un test dont le sujet s'etend a chaque ajout ne
+    # protege plus ce qu'il annonce.
+    debut = css.index("/* La grille : un point par cellule")
+    suite = css.find("\n/* ---------- ", debut)
+    bloc = css[debut:suite if suite > 0 else len(css)]
     pt = next(l for l in bloc.splitlines() if l.strip().startswith(".grilleg .pt "))
     maigre = next(l for l in bloc.splitlines() if ".pt-mgr" in l)
     assert "var(--accent)" in pt
