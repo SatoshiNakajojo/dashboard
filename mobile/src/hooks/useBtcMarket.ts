@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 
-import { fetchBlockHeight, fetchBtcHistory, fetchBtcSpot, todayIndex } from '@/lib/coingecko';
+import { fetchBlockHeight, fetchBtcHistory, fetchBtcSpot } from '@/lib/coingecko';
 import { MOCK_BTC_CHANGE_24H, MOCK_BTC_SPOT, MOCK_BLOCK_HEIGHT } from '@/mocks/calls';
+import { seasonAt } from '@/lib/season';
 import { MOCK_TODAY_INDEX, mockBtcSeries } from '@/mocks/oracle';
 import type { BtcSpot, MarketPoint } from '@/types/domain';
 
@@ -64,7 +65,13 @@ export function useBtcSpot(): BtcSpotState {
 
 export interface BtcHistoryState {
   points: MarketPoint[];
-  /** Index du jour courant dans la fenêtre de 90 jours. */
+  /**
+   * Index du jour courant dans la fenêtre de 90 jours.
+   *
+   * Il vient du **calendrier**, plus du dernier point reçu. Un jour où
+   * CoinGecko ne répond pas ne doit pas faire reculer le curseur de la saison,
+   * ni ramener la toile à un avenir qu'on aurait déjà consommé.
+   */
   today: number;
   loading: boolean;
   stale: boolean;
@@ -72,6 +79,9 @@ export interface BtcHistoryState {
 
 /** Historique 90 jours pour la courbe réelle de l'Oracle. */
 export function useBtcHistory(): BtcHistoryState {
+  // Repli cohérent avec lui-même : la série de démonstration s'arrête à son
+  // propre jour 34. Il est remplacé par le calendrier dès que CoinGecko répond,
+  // et conservé tel quel s'il ne répond pas — une grille vide serait illisible.
   const [state, setState] = useState<BtcHistoryState>({
     points: mockBtcSeries(),
     today: MOCK_TODAY_INDEX,
@@ -86,7 +96,7 @@ export function useBtcHistory(): BtcHistoryState {
       try {
         const { points, stale } = await fetchBtcHistory(controller.signal);
         if (controller.signal.aborted || points.length === 0) return;
-        setState({ points, today: todayIndex(points), loading: false, stale });
+        setState({ points, today: seasonAt().day, loading: false, stale });
       } catch {
         // On conserve la série de repli : la grille seule serait illisible.
         if (!controller.signal.aborted) {

@@ -99,7 +99,7 @@ de 4 unités — et borné dans le repère.
 
 ## Ce qui a été vérifié
 
-- `npm run typecheck`, `npm run lint`, `npm test` — propres (155 tests).
+- `npm run typecheck`, `npm run lint`, `npm test` — propres (171 tests).
 - **Règles pures** : bornes et inversibilité du repère, monotonie du tracé,
   écart à la courbe réelle, espaces insécables du formatage français, perf vs ₿
   comme ratio et non soustraction, seuils et tri des deux classements.
@@ -128,10 +128,45 @@ de 4 unités — et borné dans le repère.
   en ACTION. Avec Supabase configuré : la garde mène à la porte, l'adresse invalide est
   refusée, la panne réseau se lit « Connexion indisponible » et non en trace
   technique.
+- **Ancrage de la saison** : build web pilotée dans Chromium avec l'horloge
+  figée au douzième jour de la saison I et un faux CoinGecko. L'app demande 13
+  jours d'historique et non 90, affiche `JOUR 12 / 90`, laisse 78 jours de
+  toile vierge à droite du marqueur, et titre « saison I ».
 - **Diagnostic backend** : `npm run check:supabase` exécuté contre un faux
   projet Supabase, sain puis cassé — table absente, RLS inactive, migration
   partielle, fonction non déployée, inscription ouverte — et contre un projet
   injoignable. Chaque cas produit le bon verdict et le bon remède.
+
+---
+
+## La saison ancre la courbe, pas seulement l'étiquette
+
+L'Oracle prédit 90 jours. Encore faut-il savoir à quelle date correspond le
+jour 0 du repère.
+
+Il n'y avait pas de réponse : l'historique BTC était demandé sur « les 90
+derniers jours » et numéroté depuis le premier point reçu. Avec de vraies
+données, aujourd'hui tombait donc au **jour 90 sur 90** — la courbe réelle
+couvrait la toile entière, et il ne restait aucun avenir à tracer. Le jeu de
+démonstration place aujourd'hui au jour 34, ce qui masquait le défaut
+complètement : il ne pouvait apparaître qu'une fois Supabase et CoinGecko
+branchés.
+
+`src/lib/season.ts` donne cet ancrage. Une saison dure 90 jours et démarre à
+l'ouverture du club — `SEASON_EPOCH`, minuit à Nouméa, **la seule ligne à
+changer** et pas à la légère : `predictions.season` en dérive, et des tracés
+déposés se retrouveraient orphelins d'une saison qui n'existe plus.
+
+Trois choses en découlent, qui étaient figées à trois endroits différents :
+
+- On ne demande à CoinGecko que les jours écoulés, datés depuis le début de
+  saison — 13 jours au douzième jour, pas 90.
+- Le compteur `JOUR n / 90` vient du **calendrier**. Un jour où CoinGecko ne
+  répond pas ne fait plus reculer le curseur de la saison.
+- `predictions` porte un `unique (user_id, season)`. Tant que l'étiquette était
+  figée, un membre ayant scellé son tracé ne pouvait plus jamais en déposer un
+  autre. La saison tourne maintenant d'elle-même, et chacun repart d'une toile
+  vierge.
 
 ---
 
@@ -270,8 +305,9 @@ Rien ne bloque. Ce qui suit est du confort :
   cotations. Le sélecteur de place couvre le besoin en attendant.
 - **Taille de position.** La colonne existe et les cartes l'affichent, mais le
   composer ne la collecte pas — le design ne lui donne pas de champ.
-- **Saison de l'Oracle** figée à `2026-S3` dans `src/mocks/oracle.ts` ; en
-  production elle devrait venir d'une table `seasons`.
+- **Ouverture d'une saison à la main.** Elles tournent seules tous les 90 jours
+  (`src/lib/season.ts`). Si le club veut décider lui-même quand une saison
+  s'ouvre, il faudra une table `seasons` et un écran pour l'administrer.
 - **Sous-ligne des classements.** Le design y met de la prose
   (« DCA 2 ans · 0,84 ₿ ») ; faute de colonne pour ça, elle est dérivée
   (« +31 % vs ₿ »), ce qui recouvre quatre des six lignes du design.

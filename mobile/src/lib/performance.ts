@@ -25,6 +25,7 @@
  */
 
 import type { CallView } from '@/types/domain';
+import { toRoman } from './format';
 
 export type LeaderboardReference = 'usd' | 'vsBtc';
 
@@ -123,11 +124,9 @@ export function splitLeaderboards(calls: readonly CallView[]): {
   return { fame, rekt };
 }
 
-const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X'];
-
 /** Rangs du Hall of Fame en chiffres romains — jamais `01 / 02 / 03`. */
 export function romanRank(index: number): string {
-  return ROMAN[index] ?? String(index + 1);
+  return toRoman(index + 1);
 }
 
 /** Frimousses du Rekt Board, en monospace — l'humour du club, en sourdine. */

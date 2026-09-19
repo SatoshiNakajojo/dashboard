@@ -16,6 +16,7 @@ import {
   describeKey,
   describeNetworkError,
   formatReport,
+  EDGE_FUNCTIONS,
   interpretColumn,
   interpretFunction,
   interpretMembers,
@@ -274,26 +275,42 @@ describe('paramètres d’authentification', () => {
 });
 
 describe('fonctions Edge', () => {
+  const QUOTE = EDGE_FUNCTIONS.find((fn) => fn.name === 'quote').refusal;
+
   it('lit une 404 comme une fonction non déployée', () => {
-    const check = interpretFunction('quote', { status: 404, body: { code: 'NOT_FOUND' } });
+    const check = interpretFunction('quote', { status: 404, body: { code: 'NOT_FOUND' } }, QUOTE);
     assert.equal(check.level, 'fail');
     assert.match(check.remedy, /functions deploy quote/);
   });
 
   it('lit le refus « réservé aux membres » comme une preuve de déploiement', () => {
-    const check = interpretFunction('quote', { status: 401, body: { error: 'Réservé aux membres' } });
-    assert.equal(check.level, 'ok');
+    const refused = { status: 401, body: { error: 'Réservé aux membres' } };
+    assert.equal(interpretFunction('quote', refused, QUOTE).level, 'ok');
+  });
+
+  it('ne conclut pas au déploiement sur une 401 qui n’est pas la sienne', () => {
+    // Un 401 seul ne dit pas quel programme l'a écrit. Sans le message de la
+    // fonction, le script doute à voix haute plutôt que de rassurer à tort.
+    const check = interpretFunction('quote', { status: 401, body: {} }, QUOTE);
+    assert.equal(check.level, 'warn');
+    assert.match(check.detail, /pas le sien/);
+  });
+
+  it('couvre chaque fonction du club', () => {
+    assert.deepEqual(EDGE_FUNCTIONS.map((fn) => fn.name), ['quote', 'refresh-prices']);
+    for (const fn of EDGE_FUNCTIONS) assert.ok(fn.refusal instanceof RegExp, fn.name);
   });
 
   it('distingue le refus de la passerelle de celui de la fonction', () => {
     const gateway = { status: 401, body: { message: 'Invalid JWT' } };
-    const check = interpretFunction('quote', gateway);
+    const check = interpretFunction('quote', gateway, QUOTE);
     assert.equal(check.level, 'fail');
     assert.match(check.detail, /passerelle/);
   });
 
   it('pointe les secrets manquants sur une 500', () => {
-    const check = interpretFunction('refresh-prices', { status: 500, body: { error: 'Environnement incomplet' } });
+    const refused = { status: 500, body: { error: 'Environnement incomplet' } };
+    const check = interpretFunction('refresh-prices', refused);
     assert.equal(check.level, 'fail');
     assert.match(check.remedy, /secrets set/);
   });

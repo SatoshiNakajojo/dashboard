@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { meanAbsoluteGap, priceAt, x as dayToX, y as priceToY, type Point } from '@/lib/chart';
+import { seasonAt } from '@/lib/season';
 import { describeError, supabase } from '@/lib/supabase';
 import {
   MOCK_HASH,
   MOCK_LOCK_DELAY_MS,
   MOCK_PREDICTIONS,
-  MOCK_SEASON,
   MOCK_RESOLUTION_LABEL,
 } from '@/mocks/oracle';
 import type { MarketPoint, Member, Prediction, PredictionView } from '@/types/domain';
@@ -30,7 +30,15 @@ export interface PredictionsState {
   simulateLock: (() => void) | undefined;
 }
 
-const SEASON = MOCK_SEASON;
+/**
+ * La saison en cours, pas celle du jeu de démonstration.
+ *
+ * `predictions` porte une contrainte `unique (user_id, season)` : tant que
+ * cette valeur était figée, un membre ayant scellé son tracé ne pouvait plus
+ * jamais en déposer un autre. La saison tourne désormais d'elle-même tous les
+ * 90 jours, et chacun repart avec une toile vierge.
+ */
+const SEASON = seasonAt().code;
 
 /** Commutateur « SIMULER T-0 ». Jamais actif dans une build livrée aux membres. */
 const DEMO_LOCK_ENABLED =

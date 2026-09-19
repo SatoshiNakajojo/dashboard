@@ -10,9 +10,9 @@
 import { getJson } from './http';
 import { withCache } from './cache';
 import { bestCoin, normalizeTicker, rankCoins, type CoinMatch, type RawCoin } from './coinSearch';
-import { MOCK_TODAY_INDEX } from '@/mocks/oracle';
 import type { BtcSpot, MarketPoint } from '@/types/domain';
 import { DAYS } from './chart';
+import { historyDays, seasonAt } from './season';
 
 const BASE = 'https://api.coingecko.com/api/v3';
 
@@ -73,18 +73,30 @@ export interface BtcHistory {
 }
 
 /**
- * Historique 90 jours, projeté dans le repère de l'Oracle.
+ * Historique BTC depuis le début de la saison, projeté dans le repère.
  *
- * CoinGecko renvoie des couples `[timestamp, prix]` ; on les convertit en
- * `{ day, price }` où `day` est l'index dans la fenêtre de 90 jours, puis on
- * tronque au jour courant — la courbe réelle s'arrête à aujourd'hui.
+ * Le jour 0 est **le début de la saison**, pas le premier point renvoyé par
+ * CoinGecko. C'est toute la différence : demander « les 90 derniers jours » et
+ * numéroter à partir du premier point plaçait aujourd'hui au jour 90 sur 90,
+ * la courbe réelle couvrait la toile entière, et l'Oracle n'avait plus aucun
+ * avenir à prédire. Le défaut ne pouvait pas se voir sur les mocks, qui fixent
+ * aujourd'hui au jour 34.
+ *
+ * On ne demande donc que les jours écoulés, et on les date depuis l'ancrage.
  */
 export async function fetchBtcHistory(signal?: AbortSignal): Promise<BtcHistory> {
-  const result = await withCache('coingecko.btc.history90', HISTORY_TTL_MS, async () => {
+  const season = seasonAt();
+  const days = historyDays(season);
+
+  // La saison et le jour font partie de la clé : au changement de jour, la
+  // fenêtre s'allonge d'un point et le cache doit suivre.
+  const key = `coingecko.btc.history.${season.code}.${season.day}`;
+
+  const result = await withCache(key, HISTORY_TTL_MS, async () => {
     const payload = await getJson<MarketChartResponse>(
       url('/coins/bitcoin/market_chart', {
         vs_currency: 'usd',
-        days: String(DAYS),
+        days: String(days),
         interval: 'daily',
       }),
       { signal, timeoutMs: 12_000 },
@@ -95,9 +107,8 @@ export async function fetchBtcHistory(signal?: AbortSignal): Promise<BtcHistory>
       throw new Error('Réponse CoinGecko inexploitable : historique vide');
     }
 
-    const firstTs = prices[0]![0];
     return prices.map(([timestamp, price]) => ({
-      day: Math.round((timestamp - firstTs) / 86_400_000),
+      day: Math.round((timestamp - season.startedAt) / 86_400_000),
       price,
     }));
   });
@@ -193,11 +204,4 @@ export async function resolveCoingeckoId(
   }
 }
 
-/**
- * Index du jour courant dans la fenêtre de 90 jours.
- * Dérivé de l'historique quand il est disponible, sinon du mock.
- */
-export function todayIndex(points: readonly MarketPoint[]): number {
-  const last = points[points.length - 1];
-  return last ? last.day : MOCK_TODAY_INDEX;
-}
+

@@ -106,3 +106,38 @@ export function formatRelative(iso: string, now: number = Date.now()): string {
   if (days === 1) return 'hier';
   return `il y a ${days}${NBSP}j`;
 }
+
+/**
+ * Chiffres romains — les rangs du Hall of Fame et les numéros de saison.
+ *
+ * Écrits en toutes lettres jusqu'où le club ira : un « 11 » au milieu de I à X
+ * se verrait, et le repli numérique de l'ancienne table de dix le produisait
+ * fatalement.
+ */
+const ROMAN: readonly [number, string][] = [
+  [1000, 'M'],
+  [900, 'CM'],
+  [500, 'D'],
+  [400, 'CD'],
+  [100, 'C'],
+  [90, 'XC'],
+  [50, 'L'],
+  [40, 'XL'],
+  [10, 'X'],
+  [9, 'IX'],
+  [5, 'V'],
+  [4, 'IV'],
+  [1, 'I'],
+];
+
+export function toRoman(value: number): string {
+  let rest = Math.max(1, Math.floor(value));
+  let out = '';
+  for (const [amount, numeral] of ROMAN) {
+    while (rest >= amount) {
+      out += numeral;
+      rest -= amount;
+    }
+  }
+  return out;
+}

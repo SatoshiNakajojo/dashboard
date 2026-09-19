@@ -22,6 +22,7 @@ import { fileURLToPath } from 'node:url';
 
 import {
   COLUMNS,
+  EDGE_FUNCTIONS,
   TABLES,
   checkAnonKey,
   checkUrl,
@@ -213,18 +214,17 @@ async function main() {
       // Les deux fonctions s'arrêtent avant tout appel sortant : `quote` à la
       // vérification de session, `refresh-prices` sur `x-refresh-secret`. Leur
       // refus est la preuve qu'elles tournent, et le sondage n'écrit rien.
-      const quote = await probe(`${url}/functions/v1/quote?symbol=AAPL`, { headers: anon });
-      const refresh = await probe(`${url}/functions/v1/refresh-prices`, {
-        method: 'POST',
-        headers: { ...anon, 'x-refresh-secret': 'diagnostic' },
-      });
-      sections.push({
-        title: 'Fonctions Edge',
-        checks: [
-          guard('quote', quote, (r) => interpretFunction('quote', r)),
-          guard('refresh-prices', refresh, (r) => interpretFunction('refresh-prices', r)),
-        ],
-      });
+      const edge = await Promise.all(
+        EDGE_FUNCTIONS.map(async ({ name, path: route, method, refusal }) => {
+          const response = await probe(`${url}/functions/v1/${route}`, {
+            method,
+            // Un secret volontairement faux : `refresh-prices` s'arrête dessus.
+            headers: { ...anon, 'x-refresh-secret': 'diagnostic' },
+          });
+          return guard(name, response, (r) => interpretFunction(name, r, refusal));
+        }),
+      );
+      sections.push({ title: 'Fonctions Edge', checks: edge });
 
       // --- membres ----------------------------------------------------------
       if (serviceKey) {

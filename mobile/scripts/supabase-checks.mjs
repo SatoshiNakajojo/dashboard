@@ -389,13 +389,26 @@ export function interpretSettings({ status, body }) {
 }
 
 /**
+ * Les fonctions Edge du club, et le refus qui prouve qu'elles tournent.
+ *
+ * `refusal` est le message que la fonction produit **elle-même** quand elle
+ * écarte un appel. C'est ce qui distingue « déployée » de « la passerelle a
+ * répondu 401 pour une autre raison » : un code de statut seul ne dit pas quel
+ * programme l'a écrit.
+ */
+export const EDGE_FUNCTIONS = [
+  { name: 'quote', path: 'quote?symbol=AAPL', method: 'GET', refusal: /réservé aux membres/i },
+  { name: 'refresh-prices', path: 'refresh-prices', method: 'POST', refusal: /non autorisé/i },
+];
+
+/**
  * Une fonction Edge sondée avec la clé anon.
  *
- * `quote` répond 401 « Réservé aux membres » : c'est la preuve qu'elle est
- * déployée **et** qu'elle n'est pas un proxy ouvert. Une fonction absente
- * donne 404 — la passerelle ne la trouve pas.
+ * Chacune refuse l'appel avant tout travail — `quote` sur la session,
+ * `refresh-prices` sur `x-refresh-secret` — donc sonder n'écrit rien et ne
+ * consomme aucun quota. Encore faut-il que le refus vienne bien d'elle.
  */
-export function interpretFunction(name, { status, body }) {
+export function interpretFunction(name, { status, body }, refusal) {
   const message = pgMessage(body);
 
   if (status === 404) {
@@ -404,7 +417,15 @@ export function interpretFunction(name, { status, body }) {
   if (status === 401 && /jwt|authorization|api key/i.test(message)) {
     return fail(name, 'la passerelle refuse la clé anon', 'vérifiez la clé avant de conclure');
   }
-  if (status === 401) return ok(name, 'déployée — elle refuse un appel non authentifié, c’est voulu');
+  if (status === 401) {
+    return refusal && refusal.test(message)
+      ? ok(name, 'déployée — elle refuse un appel non authentifié, c’est voulu')
+      : warn(
+          name,
+          `refus 401, mais pas le sien${message ? ` — « ${message} »` : ''}`,
+          'redéployez-la pour lever le doute',
+        );
+  }
   if (status === 200) return ok(name, 'déployée et fonctionnelle');
   if (status === 400) return ok(name, 'déployée');
   if (status === 502) return warn(name, 'déployée, mais le fournisseur de cotations a refusé l’appel');

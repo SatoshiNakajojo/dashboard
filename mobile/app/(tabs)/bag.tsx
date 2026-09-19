@@ -18,6 +18,7 @@ import {
   splitLeaderboards,
 } from '@/lib/performance';
 import { formatPercent } from '@/lib/format';
+import { seasonAt } from '@/lib/season';
 import { a, c, f, radius } from '@/theme/tokens';
 import type { CallView } from '@/types/domain';
 
@@ -46,7 +47,7 @@ export default function BagScreen() {
   return (
     <>
       <ScreenShell
-        overline={isBag ? 'Calls en cours · perf vs ₿' : 'Classement vs bitcoin · saison III'}
+        overline={isBag ? 'Calls en cours · perf vs ₿' : `Classement vs bitcoin · saison ${seasonAt().roman}`}
         title={isBag ? 'Le Bag' : 'Rekt Board'}
         me={me}
       >
