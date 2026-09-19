@@ -58,3 +58,24 @@ dans un onglet ordinaire (`detectSessionInUrl` sur le web).
 
 Ils ne servent pas : le club est fermé (`shouldCreateUser: false`), donc ni
 inscription, ni invitation, ni changement d'adresse ne partent de l'app.
+
+## Pourquoi ces gabarits ne ressemblent pas à l'app
+
+Le club est sombre. Ces courriels ne le sont pas, et c'est délibéré.
+
+Un client de messagerie ne garantit rien. Gmail et Mail iOS suppriment les
+fonds dans plusieurs situations, et un gabarit sombre y laisse du texte crème
+sur du blanc : mesuré, le code tombait à **1,19:1**. Le membre ne voyait pas un
+courriel mal fichu, il voyait un courriel vide — et cherchait la panne ailleurs.
+
+D'où trois règles, vérifiées par `scripts/__tests__/email-templates.test.mjs` :
+
+- **Aucun fond.** Ni `bgcolor`, ni `background-color`. Ce qui porte la mise en
+  page est la bordure, qui ne se fait pas retirer.
+- **Tout lisible sur blanc**, à 4,5:1 minimum. Un client qui force le blanc ne
+  doit rien coûter.
+- **Pas de commentaire HTML.** Le moteur de gabarits traite tout ce qu'on lui
+  donne ; un en-tête collé par mégarde part dans le courriel.
+
+Le repli `magic-link-minimal.html` ne déclare pas une seule couleur. Il est
+laid et il arrive partout.
