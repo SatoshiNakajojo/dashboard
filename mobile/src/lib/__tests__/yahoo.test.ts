@@ -16,7 +16,14 @@ import {
   toUsd,
   type YahooChartResponse,
 } from '@/lib/yahooParse';
-import { fxSymbol, providerFor, toYahooSymbol } from '@/lib/quotes';
+import {
+  DEFAULT_EXCHANGE,
+  EXCHANGES,
+  EXCHANGE_SUFFIX,
+  fxSymbol,
+  providerFor,
+  toYahooSymbol,
+} from '@/lib/quotes';
 
 /** Réponse type d'une action américaine en séance. */
 const live: YahooChartResponse = {
@@ -174,6 +181,47 @@ describe('symboles Yahoo', () => {
   it('renvoie null pour une saisie vide', () => {
     assert.equal(toYahooSymbol('$'), null);
     assert.equal(toYahooSymbol('   '), null);
+  });
+
+  it('laisse un titre américain sans suffixe', () => {
+    // La place par défaut du composer ne doit rien ajouter : `MSTR.US`
+    // n'existe pas chez Yahoo.
+    assert.equal(toYahooSymbol('$MSTR', DEFAULT_EXCHANGE), 'MSTR');
+  });
+
+  it('distingue deux sociétés qui partagent un ticker', () => {
+    // `$AI` est C3.ai à New York et Air Liquide à Paris. Sans la place, le
+    // composer proposerait le prix de l'une pour un call sur l'autre.
+    assert.notEqual(toYahooSymbol('$AI', 'us'), toYahooSymbol('$AI', 'paris'));
+    assert.equal(toYahooSymbol('$AI', 'us'), 'AI');
+    assert.equal(toYahooSymbol('$AI', 'paris'), 'AI.PA');
+  });
+});
+
+describe('places de cotation', () => {
+  it('propose les États-Unis en premier, sans suffixe', () => {
+    assert.equal(EXCHANGES[0].key, DEFAULT_EXCHANGE);
+    assert.equal(EXCHANGES[0].suffix, '');
+  });
+
+  it('expose chaque place du sélecteur dans la table des suffixes', () => {
+    // Les deux sont dérivées l'une de l'autre : un écart voudrait dire qu'un
+    // choix du composer ne produit aucun suffixe.
+    for (const { key, suffix } of EXCHANGES) {
+      assert.equal(EXCHANGE_SUFFIX[key], suffix, key);
+    }
+  });
+
+  it('ne propose pas deux fois la même place', () => {
+    const keys = EXCHANGES.map((e) => e.key);
+    assert.equal(new Set(keys).size, keys.length);
+    const suffixes = EXCHANGES.map((e) => e.suffix);
+    assert.equal(new Set(suffixes).size, suffixes.length);
+  });
+
+  it('accepte les noms alternatifs qu’un membre peut écrire', () => {
+    assert.equal(toYahooSymbol('$SAP', 'xetra'), 'SAP.DE');
+    assert.equal(toYahooSymbol('$SHEL', 'london'), 'SHEL.L');
   });
 
   it('construit la paire de change', () => {

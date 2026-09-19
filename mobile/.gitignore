@@ -31,6 +31,11 @@ yarn-error.*
 *.pem
 
 # local env files
+#
+# `.env` porte la clé anon — publique par construction — mais aussi, si on suit
+# `docs/INSTALLATION.md` §1.8, la clé service_role, qui contourne la RLS. Ce
+# fichier est une configuration de machine, il ne se partage pas.
+.env
 .env*.local
 
 # typescript
@@ -42,3 +47,6 @@ yarn-error.*
 
 # CanvasKit, copié depuis node_modules par `npm run canvaskit`
 public/canvaskit.wasm
+
+# État local de la CLI Supabase (projet lié, migrations appliquées)
+supabase/.temp/

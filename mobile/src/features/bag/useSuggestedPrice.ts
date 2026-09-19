@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 
 import { useBtcSpot } from '@/hooks/useBtcMarket';
-import { providerFor, toYahooSymbol } from '@/lib/quotes';
+import { providerFor, toYahooSymbol, type ExchangeKey } from '@/lib/quotes';
 import { fetchStockQuote } from '@/lib/yahoo';
 import type { AssetClass } from '@/theme/tokens';
 
@@ -10,6 +10,13 @@ export interface SuggestedPrice {
   price: number | null;
   /** D'où il vient, pour le dire à l'écran. */
   source: 'btc' | 'yahoo' | null;
+  /**
+   * Le symbole réellement interrogé — `AI.PA`, pas `$AI`.
+   *
+   * Le composer l'affiche : c'est ce qui transforme une erreur de place en
+   * erreur visible, avant publication plutôt qu'au premier relevé de perf.
+   */
+  symbol: string | null;
   loading: boolean;
 }
 
@@ -27,14 +34,22 @@ const DEBOUNCE_MS = 550;
  * Les alts ne sont pas couverts : résoudre un symbole CoinGecko demande un
  * aller-retour de recherche par frappe, ce qui épuiserait le quota. Ils sont
  * résolus à la publication, une seule fois.
+ *
+ * `exchange` compte autant que le ticker : sans lui, `$AI` interroge C3.ai à
+ * New York au lieu d'Air Liquide à Paris, et le prix proposé est celui d'une
+ * autre société.
  */
-export function useSuggestedPrice(assetClass: AssetClass, symbol: string): SuggestedPrice {
+export function useSuggestedPrice(
+  assetClass: AssetClass,
+  symbol: string,
+  exchange?: ExchangeKey | null,
+): SuggestedPrice {
   const { spot } = useBtcSpot();
   const [quote, setQuote] = useState<{ price: number; symbol: string } | null>(null);
   const [loading, setLoading] = useState(false);
 
   const isStock = providerFor(assetClass) === 'yahoo';
-  const yahooSymbol = isStock ? toYahooSymbol(symbol) : null;
+  const yahooSymbol = isStock ? toYahooSymbol(symbol, exchange) : null;
 
   useEffect(() => {
     // Rien à demander : le rendu lit `quote?.symbol === yahooSymbol`, donc une
@@ -61,10 +76,10 @@ export function useSuggestedPrice(assetClass: AssetClass, symbol: string): Sugge
   }, [yahooSymbol]);
 
   if (assetClass === 'BTC') {
-    return { price: spot.usd, source: 'btc', loading: false };
+    return { price: spot.usd, source: 'btc', symbol: 'BTC', loading: false };
   }
   if (isStock && quote?.symbol === yahooSymbol) {
-    return { price: quote.price, source: 'yahoo', loading };
+    return { price: quote.price, source: 'yahoo', symbol: yahooSymbol, loading };
   }
-  return { price: null, source: null, loading: isStock && loading };
+  return { price: null, source: null, symbol: yahooSymbol, loading: isStock && loading };
 }

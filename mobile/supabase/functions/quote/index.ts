@@ -67,18 +67,27 @@ Deno.serve(async (request) => {
   // Réservé aux membres : la fonction relaie un appel sortant, elle ne doit pas
   // devenir un proxy ouvert. Le jeton du client suffit — pas besoin du rôle
   // service, on ne lit ni n'écrit aucune table.
+  //
+  // La garde est **inconditionnelle**. Elle était auparavant conditionnée à la
+  // présence des variables d'environnement : un projet où `SUPABASE_ANON_KEY`
+  // n'est pas injecté — les nouvelles clés nommées portent un autre nom — la
+  // sautait en silence, et la fonction relayait Yahoo pour qui trouvait l'URL.
+  // Un environnement incomplet doit refuser, jamais laisser passer.
   const url = Deno.env.get('SUPABASE_URL');
-  const anonKey = Deno.env.get('SUPABASE_ANON_KEY');
+  const anonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? Deno.env.get('SUPABASE_PUBLISHABLE_KEY');
   const authorization = request.headers.get('Authorization');
 
-  if (url && anonKey) {
-    const client = createClient(url, anonKey, {
-      global: { headers: authorization ? { Authorization: authorization } : {} },
-      auth: { persistSession: false },
-    });
-    const { data } = await client.auth.getUser();
-    if (!data.user) return json({ error: 'Réservé aux membres' }, 401);
+  if (!url || !anonKey) {
+    return json({ error: 'Environnement incomplet : impossible de vérifier l’appelant' }, 500);
   }
+  if (!authorization) return json({ error: 'Réservé aux membres' }, 401);
+
+  const client = createClient(url, anonKey, {
+    global: { headers: { Authorization: authorization } },
+    auth: { persistSession: false },
+  });
+  const { data } = await client.auth.getUser();
+  if (!data.user) return json({ error: 'Réservé aux membres' }, 401);
 
   try {
     const quote = await fetchChart(symbol, '5d');

@@ -1,11 +1,14 @@
 import { useState } from 'react';
-import { Modal, Pressable, Text, TextInput, View } from 'react-native';
+import { Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 
 import { Micro } from '@/components/ui/Micro';
+import { useCoinSearch } from '@/features/bag/useCoinSearch';
 import { useSuggestedPrice } from '@/features/bag/useSuggestedPrice';
 import { formatUsd } from '@/lib/format';
+import { normalizeTicker, type CoinMatch } from '@/lib/coinSearch';
+import { DEFAULT_EXCHANGE, EXCHANGES, providerFor, type ExchangeKey } from '@/lib/quotes';
 import {
   ASSET_CLASSES,
   a,
@@ -23,6 +26,13 @@ export interface CallDraft {
   symbol: string;
   entryPrice: number;
   thesis: string;
+  /** Place de cotation, pour les actions et ETF hors États-Unis. */
+  exchange: ExchangeKey;
+  /**
+   * Jeton choisi dans la liste, s'il l'a été. `null` laisse la publication
+   * résoudre le ticker elle-même, au mieux classé.
+   */
+  coingeckoId: string | null;
 }
 
 export interface ComposerSheetProps {
@@ -48,10 +58,28 @@ export function ComposerSheet({
   const [symbol, setSymbol] = useState('$BTC');
   const [entry, setEntry] = useState('');
   const [thesis, setThesis] = useState('');
+  const [exchange, setExchange] = useState<ExchangeKey>(DEFAULT_EXCHANGE);
+  const [picked, setPicked] = useState<CoinMatch | null>(null);
+
+  /** Seuls les titres ont une place de cotation ; un jeton se négocie partout. */
+  const isStock = providerFor(assetClass) === 'yahoo';
+  /** `$BTC` n'a pas d'homonyme — lui proposer une liste serait du bruit. */
+  const isCoin = !isStock && assetClass !== 'BTC';
+
+  const search = useCoinSearch(assetClass, symbol);
+
+  /**
+   * Le choix ne survit pas à une modification du ticker.
+   *
+   * Dérivé plutôt que rangé dans un effet : le symbole fait foi, et il n'y a
+   * aucun instant où l'écran montrerait un jeton que la saisie contredit.
+   */
+  const pinned =
+    picked && normalizeTicker(symbol) === picked.symbol.toLowerCase() ? picked : null;
 
   // Le cours proposé dépend de l'actif : spot BTC pour un call bitcoin, Yahoo
   // pour une action ou un ETF, rien pour un alt — plutôt qu'un prix faux.
-  const suggested = useSuggestedPrice(assetClass, symbol);
+  const suggested = useSuggestedPrice(assetClass, symbol, exchange);
 
   /** Le prix saisi, ou le cours proposé à défaut. */
   const entryPrice = (() => {
@@ -65,10 +93,19 @@ export function ComposerSheet({
     setSymbol('$BTC');
     setEntry('');
     setThesis('');
+    setExchange(DEFAULT_EXCHANGE);
+    setPicked(null);
   };
 
   const submit = async () => {
-    const sent = await onPublish({ assetClass, symbol, entryPrice, thesis: thesis.trim() });
+    const sent = await onPublish({
+      assetClass,
+      symbol,
+      entryPrice,
+      thesis: thesis.trim(),
+      exchange,
+      coingeckoId: pinned?.id ?? null,
+    });
     // Sur échec, on garde la saisie : le membre ne doit pas réécrire sa thèse.
     if (sent) reset();
   };
@@ -151,7 +188,13 @@ export function ComposerSheet({
                     key={key}
                     accessibilityRole="button"
                     accessibilityState={{ selected: on }}
-                    onPress={() => setAssetClass(key)}
+                    onPress={() => {
+                      setAssetClass(key);
+                      // Une place retenue d'un call précédent n'a aucun sens
+                      // sur un jeton, et fausserait le symbole d'un retour aux
+                      // actions.
+                      if (providerFor(key) !== 'yahoo') setExchange(DEFAULT_EXCHANGE);
+                    }}
                     style={{
                       flex: 1,
                       alignItems: 'center',
@@ -232,6 +275,133 @@ export function ComposerSheet({
               />
             </View>
           </View>
+
+          {isStock && (
+            <View>
+              <Micro style={{ marginBottom: 10 }}>PLACE DE COTATION</Micro>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{ gap: 8, paddingRight: 22 }}
+              >
+                {EXCHANGES.map(({ key, label }) => {
+                  const on = exchange === key;
+                  const style = on ? assetClassStyle[assetClass] : assetClassIdle;
+                  return (
+                    <Pressable
+                      key={key}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: on }}
+                      onPress={() => setExchange(key)}
+                      style={{
+                        paddingHorizontal: 12,
+                        paddingVertical: 8,
+                        borderRadius: radius.button,
+                        borderWidth: 1,
+                        borderColor: style.border,
+                        backgroundColor: style.bg,
+                      }}
+                    >
+                      <Text
+                        style={{
+                          fontFamily: f.monoMed,
+                          fontSize: 9,
+                          letterSpacing: 1.08,
+                          color: style.fg,
+                        }}
+                      >
+                        {label.toUpperCase()}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+              <Text
+                style={{
+                  fontFamily: f.sans,
+                  fontSize: 10,
+                  lineHeight: 16,
+                  color: c.sepiaFaint,
+                  marginTop: 9,
+                }}
+              >
+                {suggested.symbol
+                  ? `Suivi comme ${suggested.symbol} sur Yahoo Finance.`
+                  : 'Hors des États-Unis, Yahoo suffixe le ticker : AI.PA, pas AI.'}
+              </Text>
+            </View>
+          )}
+
+          {isCoin && (
+            <View>
+              <Micro style={{ marginBottom: 10 }}>JETON</Micro>
+              {search.matches.slice(0, 4).map((coin) => {
+                const on = pinned?.id === coin.id;
+                const style = on ? assetClassStyle[assetClass] : assetClassIdle;
+                return (
+                  <Pressable
+                    key={coin.id}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: on }}
+                    onPress={() => {
+                      setSymbol(`$${coin.symbol}`);
+                      setPicked(coin);
+                    }}
+                    className="flex-row items-baseline"
+                    style={{
+                      gap: 10,
+                      paddingHorizontal: 12,
+                      paddingVertical: 9,
+                      marginBottom: 6,
+                      borderRadius: radius.button,
+                      borderWidth: 1,
+                      borderColor: style.border,
+                      backgroundColor: style.bg,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        fontFamily: f.monoMed,
+                        fontSize: 10,
+                        letterSpacing: 1.08,
+                        color: style.fg,
+                      }}
+                    >
+                      {coin.symbol}
+                    </Text>
+                    <Text
+                      numberOfLines={1}
+                      style={{ flex: 1, fontFamily: f.sans, fontSize: 11, color: c.parchment }}
+                    >
+                      {coin.name}
+                    </Text>
+                    <Text style={{ fontFamily: f.monoMed, fontSize: 9, color: c.sepiaFaint }}>
+                      {coin.rank === null ? 'HORS RANG' : `#${coin.rank}`}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+              <Text
+                style={{
+                  fontFamily: f.sans,
+                  fontSize: 10,
+                  lineHeight: 16,
+                  color: search.empty ? c.sepia : c.sepiaFaint,
+                  marginTop: 3,
+                }}
+              >
+                {pinned
+                  ? `Suivi comme ${pinned.name} sur CoinGecko.`
+                  : search.loading
+                    ? 'Recherche…'
+                    : search.empty
+                      ? 'Aucun jeton connu sous ce ticker. Le call partira sans cours, et sa carte restera au prix d’entrée.'
+                      : search.matches.length > 0
+                        ? 'Sans choix, le mieux classé sera retenu.'
+                        : 'Tapez deux lettres pour voir les jetons connus.'}
+              </Text>
+            </View>
+          )}
 
           <View>
             <Micro size={8.5} tracking={1.7} style={{ color: c.sepiaMuted }}>

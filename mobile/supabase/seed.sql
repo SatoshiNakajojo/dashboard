@@ -36,11 +36,16 @@ on conflict (id) do update
       color        = excluded.color;
 
 -- --- Crypto Nights ----------------------------------------------------------
+--
+-- Heures en UTC+11 : le club est en Nouvelle-Calédonie. `starts_at` est un
+-- `timestamptz`, donc l'heure s'affiche correctement où que soit le membre —
+-- mais le décalage doit être juste à l'écriture, sinon une soirée à 20 h
+-- devient une soirée à 10 h.
 
 insert into public.events (id, starts_at, theme, location, tag, created_by) values
-  ('22222222-2222-4222-8222-000000000001', '2026-09-18 20:00:00+02', 'Pastaga & Wine Tasting',    'Penthouse — Marco', 'Dégustation', '11111111-1111-4111-8111-000000000003'),
-  ('22222222-2222-4222-8222-000000000002', '2026-10-03 19:30:00+02', 'Grillades & Halving Talk',  'Rooftop — Alex',    'Barbecue',    '11111111-1111-4111-8111-000000000002'),
-  ('22222222-2222-4222-8222-000000000003', '2026-10-22 22:00:00+02', 'Night Trading Session',     'Loft — Sofia',      'Séance live', '11111111-1111-4111-8111-000000000004')
+  ('22222222-2222-4222-8222-000000000001', '2026-09-18 20:00:00+11', 'Pastaga & Wine Tasting',    'Penthouse — Marco', 'Dégustation', '11111111-1111-4111-8111-000000000003'),
+  ('22222222-2222-4222-8222-000000000002', '2026-10-03 19:30:00+11', 'Grillades & Halving Talk',  'Rooftop — Alex',    'Barbecue',    '11111111-1111-4111-8111-000000000002'),
+  ('22222222-2222-4222-8222-000000000003', '2026-10-22 22:00:00+11', 'Night Trading Session',     'Loft — Sofia',      'Séance live', '11111111-1111-4111-8111-000000000004')
 on conflict (id) do nothing;
 
 insert into public.event_attendees (event_id, user_id) values

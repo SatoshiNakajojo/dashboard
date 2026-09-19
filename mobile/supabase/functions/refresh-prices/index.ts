@@ -146,8 +146,19 @@ Deno.serve(async (request) => {
     return Response.json({ error: 'Environnement incomplet' }, { status: 500 });
   }
 
+  // `REFRESH_SECRET` est **exigé**, pas facultatif. Tant qu'il l'était, une
+  // installation qui ne l'avait pas posé exposait un point d'entrée qui écrit
+  // en base et appelle deux API externes, joignable avec la clé anon — qui est
+  // publiée dans le bundle. Sans secret, on refuse : c'est une configuration
+  // inachevée, pas une permission.
   const secret = Deno.env.get('REFRESH_SECRET');
-  if (secret && request.headers.get('x-refresh-secret') !== secret) {
+  if (!secret) {
+    return Response.json(
+      { error: 'REFRESH_SECRET absent — voir supabase/functions/README.md' },
+      { status: 500 },
+    );
+  }
+  if (request.headers.get('x-refresh-secret') !== secret) {
     return Response.json({ error: 'Non autorisé' }, { status: 401 });
   }
 
