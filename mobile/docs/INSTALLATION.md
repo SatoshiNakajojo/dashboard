@@ -71,11 +71,17 @@ connexion, quand ils saisissent leur prénom. Rien à faire à la main.
 ```bash
 npx supabase functions deploy refresh-prices
 npx supabase functions deploy quote
+npx supabase secrets set REFRESH_SECRET="$(openssl rand -hex 24)"
 ```
 
 `refresh-prices` met à jour les cours (CoinGecko pour les cryptos, Yahoo pour
 les actions et ETF). `quote` sert la suggestion de prix du composer — dans un
 navigateur, Yahoo est bloqué par CORS, et cette fonction est le relais.
+
+La troisième ligne n'est pas facultative : sans ce secret, `refresh-prices`
+refuse de tourner. Elle écrit en base et appelle deux API externes ; la laisser
+joignable avec la seule clé anon, qui est publiée dans le bundle, reviendrait à
+offrir le point d'entrée. Notez la valeur, la planification en a besoin.
 
 Planifiez le rafraîchissement : voir `supabase/functions/README.md`.
 
@@ -169,9 +175,8 @@ Elle n'affiche aucune clé et se contente de la clé `anon`. Ajoutez
 `SUPABASE_SERVICE_ROLE_KEY=…` dans `.env` — **sans** le préfixe
 `EXPO_PUBLIC_`, qui la publierait — pour qu'elle compte aussi les membres.
 
-Une seule écriture possible, et elle est sans conséquence : tant que
-`REFRESH_SECRET` n'est pas configuré (§1.4), sonder `refresh-prices` la fait
-tourner pour de bon. C'est exactement ce que fait la planification horaire.
+Elle n'écrit rien : les deux fonctions Edge sont sondées avec un jeton qu'elles
+refusent, et ce refus est précisément la preuve qu'elles sont déployées.
 
 Trois choses lui restent hors de portée, et elle vous le dit en terminant : le
 gabarit de courriel (§1.6), le SMTP (§1.5), et les tables publiées en temps

@@ -210,10 +210,9 @@ async function main() {
       sections.push({ title: 'Authentification', checks: interpretSettings(settings) });
 
       // --- fonctions Edge ---------------------------------------------------
-      // `quote` s'arrête à la vérification de session : sonder ne coûte aucun
-      // appel sortant. `refresh-prices` est protégée par REFRESH_SECRET ; à
-      // défaut de secret configuré, le sondage déclenche une mise à jour des
-      // prix — c'est exactement ce que fait la planification horaire.
+      // Les deux fonctions s'arrêtent avant tout appel sortant : `quote` à la
+      // vérification de session, `refresh-prices` sur `x-refresh-secret`. Leur
+      // refus est la preuve qu'elles tournent, et le sondage n'écrit rien.
       const quote = await probe(`${url}/functions/v1/quote?symbol=AAPL`, { headers: anon });
       const refresh = await probe(`${url}/functions/v1/refresh-prices`, {
         method: 'POST',

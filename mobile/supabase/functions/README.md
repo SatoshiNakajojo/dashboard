@@ -45,10 +45,21 @@ liste à jour.
 ```bash
 npx supabase functions deploy refresh-prices
 
-# Clé CoinGecko (facultative) et secret d'appel (recommandé)
-npx supabase secrets set COINGECKO_API_KEY=...
+# Secret d'appel — obligatoire, la fonction refuse de tourner sans lui
 npx supabase secrets set REFRESH_SECRET="$(openssl rand -hex 24)"
+
+# Clé CoinGecko — facultative, elle relève seulement le quota
+npx supabase secrets set COINGECKO_API_KEY=...
 ```
+
+`REFRESH_SECRET` n'est pas une option. Sans lui, `refresh-prices` serait un
+point d'entrée qui écrit en base et appelle deux API externes, joignable avec
+la clé anon — qui est publiée dans le bundle de l'app. La fonction répond donc
+500 tant qu'il n'est pas posé : une configuration inachevée n'est pas une
+permission.
+
+Notez la valeur, elle ne réapparaît pas : la planification ci-dessous en a
+besoin.
 
 `SUPABASE_URL` et `SUPABASE_SERVICE_ROLE_KEY` sont injectés par la plateforme.
 La clé de service ne sort jamais du serveur : elle contourne RLS, c'est
