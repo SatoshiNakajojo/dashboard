@@ -21,6 +21,7 @@ import {
   interpretFunction,
   interpretMembers,
   interpretReachable,
+  interpretRpc,
   interpretSettings,
   interpretSiteUrl,
   interpretTable,
@@ -30,6 +31,7 @@ import {
   parseCount,
   parseEnv,
   projectRef,
+  RPCS,
   secretsInText,
   summarize,
   TABLES,
@@ -239,6 +241,40 @@ describe('tables', () => {
   it('accepte une lecture anonyme révoquée : plus fermé, pas moins', () => {
     const denied = { status: 403, body: { code: '42501', message: 'permission denied for table events' } };
     assert.equal(interpretTable('events', denied).level, 'ok');
+  });
+});
+
+describe('fonctions appelées par l’app', () => {
+  const spec = RPCS[0];
+
+  it('couvre la fonction des couleurs', () => {
+    assert.equal(spec.name, 'taken_profile_colors');
+  });
+
+  it('lit un refus de permission comme la bonne réponse', () => {
+    // Elle n'est accordée qu'au rôle `authenticated` : que la clé anon se
+    // fasse refuser prouve qu'elle existe *et* qu'elle est fermée.
+    const denied = { status: 403, body: { code: '42501', message: 'permission denied' } };
+    assert.equal(interpretRpc(spec, denied).level, 'ok');
+    assert.equal(interpretRpc(spec, { status: 401, body: null }).level, 'ok');
+  });
+
+  it('nomme la migration quand la fonction manque', () => {
+    // Sans elle, l'app retombe sur une couleur de repli sans rien dire : ce
+    // silence est exactement ce que le diagnostic doit rompre.
+    const absent = {
+      status: 404,
+      body: { code: 'PGRST202', message: 'Could not find the function public.taken_profile_colors' },
+    };
+    const check = interpretRpc(spec, absent);
+    assert.equal(check.level, 'fail');
+    assert.match(check.remedy, /profile_colors\.sql/);
+  });
+
+  it('refuse qu’un visiteur anonyme puisse l’appeler', () => {
+    const check = interpretRpc(spec, { status: 200, body: [] });
+    assert.equal(check.level, 'fail');
+    assert.match(check.remedy, /revoke execute/);
   });
 });
 

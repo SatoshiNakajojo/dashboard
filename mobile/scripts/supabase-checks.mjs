@@ -346,6 +346,36 @@ export function schemaNote(checks) {
   return 'Aucune table ne répond : soit la migration n’est jamais passée, soit l’API de données est désactivée (Project Settings → Data API).';
 }
 
+/**
+ * Les fonctions appelées par l'app, sondées avec la clé anon.
+ *
+ * `taken_profile_colors` n'est accordée qu'au rôle `authenticated` : un refus
+ * de permission est donc la bonne réponse, et prouve à la fois qu'elle existe
+ * et qu'elle est fermée. Son absence, elle, ne se verrait nulle part — l'app
+ * retomberait sur une couleur de repli sans rien dire.
+ */
+export const RPCS = [
+  { name: 'taken_profile_colors', migration: '20260919090000_profile_colors.sql' },
+];
+
+export function interpretRpc({ name, migration }, { status, body }) {
+  const code = pgCode(body);
+  if (code === '42501' || ((status === 401 || status === 403) && !code)) {
+    return ok(name, 'présente, fermée aux visiteurs');
+  }
+  if (status === 404 || code === 'PGRST202') {
+    return fail(name, 'absente', `appliquez supabase/migrations/${migration}`);
+  }
+  if (status === 200) {
+    return fail(
+      name,
+      'un visiteur anonyme peut l’appeler',
+      `revoke execute on function public.${name}() from anon;`,
+    );
+  }
+  return warn(name, `réponse inattendue (${status})`);
+}
+
 export function interpretColumn({ table, column, migration }, { status, body }) {
   const label = `${table}.${column}`;
   if (status === 200) return ok(label, 'présente');

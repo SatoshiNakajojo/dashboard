@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 
 import { describeError, supabase } from '@/lib/supabase';
 import { MOCK_CURRENT_USER_ID } from '@/mocks/members';
-import { initialsFrom, pickColor } from './profile';
+import { colorFor, initialsFrom, pickColor } from './profile';
 
 /**
  * Connexion par code à usage unique.
@@ -109,7 +109,7 @@ export function useAuth(): AuthState {
 // Amorçage du profil
 // ---------------------------------------------------------------------------
 
-export { initialsFrom, pickColor } from './profile';
+export { colorFor, initialsFrom, pickColor } from './profile';
 
 /**
  * Un compte `auth.users` ne suffit pas à être membre : `is_member()` exige une
@@ -170,8 +170,12 @@ export function useProfileBootstrap(userId: string | null): ProfileBootstrap {
       // Pas un `select` sur `profiles` : la RLS le refuserait à qui n'est pas
       // encore membre — c'est-à-dire à tout le monde, ici. La fonction rend les
       // couleurs et rien d'autre.
-      const { data: taken } = await client.rpc('taken_profile_colors');
-      const color = pickColor(taken ?? []);
+      //
+      // Si elle manque, on ne retombe pas sur la première de la palette : ce
+      // serait redonner la même couleur à tout le club, le défaut même qu'elle
+      // corrige. On décale d'après l'identifiant.
+      const { data: taken, error: colorFailed } = await client.rpc('taken_profile_colors');
+      const color = colorFailed ? colorFor(userId) : pickColor(taken ?? []);
 
       const { error: cause } = await client.from('profiles').insert({
         id: userId,

@@ -8,7 +8,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { PALETTE, initialsFrom, pickColor } from '@/features/auth/profile';
+import { PALETTE, colorFor, initialsFrom, pickColor } from '@/features/auth/profile';
 import { MEMBER_LIST } from '@/mocks/members';
 
 describe('initiales dérivées du prénom', () => {
@@ -76,5 +76,25 @@ describe('attribution de couleur', () => {
       MEMBER_LIST.map((m) => m.color),
       'l’ordre de la palette suit celui des membres du design',
     );
+  });
+});
+
+describe('couleur de repli', () => {
+  it('ne redonne pas la même couleur à tout le club', () => {
+    // Le repli sert quand `taken_profile_colors()` manque. Retomber sur
+    // `PALETTE[0]` reconstituerait le défaut qu'elle corrige : sept avatars
+    // identiques.
+    const ids = Array.from(
+      { length: 7 },
+      (_, i) => `11111111-1111-4111-8111-${String(i + 1).padStart(12, '0')}`,
+    );
+    const couleurs = ids.map(colorFor);
+    for (const couleur of couleurs) assert.ok(PALETTE.includes(couleur as never), couleur);
+    assert.ok(new Set(couleurs).size >= 4, `trop de collisions : ${couleurs.join(' ')}`);
+  });
+
+  it('rend toujours la même couleur au même membre', () => {
+    const id = '11111111-1111-4111-8111-000000000003';
+    assert.equal(colorFor(id), colorFor(id));
   });
 });

@@ -34,7 +34,9 @@ import {
   interpretReachable,
   interpretSettings,
   interpretSiteUrl,
+  interpretRpc,
   interpretTable,
+  RPCS,
   schemaNote,
   leakedPublicSecrets,
   parseCount,
@@ -200,9 +202,20 @@ async function main() {
           return guard(`${table}.${column}`, response, (r) => interpretColumn(probeSpec, r));
         }),
       );
+      const rpcs = await Promise.all(
+        RPCS.map(async (spec) => {
+          const response = await probe(`${url}/rest/v1/rpc/${spec.name}`, {
+            method: 'POST',
+            headers: { ...anon, 'content-type': 'application/json' },
+            body: '{}',
+          });
+          return guard(spec.name, response, (r) => interpretRpc(spec, r));
+        }),
+      );
+
       sections.push({
         title: 'Schéma',
-        checks: [...tables, ...columns],
+        checks: [...tables, ...columns, ...rpcs],
         note:
           schemaNote(tables) ??
           '« fermée aux visiteurs » veut dire que la RLS répond : sans session, aucune ligne ne sort.',

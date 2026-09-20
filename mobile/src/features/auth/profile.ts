@@ -53,3 +53,21 @@ export function pickColor(taken: readonly string[]): string {
   const used = new Set(taken.map((color) => color.toLowerCase()));
   return PALETTE.find((color) => !used.has(color.toLowerCase())) ?? PALETTE[0];
 }
+
+/**
+ * Couleur de repli quand les couleurs déjà prises sont inconnues.
+ *
+ * Le cas arrive si `taken_profile_colors()` manque — migration non appliquée —
+ * ou si l'appel échoue. Retomber sur `PALETTE[0]` donnerait alors la **même**
+ * couleur à tout le club, ce qui est précisément le défaut qu'on vient de
+ * corriger : un repli ne doit pas reconstituer la panne.
+ *
+ * L'identifiant du membre sert de graine. Ce n'est pas une garantie d'unicité,
+ * seulement la différence entre « peut-être une collision » et « sept avatars
+ * identiques, à coup sûr ».
+ */
+export function colorFor(userId: string): string {
+  let hash = 0;
+  for (const char of userId) hash = (hash * 31 + char.charCodeAt(0)) % 2_147_483_647;
+  return PALETTE[hash % PALETTE.length]!;
+}
