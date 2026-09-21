@@ -1281,7 +1281,7 @@
    "ts_ms": 1668162543000,
    "debloque": 4543477.998058333,
    "lineaire": 0.0,
-   "part_offre": 0.033290648321904155,
+   "part_offre": 0.03329815107742988,
    "categories": [
     "noncirculating"
    ]
@@ -1290,7 +1290,7 @@
    "ts_ms": 1670792286000,
    "debloque": 4543477.998058333,
    "lineaire": 0.0,
-   "part_offre": 0.03086280856428727,
+   "part_offre": 0.030875422511789586,
    "categories": [
     "noncirculating"
    ]
@@ -1299,7 +1299,7 @@
    "ts_ms": 1673422029000,
    "debloque": 4543477.998058333,
    "lineaire": 0.0,
-   "part_offre": 0.02874233048424277,
+   "part_offre": 0.02875872740112858,
    "categories": [
     "noncirculating"
    ]
@@ -1308,7 +1308,7 @@
    "ts_ms": 1676051772000,
    "debloque": 4543477.998058333,
    "lineaire": 0.0,
-   "part_offre": 0.026939889732289796,
+   "part_offre": 0.026958873515797847,
    "categories": [
     "noncirculating"
    ]
@@ -1317,7 +1317,7 @@
    "ts_ms": 1678681515000,
    "debloque": 4543477.998058333,
    "lineaire": 0.0,
-   "part_offre": 0.02533380490462603,
+   "part_offre": 0.025354720349566165,
    "categories": [
     "noncirculating"
    ]
@@ -1326,7 +1326,7 @@
    "ts_ms": 1681311258000,
    "debloque": 4543477.998058333,
    "lineaire": 0.0,
-   "part_offre": 0.023944050740246484,
+   "part_offre": 0.02396625270870586,
    "categories": [
     "noncirculating"
    ]
@@ -1335,7 +1335,7 @@
    "ts_ms": 1683941001000,
    "debloque": 4543477.998058333,
    "lineaire": 0.0,
-   "part_offre": 0.022686744417866736,
+   "part_offre": 0.022709892379794677,
    "categories": [
     "noncirculating"
    ]
@@ -1344,7 +1344,7 @@
    "ts_ms": 1686570744000,
    "debloque": 4543477.998058333,
    "lineaire": 0.0,
-   "part_offre": 0.02158358818929192,
+   "part_offre": 0.02160731463317077,
    "categories": [
     "noncirculating"
    ]
@@ -1353,7 +1353,7 @@
    "ts_ms": 1689200487000,
    "debloque": 4543477.998058333,
    "lineaire": 0.0,
-   "part_offre": 0.020591061543380074,
+   "part_offre": 0.020615142231687738,
    "categories": [
     "noncirculating"
    ]
@@ -1362,7 +1362,7 @@
    "ts_ms": 1691830230000,
    "debloque": 4543477.998058333,
    "lineaire": 0.0,
-   "part_offre": 0.019677882094951128,
+   "part_offre": 0.01970218268165448,
    "categories": [
     "noncirculating"
    ]
@@ -1371,7 +1371,7 @@
    "ts_ms": 1694459973000,
    "debloque": 4543477.998058333,
    "lineaire": 0.0,
-   "part_offre": 0.018863864030652266,
+   "part_offre": 0.018888214340665472,
    "categories": [
     "noncirculating"
    ]
@@ -1380,7 +1380,7 @@
    "ts_ms": 1697089716000,
    "debloque": 4543477.998058333,
    "lineaire": 0.0,
-   "part_offre": 0.018108486729163657,
+   "part_offre": 0.01813281491963487,
    "categories": [
     "noncirculating"
    ]
@@ -1389,7 +1389,7 @@
    "ts_ms": 1699719459000,
    "debloque": 24842393.012620836,
    "lineaire": 0.0,
-   "part_offre": 0.09529943799140182,
+   "part_offre": 0.09543176322863645,
    "categories": [
     "insiders",
     "noncirculating",
@@ -1400,7 +1400,7 @@
    "ts_ms": 1702349202000,
    "debloque": 24842393.012620836,
    "lineaire": 0.0,
-   "part_offre": 0.09183022345806725,
+   "part_offre": 0.09196165364591509,
    "categories": [
     "insiders",
     "noncirculating",
@@ -1411,7 +1411,7 @@
    "ts_ms": 1704978945000,
    "debloque": 24842393.012620836,
    "lineaire": 0.0,
-   "part_offre": 0.08269703688622991,
+   "part_offre": 0.08281020452033871,
    "categories": [
     "insiders",
     "noncirculating",
@@ -1422,7 +1422,7 @@
    "ts_ms": 1707608688000,
    "debloque": 24842393.012620836,
    "lineaire": 0.0,
-   "part_offre": 0.07523903174480857,
+   "part_offre": 0.07533804709670348,
    "categories": [
     "insiders",
     "noncirculating",
@@ -1433,7 +1433,7 @@
    "ts_ms": 1710238431000,
    "debloque": 24842393.012620836,
    "lineaire": 0.0,
-   "part_offre": 0.06900352313762152,
+   "part_offre": 0.069091352122056,
    "categories": [
     "insiders",
     "noncirculating",
@@ -1444,7 +1444,7 @@
    "ts_ms": 1712868174000,
    "debloque": 24842393.012620836,
    "lineaire": 0.0,
-   "part_offre": 0.06376565591428705,
+   "part_offre": 0.06384433349708078,
    "categories": [
     "insiders",
     "noncirculating",
@@ -1455,7 +1455,7 @@
    "ts_ms": 1715497917000,
    "debloque": 11309783.0029125,
    "lineaire": 0.0,
-   "part_offre": 0.026978713726585394,
+   "part_offre": 0.027011110151450125,
    "categories": [
     "insiders",
     "noncirculating",
@@ -1466,7 +1466,7 @@
    "ts_ms": 1718127660000,
    "debloque": 11309783.0029125,
    "lineaire": 0.0,
-   "part_offre": 0.02521275777056303,
+   "part_offre": 0.02524225819804306,
    "categories": [
     "insiders",
     "noncirculating",
@@ -1477,7 +1477,7 @@
    "ts_ms": 1720757403000,
    "debloque": 11309783.0029125,
    "lineaire": 0.0,
-   "part_offre": 0.024351249042717186,
+   "part_offre": 0.02437990417385739,
    "categories": [
     "insiders",
     "noncirculating",
@@ -1488,7 +1488,7 @@
    "ts_ms": 1723387146000,
    "debloque": 11309783.0029125,
    "lineaire": 0.0,
-   "part_offre": 0.02355920432769555,
+   "part_offre": 0.02358702964214664,
    "categories": [
     "insiders",
     "noncirculating",
@@ -1499,7 +1499,7 @@
    "ts_ms": 1726016889000,
    "debloque": 11309783.0029125,
    "lineaire": 0.0,
-   "part_offre": 0.022815675898498082,
+   "part_offre": 0.02284272074340285,
    "categories": [
     "insiders",
     "noncirculating",
@@ -1510,7 +1510,7 @@
    "ts_ms": 1728646632000,
    "debloque": 11309783.0029125,
    "lineaire": 0.0,
-   "part_offre": 0.02212849825342373,
+   "part_offre": 0.022154778764823895,
    "categories": [
     "insiders",
     "noncirculating",
@@ -1521,7 +1521,7 @@
    "ts_ms": 1731276375000,
    "debloque": 11309783.0029125,
    "lineaire": 0.0,
-   "part_offre": 0.021486085164030864,
+   "part_offre": 0.021511632295589302,
    "categories": [
     "insiders",
     "noncirculating",
@@ -1532,7 +1532,7 @@
    "ts_ms": 1733906118000,
    "debloque": 11309783.0029125,
    "lineaire": 0.0,
-   "part_offre": 0.020879336006907633,
+   "part_offre": 0.020904190903802227,
    "categories": [
     "insiders",
     "noncirculating",
@@ -1543,7 +1543,7 @@
    "ts_ms": 1736535861000,
    "debloque": 11309783.0029125,
    "lineaire": 0.0,
-   "part_offre": 0.02031478570701072,
+   "part_offre": 0.020338963768356453,
    "categories": [
     "insiders",
     "noncirculating",
@@ -1554,7 +1554,7 @@
    "ts_ms": 1739165604000,
    "debloque": 11309783.0029125,
    "lineaire": 0.0,
-   "part_offre": 0.019779783311772527,
+   "part_offre": 0.01980332084355257,
    "categories": [
     "insiders",
     "noncirculating",
@@ -1565,7 +1565,7 @@
    "ts_ms": 1741795347000,
    "debloque": 11309783.0029125,
    "lineaire": 0.0,
-   "part_offre": 0.01928005014466846,
+   "part_offre": 0.019302961628540137,
    "categories": [
     "insiders",
     "noncirculating",
@@ -1576,7 +1576,7 @@
    "ts_ms": 1744425090000,
    "debloque": 11309783.0029125,
    "lineaire": 0.0,
-   "part_offre": 0.018805098668020468,
+   "part_offre": 0.018827416103260494,
    "categories": [
     "insiders",
     "noncirculating",
@@ -1587,7 +1587,7 @@
    "ts_ms": 1747054833000,
    "debloque": 11309783.0029125,
    "lineaire": 0.0,
-   "part_offre": 0.018357987196747798,
+   "part_offre": 0.01837972860040281,
    "categories": [
     "insiders",
     "noncirculating",
@@ -1598,7 +1598,7 @@
    "ts_ms": 1749684576000,
    "debloque": 11309783.0029125,
    "lineaire": 0.0,
-   "part_offre": 0.01793138605868034,
+   "part_offre": 0.017952580861410616,
    "categories": [
     "insiders",
     "noncirculating",
@@ -1609,7 +1609,7 @@
    "ts_ms": 1752314319000,
    "debloque": 11309783.0029125,
    "lineaire": 0.0,
-   "part_offre": 0.017520878216468173,
+   "part_offre": 0.017541560947545033,
    "categories": [
     "insiders",
     "noncirculating",
@@ -1620,7 +1620,7 @@
    "ts_ms": 1754944062000,
    "debloque": 11309783.0029125,
    "lineaire": 0.0,
-   "part_offre": 0.017131412077925307,
+   "part_offre": 0.017151600437480367,
    "categories": [
     "insiders",
     "noncirculating",
@@ -1631,7 +1631,7 @@
    "ts_ms": 1757573805000,
    "debloque": 11309783.0029125,
    "lineaire": 0.0,
-   "part_offre": 0.016755865172820364,
+   "part_offre": 0.016775589387060537,
    "categories": [
     "insiders",
     "noncirculating",
@@ -1642,7 +1642,7 @@
    "ts_ms": 1760203548000,
    "debloque": 11309783.0029125,
    "lineaire": 0.0,
-   "part_offre": 0.01639888694222761,
+   "part_offre": 0.016418161922614367,
    "categories": [
     "insiders",
     "noncirculating",
@@ -1653,7 +1653,7 @@
    "ts_ms": 1762833291000,
    "debloque": 11309783.0029125,
    "lineaire": 0.0,
-   "part_offre": 0.01605401572077499,
+   "part_offre": 0.01607286810448903,
    "categories": [
     "insiders",
     "noncirculating",
@@ -1664,7 +1664,7 @@
    "ts_ms": 1765463034000,
    "debloque": 11309783.0029125,
    "lineaire": 0.0,
-   "part_offre": 0.015725622548421567,
+   "part_offre": 0.015744064965440258,
    "categories": [
     "insiders",
     "noncirculating",
@@ -1675,7 +1675,7 @@
    "ts_ms": 1768092777000,
    "debloque": 11309783.0029125,
    "lineaire": 0.0,
-   "part_offre": 0.015407814555079988,
+   "part_offre": 0.01542587062353037,
    "categories": [
     "insiders",
     "noncirculating",
@@ -1686,7 +1686,7 @@
    "ts_ms": 1770722520000,
    "debloque": 11309783.0029125,
    "lineaire": 0.0,
-   "part_offre": 0.015104704593370112,
+   "part_offre": 0.01512238506213626,
    "categories": [
     "insiders",
     "noncirculating",
@@ -1697,7 +1697,7 @@
    "ts_ms": 1773352263000,
    "debloque": 11309783.0029125,
    "lineaire": 0.0,
-   "part_offre": 0.014813110679331587,
+   "part_offre": 0.014830431247441834,
    "categories": [
     "insiders",
     "noncirculating",
@@ -1708,7 +1708,7 @@
    "ts_ms": 1775982006000,
    "debloque": 11309783.0029125,
    "lineaire": 0.0,
-   "part_offre": 0.014530248365531712,
+   "part_offre": 0.014547228953117624,
    "categories": [
     "insiders",
     "noncirculating",
@@ -1719,7 +1719,7 @@
    "ts_ms": 1778611749000,
    "debloque": 11309783.0029125,
    "lineaire": 0.0,
-   "part_offre": 0.014259879554955791,
+   "part_offre": 0.014276528660266493,
    "categories": [
     "insiders",
     "noncirculating",
@@ -1730,7 +1730,7 @@
    "ts_ms": 1781241492000,
    "debloque": 11309783.0029125,
    "lineaire": 0.0,
-   "part_offre": 0.013997230080342475,
+   "part_offre": 0.014013565599579014,
    "categories": [
     "insiders",
     "noncirculating",
@@ -1741,7 +1741,7 @@
    "ts_ms": 1783871235000,
    "debloque": 11309783.0029125,
    "lineaire": 0.0,
-   "part_offre": 0.013745849684092835,
+   "part_offre": 0.013761878920142101,
    "categories": [
     "insiders",
     "noncirculating",
@@ -1752,7 +1752,7 @@
    "ts_ms": 1786500978000,
    "debloque": 11309783.0029125,
    "lineaire": 0.0,
-   "part_offre": 0.013501320041986743,
+   "part_offre": 0.013517059146034632,
    "categories": [
     "insiders",
     "noncirculating",
@@ -1763,7 +1763,7 @@
    "ts_ms": 1789130721000,
    "debloque": 11309783.0029125,
    "lineaire": 0.0,
-   "part_offre": 0.013276041951057145,
+   "part_offre": 0.013282450208795914,
    "categories": [
     "insiders",
     "noncirculating",
@@ -1774,7 +1774,7 @@
    "ts_ms": 1791760464000,
    "debloque": 11309783.0029125,
    "lineaire": 0.0,
-   "part_offre": 0.013102097949038844,
+   "part_offre": 0.01309250444832011,
    "categories": [
     "insiders",
     "noncirculating",
@@ -1785,7 +1785,7 @@
    "ts_ms": 1794390207000,
    "debloque": 4543477.998058333,
    "lineaire": 0.0,
-   "part_offre": 0.005195433425030966,
+   "part_offre": 0.005191678433580367,
    "categories": [
     "noncirculating"
    ]
@@ -1794,7 +1794,7 @@
    "ts_ms": 1797019950000,
    "debloque": 4543477.998058333,
    "lineaire": 0.0,
-   "part_offre": 0.00512910054713536,
+   "part_offre": 0.005125440793781885,
    "categories": [
     "noncirculating"
    ]
@@ -1803,7 +1803,7 @@
    "ts_ms": 1799649693000,
    "debloque": 4543477.998058333,
    "lineaire": 0.0,
-   "part_offre": 0.005102927120847827,
+   "part_offre": 0.005099304609914309,
    "categories": [
     "noncirculating"
    ]
@@ -1812,7 +1812,7 @@
    "ts_ms": 1802279436000,
    "debloque": 4543477.998058333,
    "lineaire": 0.0,
-   "part_offre": 0.005077019460549517,
+   "part_offre": 0.005073433626434936,
    "categories": [
     "noncirculating"
    ]
@@ -1821,7 +1821,7 @@
    "ts_ms": 1804909179000,
    "debloque": 4543477.998058333,
    "lineaire": 0.0,
-   "part_offre": 0.0050513735387905725,
+   "part_offre": 0.0050478238272892465,
    "categories": [
     "noncirculating"
    ]
@@ -1830,16 +1830,7 @@
    "ts_ms": 1807538922000,
    "debloque": 4543477.998058333,
    "lineaire": 0.0,
-   "part_offre": 0.0050259854090887535,
-   "categories": [
-    "noncirculating"
-   ]
-  },
-  {
-   "ts_ms": 1810168665000,
-   "debloque": 4543477.998058333,
-   "lineaire": 0.0,
-   "part_offre": 0.005000851203904904,
+   "part_offre": 0.0050224712771048015,
    "categories": [
     "noncirculating"
    ]
@@ -1847,7 +1838,7 @@
  ],
  "ARB": [
   {
-   "ts_ms": 1697623830000,
+   "ts_ms": 1697623828000,
    "debloque": 50093999.999999925,
    "lineaire": 0.0,
    "part_offre": 0.03645170910299682,
@@ -1856,7 +1847,7 @@
    ]
   },
   {
-   "ts_ms": 1701857322000,
+   "ts_ms": 1701857426000,
    "debloque": 21520000.000000093,
    "lineaire": 0.0,
    "part_offre": 0.014846452145580911,
@@ -1865,7 +1856,7 @@
    ]
   },
   {
-   "ts_ms": 1709114873000,
+   "ts_ms": 1709114961000,
    "debloque": 45734999.99999959,
    "lineaire": 0.0,
    "part_offre": 0.03013467791076624,
@@ -1884,7 +1875,7 @@
    ]
   },
   {
-   "ts_ms": 1712743690000,
+   "ts_ms": 1712743687000,
    "debloque": 35295000.0,
    "lineaire": 0.0,
    "part_offre": 0.013074264329670073,
@@ -1903,7 +1894,7 @@
    ]
   },
   {
-   "ts_ms": 1715767720000,
+   "ts_ms": 1715767676000,
    "debloque": 37599999.99999989,
    "lineaire": 0.0,
    "part_offre": 0.013197422146489626,
@@ -1922,7 +1913,7 @@
    ]
   },
   {
-   "ts_ms": 1718186932000,
+   "ts_ms": 1718186901000,
    "debloque": 225094500.00000012,
    "lineaire": 0.0,
    "part_offre": 0.07517540680000409,
@@ -1981,7 +1972,7 @@
    ]
   },
   {
-   "ts_ms": 1729677876000,
+   "ts_ms": 1729678130000,
    "debloque": 249999999.99999994,
    "lineaire": 0.0,
    "part_offre": 0.06626613180487018,
@@ -2010,7 +2001,7 @@
    ]
   },
   {
-   "ts_ms": 1735121337000,
+   "ts_ms": 1735121333000,
    "debloque": 26251932.00000034,
    "lineaire": 0.0,
    "part_offre": 0.006156397789147395,
@@ -2039,7 +2030,7 @@
    ]
   },
   {
-   "ts_ms": 1739959737000,
+   "ts_ms": 1739959736000,
    "debloque": 64606784.92999993,
    "lineaire": 0.0,
    "part_offre": 0.014342841966090966,
@@ -2048,7 +2039,7 @@
    ]
   },
   {
-   "ts_ms": 1740564538000,
+   "ts_ms": 1740564533000,
    "debloque": 23426465.000000063,
    "lineaire": 0.0,
    "part_offre": 0.0051231568182069625,
@@ -2067,7 +2058,7 @@
    ]
   },
   {
-   "ts_ms": 1744193388000,
+   "ts_ms": 1744193319000,
    "debloque": 30000000.000000168,
    "lineaire": 0.0,
    "part_offre": 0.006363623869236022,
@@ -2106,7 +2097,7 @@
    ]
   },
   {
-   "ts_ms": 1750846225000,
+   "ts_ms": 1750846137000,
    "debloque": 79999999.99999972,
    "lineaire": 0.0,
    "part_offre": 0.015803529912124983,
@@ -2125,7 +2116,7 @@
    ]
   },
   {
-   "ts_ms": 1755079568000,
+   "ts_ms": 1755079896000,
    "debloque": 38999999.99999978,
    "lineaire": 0.0,
    "part_offre": 0.007414505013041392,
@@ -2244,7 +2235,7 @@
    ]
   },
   {
-   "ts_ms": 1782900541000,
+   "ts_ms": 1782900525000,
    "debloque": 229900000.00000033,
    "lineaire": 0.0,
    "part_offre": 0.03545999779936136,
@@ -6543,7 +6534,7 @@
    "ts_ms": 1790822802000,
    "debloque": 36820227.0,
    "lineaire": 0.0,
-   "part_offre": 0.042662619594838525,
+   "part_offre": 0.042649426795001784,
    "categories": [
     "insiders",
     "privateSale"
@@ -6553,7 +6544,7 @@
    "ts_ms": 1793452545000,
    "debloque": 36820227.0,
    "lineaire": 0.0,
-   "part_offre": 0.04091699346756721,
+   "part_offre": 0.04090485804620042,
    "categories": [
     "insiders",
     "privateSale"
@@ -6563,7 +6554,7 @@
    "ts_ms": 1796082288000,
    "debloque": 36820227.0,
    "lineaire": 0.0,
-   "part_offre": 0.03930860359120662,
+   "part_offre": 0.0392974033409544,
    "categories": [
     "insiders",
     "privateSale"
@@ -6573,7 +6564,7 @@
    "ts_ms": 1798712031000,
    "debloque": 36820227.0,
    "lineaire": 0.0,
-   "part_offre": 0.03782187836738813,
+   "part_offre": 0.03781150921250055,
    "categories": [
     "insiders",
     "privateSale"
@@ -6583,7 +6574,7 @@
    "ts_ms": 1801341774000,
    "debloque": 36820227.0,
    "lineaire": 0.0,
-   "part_offre": 0.03644351613292856,
+   "part_offre": 0.03643388888719515,
    "categories": [
     "insiders",
     "privateSale"
@@ -6593,7 +6584,7 @@
    "ts_ms": 1803971517000,
    "debloque": 36820227.0,
    "lineaire": 0.0,
-   "part_offre": 0.035162086081548236,
+   "part_offre": 0.035153123877793804,
    "categories": [
     "insiders",
     "privateSale"
@@ -6603,7 +6594,7 @@
    "ts_ms": 1806601260000,
    "debloque": 36820227.0,
    "lineaire": 0.0,
-   "part_offre": 0.03396771052024236,
+   "part_offre": 0.0339593467545231,
    "categories": [
     "insiders",
     "privateSale"
@@ -6613,7 +6604,7 @@
    "ts_ms": 1809231003000,
    "debloque": 36820227.0,
    "lineaire": 0.0,
-   "part_offre": 0.03285180975637185,
+   "part_offre": 0.032843986430527945,
    "categories": [
     "insiders",
     "privateSale"
@@ -6623,7 +6614,7 @@
    "ts_ms": 1811860746000,
    "debloque": 36820227.0,
    "lineaire": 0.0,
-   "part_offre": 0.031806895670852244,
+   "part_offre": 0.031799562046186274,
    "categories": [
     "insiders",
     "privateSale"
@@ -6633,7 +6624,7 @@
    "ts_ms": 1814490489000,
    "debloque": 36820227.0,
    "lineaire": 0.0,
-   "part_offre": 0.03082640347171966,
+   "part_offre": 0.030819514967736373,
    "categories": [
     "insiders",
     "privateSale"
@@ -11222,7 +11213,7 @@
    "ts_ms": 1790655915000,
    "debloque": 20833333.333333332,
    "lineaire": 0.0,
-   "part_offre": 0.012565436468052265,
+   "part_offre": 0.012563481894484611,
    "categories": [
     "publicSale"
    ]
@@ -11231,7 +11222,7 @@
    "ts_ms": 1809043200000,
    "debloque": 132638888.8888889,
    "lineaire": 0.0,
-   "part_offre": 0.07803876326945079,
+   "part_offre": 0.07802692175732434,
    "categories": [
     "publicSale"
    ]
@@ -11392,7 +11383,7 @@
    "ts_ms": 1795499326000,
    "debloque": 17105208333.333332,
    "lineaire": 0.0,
-   "part_offre": 0.335942902282959,
+   "part_offre": 0.33523875028050343,
    "categories": [
     "insiders",
     "privateSale"
@@ -11402,7 +11393,7 @@
    "ts_ms": 1798129069000,
    "debloque": 492708333.3333334,
    "lineaire": 0.0,
-   "part_offre": 0.007248291404179539,
+   "part_offre": 0.007236905337232094,
    "categories": [
     "insiders",
     "privateSale"
@@ -11412,7 +11403,7 @@
    "ts_ms": 1800758812000,
    "debloque": 492708333.3333334,
    "lineaire": 0.0,
-   "part_offre": 0.007147987973201995,
+   "part_offre": 0.007136914610888924,
    "categories": [
     "insiders",
     "privateSale"
@@ -11422,7 +11413,7 @@
    "ts_ms": 1803388555000,
    "debloque": 492708333.3333334,
    "lineaire": 0.0,
-   "part_offre": 0.00705192382228724,
+   "part_offre": 0.007041145872644007,
    "categories": [
     "insiders",
     "privateSale"
@@ -11432,7 +11423,7 @@
    "ts_ms": 1806018298000,
    "debloque": 492708333.3333334,
    "lineaire": 0.0,
-   "part_offre": 0.006958407505356244,
+   "part_offre": 0.0069479133027289565,
    "categories": [
     "insiders",
     "privateSale"
@@ -11442,7 +11433,7 @@
    "ts_ms": 1808648041000,
    "debloque": 492708333.3333334,
    "lineaire": 0.0,
-   "part_offre": 0.006865915405882674,
+   "part_offre": 0.006855698125050456,
    "categories": [
     "insiders",
     "privateSale"
@@ -11452,7 +11443,7 @@
    "ts_ms": 1811277784000,
    "debloque": 492708333.3333334,
    "lineaire": 0.0,
-   "part_offre": 0.006777236361661083,
+   "part_offre": 0.006767281114518931,
    "categories": [
     "insiders",
     "privateSale"
@@ -11462,7 +11453,7 @@
    "ts_ms": 1813907527000,
    "debloque": 492708333.3333334,
    "lineaire": 0.0,
-   "part_offre": 0.006689467490967298,
+   "part_offre": 0.006679768241306676,
    "categories": [
     "insiders",
     "privateSale"
@@ -11472,7 +11463,7 @@
    "ts_ms": 1816537270000,
    "debloque": 492708333.3333334,
    "lineaire": 0.0,
-   "part_offre": 0.006605259873539095,
+   "part_offre": 0.0065958031043832415,
    "categories": [
     "insiders",
     "privateSale"
@@ -11482,7 +11473,7 @@
    "ts_ms": 1819167013000,
    "debloque": 492708333.3333334,
    "lineaire": 0.0,
-   "part_offre": 0.0065218614563298215,
+   "part_offre": 0.006512641816436258,
    "categories": [
     "insiders",
     "privateSale"
@@ -11492,7 +11483,7 @@
    "ts_ms": 1821796756000,
    "debloque": 492708333.3333334,
    "lineaire": 0.0,
-   "part_offre": 0.006441795403427234,
+   "part_offre": 0.006432800588909305,
    "categories": [
     "insiders",
     "privateSale"
@@ -11502,7 +11493,7 @@
    "ts_ms": 1824426499000,
    "debloque": 492708333.3333334,
    "lineaire": 0.0,
-   "part_offre": 0.0063624489411994644,
+   "part_offre": 0.006353674197346201,
    "categories": [
     "insiders",
     "privateSale"
@@ -11512,7 +11503,7 @@
    "ts_ms": 1827056242000,
    "debloque": 492708333.3333334,
    "lineaire": 0.0,
-   "part_offre": 0.006286226256461162,
+   "part_offre": 0.0062776603560767774,
    "categories": [
     "insiders",
     "privateSale"
@@ -11522,7 +11513,7 @@
    "ts_ms": 1829685985000,
    "debloque": 492708333.3333334,
    "lineaire": 0.0,
-   "part_offre": 0.0062118082600207715,
+   "part_offre": 0.0062034438349976425,
    "categories": [
     "insiders",
     "privateSale"
@@ -11532,7 +11523,7 @@
    "ts_ms": 1832315728000,
    "debloque": 492708333.3333334,
    "lineaire": 0.0,
-   "part_offre": 0.0061379939056666185,
+   "part_offre": 0.006129826956288013,
    "categories": [
     "insiders",
     "privateSale"
@@ -11542,7 +11533,7 @@
    "ts_ms": 1834945471000,
    "debloque": 492708333.3333334,
    "lineaire": 0.0,
-   "part_offre": 0.006067024345498747,
+   "part_offre": 0.006059045039601635,
    "categories": [
     "insiders",
     "privateSale"
@@ -11552,7 +11543,7 @@
    "ts_ms": 1837575214000,
    "debloque": 492708333.3333334,
    "lineaire": 0.0,
-   "part_offre": 0.005996591291812897,
+   "part_offre": 0.005988796057574955,
    "categories": [
     "insiders",
     "privateSale"
@@ -11562,7 +11553,7 @@
    "ts_ms": 1840204957000,
    "debloque": 492708333.3333334,
    "lineaire": 0.0,
-   "part_offre": 0.005928835908971447,
+   "part_offre": 0.005921215724051264,
    "categories": [
     "insiders",
     "privateSale"
@@ -11572,7 +11563,7 @@
    "ts_ms": 1842834700000,
    "debloque": 492708333.3333334,
    "lineaire": 0.0,
-   "part_offre": 0.005861557028529968,
+   "part_offre": 0.005854108697449986,
    "categories": [
     "insiders",
     "privateSale"
@@ -11582,7 +11573,7 @@
    "ts_ms": 1845464443000,
    "debloque": 492708333.3333334,
    "lineaire": 0.0,
-   "part_offre": 0.005796802311822153,
+   "part_offre": 0.005789517538208013,
    "categories": [
     "insiders",
     "privateSale"
@@ -11592,7 +11583,7 @@
    "ts_ms": 1848094186000,
    "debloque": 492708333.3333334,
    "lineaire": 0.0,
-   "part_offre": 0.005733462698982027,
+   "part_offre": 0.005726336154069773,
    "categories": [
     "insiders",
     "privateSale"
@@ -11602,7 +11593,7 @@
    "ts_ms": 1850723929000,
    "debloque": 492708333.3333334,
    "lineaire": 0.0,
-   "part_offre": 0.005670521311972164,
+   "part_offre": 0.005663550282099625,
    "categories": [
     "insiders",
     "privateSale"
@@ -11612,7 +11603,7 @@
    "ts_ms": 1853353672000,
    "debloque": 492708333.3333334,
    "lineaire": 0.0,
-   "part_offre": 0.005609896865370292,
+   "part_offre": 0.005603074005810697,
    "categories": [
     "insiders",
     "privateSale"
@@ -11622,7 +11613,7 @@
    "ts_ms": 1855983415000,
    "debloque": 492708333.3333334,
    "lineaire": 0.0,
-   "part_offre": 0.005549624970781857,
+   "part_offre": 0.005542947843977659,
    "categories": [
     "insiders",
     "privateSale"
@@ -11632,7 +11623,7 @@
    "ts_ms": 1858613158000,
    "debloque": 492708333.3333334,
    "lineaire": 0.0,
-   "part_offre": 0.005491544772873596,
+   "part_offre": 0.005485006592782379,
    "categories": [
     "insiders",
     "privateSale"
@@ -11642,7 +11633,7 @@
    "ts_ms": 1861242901000,
    "debloque": 492708333.3333334,
    "lineaire": 0.0,
-   "part_offre": 0.0054337760726144956,
+   "part_offre": 0.005427374646536049,
    "categories": [
     "insiders",
     "privateSale"
@@ -11652,7 +11643,7 @@
    "ts_ms": 1863872644000,
    "debloque": 492708333.3333334,
    "lineaire": 0.0,
-   "part_offre": 0.005378083256153674,
+   "part_offre": 0.005371812303139298,
    "categories": [
     "insiders",
     "privateSale"
@@ -11662,7 +11653,7 @@
    "ts_ms": 1866502387000,
    "debloque": 492708333.3333334,
    "lineaire": 0.0,
-   "part_offre": 0.0053226649836814665,
+   "part_offre": 0.0053165225286376985,
    "categories": [
     "insiders",
     "privateSale"
@@ -11672,7 +11663,7 @@
    "ts_ms": 1869132130000,
    "debloque": 492708333.3333334,
    "lineaire": 0.0,
-   "part_offre": 0.005269215317071762,
+   "part_offre": 0.005263195536695868,
    "categories": [
     "insiders",
     "privateSale"
@@ -11682,7 +11673,7 @@
    "ts_ms": 1871761873000,
    "debloque": 492708333.3333334,
    "lineaire": 0.0,
-   "part_offre": 0.005216828450289265,
+   "part_offre": 0.005210927705931149,
    "categories": [
     "insiders",
     "privateSale"
@@ -11692,7 +11683,7 @@
    "ts_ms": 1874391616000,
    "debloque": 492708333.3333334,
    "lineaire": 0.0,
-   "part_offre": 0.00516466752873959,
+   "part_offre": 0.005158884127297603,
    "categories": [
     "insiders",
     "privateSale"
@@ -11702,7 +11693,7 @@
    "ts_ms": 1877021359000,
    "debloque": 492708333.3333334,
    "lineaire": 0.0,
-   "part_offre": 0.005114328949868292,
+   "part_offre": 0.005108657675525497,
    "categories": [
     "insiders",
     "privateSale"
@@ -11712,7 +11703,7 @@
    "ts_ms": 1879651102000,
    "debloque": 492708333.3333334,
    "lineaire": 0.0,
-   "part_offre": 0.005064187742599087,
+   "part_offre": 0.005058627065752047,
    "categories": [
     "insiders",
     "privateSale"
@@ -11722,7 +11713,7 @@
    "ts_ms": 1882280845000,
    "debloque": 492708333.3333334,
    "lineaire": 0.0,
-   "part_offre": 0.0050157796279976545,
+   "part_offre": 0.005010324693819404,
    "categories": [
     "insiders",
     "privateSale"
@@ -12877,7 +12868,7 @@
    "ts_ms": 1627367229000,
    "debloque": 10042444.96,
    "lineaire": 0.0,
-   "part_offre": 0.2283931630158369,
+   "part_offre": 0.22850136641023228,
    "categories": [
     "insiders",
     "privateSale"
@@ -12887,7 +12878,7 @@
    "ts_ms": 1635256458000,
    "debloque": 10042444.96,
    "lineaire": 0.0,
-   "part_offre": 0.1465652362267465,
+   "part_offre": 0.1466538817446906,
    "categories": [
     "insiders",
     "privateSale"
@@ -12897,7 +12888,7 @@
    "ts_ms": 1643145687000,
    "debloque": 10042444.96,
    "lineaire": 0.0,
-   "part_offre": 0.11441304485415167,
+   "part_offre": 0.1144939339053096,
    "categories": [
     "insiders",
     "privateSale"
@@ -12907,7 +12898,7 @@
    "ts_ms": 1651034926000,
    "debloque": 57116405.70999999,
    "lineaire": 0.0,
-   "part_offre": 0.5480527918831258,
+   "part_offre": 0.5484887361198535,
    "categories": [
     "insiders",
     "noncirculating"
@@ -12917,7 +12908,7 @@
    "ts_ms": 1658924155000,
    "debloque": 6904180.91,
    "lineaire": 0.0,
-   "part_offre": 0.04089265747477382,
+   "part_offre": 0.040917723267860084,
    "categories": [
     "insiders"
    ]
@@ -12926,7 +12917,7 @@
    "ts_ms": 1666813384000,
    "debloque": 6904180.91,
    "lineaire": 0.0,
-   "part_offre": 0.03830381991944886,
+   "part_offre": 0.038330193683336664,
    "categories": [
     "insiders"
    ]
@@ -12935,7 +12926,7 @@
    "ts_ms": 1674702613000,
    "debloque": 6904180.91,
    "lineaire": 0.0,
-   "part_offre": 0.035280563230657876,
+   "part_offre": 0.03530669573391985,
    "categories": [
     "insiders"
    ]
@@ -16662,7 +16653,7 @@
    "ts_ms": 1648252800000,
    "debloque": 3344819.0169706065,
    "lineaire": 0.0,
-   "part_offre": 0.0070399799387628375,
+   "part_offre": 0.007039985175439564,
    "categories": [
     "Uncategorized"
    ]
