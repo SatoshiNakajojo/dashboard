@@ -19,13 +19,13 @@ export const c = {
   borderLift: '#241E14',
   borderSheet: '#2A2218',
   dial: '#3A2F1E',
-  gold: '#E8A33D',
-  goldLight: '#F0B255',
-  goldDeepEnd: '#D08A20',
-  goldDeep: '#B87415',
-  goldMuted: '#A8802F',
-  goldGlow: '#FFC46B',
-  goldTint: '#FFD9A0',
+  gold: '#E8903D',
+  goldLight: '#F0A055',
+  goldDeepEnd: '#D07520',
+  goldDeep: '#B86415',
+  goldMuted: '#A8692F',
+  goldGlow: '#FFB36B',
+  goldTint: '#FFCEA0',
   onGold: '#1A1206',
   ivory: '#F2EBDD',
   bone: '#E9E1D2',
@@ -43,18 +43,18 @@ export const c = {
 
 /** Couleurs à opacité — le HTML de référence les écrit en `rgba()`. */
 export const a = {
-  cardBorderOpen: 'rgba(232,163,61,.26)',
-  lockOpen: 'rgba(232,163,61,.35)',
+  cardBorderOpen: 'rgba(232,144,61,.26)',
+  lockOpen: 'rgba(232,144,61,.35)',
   lockClosed: 'rgba(179,87,79,.35)',
-  rsvpGoldBg: 'rgba(232,163,61,.10)',
-  rsvpGoldBorder: 'rgba(232,163,61,.42)',
+  rsvpGoldBg: 'rgba(232,144,61,.10)',
+  rsvpGoldBorder: 'rgba(232,144,61,.42)',
   rsvpSageBg: 'rgba(110,154,120,.10)',
   rsvpSageBorder: 'rgba(110,154,120,.40)',
-  pressed: 'rgba(232,163,61,.06)',
-  btcFillTop: 'rgba(232,163,61,.22)',
-  btcFillBottom: 'rgba(232,163,61,0)',
-  btcHalo: 'rgba(232,163,61,.16)',
-  nowHalo: 'rgba(232,163,61,.18)',
+  pressed: 'rgba(232,144,61,.06)',
+  btcFillTop: 'rgba(232,144,61,.22)',
+  btcFillBottom: 'rgba(232,144,61,0)',
+  btcHalo: 'rgba(232,144,61,.16)',
+  nowHalo: 'rgba(232,144,61,.18)',
   scrim: 'rgba(6,5,3,.62)',
   fameRule: 'rgba(168,128,47,.5)',
   rektRule: 'rgba(154,84,80,.5)',
@@ -86,7 +86,7 @@ export const cardGradient = [c.surface, c.surfaceDeep] as const;
 export const goldRadial = [c.goldGlow, c.gold, c.goldDeep] as const;
 export const goldRadialLocations = [0, 0.6, 1] as const;
 
-/** Bouton primaire de la sheet : 180°, `#F0B255 → #D08A20`. */
+/** Bouton primaire de la sheet : 180°, `#F0A055 → #D07520`. */
 export const goldButtonGradient = [c.goldLight, c.goldDeepEnd] as const;
 
 /** Couleurs de classe d'actif — README §4.2. */
@@ -94,7 +94,7 @@ export const ASSET_CLASSES = ['BTC', 'ALT', 'ACTION', 'ETF', 'DEGEN'] as const;
 export type AssetClass = (typeof ASSET_CLASSES)[number];
 
 export const assetClassStyle: Record<AssetClass, { fg: string; bg: string; border: string }> = {
-  BTC: { fg: '#E8A33D', bg: 'rgba(232,163,61,.10)', border: 'rgba(232,163,61,.40)' },
+  BTC: { fg: '#E8903D', bg: 'rgba(232,144,61,.10)', border: 'rgba(232,144,61,.40)' },
   ACTION: { fg: '#8FA8B8', bg: 'rgba(143,168,184,.09)', border: 'rgba(143,168,184,.30)' },
   ETF: { fg: '#9A8CB8', bg: 'rgba(154,140,184,.09)', border: 'rgba(154,140,184,.30)' },
   ALT: { fg: '#9A8F7B', bg: 'rgba(154,143,123,.08)', border: '#2A2218' },

@@ -188,6 +188,71 @@ parce que les six autres membres la voient. Le potluck est écrit ensuite, et so
 
 ---
 
+## Dire oui, et que ça se sache
+
+Trois choses s'enchaînent quand quelqu'un tape « Je viens », et elles répondent
+à trois questions différentes.
+
+**Pour soi : une coche.** Le bouton passait de `JE VIENS` à `VOUS Y ÊTES`, et
+il fallait lire pour savoir où on en était. Il porte maintenant une coche. Elle
+est **dessinée** — deux `View` pivotées, pas un `✓` : le caractère Unicode se
+fait substituer par le système et arrive à des tailles imprévisibles selon
+l'appareil. Le club a déjà payé cette leçon une fois, avec le ₿.
+
+**Pour les autres : le temps réel.** `event_attendees` est publiée dans
+`supabase_realtime`. Sans ça, « Je viens » n'était visible que de celui qui
+l'avait tapé, et les six autres découvraient sa venue à leur prochaine
+ouverture de l'app — c'est-à-dire, pour une soirée qui se décide le soir même,
+jamais. Les écritures restent optimistes : l'écho de sa propre action retombe
+sur un état déjà à jour, l'ensemble est idempotent.
+
+**Pour qu'on le voie : une annonce.** Mettre la liste des présents à jour en
+silence n'est pas prévenir. Un avatar qui apparaît dans une carte repliée,
+personne ne le remarque. `AttendanceNotices` pose donc une bannière — « Alex
+vient à Grillades & Halving Talk » — qui s'efface seule au bout de sept
+secondes ou au doigt. Elle est ancrée **sous l'en-tête**, pas en haut de
+l'écran : une bannière qui recouvre le logo et le titre fait perdre de vue où
+on est. Et on ne s'annonce jamais à soi-même — le bouton vient de passer au
+vert sous le doigt.
+
+Ce sont des notifications **dans l'app**. Écran verrouillé, app fermée, rien
+n'arrive : voir « Ce qui reste à faire ».
+
+---
+
+## Le mois en grille
+
+La liste dit ce qui arrive ; elle ne dit pas où sont les trous. C'est pourtant
+ce qu'on regarde pour proposer une date. L'onglet Nights porte donc deux vues,
+« À venir » et « Le mois ».
+
+La grille fait **toujours six lignes**, même quand cinq suffiraient : sans ça,
+elle saute d'une hauteur en changeant de mois, ce qui se voit plus qu'on ne
+croit quand on feuillette. Les jours de débord appartiennent aux mois voisins
+et s'affichent en retrait — un trou est moins lisible qu'un 29 septembre grisé.
+La semaine commence le lundi.
+
+`src/lib/monthGrid.ts` fait l'arithmétique en UTC **sur des dates de
+calendrier** : `Date.UTC(2026, 9, 1)` y est « le 1er octobre », pas « minuit
+quelque part ». C'est ce qui empêche la grille de se décaler d'un jour selon le
+fuseau de l'appareil. Une seule fonction consulte le décalage du club,
+`clubDayKey` — parce qu'une soirée du 3 à 19 h 30 à Nouméa tombe le 2 en UTC,
+et qu'elle doit apparaître le 3. Une soirée du 1er novembre à 00 h 30
+appartient à novembre, pas au 31 octobre.
+
+La grille et la liste parlent **du même mois**. Feuilleter jusqu'en décembre et
+lire en dessous une soirée de septembre ne veut rien dire ; un mois vide
+affiche « Rien ce mois-ci », ce qui est une information. Taper un jour réduit
+la liste à ce jour, le retaper la rend — une sélection dont on ne peut pas
+sortir est un piège.
+
+Les chevrons sont dessinés, comme la coche. Leur sens est vérifié en
+navigateur : un chevron qui pointe du mauvais côté fait reculer là où on
+croyait avancer, et la rotation naïve donne exactement l'inverse de ce qu'on
+veut.
+
+---
+
 ## La saison ancre la courbe, pas seulement l'étiquette
 
 L'Oracle prédit 90 jours. Encore faut-il savoir à quelle date correspond le
@@ -274,6 +339,21 @@ chaque membre, et un nom qui contredit la marque se remarque. Revenir en arrièr
 est un mot à changer dans `brand.ts` — plus les deux fichiers statiques qu'il
 nomme.
 
+Le logo ne vivait que sur la porte d'entrée : une fois connecté, plus rien ne
+disait chez qui on était. Il tient maintenant la place d'un sceau dans
+`ScreenHeader`, à gauche du titre, sur les trois onglets — petit, sans jamais
+réclamer l'attention.
+
+**La palette a suivi.** L'or du design était à 36° de teinte, celui du logo à
+29°. Sept degrés ne se nomment pas, mais deux oranges voisins posés l'un à côté
+de l'autre se voient : le logo avait l'air rapporté. Toute la famille d'ors a
+donc été décalée sur la teinte du logo — `gold`, `goldLight`, `goldDeep`,
+`goldMuted`, `goldGlow`, `goldTint`, les dégradés du FAB et la première couleur
+de la palette des membres — **à luminosité et saturation constantes**. Le
+registre sobre du design survit ; seule la teinte bouge. `src/theme/tokens.ts`
+et `tailwind.config.js` sont deux copies de la même vérité : toute couleur
+ajoutée à l'un doit l'être à l'autre.
+
 ---
 
 ## Deux fournisseurs de cours
@@ -348,6 +428,14 @@ Deux garanties tiennent l'ensemble (`src/lib/coinSearch.ts`, testé) :
 
 Rien ne bloque. Ce qui suit est du confort :
 
+- **Notifications sur le téléphone.** Les annonces de présence sont
+  **dans l'app** : elles ne s'affichent que si elle est ouverte. Une vraie
+  notification — écran verrouillé, app fermée — est une autre construction :
+  une paire de clés VAPID, une table `push_subscriptions` avec sa RLS, une
+  fonction Edge qui chiffre en `aes128gcm` et signe en VAPID, une demande de
+  permission à l'écran, et sur iOS l'obligation que la PWA soit installée sur
+  l'écran d'accueil (Safari ne notifie pas un onglet). Rien d'exotique, mais
+  rien qui se déduise de ce qui est là.
 - **Autocomplétion des titres.** Les cryptos ont leur liste — CoinGecko
   autorise les appels navigateur. Les actions n'en ont pas : il faudrait
   relayer `v1/finance/search` de Yahoo par une fonction Edge, comme pour les

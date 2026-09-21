@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import { pushNotice, type AttendanceNotice } from '@/lib/attendanceNotice';
 import { normalizeThemes } from '@/lib/nightThemes';
 import { describeError, supabase } from '@/lib/supabase';
 import { MOCK_ATTENDANCE, MOCK_EVENTS } from '@/mocks/events';
@@ -31,6 +32,10 @@ export interface EventsState {
   create: (draft: NightDraft) => Promise<boolean>;
   /** Écriture en cours — le bouton s'en sert. */
   creating: boolean;
+  /** Les « X vient à Y » reçus des autres membres, la plus récente en tête. */
+  notices: AttendanceNotice[];
+  /** Referme une annonce — au doigt, ou à l'expiration de son minuteur. */
+  dismissNotice: (id: string) => void;
 }
 
 /** Agenda des Crypto Nights + présences. */
@@ -48,6 +53,18 @@ export function useEvents(currentUserId: string | null): EventsState {
   const [loading, setLoading] = useState(Boolean(supabase));
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notices, setNotices] = useState<AttendanceNotice[]>([]);
+
+  /**
+   * L'abonnement temps réel se monte une fois et ne se redémarre pas quand
+   * l'identité arrive — rouvrir un canal WebSocket à chaque rendu perdrait des
+   * messages. Une référence suffit à savoir, au moment où l'annonce tombe, si
+   * elle parle de nous.
+   */
+  const meRef = useRef(currentUserId);
+  useEffect(() => {
+    meRef.current = currentUserId;
+  }, [currentUserId]);
 
   useEffect(() => {
     const client = supabase;
@@ -137,6 +154,50 @@ export function useEvents(currentUserId: string | null): EventsState {
           return [...without, incoming].sort((a, b) => a.startsAt.localeCompare(b.startsAt));
         });
       })
+      /**
+       * Les présences, elles aussi.
+       *
+       * Sans ça, « Je viens » n'était visible que de celui qui l'avait tapé :
+       * les six autres découvraient sa venue à leur prochaine ouverture de
+       * l'app. C'est pourtant le seul moment où une soirée se décide.
+       *
+       * Les écritures en vol sont optimistes, donc l'écho de sa propre action
+       * retombe sur un état déjà à jour — l'ensemble s'en moque, il est
+       * idempotent.
+       */
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'event_attendees' },
+        (payload) => {
+          const row = (payload.new ?? payload.old) as
+            { event_id?: string; user_id?: string } | undefined;
+          if (!row?.event_id || !row.user_id) return;
+          const { event_id: eventId, user_id: userId } = row;
+          const arriving = payload.eventType !== 'DELETE';
+
+          // On ne s'annonce pas à soi-même : le bouton vient déjà de passer au
+          // vert sous le doigt, une bannière par-dessus serait du bruit.
+          if (userId !== meRef.current) {
+            setNotices((current) =>
+              pushNotice(current, { id: `${eventId}:${userId}`, eventId, userId, arriving }),
+            );
+          }
+
+          setEvents((current) =>
+            current.map((event) => {
+              if (event.id !== eventId) return event;
+              const present = event.attendeeIds.includes(userId);
+              if (arriving === present) return event;
+              return {
+                ...event,
+                attendeeIds: arriving
+                  ? [...event.attendeeIds, userId]
+                  : event.attendeeIds.filter((id) => id !== userId),
+              };
+            }),
+          );
+        },
+      )
       .subscribe();
 
     return () => {
@@ -251,8 +312,9 @@ export function useEvents(currentUserId: string | null): EventsState {
           if (potluckCause) setError(describeError(potluckCause));
         }
 
-        // `events` n'est pas publiée en temps réel : le créateur doit voir sa
-        // soirée sans recharger, les autres la verront à leur prochaine visite.
+        // Le canal temps réel va pousser la même ligne, mais on ne l'attend
+        // pas : celui qui vient de créer sa soirée doit la voir tout de suite.
+        // L'insertion est idempotente — l'écho retombera sur un état à jour.
         setEvents((current) =>
           [
             ...current,
@@ -274,8 +336,12 @@ export function useEvents(currentUserId: string | null): EventsState {
     [creating, currentUserId],
   );
 
+  const dismissNotice = useCallback((id: string) => {
+    setNotices((current) => current.filter((notice) => notice.id !== id));
+  }, []);
+
   return useMemo(
-    () => ({ events, loading, error, toggleRsvp, create, creating }),
-    [events, loading, error, toggleRsvp, create, creating],
+    () => ({ events, loading, error, toggleRsvp, create, creating, notices, dismissNotice }),
+    [events, loading, error, toggleRsvp, create, creating, notices, dismissNotice],
   );
 }

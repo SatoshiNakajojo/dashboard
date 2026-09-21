@@ -8,7 +8,7 @@
 
 /** Palette du club, dans l'ordre d'attribution (README §4.3). */
 export const PALETTE = [
-  '#E8A33D',
+  '#E8903D',
   '#6E9A78',
   '#8C7BA8',
   '#B3574F',

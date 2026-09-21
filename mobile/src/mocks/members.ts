@@ -6,7 +6,7 @@ import type { Member } from '@/types/domain';
  * ce qui permet de basculer mock ↔ serveur sans changer une seule vue.
  */
 export const MEMBERS: Record<string, Member> = {
-  john: { id: '11111111-1111-4111-8111-000000000001', displayName: 'John', initials: 'JD', color: '#E8A33D' },
+  john: { id: '11111111-1111-4111-8111-000000000001', displayName: 'John', initials: 'JD', color: '#E8903D' },
   alex: { id: '11111111-1111-4111-8111-000000000002', displayName: 'Alex', initials: 'AX', color: '#6E9A78' },
   marco: { id: '11111111-1111-4111-8111-000000000003', displayName: 'Marco', initials: 'MC', color: '#8C7BA8' },
   sofia: { id: '11111111-1111-4111-8111-000000000004', displayName: 'Sofia', initials: 'SF', color: '#B3574F' },

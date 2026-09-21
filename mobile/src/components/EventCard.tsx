@@ -148,16 +148,22 @@ export function EventCard({
                 borderColor: going ? a.rsvpSageBorder : a.rsvpGoldBorder,
               }}
             >
-              <Text
-                style={{
-                  fontFamily: f.monoMed,
-                  fontSize: 10,
-                  letterSpacing: 1.8,
-                  color: going ? c.sage : c.gold,
-                }}
-              >
-                {going ? 'VOUS Y ÊTES' : 'JE VIENS'}
-              </Text>
+              {/* Une coche plutôt qu'un simple changement de mot : l'état se
+                  voit d'un coup d'œil sur une carte pliée, sans qu'on ait à
+                  lire. */}
+              <View className="flex-row items-center" style={{ gap: 7 }}>
+                {going ? <Check color={c.sage} /> : null}
+                <Text
+                  style={{
+                    fontFamily: f.monoMed,
+                    fontSize: 10,
+                    letterSpacing: 1.8,
+                    color: going ? c.sage : c.gold,
+                  }}
+                >
+                  {going ? 'VOUS Y ÊTES' : 'JE VIENS'}
+                </Text>
+              </View>
             </Pressable>
 
             <View
@@ -185,5 +191,41 @@ export function EventCard({
         </View>
       ) : null}
     </LinearGradient>
+  );
+}
+
+/**
+ * Coche dessinée : deux traits pivotés.
+ *
+ * Pas une police d'icônes ni un caractère Unicode — `✓` se fait substituer par
+ * le système et arrive à des tailles imprévisibles selon l'appareil, ce qu'on a
+ * déjà payé une fois avec le ₿.
+ */
+function Check({ color }: { color: string }) {
+  return (
+    <View style={{ width: 11, height: 11 }}>
+      <View
+        style={{
+          position: 'absolute',
+          left: 0,
+          top: 5,
+          width: 5,
+          height: 1.6,
+          backgroundColor: color,
+          transform: [{ rotate: '45deg' }],
+        }}
+      />
+      <View
+        style={{
+          position: 'absolute',
+          left: 3,
+          top: 4,
+          width: 9,
+          height: 1.6,
+          backgroundColor: color,
+          transform: [{ rotate: '-50deg' }],
+        }}
+      />
+    </View>
   );
 }
