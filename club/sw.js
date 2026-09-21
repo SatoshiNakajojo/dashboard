@@ -6,7 +6,7 @@
  *     cache qu'en secours hors-ligne. Sans cela, une PWA iOS reste bloquée des
  *     semaines sur une version périmée ;
  *   • les fichiers versionnés par empreinte (bundles `_expo/static/...`,
- *     polices, canvaskit.wasm) en CACHE D'ABORD — leur URL change à chaque
+ *     polices, images) en CACHE D'ABORD — leur URL change à chaque
  *     modification, donc un cache ne peut pas devenir périmé.
  *
  * Les API (Supabase, CoinGecko, Yahoo) ne sont JAMAIS mises en cache : une
