@@ -5,24 +5,24 @@ import { MEMBERS } from './members';
 export const MOCK_EVENTS: ClubEvent[] = [
   {
     id: '22222222-2222-4222-8222-000000000001',
-    startsAt: '2026-09-18T20:00:00',
-    theme: 'Pastaga & Wine Tasting',
+    startsAt: '2026-09-18T20:00:00+11:00',
+    title: 'Pastaga & Wine Tasting',
     location: 'Penthouse — Marco',
-    tag: 'Dégustation',
+    themes: ['Crypto Night'],
   },
   {
     id: '22222222-2222-4222-8222-000000000002',
-    startsAt: '2026-10-03T19:30:00',
-    theme: 'Grillades & Halving Talk',
+    startsAt: '2026-10-03T19:30:00+11:00',
+    title: 'Grillades & Halving Talk',
     location: 'Rooftop — Alex',
-    tag: 'Barbecue',
+    themes: ['Crypto Night', 'Stock Night'],
   },
   {
     id: '22222222-2222-4222-8222-000000000003',
-    startsAt: '2026-10-22T22:00:00',
-    theme: 'Night Trading Session',
+    startsAt: '2026-10-22T22:00:00+11:00',
+    title: 'Night Trading Session',
     location: 'Loft — Sofia',
-    tag: 'Séance live',
+    themes: ['Stock Night', 'Vibe Coding Night'],
   },
 ];
 

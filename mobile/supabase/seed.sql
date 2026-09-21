@@ -42,10 +42,10 @@ on conflict (id) do update
 -- mais le décalage doit être juste à l'écriture, sinon une soirée à 20 h
 -- devient une soirée à 10 h.
 
-insert into public.events (id, starts_at, theme, location, tag, created_by) values
-  ('22222222-2222-4222-8222-000000000001', '2026-09-18 20:00:00+11', 'Pastaga & Wine Tasting',    'Penthouse — Marco', 'Dégustation', '11111111-1111-4111-8111-000000000003'),
-  ('22222222-2222-4222-8222-000000000002', '2026-10-03 19:30:00+11', 'Grillades & Halving Talk',  'Rooftop — Alex',    'Barbecue',    '11111111-1111-4111-8111-000000000002'),
-  ('22222222-2222-4222-8222-000000000003', '2026-10-22 22:00:00+11', 'Night Trading Session',     'Loft — Sofia',      'Séance live', '11111111-1111-4111-8111-000000000004')
+insert into public.events (id, starts_at, title, location, themes, created_by) values
+  ('22222222-2222-4222-8222-000000000001', '2026-09-18 20:00:00+11', 'Pastaga & Wine Tasting',   'Penthouse — Marco', array['Crypto Night'],                      '11111111-1111-4111-8111-000000000003'),
+  ('22222222-2222-4222-8222-000000000002', '2026-10-03 19:30:00+11', 'Grillades & Halving Talk', 'Rooftop — Alex',    array['Crypto Night','Stock Night'],        '11111111-1111-4111-8111-000000000002'),
+  ('22222222-2222-4222-8222-000000000003', '2026-10-22 22:00:00+11', 'Night Trading Session',    'Loft — Sofia',      array['Stock Night','Vibe Coding Night'],   '11111111-1111-4111-8111-000000000004')
 on conflict (id) do nothing;
 
 insert into public.event_attendees (event_id, user_id) values

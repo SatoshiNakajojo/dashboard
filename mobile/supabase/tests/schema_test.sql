@@ -30,8 +30,8 @@ insert into public.profiles (id, display_name, initials, color) values
   ('aaaaaaaa-0000-4000-8000-000000000001', 'John', 'JD', '#E8A33D'),
   ('aaaaaaaa-0000-4000-8000-000000000002', 'Alex', 'AX', '#6E9A78');
 
-insert into public.events (id, starts_at, theme, location, created_by) values
-  ('bbbbbbbb-0000-4000-8000-000000000001', now(), 'Test', 'Ici',
+insert into public.events (id, starts_at, title, location, themes, created_by) values
+  ('bbbbbbbb-0000-4000-8000-000000000001', now(), 'Test', 'Ici', array['Crypto Night'],
    'aaaaaaaa-0000-4000-8000-000000000001');
 
 insert into public.potluck_items (id, event_id, item_name, assigned_user_id) values

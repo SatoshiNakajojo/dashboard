@@ -1,6 +1,6 @@
-# Cryptos Club
+# Satoshi Social Club
 
-Application privée d'un club de sept investisseurs Bitcoin, installable sur
+Application privée d'un club de sept investisseurs de Nouméa, installable sur
 l'écran d'accueil — **une PWA**, comme le dashboard JCGI.
 React Native (Expo SDK 57) · TypeScript · NativeWind v4 · Supabase · Skia.
 
@@ -99,7 +99,7 @@ de 4 unités — et borné dans le repère.
 
 ## Ce qui a été vérifié
 
-- `npm run typecheck`, `npm run lint`, `npm test` — propres (203 tests).
+- `npm run typecheck`, `npm run lint`, `npm test` — propres (212 tests).
 - **Règles pures** : bornes et inversibilité du repère, monotonie du tracé,
   écart à la courbe réelle, espaces insécables du formatage français, perf vs ₿
   comme ratio et non soustraction, seuils et tri des deux classements.
@@ -138,7 +138,8 @@ de 4 unités — et borné dans le repère.
   jours d'historique et non 90, affiche `JOUR 12 / 90`, laisse 78 jours de
   toile vierge à droite du marqueur, et titre « saison I ».
 - **Création d'une soirée** : feuille ouverte depuis l'onglet Nights dans
-  Chromium, soirée écrite avec `2026-10-03T19:30:00+11:00` et trois lignes de
+  Chromium, deux thèmes du club cochés, un troisième inventé au clavier, soirée
+  écrite avec `2026-10-03T19:30:00+11:00`, ses trois thèmes et trois lignes de
   potluck numérotées, carte affichée sans rechargement. Le navigateur de test
   tourne en UTC : sans l'ancrage, la carte aurait annoncé 08:30.
 - **Dates du club** : le 31 avril et le 29 février 2027 sont refusés — ils se
@@ -153,8 +154,19 @@ de 4 unités — et borné dans le repère.
 
 ## Une soirée se propose depuis l'app, à l'heure du club
 
-N'importe quel membre propose une Crypto Night — le club n'a pas
-d'organisateur désigné, et la RLS vérifie seulement qu'on en est un. La feuille
+N'importe quel membre propose une soirée — le club n'a pas d'organisateur
+désigné, et la RLS vérifie seulement qu'on en est un.
+
+Une soirée porte **un ou plusieurs thèmes** : Crypto Night, Stock Night, Vibe
+Coding Night, ou ce que le club inventera. Une Crypto Night qui finit en Vibe
+Coding Night est une soirée, pas deux. La liste de `src/lib/nightThemes.ts`
+n'est donc pas fermée — elle aide à la saisie, elle ne valide rien, et un thème
+inventé une fois se reprend d'un doigt la fois suivante. La base ne connaît que
+du texte, bornée à cinq entrées.
+
+Le modèle a été renommé pour que ça se dise : `events.theme` portait le titre,
+`events.tag` l'étiquette. Le titre est désormais `title`, et `themes` est un
+tableau. La feuille
 demande une date, un thème, un lieu, et jusqu'à six lignes de potluck laissées
 libres : c'est aux autres de se les attribuer, et c'est tout l'intérêt de
 l'écran.
@@ -257,7 +269,7 @@ dérive toutes les tailles de la seconde — PWA, iOS, Android, splash, écran d
 connexion.
 
 Le dossier de design parle de « Satoshi Social Club » ; le logo du club porte
-« CRYPTOS CLUB ». C'est le logo qui l'emporte : il sera sur l'écran d'accueil de
+« SATOSHI SOCIAL CLUB ». C'est le logo qui l'emporte : il sera sur l'écran d'accueil de
 chaque membre, et un nom qui contredit la marque se remarque. Revenir en arrière
 est un mot à changer dans `brand.ts` — plus les deux fichiers statiques qu'il
 nomme.

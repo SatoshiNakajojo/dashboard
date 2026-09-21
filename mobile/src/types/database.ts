@@ -21,9 +21,10 @@ export type ProfileRow = {
 export type EventRow = {
   id: string;
   starts_at: string;
-  theme: string;
+  title: string;
   location: string;
-  tag: string;
+  /** Crypto Night, Stock Night… une soirée peut en porter plusieurs. */
+  themes: string[];
   created_by: string;
   created_at: string;
 };

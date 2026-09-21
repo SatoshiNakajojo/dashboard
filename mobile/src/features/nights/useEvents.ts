@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
+import { normalizeThemes } from '@/lib/nightThemes';
 import { describeError, supabase } from '@/lib/supabase';
 import { MOCK_ATTENDANCE, MOCK_EVENTS } from '@/mocks/events';
+import type { EventRow } from '@/types/database';
 import type { ClubEvent } from '@/types/domain';
 
 export interface EventWithAttendance extends ClubEvent {
@@ -11,9 +13,10 @@ export interface EventWithAttendance extends ClubEvent {
 export interface NightDraft {
   /** Instant de début, décalage compris — `2026-10-03T19:30:00+11:00`. */
   startsAt: string;
-  theme: string;
+  title: string;
   location: string;
-  tag: string;
+  /** Crypto Night, Stock Night… au moins un, au plus cinq. */
+  themes: string[];
   /** Ce qu'il y a à apporter, laissé libre. Peut être vide. */
   potluck: string[];
 }
@@ -56,7 +59,7 @@ export function useEvents(currentUserId: string | null): EventsState {
       const [eventsResult, attendeesResult] = await Promise.all([
         client
           .from('events')
-          .select('id, starts_at, theme, location, tag')
+          .select('id, starts_at, title, location, themes')
           .order('starts_at', { ascending: true })
           .abortSignal(controller.signal),
         client
@@ -84,9 +87,9 @@ export function useEvents(currentUserId: string | null): EventsState {
         (eventsResult.data ?? []).map((row) => ({
           id: row.id,
           startsAt: row.starts_at,
-          theme: row.theme,
+          title: row.title,
           location: row.location,
-          tag: row.tag,
+          themes: row.themes ?? [],
           attendeeIds: byEvent.get(row.id) ?? [],
         })),
       );
@@ -94,6 +97,51 @@ export function useEvents(currentUserId: string | null): EventsState {
     })();
 
     return () => controller.abort();
+  }, []);
+
+  /**
+   * Les soirées en direct.
+   *
+   * Sans cet abonnement, une soirée proposée par un membre n'apparaissait chez
+   * les six autres qu'à leur prochaine ouverture de l'app — ce qui, pour une
+   * invitation, revient à ne pas l'envoyer.
+   *
+   * On ne rapatrie pas la ligne poussée telle quelle : elle ne porte pas les
+   * présences, et un `insert` concurrent au nôtre doit rester idempotent. On
+   * relit l'agenda, c'est court et sans surprise.
+   */
+  useEffect(() => {
+    const client = supabase;
+    if (!client) return;
+
+    const channel = client
+      .channel('events')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'events' }, (payload) => {
+        const row = (payload.new ?? payload.old) as Partial<EventRow> | undefined;
+        if (!row?.id) return;
+
+        setEvents((current) => {
+          if (payload.eventType === 'DELETE') {
+            return current.filter((event) => event.id !== row.id);
+          }
+          const incoming: EventWithAttendance = {
+            id: row.id!,
+            startsAt: row.starts_at ?? '',
+            title: row.title ?? '',
+            location: row.location ?? '',
+            themes: row.themes ?? [],
+            // Les présences arrivent par leur propre table, déjà en temps réel.
+            attendeeIds: current.find((event) => event.id === row.id)?.attendeeIds ?? [],
+          };
+          const without = current.filter((event) => event.id !== row.id);
+          return [...without, incoming].sort((a, b) => a.startsAt.localeCompare(b.startsAt));
+        });
+      })
+      .subscribe();
+
+    return () => {
+      void client.removeChannel(channel);
+    };
   }, []);
 
   const toggleRsvp = useCallback(
@@ -178,12 +226,12 @@ export function useEvents(currentUserId: string | null): EventsState {
           .from('events')
           .insert({
             starts_at: draft.startsAt,
-            theme: draft.theme.trim(),
+            title: draft.title.trim(),
             location: draft.location.trim(),
-            tag: draft.tag.trim() || 'Session',
+            themes: normalizeThemes(draft.themes),
             created_by: currentUserId,
           })
-          .select('id, starts_at, theme, location, tag')
+          .select('id, starts_at, title, location, themes')
           .single();
 
         if (cause || !data) {
@@ -211,9 +259,9 @@ export function useEvents(currentUserId: string | null): EventsState {
             {
               id: data.id,
               startsAt: data.starts_at,
-              theme: data.theme,
+              title: data.title,
               location: data.location,
-              tag: data.tag,
+              themes: data.themes ?? [],
               attendeeIds: [],
             },
           ].sort((a, b) => a.startsAt.localeCompare(b.startsAt)),

@@ -5,9 +5,12 @@
 -- l'une ni l'autre : le dossier de design n'a pas d'écran d'administration. En
 -- attendant, une soirée se pose ici.
 --
--- À adapter : l'adresse de l'organisateur, le thème, le lieu, la date. Le thème
--- et la date apparaissent **deux fois** — ils servent à retrouver la soirée
--- pour y accrocher le potluck.
+-- À adapter : l'adresse de l'organisateur, le titre, les thèmes, le lieu, la
+-- date. Le titre et la date apparaissent **deux fois** — ils servent à
+-- retrouver la soirée pour y accrocher le potluck.
+--
+-- Depuis que l'app sait créer une soirée, ce fichier ne sert plus qu'à amorcer
+-- un club vide, avant la première connexion d'un membre.
 --
 -- Les heures sont en UTC+11, celle de Nouméa. `starts_at` est un `timestamptz`,
 -- donc l'heure s'affiche juste pour chaque membre — à condition que le décalage
@@ -21,19 +24,19 @@
 -- L'organisateur est retrouvé par son adresse, et `created_by` référence
 -- `profiles` : il doit s'être connecté au moins une fois.
 
-insert into public.events (starts_at, theme, location, tag, created_by)
+insert into public.events (starts_at, title, location, themes, created_by)
 select
   timestamptz '2026-10-03 19:30:00+11',
   'Grillades & Halving Talk',
   'Chez John',
-  'Barbecue',
+  array['Crypto Night', 'Stock Night'],
   p.id
 from public.profiles p
 join auth.users u on u.id = p.id
 where u.email = 'john.creusot@gmail.com'
   and not exists (
     select 1 from public.events e
-    where e.theme = 'Grillades & Halving Talk'
+    where e.title = 'Grillades & Halving Talk'
       and e.starts_at = timestamptz '2026-10-03 19:30:00+11'
   );
 
@@ -53,7 +56,7 @@ cross join (values
   ('Dessert',                5),
   ('Softs & jus',            6)
 ) as besoin(nom, rang)
-where e.theme = 'Grillades & Halving Talk'
+where e.title = 'Grillades & Halving Talk'
   and e.starts_at = timestamptz '2026-10-03 19:30:00+11'
   and not exists (
     select 1 from public.potluck_items i
@@ -62,8 +65,8 @@ where e.theme = 'Grillades & Halving Talk'
 
 -- --- Contrôle ---------------------------------------------------------------
 
-select e.starts_at, e.theme, e.location, count(i.id) as lignes_potluck
+select e.starts_at, e.title, e.themes, count(i.id) as lignes_potluck
 from public.events e
 left join public.potluck_items i on i.event_id = e.id
-group by e.id, e.starts_at, e.theme, e.location
+group by e.id, e.starts_at, e.title, e.themes
 order by e.starts_at;

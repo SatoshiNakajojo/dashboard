@@ -25,8 +25,8 @@ export const PWA_HEAD = `
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta name="apple-mobile-web-app-title" content="Cryptos Club" />
-    <meta name="application-name" content="Cryptos Club" />
+    <meta name="apple-mobile-web-app-title" content="Satoshi Club" />
+    <meta name="application-name" content="Satoshi Social Club" />
     <meta name="theme-color" content="${INK}" />
     <meta name="color-scheme" content="dark" />
     <link rel="manifest" href="manifest.json" />

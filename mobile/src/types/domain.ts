@@ -15,9 +15,10 @@ export interface Member {
 export interface ClubEvent {
   id: Uuid;
   startsAt: string;
-  theme: string;
+  title: string;
   location: string;
-  tag: string;
+  /** Crypto Night, Stock Night… une soirée peut en porter plusieurs. */
+  themes: string[];
 }
 
 /** `potluck_items` — une ligne « qui amène quoi ». */

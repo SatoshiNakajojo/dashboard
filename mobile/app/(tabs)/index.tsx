@@ -29,7 +29,7 @@ export default function NightsScreen() {
 
   return (
     <>
-      <ScreenShell overline="Prochaines sessions du club" title="Crypto Nights" me={me}>
+      <ScreenShell overline="Prochaines sessions du club" title="Les Nights" me={me}>
         <View style={{ gap: 20 }}>
           {loading ? <EventSkeleton /> : null}
 

@@ -138,7 +138,7 @@ sans carte bancaire :
    | Username | `resend` |
    | Password | votre clé API Resend |
    | Sender email | voir ci-dessous |
-   | Sender name | `Cryptos Club` |
+   | Sender name | `Satoshi Social Club` |
 
 3. Plus bas, **Rate Limits** → passez l'envoi de courriels à 30 par heure.
 
@@ -172,7 +172,7 @@ un **lien**. L'app attend un **code à six chiffres**, soit `{{ .Token }}`.
 
 Collez le contenu de `supabase/templates/magic-link.html` — **le balisage seul**,
 sans commentaire d'en-tête : le moteur de gabarits traite tout, y compris ce qui
-est entre `<!-- -->`. Sujet : `Votre code d'entrée au Cryptos Club`.
+est entre `<!-- -->`. Sujet : `Votre code d'entrée au Satoshi Social Club`.
 
 **Regardez l'aperçu avant de sauvegarder.** Chaque essai raté consomme un
 courriel de votre quota. Si le courriel arrive malgré tout vide, prenez
@@ -338,7 +338,7 @@ moteur de Safari mais pas son menu d'installation.
 1. Ouvrir l'adresse dans **Safari**.
 2. Bouton **Partager** (le carré avec la flèche, en bas).
 3. Faire défiler → **Sur l'écran d'accueil**.
-4. Le nom proposé est « Cryptos Club » → **Ajouter**.
+4. Le nom proposé est « Satoshi Social Club » → **Ajouter**.
 
 L'icône apparaît sur l'écran d'accueil. À l'ouverture, plus de barre d'adresse :
 l'app occupe l'écran, encoche comprise.
@@ -385,7 +385,7 @@ npm run build:web && npm run deploy
 
 Le script recadre au disque, compose sur le fond encre, et produit chaque taille.
 La version *maskable* est volontairement plus petite : Android rogne jusqu'à
-20 % de l'icône, et sans cette marge « CRYPTOS CLUB » se ferait couper.
+20 % de l'icône, et sans cette marge « SATOSHI SOCIAL CLUB » se ferait couper.
 
 ---
 

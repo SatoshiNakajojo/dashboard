@@ -5,18 +5,21 @@ import { LinearGradient } from 'expo-linear-gradient';
 
 import { Micro } from '@/components/ui/Micro';
 import { parseClubDateTime, todayInClub } from '@/lib/clubTime';
+import { MAX_THEME_LENGTH, normalizeThemes, suggestThemes } from '@/lib/nightThemes';
 import { a, c, f, goldButtonGradient, radius } from '@/theme/tokens';
 
 export interface NightSheetDraft {
   startsAt: string;
-  theme: string;
+  title: string;
   location: string;
-  tag: string;
+  themes: string[];
   potluck: string[];
 }
 
 export interface NightSheetProps {
   visible: boolean;
+  /** Thèmes déjà employés par le club, proposés avant les nouveaux. */
+  knownThemes?: string[];
   /** Écriture en cours : le bouton se verrouille et annonce l'attente. */
   creating?: boolean;
   onClose: () => void;
@@ -25,33 +28,55 @@ export interface NightSheetProps {
 }
 
 /** Contraintes de la base — refuser ici ce qu'elle refuserait de toute façon. */
-const THEME_MAX = 80;
+const TITLE_MAX = 80;
 const LOCATION_MAX = 80;
-const TAG_MAX = 24;
 const ITEM_MAX = 60;
 
 /** Six lignes vides : assez pour une soirée, sans transformer l'écran en tableur. */
 const POTLUCK_SLOTS = 6;
 
 /** Bottom sheet « Proposer une Crypto Night ». */
-export function NightSheet({ visible, creating = false, onClose, onCreate }: NightSheetProps) {
+export function NightSheet({
+  visible,
+  knownThemes = [],
+  creating = false,
+  onClose,
+  onCreate,
+}: NightSheetProps) {
   const [date, setDate] = useState(() => todayInClub());
   const [time, setTime] = useState('19:30');
-  const [theme, setTheme] = useState('');
+  const [title, setTitle] = useState('');
   const [location, setLocation] = useState('');
-  const [tag, setTag] = useState('');
+  const [picked, setPicked] = useState<string[]>([]);
+  const [invented, setInvented] = useState('');
   const [potluck, setPotluck] = useState<string[]>(() => Array<string>(POTLUCK_SLOTS).fill(''));
 
   const startsAt = parseClubDateTime(date, time);
 
+  /**
+   * Les thèmes proposés : ceux du club, puis ceux qu'il a inventés, puis celui
+   * qu'on est en train d'écrire — pour qu'il soit sélectionnable avant même
+   * d'avoir quitté le champ.
+   */
+  const offered = suggestThemes([...knownThemes, ...picked, invented]);
+  const themes = normalizeThemes(picked);
+
   const reset = () => {
     setDate(todayInClub());
     setTime('19:30');
-    setTheme('');
+    setTitle('');
     setLocation('');
-    setTag('');
+    setPicked([]);
+    setInvented('');
     setPotluck(Array<string>(POTLUCK_SLOTS).fill(''));
   };
+
+  const toggleTheme = (theme: string) =>
+    setPicked((current) =>
+      current.some((one) => one.toLocaleLowerCase('fr') === theme.toLocaleLowerCase('fr'))
+        ? current.filter((one) => one.toLocaleLowerCase('fr') !== theme.toLocaleLowerCase('fr'))
+        : normalizeThemes([...current, theme]),
+    );
 
   /**
    * Pourquoi la création est bloquée, s'il y a lieu.
@@ -62,11 +87,13 @@ export function NightSheet({ visible, creating = false, onClose, onCreate }: Nig
   const blockedReason =
     startsAt === null
       ? 'Une date et une heure — 03/10/2026 et 19:30.'
-      : theme.trim().length === 0
-        ? 'Un thème, même court.'
-        : location.trim().length === 0
-          ? 'Où ça se passe.'
-          : null;
+      : themes.length === 0
+        ? 'Au moins un thème.'
+        : title.trim().length === 0
+          ? 'Un titre, même court.'
+          : location.trim().length === 0
+            ? 'Où ça se passe.'
+            : null;
 
   const canCreate = blockedReason === null && !creating;
 
@@ -74,9 +101,9 @@ export function NightSheet({ visible, creating = false, onClose, onCreate }: Nig
     if (startsAt === null) return;
     const sent = await onCreate({
       startsAt,
-      theme,
+      title,
       location,
-      tag,
+      themes,
       potluck: potluck.filter((item) => item.trim().length > 0),
     });
     // Sur échec, on garde la saisie : personne ne doit retaper sa liste.
@@ -146,12 +173,73 @@ export function NightSheet({ visible, creating = false, onClose, onCreate }: Nig
               />
             </View>
 
+            <View style={{ marginTop: 22 }}>
+              <Micro style={{ marginBottom: 10 }}>THÈMES</Micro>
+              <View className="flex-row flex-wrap" style={{ gap: 8 }}>
+                {offered.map((theme) => {
+                  const on = themes.some(
+                    (one) => one.toLocaleLowerCase('fr') === theme.toLocaleLowerCase('fr'),
+                  );
+                  return (
+                    <Pressable
+                      key={theme}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: on }}
+                      onPress={() => toggleTheme(theme)}
+                      style={{
+                        paddingHorizontal: 12,
+                        paddingVertical: 8,
+                        borderRadius: radius.button,
+                        borderWidth: 1,
+                        borderColor: on ? c.gold : c.border,
+                        backgroundColor: on ? a.rsvpGoldBg : 'transparent',
+                      }}
+                    >
+                      <Text
+                        style={{
+                          fontFamily: f.monoMed,
+                          fontSize: 9,
+                          letterSpacing: 1.08,
+                          color: on ? c.gold : c.sepiaMuted,
+                        }}
+                      >
+                        {theme.toLocaleUpperCase('fr')}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+              <TextInput
+                value={invented}
+                onChangeText={setInvented}
+                onSubmitEditing={() => {
+                  if (invented.trim()) {
+                    toggleTheme(invented.trim());
+                    setInvented('');
+                  }
+                }}
+                placeholder="Inventer un thème — Pizza Night…"
+                placeholderTextColor={c.sepiaFaint}
+                maxLength={MAX_THEME_LENGTH}
+                returnKeyType="done"
+                style={{
+                  fontFamily: f.sans,
+                  fontSize: 13,
+                  color: c.parchment,
+                  marginTop: 12,
+                  paddingVertical: 6,
+                  borderBottomWidth: 1,
+                  borderBottomColor: c.hairline,
+                }}
+              />
+            </View>
+
             <Block
-              label="THÈME"
-              value={theme}
-              onChangeText={setTheme}
+              label="TITRE"
+              value={title}
+              onChangeText={setTitle}
               placeholder="Grillades & Halving Talk"
-              maxLength={THEME_MAX}
+              maxLength={TITLE_MAX}
             />
             <Block
               label="LIEU"
@@ -159,13 +247,6 @@ export function NightSheet({ visible, creating = false, onClose, onCreate }: Nig
               onChangeText={setLocation}
               placeholder="Rooftop — chez Alex"
               maxLength={LOCATION_MAX}
-            />
-            <Block
-              label="ÉTIQUETTE · FACULTATIF"
-              value={tag}
-              onChangeText={setTag}
-              placeholder="Barbecue"
-              maxLength={TAG_MAX}
             />
 
             <View style={{ marginTop: 22 }}>

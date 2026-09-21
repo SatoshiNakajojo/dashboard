@@ -7,7 +7,7 @@
 | `magic-link.html` | Par défaut — aux couleurs du club |
 | `magic-link-minimal.html` | Si le précédent arrive vide. Trois lignes, rien qui puisse casser |
 
-Sujet conseillé : `Votre code d'entrée au Cryptos Club`
+Sujet conseillé : `Votre code d'entrée au Satoshi Social Club`
 
 ## Le point qui casse tout
 

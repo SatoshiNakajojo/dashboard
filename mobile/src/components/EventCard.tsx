@@ -7,6 +7,7 @@ import { Avatar } from '@/components/ui/Avatar';
 import { Micro } from '@/components/ui/Micro';
 import { formatTime, splitEventDate } from '@/lib/format';
 import { CLUB_SIZE } from '@/mocks/members';
+import { formatThemes } from '@/lib/nightThemes';
 import { a, c, cardGradient, f, radius } from '@/theme/tokens';
 import type { Member } from '@/types/domain';
 import type { EventWithAttendance } from '@/features/nights/useEvents';
@@ -75,7 +76,7 @@ export function EventCard({
 
           <View className="flex-1">
             <Micro tracking={1.98} style={{ color: c.goldMuted }}>
-              {event.tag}
+              {formatThemes(event.themes)}
             </Micro>
             <Text
               style={{
@@ -86,7 +87,7 @@ export function EventCard({
                 marginTop: 6,
               }}
             >
-              {event.theme}
+              {event.title}
             </Text>
             <Text
               style={{
