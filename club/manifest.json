@@ -1,7 +1,7 @@
 {
-  "name": "Cryptos Club",
-  "short_name": "Cryptos Club",
-  "description": "Le club — Crypto Nights, calls d'investissement et prédictions BTC.",
+  "name": "Satoshi Social Club",
+  "short_name": "Satoshi Club",
+  "description": "Le club de Nouméa — Crypto, Stock et Vibe Coding Nights, calls d'investissement et prédictions BTC.",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
