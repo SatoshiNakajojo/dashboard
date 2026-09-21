@@ -1,16 +1,6 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { Text, View, type LayoutChangeEvent } from 'react-native';
-import {
-  Canvas,
-  DashPathEffect,
-  Group,
-  LinearGradient,
-  Path,
-  Circle,
-  Skia,
-  vec,
-  type SkPath,
-} from '@shopify/react-native-skia';
+import Svg, { Circle, Defs, G, LinearGradient, Path, Stop } from 'react-native-svg';
 import {
   Gesture,
   GestureDetector,
@@ -68,7 +58,17 @@ export interface OracleGraphProps {
 }
 
 /**
- * Toile de l'Oracle — Skia.
+ * Toile de l'Oracle — SVG.
+ *
+ * Elle était peinte par Skia, donc par CanvasKit sur le web : 7,7 Mo de
+ * WebAssembly téléchargés **à chaque démarrage**, même pour qui n'ouvre jamais
+ * cet onglet, et un contexte WebGL plein écran. Dans une PWA autonome iOS, ce
+ * budget mémoire est le genre de chose qui fait tuer la page par le système —
+ * l'onglet « plantait » sans qu'aucune erreur ne soit levée.
+ *
+ * `src/lib/chart.ts` produisait déjà des chaînes de chemin SVG, que Skia
+ * recompilait ensuite en `SkPath`. Les passer directement à `react-native-svg`
+ * retire une conversion, 7,7 Mo de binaire, et le risque avec.
  *
  * Deux invariants tiennent tout le composant :
  *
@@ -82,8 +82,8 @@ export interface OracleGraphProps {
  *      prédiction est scellée.
  *
  * Les étiquettes d'axes sont rendues en `<Text>` RN par-dessus la toile,
- * plutôt qu'en `SkText` : cela évite de charger les polices une seconde fois
- * dans Skia et garde une typographie strictement identique au reste de l'app.
+ * plutôt qu'en `<Text>` SVG : la typographie reste strictement celle du reste
+ * de l'app, sans seconde pile de rendu de texte.
  */
 export function OracleGraph({
   btcSeries,
@@ -163,34 +163,33 @@ export function OracleGraph({
     [beginStroke, extendStroke, locked, scale],
   );
 
-  // --- Chemins Skia --------------------------------------------------------
+  // --- Chemins -------------------------------------------------------------
+  //
+  // Ce sont les chaînes SVG de `chart.ts`, passées telles quelles : plus de
+  // compilation en `SkPath`, donc plus rien à initialiser avant de peindre.
 
   const btcPoints = useMemo<Point[]>(
     () => btcSeries.map(({ day, price }) => [dayToX(day), priceToY(price)] as Point),
     [btcSeries],
   );
 
-  const btcPath = useSkPath(toSvgPath(btcPoints));
-  const btcArea = useSkPath(toAreaPath(btcPoints));
-  const myPath = useSkPath(points.length > 1 ? toSvgPath(points) : '');
+  const btcPath = useMemo(() => toSvgPath(btcPoints), [btcPoints]);
+  const btcArea = useMemo(() => toAreaPath(btcPoints), [btcPoints]);
+  const myPath = useMemo(() => (points.length > 1 ? toSvgPath(points) : ''), [points]);
 
-  const gridPath = useSkPath(
-    useMemo(
-      () =>
-        Y_TICKS.map((price) => {
-          const gy = priceToY(price).toFixed(1);
-          return `M ${PAD.l} ${gy} L ${W - PAD.r} ${gy}`;
-        }).join(' '),
-      [],
-    ),
+  const gridPath = useMemo(
+    () =>
+      Y_TICKS.map((price) => {
+        const gy = priceToY(price).toFixed(1);
+        return `M ${PAD.l} ${gy} L ${W - PAD.r} ${gy}`;
+      }).join(' '),
+    [],
   );
 
-  const todayPath = useSkPath(
-    useMemo(() => {
-      const tx = dayToX(todayIndex).toFixed(1);
-      return `M ${tx} ${PAD.t} L ${tx} ${BASELINE_Y}`;
-    }, [todayIndex]),
-  );
+  const todayPath = useMemo(() => {
+    const tx = dayToX(todayIndex).toFixed(1);
+    return `M ${tx} ${PAD.t} L ${tx} ${BASELINE_Y}`;
+  }, [todayIndex]);
 
   const last = btcPoints[btcPoints.length - 1];
   const hasDrawing = points.length > 1;
@@ -213,54 +212,75 @@ export function OracleGraph({
               }
               style={{ width, height }}
             >
-              <Canvas style={{ width, height }}>
-                <Group transform={[{ scale }]}>
+              {/* `pointerEvents="none"` : la toile est décorative, le doigt
+                  doit atteindre la vue du geste qui l'enveloppe. */}
+              <Svg width={width} height={height} pointerEvents="none">
+                <Defs>
+                  <LinearGradient
+                    id="btcFill"
+                    // En coordonnées du repère logique, pas en fraction de la
+                    // boîte : l'aire doit s'éteindre sur la ligne de base, pas
+                    // sur le bas du chemin, qui change avec les données.
+                    gradientUnits="userSpaceOnUse"
+                    x1={0}
+                    y1={PAD.t}
+                    x2={0}
+                    y2={BASELINE_Y}
+                  >
+                    <Stop
+                      offset="0"
+                      stopColor={a.btcFillColor}
+                      stopOpacity={a.btcFillTopOpacity}
+                    />
+                    <Stop
+                      offset="1"
+                      stopColor={a.btcFillColor}
+                      stopOpacity={a.btcFillBottomOpacity}
+                    />
+                  </LinearGradient>
+                </Defs>
+
+                <G scale={scale}>
                   {/* 1 — grille horizontale */}
                   {gridPath ? (
-                    <Path path={gridPath} style="stroke" strokeWidth={1} color={c.grid} />
+                    <Path d={gridPath} stroke={c.grid} strokeWidth={1} fill="none" />
                   ) : null}
 
                   {/* 4 — courbes des autres membres, sous la courbe réelle */}
                   {showOthers
-                    ? curves.map((curve) => (
-                        <MemberCurve key={curve.id} curve={curve} />
-                      ))
+                    ? curves.map((curve) => <MemberCurve key={curve.id} curve={curve} />)
                     : null}
 
                   {/* 5 — ligne « aujourd'hui » */}
                   {todayPath ? (
-                    <Path path={todayPath} style="stroke" strokeWidth={1} color={c.borderSheet}>
-                      <DashPathEffect intervals={[2, 5]} />
-                    </Path>
+                    <Path
+                      d={todayPath}
+                      stroke={c.borderSheet}
+                      strokeWidth={1}
+                      strokeDasharray="2,5"
+                      fill="none"
+                    />
                   ) : null}
 
                   {/* 6 — aire dégradée sous la courbe BTC */}
-                  {btcArea ? (
-                    <Path path={btcArea} style="fill">
-                      <LinearGradient
-                        start={vec(0, PAD.t)}
-                        end={vec(0, BASELINE_Y)}
-                        colors={[a.btcFillTop, a.btcFillBottom]}
-                      />
-                    </Path>
-                  ) : null}
+                  {btcArea ? <Path d={btcArea} fill="url(#btcFill)" /> : null}
 
                   {/* 7 — halo puis 8 — trait net : la courbe réelle en deux passes */}
                   {btcPath ? (
                     <>
                       <Path
-                        path={btcPath}
-                        style="stroke"
+                        d={btcPath}
+                        stroke={a.btcHalo}
                         strokeWidth={3.6}
-                        strokeCap="round"
-                        color={a.btcHalo}
+                        strokeLinecap="round"
+                        fill="none"
                       />
                       <Path
-                        path={btcPath}
-                        style="stroke"
+                        d={btcPath}
+                        stroke={c.goldLight}
                         strokeWidth={1.6}
-                        strokeCap="round"
-                        color={c.goldLight}
+                        strokeLinecap="round"
+                        fill="none"
                       />
                     </>
                   ) : null}
@@ -268,26 +288,25 @@ export function OracleGraph({
                   {/* 9 — point « aujourd'hui » */}
                   {last ? (
                     <>
-                      <Circle cx={last[0]} cy={last[1]} r={5} color={a.nowHalo} />
-                      <Circle cx={last[0]} cy={last[1]} r={2.2} color={c.goldTint} />
+                      <Circle cx={last[0]} cy={last[1]} r={5} fill={a.nowHalo} />
+                      <Circle cx={last[0]} cy={last[1]} r={2.2} fill={c.goldTint} />
                     </>
                   ) : null}
 
                   {/* 10 — ma courbe : pointillés tant qu'elle est modifiable */}
                   {myPath ? (
                     <Path
-                      path={myPath}
-                      style="stroke"
+                      d={myPath}
+                      stroke={color}
                       strokeWidth={2.2}
-                      strokeCap="round"
-                      strokeJoin="round"
-                      color={color}
-                    >
-                      {locked ? null : <DashPathEffect intervals={[5, 5]} />}
-                    </Path>
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeDasharray={locked ? undefined : '5,5'}
+                      fill="none"
+                    />
                   ) : null}
-                </Group>
-              </Canvas>
+                </G>
+              </Svg>
 
               <AxisLabels scale={scale} />
 
@@ -320,30 +339,32 @@ export function OracleGraph({
 // ---------------------------------------------------------------------------
 
 function MemberCurve({ curve }: { curve: OracleCurve }) {
-  const path = useSkPath(curve.points.length > 1 ? toSvgPath(curve.points) : '');
-  if (!path) return null;
+  const d = curve.points.length > 1 ? toSvgPath(curve.points) : '';
+  if (!d) return null;
 
   return (
     <Path
-      path={path}
-      style="stroke"
+      d={d}
+      stroke={curve.color}
       strokeWidth={1.4}
-      strokeCap="round"
-      color={curve.color}
+      strokeLinecap="round"
+      strokeDasharray={curve.dashed ? '4,4' : undefined}
       opacity={0.5}
-    >
-      {curve.dashed ? <DashPathEffect intervals={[4, 4]} /> : null}
-    </Path>
+      fill="none"
+    />
   );
 }
 
 /**
  * Étiquettes d'axes, positionnées dans le repère logique puis mises à
- * l'échelle — donc alignées au pixel près sur la grille peinte par Skia.
+ * l'échelle — donc alignées au pixel près sur la grille peinte en SVG.
  */
 function AxisLabels({ scale }: { scale: number }) {
   return (
-    <View pointerEvents="none" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}>
+    <View
+      pointerEvents="none"
+      style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
+    >
       {Y_TICKS.map((price) => (
         <Text
           key={price}
@@ -383,17 +404,12 @@ function AxisLabels({ scale }: { scale: number }) {
   );
 }
 
-/** Compile une chaîne SVG en `SkPath`, mémoïsée. `null` si la chaîne est vide. */
-function useSkPath(d: string): SkPath | null {
-  return useMemo(() => (d ? Skia.Path.MakeFromSVGString(d) : null), [d]);
-}
-
 /** Ré-exporté pour les tests et les écrans : la règle de capture du tracé. */
 export { MIN_X_STEP };
 
 /**
- * Export par défaut pour `React.lazy` — voir `OracleCanvas.tsx`. Le module ne
- * doit être évalué qu'une fois CanvasKit chargé, sans quoi `Skia` se lie à une
- * API non initialisée et lève au premier tracé.
+ * Export par défaut pour `React.lazy` — voir `OracleCanvas.tsx`. Le chargement
+ * différé ne sert plus à attendre un moteur, seulement à garder le graphe hors
+ * du bundle d'entrée : on ne paie ses kilo-octets qu'en ouvrant l'onglet.
  */
 export default OracleGraph;

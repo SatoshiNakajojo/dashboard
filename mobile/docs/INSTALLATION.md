@@ -406,7 +406,7 @@ La version *maskable* est volontairement plus petite : Android rogne jusqu'à
 | Connecté, mais « Aucune session prévue » | La base est vide et l'app ne sait pas créer de soirée. Collez `mobile/supabase/first-night.sql` dans le SQL Editor |
 | Tout a réussi, mais le site ne change pas | Vous avez construit depuis une branche que GitHub Pages ne sert pas. Fusionnez dans `main`, puis reconstruisez → §2.2 |
 | L'app s'ouvre avec une barre d'adresse | Le document publié n'a pas ses balises PWA. `npm run deploy` le vérifie et refuse désormais de publier sans |
-| Écran blanc sur l'Oracle | CanvasKit n'a pas pu se charger. Vérifiez que `canvaskit.wasm` est bien dans `club/` |
+| Écran blanc sur l'Oracle | Ne devrait plus arriver : le graphe est en SVG et `ChartBoundary` attrape le reste. Si ça se produit, ouvrez l'inspecteur — le message y est |
 
 ## Limites connues de la PWA
 
@@ -417,8 +417,9 @@ La version *maskable* est volontairement plus petite : Android rogne jusqu'à
 - **iOS peut purger les données** d'un site web inutilisé pendant sept jours.
   Une app installée sur l'écran d'accueil y échappe — raison de plus pour
   l'installer plutôt que de garder l'onglet.
-- **Premier chargement lourd.** Le moteur graphique de l'Oracle (CanvasKit)
-  pèse 8 Mo. Il est mis en cache après la première ouverture — conseillez le
-  Wi-Fi pour l'installation.
+- **Premier chargement.** L'app pèse environ 3,6 Mo, mise en cache après la
+  première ouverture. Elle en faisait 11,5 : le moteur graphique de l'Oracle
+  (CanvasKit, 7,7 Mo de WebAssembly) était téléchargé à chaque démarrage, même
+  sans jamais ouvrir l'onglet. Le graphe est passé en SVG.
 - **Safari en navigation privée** n'enregistre pas la session : il faut se
   reconnecter à chaque ouverture.

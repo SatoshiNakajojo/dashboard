@@ -45,8 +45,5 @@ yarn-error.*
 /ios
 /android
 
-# CanvasKit, copié depuis node_modules par `npm run canvaskit`
-public/canvaskit.wasm
-
 # État local de la CLI Supabase (projet lié, migrations appliquées)
 supabase/.temp/

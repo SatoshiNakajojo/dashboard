@@ -21,7 +21,6 @@ import {
 
 import { BootScreen } from '@/components/BootScreen';
 import { hideBootShell } from '@/lib/bootShell';
-import { loadSkia } from '@/lib/skiaWeb';
 import { useProfileBootstrap } from '@/features/auth/useAuth';
 import { useSession } from '@/hooks/useSession';
 import { isSupabaseConfigured } from '@/lib/supabase';
@@ -44,12 +43,6 @@ export default function RootLayout() {
     JetBrainsMono_500Medium,
     JetBrainsMono_600SemiBold,
   });
-
-  useEffect(() => {
-    // Lancé sans être attendu : l'app démarre même si CanvasKit met du temps
-    // ou ne vient jamais. C'est l'onglet Oracle qui dégrade, pas l'application.
-    void loadSkia();
-  }, []);
 
   useEffect(() => {
     // Une police manquante ne doit pas bloquer l'app sur son splash : on laisse

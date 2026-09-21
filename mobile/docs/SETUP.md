@@ -38,14 +38,14 @@ dossier `app/`.
 > `node -p "require('expo/bundledNativeModules.json')['react-native-reanimated']"`.
 > C'est ce qui a été fait ici ; le `package.json` final est identique.
 
-## 3. Geste, animation et Skia
+## 3. Geste et animation
 
-Skia 2 s'appuie sur Reanimated 4, qui s'appuie lui-même sur `react-native-worklets` :
+Reanimated 4 s'appuie sur `react-native-worklets` :
 les trois s'installent ensemble, sous peine d'un écran rouge au premier rendu.
 
 ```bash
 npx expo install react-native-gesture-handler react-native-reanimated \
-  react-native-worklets @shopify/react-native-skia
+  react-native-worklets
 ```
 
 ## 4. Supabase
@@ -126,7 +126,7 @@ l'application tourne entièrement sur les mocks de `src/mocks`** : les trois
 npm start          # Metro + QR code
 npm run ios        # simulateur iOS (macOS requis)
 npm run android    # émulateur Android
-npm run web        # copie canvaskit.wasm puis démarre le web
+npm run web        # démarre le web
 ```
 
 Vérifications :
@@ -146,16 +146,14 @@ ce qui rend les fixtures testables sans les recopier.
 
 ## Le cas du web
 
-Skia est natif sur iOS et Android. Sur le web, c'est un binaire WebAssembly de
-8 Mo qu'il faut servir soi-même :
+Le graphe de l'Oracle est dessiné en `react-native-svg`, sur les trois
+plateformes. Il l'était en Skia : sur le web, cela imposait 7,7 Mo de
+WebAssembly (CanvasKit) téléchargés à chaque démarrage, même sans jamais ouvrir
+l'onglet. Rien à copier, rien à préparer.
 
-```bash
-npm run canvaskit   # copie node_modules/canvaskit-wasm/.../canvaskit.wasm → public/
-```
-
-Le fichier n'est pas versionné. `src/lib/skiaWeb.ts` le charge **sans bloquer le
-démarrage** : si CanvasKit tarde ou ne vient pas, l'onglet Oracle affiche
-« graphique indisponible » et le reste de l'app fonctionne normalement.
+Le graphe reste chargé à la demande (`React.lazy`) : 55 Ko qu'on ne paie qu'en
+ouvrant l'onglet. Et `ChartBoundary` l'entoure — un plantage du graphe affiche
+une ligne de texte, il n'emporte plus l'écran.
 
 ---
 

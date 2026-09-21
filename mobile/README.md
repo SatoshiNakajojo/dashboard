@@ -2,7 +2,7 @@
 
 Application privée d'un club de sept investisseurs de Nouméa, installable sur
 l'écran d'accueil — **une PWA**, comme le dashboard JCGI.
-React Native (Expo SDK 57) · TypeScript · NativeWind v4 · Supabase · Skia.
+React Native (Expo SDK 57) · TypeScript · NativeWind v4 · Supabase.
 
 **[Comment l'installer sur un téléphone →](docs/INSTALLATION.md)**
 
@@ -80,7 +80,7 @@ Le rollback n'est pas un cas d'erreur exotique. Deux membres qui tapent
 perdant voit sa pastille revenir avec une ligne d'explication. Aucune
 interruption, aucune boîte de dialogue.
 
-### `OracleGraph` — Skia, time-lock, superposition CoinGecko
+### `OracleGraph` — SVG, time-lock, superposition CoinGecko
 
 Deux invariants :
 
@@ -310,7 +310,7 @@ dans un club de sept. Les mocks reprennent les totaux du design ; le seed
 Supabase, lui, reste à un vote par membre.
 
 **Étiquettes d'axes.** Rendues en `<Text>` React Native par-dessus la toile,
-pas en `SkText` : cela évite de charger les polices une seconde fois dans Skia
+pas en `<Text>` SVG : la typographie reste strictement celle du reste de l'app,
 et garde une typographie strictement identique au reste de l'app. Elles sont
 positionnées dans le repère logique puis mises à l'échelle — donc alignées au
 pixel près sur la grille peinte.
@@ -353,6 +353,47 @@ de la palette des membres — **à luminosité et saturation constantes**. Le
 registre sobre du design survit ; seule la teinte bouge. `src/theme/tokens.ts`
 et `tailwind.config.js` sont deux copies de la même vérité : toute couleur
 ajoutée à l'un doit l'être à l'autre.
+
+---
+
+## L'Oracle plantait : 7,7 Mo de WebAssembly
+
+Un membre a signalé que l'onglet Oracle tuait la page. Aucune erreur, aucun
+message : l'écran mourait.
+
+La mesure, sur les octets réellement publiés : **l'app téléchargeait 11,5 Mo au
+démarrage, dont 7,7 Mo de `canvaskit.wasm`** — le moteur Skia compilé en
+WebAssembly. Et elle les téléchargeait **sur l'écran d'accueil**, avant même
+qu'on ouvre l'Oracle, parce que `loadSkia()` partait au montage de la racine.
+Dans une PWA autonome iOS, ce budget — un module WASM de 8 Mo, un contexte
+WebGL plein écran à 3× la densité de pixels — est exactement ce qui fait tuer
+la page par le système.
+
+Le graphe est passé à **`react-native-svg`**, qui était déjà une dépendance du
+projet et n'était utilisé nulle part. Le port est mécanique parce que
+`src/lib/chart.ts` produisait **déjà** des chaînes de chemin SVG, que Skia
+recompilait ensuite en `SkPath` : les passer directement retire une conversion.
+Le reste se traduit terme à terme — `DashPathEffect` devient `strokeDasharray`,
+le `LinearGradient` Skia devient un `<Defs><LinearGradient>` en
+`userSpaceOnUse`, `<Group transform>` devient `<G scale>`.
+
+Ce qu'on y gagne, mesuré en navigateur sur la build publiée :
+
+| | avant | après |
+|---|---|---|
+| Téléchargé au démarrage | 11,47 Mo | **3,59 Mo** |
+| Coût de l'onglet Oracle | 440 Ko (+ 7,7 Mo déjà chargés) | **53 Ko** |
+| Morceau différé `OracleGraph` | 466 Ko | **55 Ko** |
+
+Le geste de tracé, le time-lock, la superposition des courbes du club et le
+dégradé sous la courbe BTC sont inchangés — vérifiés en navigateur, tracé au
+doigt compris.
+
+**Et une barrière.** `ChartBoundary` entoure le graphe. Elle ne répare rien :
+elle garantit que le pire cas est une ligne de texte au lieu d'une app morte.
+Un graphe est le seul endroit de l'app où l'on peint des données arbitraires
+sur une pile de rendu qui n'est pas celle du reste ; une exception y remontait
+jusqu'à la racine React, qui démonte tout.
 
 ---
 

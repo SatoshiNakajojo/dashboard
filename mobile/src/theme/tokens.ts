@@ -53,6 +53,11 @@ export const a = {
   pressed: 'rgba(232,144,61,.06)',
   btcFillTop: 'rgba(232,144,61,.22)',
   btcFillBottom: 'rgba(232,144,61,0)',
+  // Le même dégradé, décomposé : un `<Stop>` SVG veut une couleur et une
+  // opacité séparées, et `rgba()` dans `stopColor` n'est pas portable.
+  btcFillColor: '#E8903D',
+  btcFillTopOpacity: 0.22,
+  btcFillBottomOpacity: 0,
   btcHalo: 'rgba(232,144,61,.16)',
   nowHalo: 'rgba(232,144,61,.18)',
   scrim: 'rgba(6,5,3,.62)',
