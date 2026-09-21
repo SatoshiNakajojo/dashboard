@@ -22,8 +22,8 @@
         flex: 1;
       }
     </style>
-  <link rel="icon" href="/dashboard/club/favicon.ico"/><link rel="preload" href="/dashboard/club/_expo/static/css/web-1a812c58529dde2780cb06e8f1bcf242.css" as="style">
-<link rel="stylesheet" href="/dashboard/club/_expo/static/css/web-1a812c58529dde2780cb06e8f1bcf242.css">
+  <link rel="icon" href="/dashboard/club/favicon.ico"/><link rel="preload" href="/dashboard/club/_expo/static/css/web-0223a35179359ac9ceab918bf1401b53.css" as="style">
+<link rel="stylesheet" href="/dashboard/club/_expo/static/css/web-0223a35179359ac9ceab918bf1401b53.css">
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -55,6 +55,60 @@
     </noscript>
     <!-- The root element for your Expo app. -->
     <div id="root"></div>
-  <script src="/dashboard/club/_expo/static/js/web/__expo-metro-runtime-1f8f5d3ca6b7f58204d51e14506d73fb.js" defer></script><script src="/dashboard/club/_expo/static/js/web/__common-e03d1d1da571bffd188460ee8f50bb11.js" defer></script><script src="/dashboard/club/_expo/static/js/web/entry-d79e4acc3f73c90e82903f92b30cd8cc.js" defer></script>
+  <script src="/dashboard/club/_expo/static/js/web/__expo-metro-runtime-1f8f5d3ca6b7f58204d51e14506d73fb.js" defer></script><script src="/dashboard/club/_expo/static/js/web/__common-eeb1e327e774e759b6a6a3c9fa424f56.js" defer></script><script src="/dashboard/club/_expo/static/js/web/entry-d9089cb242644984dc2b3770c4324ec0.js" defer></script>
+
+    <div id="boot" aria-label="Chargement" role="progressbar">
+      <img id="boot-logo" src="icon-192.png" alt="" width="132" height="132" />
+      <div id="boot-chain">
+        <div class="boot-row"><i class="boot-b"></i><i class="boot-b"></i><i class="boot-b"></i><i class="boot-b"></i><i class="boot-b"></i><i class="boot-b"></i><i class="boot-b"></i><i class="boot-b"></i></div>
+        <div id="boot-fill"><div class="boot-row"><i class="boot-b on"></i><i class="boot-b on"></i><i class="boot-b on"></i><i class="boot-b on"></i><i class="boot-b on"></i><i class="boot-b on"></i><i class="boot-b on"></i><i class="boot-b on"></i></div></div>
+      </div>
+      <p id="boot-label">MINAGE EN COURS</p>
+    </div>
+    <style>
+      #boot {
+        position: fixed; inset: 0; z-index: 9999;
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        gap: 26px; background: #0A0806;
+        transition: opacity .25s ease-out;
+      }
+      #boot.done { opacity: 0; pointer-events: none; }
+      #boot-logo { width: 132px; height: 132px; }
+      #boot-chain { position: relative; }
+      /* « width: max-content » et « flex: none » ensemble : sans eux, les
+         blocs du calque doré se compriment dans la largeur animée au lieu
+         d'être découpés par elle, et la chaîne se remplit de tranches au lieu
+         de blocs. Le défaut ne se voit qu'une fois l'animation lancée.
+         (Pas de guillemets obliques ici : on est dans un gabarit de chaîne.) */
+      .boot-row { display: flex; gap: 5px; width: max-content; }
+      .boot-b {
+        flex: none;
+        width: 11px; height: 11px; border-radius: 1px;
+        border: 1px solid #3A2F1E; box-sizing: border-box;
+      }
+      .boot-b.on { border-color: #E8903D; background: #E8903D; }
+      /* Le remplissage est un calque découpé qui s'élargit par crans : chaque
+         cran tombe dans un intervalle entre deux blocs, jamais au milieu de
+         l'un d'eux — un demi-bloc doré se verrait comme un défaut. */
+      #boot-fill {
+        position: absolute; inset: 0; overflow: hidden; width: 0;
+        animation: boot-mine 1650ms steps(8, end) infinite;
+      }
+      @keyframes boot-mine {
+        0% { width: 0; }
+        72.73% { width: 100%; }
+        100% { width: 100%; }
+      }
+      #boot-label {
+        margin: 0; color: #6D6455;
+        font: 500 9px/1 ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+        letter-spacing: 2.2px;
+      }
+      @media (prefers-reduced-motion: reduce) {
+        /* Sans mouvement, la chaîne reste pleine : elle dit encore « ça
+           travaille » sans imposer une animation à qui n'en veut pas. */
+        #boot-fill { animation: none; width: 100%; }
+      }
+    </style>
 </body>
 </html>
