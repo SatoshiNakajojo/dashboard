@@ -308,6 +308,11 @@ Rien ne bloque. Ce qui suit est du confort :
   autorise les appels navigateur. Les actions n'en ont pas : il faudrait
   relayer `v1/finance/search` de Yahoo par une fonction Edge, comme pour les
   cotations. Le sélecteur de place couvre le besoin en attendant.
+- **Créer une Crypto Night depuis l'app.** C'est le manque le plus visible une
+  fois le club en ligne : l'app sait rejoindre une soirée et prendre une ligne
+  de potluck, pas les créer. Le dossier de design n'a pas d'écran
+  d'administration. En attendant, `supabase/first-night.sql` pose une soirée et
+  sa liste, et se relance sans créer de doublon.
 - **Taille de position.** La colonne existe et les cartes l'affichent, mais le
   composer ne la collecte pas — le design ne lui donne pas de champ.
 - **Ouverture d'une saison à la main.** Elles tournent seules tous les 90 jours

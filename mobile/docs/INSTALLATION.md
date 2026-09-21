@@ -403,6 +403,7 @@ La version *maskable* est volontairement plus petite : Android rogne jusqu'à
 | Aucun courriel, aucune erreur | Regardez **Authentication → Logs** dans Supabase : l'envoi y apparaît, réussi ou non |
 | Une liste reste vide alors que la base contient des lignes | `npm run check:supabase` (§1.8) : le plus souvent une migration non appliquée, ou la connexion qui n'a jamais abouti |
 | Connecté dans Safari, mais l'app installée redemande le code | Deux stockages distincts. C'est normal, et c'est pourquoi le code prime sur le lien |
+| Connecté, mais « Aucune session prévue » | La base est vide et l'app ne sait pas créer de soirée. Collez `mobile/supabase/first-night.sql` dans le SQL Editor |
 | Tout a réussi, mais le site ne change pas | Vous avez construit depuis une branche que GitHub Pages ne sert pas. Fusionnez dans `main`, puis reconstruisez → §2.2 |
 | L'app s'ouvre avec une barre d'adresse | Le document publié n'a pas ses balises PWA. `npm run deploy` le vérifie et refuse désormais de publier sans |
 | Écran blanc sur l'Oracle | CanvasKit n'a pas pu se charger. Vérifiez que `canvaskit.wasm` est bien dans `club/` |
