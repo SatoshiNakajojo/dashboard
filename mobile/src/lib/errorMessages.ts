@@ -27,7 +27,19 @@ const TRANSLATIONS: [pattern: RegExp, message: string][] = [
     /only request this after (\d+) seconds?/i,
     'Un code vient d’être envoyé. Patientez quelques secondes.',
   ],
-  [/token has expired|invalid token|otp_expired/i, 'Ce code est expiré ou incorrect.'],
+  /**
+   * Le jeton d'authentification de l'app, pas le code du membre.
+   *
+   * GoTrue répond « invalid token » aussi bien pour un en-tête `Authorization`
+   * qu'il n'arrive pas à lire que pour un code à six chiffres inconnu. Les
+   * confondre coûte cher : on cherche l'erreur dans la boîte de réception du
+   * membre alors qu'elle est dans la configuration de l'app.
+   */
+  [
+    /unable to parse or verify signature|bad_jwt|invalid claim|invalid jwt/i,
+    'L’application n’arrive pas à s’authentifier auprès du serveur. Le code n’est pas en cause.',
+  ],
+  [/token has expired|otp_expired|invalid token/i, 'Ce code est expiré ou incorrect.'],
   [/violates row-level security/i, 'Cette ligne ne vous appartient pas.'],
   [
     /failed to fetch|network request failed|load failed/i,

@@ -26,6 +26,24 @@ describe('erreurs d’authentification', () => {
     }
   });
 
+  it('ne fait pas passer un défaut de configuration pour un mauvais code', () => {
+    // GoTrue dit « invalid token » dans les deux cas. Les confondre envoie
+    // chercher l'erreur dans la boîte de réception du membre, alors qu'elle
+    // est dans l'en-tête `Authorization` que l'app envoie.
+    for (const message of [
+      'invalid JWT: unable to parse or verify signature, token is malformed',
+      'bad_jwt',
+    ]) {
+      assert.match(describeError({ message }), /n’arrive pas à s’authentifier/, message);
+    }
+  });
+
+  it('garde son message au vrai code périmé', () => {
+    for (const message of ['Token has expired or is invalid', 'otp_expired']) {
+      assert.equal(describeError({ message }), 'Ce code est expiré ou incorrect.', message);
+    }
+  });
+
   it('explique la limite d’envoi de courriels', () => {
     assert.equal(
       describeError({ message: 'Email rate limit exceeded' }),
