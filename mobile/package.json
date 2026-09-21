@@ -3,9 +3,9 @@
   "version": "1.0.0",
   "main": "expo-router/entry",
   "dependencies": {
-    "@expo-google-fonts/instrument-serif": "^0.4.1",
+    "@expo-google-fonts/fraunces": "^0.4.1",
     "@expo-google-fonts/jetbrains-mono": "^0.4.1",
-    "@expo-google-fonts/manrope": "^0.4.2",
+    "@expo-google-fonts/plus-jakarta-sans": "^0.4.2",
     "@expo/metro-runtime": "~57.0.15",
     "@react-native-async-storage/async-storage": "^2.2.0",
     "@shopify/react-native-skia": "^2.6.2",
@@ -55,7 +55,7 @@
     "format": "prettier --write \"**/*.{ts,tsx,js,json,md,sql}\"",
     "canvaskit": "node -e \"require('fs').mkdirSync('public',{recursive:true});require('fs').copyFileSync(require.resolve('canvaskit-wasm/bin/full/canvaskit.wasm'),'public/canvaskit.wasm')\"",
     "test": "node --experimental-strip-types --import ./scripts/register-alias.mjs --test \"src/**/__tests__/*.test.ts\" \"supabase/functions/**/__tests__/*.test.ts\" \"scripts/__tests__/*.test.mjs\"",
-    "build:web": "npm run canvaskit && expo export --platform web --output-dir dist --clear",
+    "build:web": "npm run canvaskit && expo export --platform web --output-dir dist --clear && node scripts/decorate-web.mjs dist",
     "deploy": "node scripts/deploy-pages.mjs",
     "check:supabase": "node scripts/check-supabase.mjs"
   },

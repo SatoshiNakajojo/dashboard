@@ -13,11 +13,12 @@
  * Il ne commite rien : à vous de relire puis de pousser.
  */
 
-import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { injectPwaHead, missingTags } from './pwa-head.mjs';
+import { decorateDir, htmlFiles } from './decorate-web.mjs';
+import { missingTags } from './pwa-head.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const DIST = path.join(HERE, '..', 'dist');
@@ -34,25 +35,10 @@ rmSync(TARGET, { recursive: true, force: true });
 mkdirSync(TARGET, { recursive: true });
 cpSync(DIST, TARGET, { recursive: true });
 
-/** Tous les documents HTML publiés, quel que soit le mode de rendu. */
-function htmlFiles(dir) {
-  const out = [];
-  for (const entry of readdirSync(dir, { withFileTypes: true })) {
-    const full = path.join(dir, entry.name);
-    if (entry.isDirectory()) out.push(...htmlFiles(full));
-    else if (entry.name.endsWith('.html')) out.push(full);
-  }
-  return out;
-}
-
-let injected = 0;
-for (const file of htmlFiles(TARGET)) {
-  const result = injectPwaHead(readFileSync(file, 'utf8'));
-  if (result.injected) {
-    writeFileSync(file, result.html);
-    injected += 1;
-  }
-}
+// `build:web` a normalement déjà fait ce travail sur `dist/` ; on le refait
+// ici parce qu'une publication doit être complète quoi qu'il se soit passé
+// avant elle, et que les injections sont idempotentes.
+const injected = decorateDir(TARGET);
 
 /**
  * GitHub Pages n'a pas de réécriture d'URL : sans ce fichier, ouvrir
@@ -86,6 +72,6 @@ for (const asset of ['manifest.json', 'sw.js', 'apple-touch-icon.png', 'icon-512
 
 const pages = htmlFiles(TARGET).length;
 console.log(`Publié dans ${path.relative(process.cwd(), TARGET)}/`);
-console.log(`  ${pages} document(s) HTML, dont ${injected} complété(s) avec les balises PWA`);
+console.log(`  ${pages} document(s) HTML, dont ${injected} complété(s) à la publication`);
 console.log('  installable : oui');
 console.log('\nRelisez, puis : git add club && git commit && git push');

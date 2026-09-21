@@ -356,6 +356,83 @@ ajoutée à l'un doit l'être à l'autre.
 
 ---
 
+## Trois polices, et pourquoi celles-ci
+
+Le serif d'affichage était **Instrument Serif**. Mesuré sur fond noir, ses
+pleins s'amincissent jusqu'à disparaître : c'est une police de magazine, faite
+pour de l'encre sur du papier, et le club la lisait sur un écran sombre.
+
+Onze familles ont été rendues côte à côte, au même corps, sur le vrai fond de
+l'app, avec le vrai texte des cartes. **Fraunces** l'emporte : des fûts qui
+survivent au fond sombre, et une chaleur de vieille affiche qui répond au badge
+du club mieux qu'un didone. Le corps passe à **Plus Jakarta Sans**, plus ouvert
+que Manrope aux petites tailles. **JetBrains Mono** ne bouge pas — c'est le
+registre technique, il était juste.
+
+La mesure qui a compté : Fraunces est **1,42 fois plus large** qu'Instrument
+Serif à corps égal. Ce n'est pas un détail de goût. Instrument Serif est
+exceptionnellement étroite, et sur les onze candidates, **aucune** n'approche sa
+largeur sans retomber dans le défaut qu'on corrigeait — les deux plus étroites,
+EB Garamond et Crimson Pro, sont aussi les plus fines. Changer de serif impose
+donc de changer de gabarit : c'est assumé, et chaque écran a été repassé en
+navigateur pour vérifier qu'aucun texte ne déborde ni ne se coupe.
+
+---
+
+## Ce qu'on voit avant que l'app existe
+
+Le bundle pèse 2,7 Mo. Entre le moment où Safari reçoit le document et celui où
+React peint quelque chose, il s'écoule plusieurs secondes — et pendant ce temps
+l'app était un rectangle noir. Sur un écran d'accueil d'iPhone, un rectangle
+noir se lit « ça a planté ».
+
+`scripts/boot-shell.mjs` pose une coquille dans le document publié : le logo, et
+une chaîne de huit blocs qui se minent en boucle. Elle est là **dès le premier
+octet** — aucune police à charger, aucun JavaScript, et pour seule image
+l'icône que la PWA a déjà en cache. Si le bundle n'arrive jamais, elle reste :
+c'est encore mieux qu'une page blanche.
+
+Pas de pourcentage. On ignore le débit du réseau, et une barre bloquée à 80 %
+ressemble à une panne ; des blocs qui se minent ne promettent que « ça
+travaille », ce qui est la seule chose vraie.
+
+`src/components/BootScreen.tsx` en est la copie React — elle prend le relais
+pendant le chargement des polices, et sur mobile natif elle est seule. Les deux
+doivent se ressembler : c'est ce qui rend le passage de l'une à l'autre
+invisible. L'app retire la coquille quand elle est prête, et elle seule sait
+quand ce moment arrive.
+
+Le remplissage est un calque découpé qui s'élargit par crans, un par bloc. Le
+premier essai laissait les blocs **se comprimer** dans la largeur animée au lieu
+d'être découpés par elle : la chaîne se remplissait de tranches dorées. Ça ne se
+voit qu'une fois l'animation lancée, donc jamais en relisant le code.
+
+---
+
+## Le huitième d'écran perdu en bas
+
+La barre d'onglets réservait `24 + insets.bottom`. C'était deux fois la même
+chose : les 24 de la maquette dessinaient la barre d'accueil que l'inset système
+mesure déjà.
+
+Mesuré sur une capture du club — deux repères nets, le soulignement d'onglet en
+haut et le trait d'indicateur en bas — la barre atteignait **131 pt**, un
+huitième de l'écran pour trois mots. Le défaut était invisible en
+développement, où `insets.bottom` vaut 0 : il ne pouvait apparaître que sur un
+vrai téléphone.
+
+`bottomInset()` borne désormais la marge entre 12 et 34 pt. La borne haute n'est
+pas de la superstition : dans une PWA autonome iOS, `env(safe-area-inset-bottom)`
+remonte parfois bien plus que les 34 pt de la barre d'accueil, et une marge
+décorative ne doit pas suivre une valeur aberrante. Au pire on frôle la zone
+système de quelques points ; sans borne, on reperd ce qu'on vient de récupérer.
+
+Le bouton flottant descend au passage de 96 à 24 pt : il était calé sur la
+hauteur de barre de la maquette, et flottait au milieu de la liste où il
+masquait un ticker sur deux.
+
+---
+
 ## Deux fournisseurs de cours
 
 | Classe d'actif | Fournisseur |

@@ -60,12 +60,27 @@ export const a = {
   rektRule: 'rgba(154,84,80,.5)',
 } as const;
 
+/**
+ * Trois familles, trois rôles qui ne s'échangent pas.
+ *
+ * Le serif d'affichage était Instrument Serif. Mesuré sur fond noir, ses
+ * pleins s'amincissent jusqu'à disparaître : c'est une police de magazine,
+ * faite pour de l'encre sur du papier. Fraunces tient le même registre avec
+ * des fûts qui survivent au fond sombre, et sa chaleur de vieille affiche
+ * répond au badge du club mieux qu'un didone.
+ *
+ * Elle est en revanche **1,42 fois plus large** à taille égale — Instrument
+ * Serif est exceptionnellement étroite, et aucune police plus solide ne
+ * l'égale sur ce point. Les tailles d'affichage ont donc été reprises là où
+ * la largeur comptait ; ce n'est pas un détail qu'on peut remettre à plus
+ * tard sans voir des titres déborder.
+ */
 export const f = {
-  serif: 'InstrumentSerif_400Regular',
-  serifItalic: 'InstrumentSerif_400Regular_Italic',
-  sans: 'Manrope_400Regular',
-  sansMed: 'Manrope_500Medium',
-  sansSemi: 'Manrope_600SemiBold',
+  serif: 'Fraunces_400Regular',
+  serifItalic: 'Fraunces_400Regular_Italic',
+  sans: 'PlusJakartaSans_400Regular',
+  sansMed: 'PlusJakartaSans_500Medium',
+  sansSemi: 'PlusJakartaSans_600SemiBold',
   mono: 'JetBrainsMono_400Regular',
   monoMed: 'JetBrainsMono_500Medium',
   monoSemi: 'JetBrainsMono_600SemiBold',

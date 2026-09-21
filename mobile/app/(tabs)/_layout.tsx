@@ -4,6 +4,7 @@ import { Tabs } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Micro } from '@/components/ui/Micro';
+import { bottomInset } from '@/lib/insets';
 import { c } from '@/theme/tokens';
 
 /**
@@ -35,7 +36,7 @@ function ClubTabBar({ state, navigation }: TabBarProps) {
       style={{
         paddingTop: 12,
         paddingHorizontal: 16,
-        paddingBottom: 24 + insets.bottom,
+        paddingBottom: bottomInset(insets.bottom),
         gap: 6,
       }}
     >

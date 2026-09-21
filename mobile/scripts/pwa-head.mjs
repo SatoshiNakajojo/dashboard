@@ -71,6 +71,8 @@ export const REQUIRED = [
   'apple-touch-icon',
   'theme-color',
   'serviceWorker',
+  // Sans elle, l'app reste un rectangle noir le temps de charger son bundle.
+  'id="boot"',
 ];
 
 export function missingTags(html) {
