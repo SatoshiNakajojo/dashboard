@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
 
 import { describeError, supabase } from '@/lib/supabase';
 import { MOCK_CURRENT_USER_ID } from '@/mocks/members';
@@ -137,9 +137,40 @@ export interface ProfileBootstrap {
   create: (displayName: string) => Promise<boolean>;
 }
 
+/**
+ * L'existence d'un profil est lue à deux endroits — la garde de route et
+ * l'écran de connexion — et **elle doit être la même des deux côtés**.
+ *
+ * Deux instances du hook, c'était deux vérités : la création du profil ne
+ * parvenait qu'à celle de l'écran. La garde conservait son ancienne réponse,
+ * ne redirigeait jamais, et l'écran, sorti de l'étape du prénom, retombait sur
+ * le champ du code. Le membre créait son profil et se retrouvait devant la
+ * porte, sans un mot.
+ *
+ * Un compteur partagé suffit : l'incrémenter fait revérifier tout le monde.
+ */
+let bootstrapRevision = 0;
+const bootstrapListeners = new Set<() => void>();
+
+function announceProfileChange(): void {
+  bootstrapRevision += 1;
+  for (const listener of bootstrapListeners) listener();
+}
+
+function subscribeToProfileChange(listener: () => void): () => void {
+  bootstrapListeners.add(listener);
+  return () => {
+    bootstrapListeners.delete(listener);
+  };
+}
+
+const readRevision = () => bootstrapRevision;
+
 export function useProfileBootstrap(userId: string | null): ProfileBootstrap {
+  const revision = useSyncExternalStore(subscribeToProfileChange, readRevision, readRevision);
   const [needsProfile, setNeedsProfile] = useState(false);
   const [checked, setChecked] = useState<string | null>(null);
+  const [checkedAt, setCheckedAt] = useState(-1);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -162,10 +193,11 @@ export function useProfileBootstrap(userId: string | null): ProfileBootstrap {
       if (cause) setError(describeError(cause));
       setNeedsProfile(!data);
       setChecked(userId);
+      setCheckedAt(revision);
     })();
 
     return () => controller.abort();
-  }, [userId]);
+  }, [revision, userId]);
 
   const create = useCallback(
     async (displayName: string): Promise<boolean> => {
@@ -200,13 +232,17 @@ export function useProfileBootstrap(userId: string | null): ProfileBootstrap {
         return false;
       }
       setNeedsProfile(false);
+      // La garde de route lit sa propre instance : sans cet appel, elle
+      // ignorerait la création et laisserait le membre devant la porte.
+      announceProfileChange();
       return true;
     },
     [userId],
   );
 
   return {
-    checking: Boolean(supabase) && Boolean(userId) && checked !== userId,
+    checking:
+      Boolean(supabase) && Boolean(userId) && (checked !== userId || checkedAt !== revision),
     needsProfile,
     error,
     create,
