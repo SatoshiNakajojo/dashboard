@@ -82,11 +82,15 @@ export default function SignInScreen() {
           <Field
             label="CODE REÇU PAR COURRIEL"
             value={auth.code}
-            onChangeText={auth.setCode}
+            // `maxLength` compte les caractères, pas les chiffres : un code
+            // collé avec une espace se faisait tronquer à cinq chiffres, et le
+            // membre voyait « le code compte six chiffres » devant six chiffres
+            // affichés. On filtre avant de borner.
+            onChangeText={(text) => auth.setCode(text.replace(/\D/g, '').slice(0, 6))}
             placeholder="000000"
             keyboardType="number-pad"
             autoComplete="one-time-code"
-            maxLength={6}
+            maxLength={12}
             mono
           />
         )}
