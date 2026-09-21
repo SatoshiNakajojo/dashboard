@@ -3,12 +3,12 @@ import { LinearGradient } from 'expo-linear-gradient';
 
 import { c, goldRadial, goldRadialLocations } from '@/theme/tokens';
 
-/** Bouton d'action : cercle or, croix dessinée. Visible sur la vue Bag seule. */
-export function Fab({ onPress }: { onPress: () => void }) {
+/** Bouton d'action : cercle or, croix dessinée. */
+export function Fab({ onPress, label }: { onPress: () => void; label: string }) {
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel="Poster un call"
+      accessibilityLabel={label}
       onPress={onPress}
       style={{ position: 'absolute', right: 20, bottom: 96 }}
     >

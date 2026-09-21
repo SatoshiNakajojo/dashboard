@@ -79,7 +79,7 @@ export default function BagScreen() {
       </ScreenShell>
 
       {/* Le FAB n'apparaît que sur la vue Bag, et disparaît sheet ouverte. */}
-      {isBag && !composerOpen ? <Fab onPress={() => setComposerOpen(true)} /> : null}
+      {isBag && !composerOpen ? <Fab label="Poster un call" onPress={() => setComposerOpen(true)} /> : null}
 
       <ComposerSheet
         visible={composerOpen}

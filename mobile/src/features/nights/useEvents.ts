@@ -8,12 +8,26 @@ export interface EventWithAttendance extends ClubEvent {
   attendeeIds: string[];
 }
 
+export interface NightDraft {
+  /** Instant de début, décalage compris — `2026-10-03T19:30:00+11:00`. */
+  startsAt: string;
+  theme: string;
+  location: string;
+  tag: string;
+  /** Ce qu'il y a à apporter, laissé libre. Peut être vide. */
+  potluck: string[];
+}
+
 export interface EventsState {
   events: EventWithAttendance[];
   loading: boolean;
   error: string | null;
   /** Bascule la présence de l'utilisateur courant, en optimiste. */
   toggleRsvp: (eventId: string) => void;
+  /** Crée une soirée et sa liste. Résout `false` en cas d'échec. */
+  create: (draft: NightDraft) => Promise<boolean>;
+  /** Écriture en cours — le bouton s'en sert. */
+  creating: boolean;
 }
 
 /** Agenda des Crypto Nights + présences. */
@@ -29,6 +43,7 @@ export function useEvents(currentUserId: string | null): EventsState {
         })),
   );
   const [loading, setLoading] = useState(Boolean(supabase));
+  const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -139,8 +154,80 @@ export function useEvents(currentUserId: string | null): EventsState {
     [currentUserId, events],
   );
 
+  /**
+   * Crée une soirée, puis ses lignes de potluck.
+   *
+   * Pas optimiste, contrairement au RSVP : on n'affiche une soirée que lorsque
+   * la base l'a acceptée. Une Crypto Night qui apparaîtrait puis
+   * disparaîtrait serait pire que trois secondes d'attente — les six autres
+   * membres la voient.
+   *
+   * Le potluck est écrit après coup, et son échec ne défait pas la soirée : une
+   * soirée sans liste reste une soirée, et les lignes se rajoutent. Tout
+   * annuler pour une ligne refusée coûterait plus que ça ne protège.
+   */
+  const create = useCallback(
+    async (draft: NightDraft): Promise<boolean> => {
+      const client = supabase;
+      if (!client || !currentUserId || creating) return false;
+
+      setCreating(true);
+      setError(null);
+      try {
+        const { data, error: cause } = await client
+          .from('events')
+          .insert({
+            starts_at: draft.startsAt,
+            theme: draft.theme.trim(),
+            location: draft.location.trim(),
+            tag: draft.tag.trim() || 'Session',
+            created_by: currentUserId,
+          })
+          .select('id, starts_at, theme, location, tag')
+          .single();
+
+        if (cause || !data) {
+          setError(describeError(cause));
+          return false;
+        }
+
+        const lines = draft.potluck.map((name) => name.trim()).filter(Boolean);
+        if (lines.length > 0) {
+          const { error: potluckCause } = await client.from('potluck_items').insert(
+            lines.map((name, index) => ({
+              event_id: data.id,
+              item_name: name,
+              position: index + 1,
+            })),
+          );
+          if (potluckCause) setError(describeError(potluckCause));
+        }
+
+        // `events` n'est pas publiée en temps réel : le créateur doit voir sa
+        // soirée sans recharger, les autres la verront à leur prochaine visite.
+        setEvents((current) =>
+          [
+            ...current,
+            {
+              id: data.id,
+              startsAt: data.starts_at,
+              theme: data.theme,
+              location: data.location,
+              tag: data.tag,
+              attendeeIds: [],
+            },
+          ].sort((a, b) => a.startsAt.localeCompare(b.startsAt)),
+        );
+        return true;
+      } finally {
+        setCreating(false);
+      }
+    },
+    [creating, currentUserId],
+  );
+
   return useMemo(
-    () => ({ events, loading, error, toggleRsvp }),
-    [events, loading, error, toggleRsvp],
+    () => ({ events, loading, error, toggleRsvp, create, creating }),
+    [events, loading, error, toggleRsvp, create, creating],
   );
 }

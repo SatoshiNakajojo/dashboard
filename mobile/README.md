@@ -99,7 +99,7 @@ de 4 unités — et borné dans le repère.
 
 ## Ce qui a été vérifié
 
-- `npm run typecheck`, `npm run lint`, `npm test` — propres (189 tests).
+- `npm run typecheck`, `npm run lint`, `npm test` — propres (203 tests).
 - **Règles pures** : bornes et inversibilité du repère, monotonie du tracé,
   écart à la courbe réelle, espaces insécables du formatage français, perf vs ₿
   comme ratio et non soustraction, seuils et tri des deux classements.
@@ -137,10 +137,42 @@ de 4 unités — et borné dans le repère.
   figée au douzième jour de la saison I et un faux CoinGecko. L'app demande 13
   jours d'historique et non 90, affiche `JOUR 12 / 90`, laisse 78 jours de
   toile vierge à droite du marqueur, et titre « saison I ».
+- **Création d'une soirée** : feuille ouverte depuis l'onglet Nights dans
+  Chromium, soirée écrite avec `2026-10-03T19:30:00+11:00` et trois lignes de
+  potluck numérotées, carte affichée sans rechargement. Le navigateur de test
+  tourne en UTC : sans l'ancrage, la carte aurait annoncé 08:30.
+- **Dates du club** : le 31 avril et le 29 février 2027 sont refusés — ils se
+  découpent pourtant sans erreur — et `todayInClub` donne le jour calédonien,
+  pas le jour UTC.
 - **Diagnostic backend** : `npm run check:supabase` exécuté contre un faux
   projet Supabase, sain puis cassé — table absente, RLS inactive, migration
   partielle, fonction non déployée, inscription ouverte — et contre un projet
   injoignable. Chaque cas produit le bon verdict et le bon remède.
+
+---
+
+## Une soirée se propose depuis l'app, à l'heure du club
+
+N'importe quel membre propose une Crypto Night — le club n'a pas
+d'organisateur désigné, et la RLS vérifie seulement qu'on en est un. La feuille
+demande une date, un thème, un lieu, et jusqu'à six lignes de potluck laissées
+libres : c'est aux autres de se les attribuer, et c'est tout l'intérêt de
+l'écran.
+
+**L'heure saisie est toujours celle de Nouméa** (`src/lib/clubTime.ts`). Laisser
+`new Date(y, m, d, h, min)` décider reviendrait à laisser le fuseau de
+l'appareil choisir : un membre en déplacement qui programme « 19 h 30 » veut
+19 h 30 au club, pas 19 h 30 là où il se trouve. Le décalage est écrit dans la
+chaîne envoyée à la base, jamais calculé.
+
+L'affichage suit le même ancrage, sans quoi la carte contredirait la saisie à
+une minute d'intervalle. `splitEventDate` et `formatTime` lisent donc en UTC
+après décalage — une soirée à 23 h ne change pas de jour en route.
+
+La création n'est **pas** optimiste, contrairement au RSVP : une Crypto Night
+qui apparaîtrait puis disparaîtrait serait pire que trois secondes d'attente,
+parce que les six autres membres la voient. Le potluck est écrit ensuite, et son
+échec ne défait pas la soirée : une soirée sans liste reste une soirée.
 
 ---
 
@@ -308,11 +340,6 @@ Rien ne bloque. Ce qui suit est du confort :
   autorise les appels navigateur. Les actions n'en ont pas : il faudrait
   relayer `v1/finance/search` de Yahoo par une fonction Edge, comme pour les
   cotations. Le sélecteur de place couvre le besoin en attendant.
-- **Créer une Crypto Night depuis l'app.** C'est le manque le plus visible une
-  fois le club en ligne : l'app sait rejoindre une soirée et prendre une ligne
-  de potluck, pas les créer. Le dossier de design n'a pas d'écran
-  d'administration. En attendant, `supabase/first-night.sql` pose une soirée et
-  sa liste, et se relance sans créer de doublon.
 - **Taille de position.** La colonne existe et les cartes l'affichent, mais le
   composer ne la collecte pas — le design ne lui donne pas de champ.
 - **Ouverture d'une saison à la main.** Elles tournent seules tous les 90 jours

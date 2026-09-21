@@ -4,6 +4,8 @@
  * `fr-FR` ; on normalise pour ne jamais laisser passer une espace ordinaire.
  */
 
+import { CLUB_OFFSET_MINUTES } from './clubTime';
+
 /** Espace insécable étroite (U+202F), celle qu'attend la typographie française. */
 const NBSP = ' ';
 
@@ -62,21 +64,38 @@ const MONTHS_SHORT = [
   'JUIL', 'AOÛT', 'SEPT', 'OCT', 'NOV', 'DÉC',
 ];
 
+/**
+ * Le même instant, lu à l'heure de Nouméa.
+ *
+ * Une Crypto Night a lieu au club, et l'heure saisie est de l'heure
+ * calédonienne (`clubTime.ts`). L'afficher dans le fuseau de l'appareil ferait
+ * lire « 17:30 » à un membre en déplacement qui vient de taper « 19:30 » — la
+ * saisie et la carte se contrediraient à une minute d'intervalle.
+ *
+ * On lit donc les composantes en UTC après décalage : `getUTCHours()` ne
+ * consulte pas l'horloge du téléphone, contrairement à `getHours()`.
+ */
+function atClub(iso: string): Date | null {
+  const instant = new Date(iso);
+  if (Number.isNaN(instant.getTime())) return null;
+  return new Date(instant.getTime() + CLUB_OFFSET_MINUTES * 60_000);
+}
+
 /** Bloc date d'une carte d'événement : `{ day: '18', month: 'SEPT' }`. */
 export function splitEventDate(iso: string): { day: string; month: string } {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return { day: '--', month: '' };
+  const d = atClub(iso);
+  if (!d) return { day: '--', month: '' };
   return {
-    day: String(d.getDate()).padStart(2, '0'),
-    month: MONTHS_SHORT[d.getMonth()] ?? '',
+    day: String(d.getUTCDate()).padStart(2, '0'),
+    month: MONTHS_SHORT[d.getUTCMonth()] ?? '',
   };
 }
 
-/** `20:00` — heure locale sans secondes. */
+/** `20:00` — heure du club, sans secondes. */
 export function formatTime(iso: string): string {
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return '--:--';
-  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  const d = atClub(iso);
+  if (!d) return '--:--';
+  return `${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`;
 }
 
 /**
