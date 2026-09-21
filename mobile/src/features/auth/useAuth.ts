@@ -74,8 +74,19 @@ export function useAuth(): AuthState {
     const client = supabase;
     const digits = code.replace(/\D/g, '');
 
-    if (digits.length !== 6) {
-      setError('Le code compte six chiffres.');
+    /**
+     * Supabase laisse régler la longueur du code, de six à dix chiffres.
+     *
+     * La figer à six était une erreur coûteuse : sur un projet réglé à huit, le
+     * champ tronquait, et l'app envoyait six chiffres parfaitement formés que
+     * le serveur ne reconnaissait pas. Le membre lisait « code expiré ou
+     * incorrect » devant un code tout frais, correctement recopié.
+     *
+     * On ne vérifie donc qu'un minimum plausible. C'est au serveur de dire si
+     * le code est bon — lui seul le sait.
+     */
+    if (digits.length < 6) {
+      setError('Saisissez le code reçu par courriel.');
       return;
     }
     if (!client || busy) return;

@@ -395,6 +395,7 @@ La version *maskable* est volontairement plus petite : Android rogne jusqu'à
 |---|---|
 | Le courriel contient un **lien**, pas un code | Le gabarit Magic Link est resté celui par défaut → §1.6. Et s'il refuse de se modifier, c'est le SMTP qui manque → §1.5 |
 | Vous recevez vos codes, pas les autres membres | L'expéditeur `onboarding@resend.dev` n'écrit qu'au titulaire du compte Resend. Vérifiez un domaine → §1.5 |
+| « Ce code est expiré ou incorrect » devant un code tout frais | Vérifiez la longueur du code reçu. L'app accepte de six à dix chiffres depuis la correction ; une version antérieure tronquait à six et envoyait un code amputé. Au besoin, **Sign In / Providers → Email → Email OTP Length** |
 | Le lien du courriel ne mène nulle part | *Site URL* est resté sur `http://localhost:3000` → §1.7. `npm run check:supabase` le lit et le signale |
 | Le courriel arrive **vide** | Le gabarit a été réécrit par le client de messagerie. Prenez `magic-link-minimal.html`, et ne collez jamais le commentaire d'en-tête |
 | « Cette adresse n'est pas sur la liste du club. » | Aucun compte pour cette adresse → §1.3. Le club est fermé, personne ne s'auto-inscrit |

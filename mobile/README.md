@@ -129,7 +129,8 @@ de 4 unités — et borné dans le repère.
   et `$WIFX` annonce qu'aucun jeton ne correspond ; liste absente en BTC comme
   en ACTION. Avec Supabase configuré : la garde mène à la porte, l'adresse invalide est
   refusée, la panne réseau se lit « Connexion indisponible » et non en trace
-  technique.
+  technique. Un code à huit chiffres — la longueur est réglable côté Supabase —
+  traverse le champ sans être tronqué.
 - **Ancrage de la saison** : build web pilotée dans Chromium avec l'horloge
   figée au douzième jour de la saison I et un faux CoinGecko. L'app demande 13
   jours d'historique et non 90, affiche `JOUR 12 / 90`, laisse 78 jours de

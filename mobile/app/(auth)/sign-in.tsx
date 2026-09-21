@@ -82,12 +82,13 @@ export default function SignInScreen() {
           <Field
             label="CODE REÇU PAR COURRIEL"
             value={auth.code}
-            // `maxLength` compte les caractères, pas les chiffres : un code
-            // collé avec une espace se faisait tronquer à cinq chiffres, et le
-            // membre voyait « le code compte six chiffres » devant six chiffres
-            // affichés. On filtre avant de borner.
-            onChangeText={(text) => auth.setCode(text.replace(/\D/g, '').slice(0, 6))}
-            placeholder="000000"
+            // On filtre les chiffres avant de borner — `maxLength` compte les
+            // caractères, et un code collé avec une espace perdait sinon un
+            // chiffre. La borne est celle de Supabase, dix, pas six : la
+            // longueur du code se règle côté projet, et la supposer coûte un
+            // « code incorrect » devant un code parfaitement valide.
+            onChangeText={(text) => auth.setCode(text.replace(/\D/g, '').slice(0, 10))}
+            placeholder="Le code reçu"
             keyboardType="number-pad"
             autoComplete="one-time-code"
             maxLength={12}
