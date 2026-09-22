@@ -51,6 +51,13 @@ qu'un signal dont le stop est à 3 %, et les deux risquent le même montant.
 | `GSD_BACKSTOP_R` | 1,5 R | perte au-delà de laquelle on considère que le stop a échoué |
 | `GSD_TIME_STOP_H` | 24 h | âge au-delà duquel une position sans gain est rendue |
 
+**L'équité n'est pas `accountValue`.** Sur ce compte le collatéral vit en USDC
+spot : `clearinghouseState.marginSummary.accountValue` ne vaut que la marge
+immobilisée — relevé à **0,32 $** le 22/09 quand le capital réel était de
+**47,08 $**. `classifyHl` lit donc `perp + spot libre`, et jamais le spot
+retenu en plus du perp, qui serait le même collatéral compté deux fois.
+`scripts/panic-flat.mjs` affiche les trois chiffres séparément.
+
 **Le contrôle du risque est le stop posé chez l'exchange.** `flattenLosers` et
 `manageOpens` ne sont qu'un filet : ils ne coupent que sur un changement de
 thèse (Supertrend contre la position), un kill-switch, ou une perte au-delà du

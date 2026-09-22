@@ -10,8 +10,8 @@ import {
   GSD_MIN_NOTIONAL,
   GSD_RISK_PCT,
 } from "./bot";
-import { marginCeiling, orderTarget, planSize } from "./sizing";
-import type { SizePlan } from "./sizing";
+import { classifyHl, marginCeiling, orderTarget, planSize } from "./sizing";
+import type { HlBalances, SizePlan } from "./sizing";
 
 const STORAGE = "gsd-hl-agent-v1";
 
@@ -103,25 +103,11 @@ export async function readHlPositions(master: `0x${string}`): Promise<HlOpenPos[
   return out;
 }
 
-export type HlBalances = {
-  perps: number;
-  spot: number;
-  total: number;
-  withdrawable: number;
-  marginUsed: number;
-  unified: boolean;
-  trading: number;
-  free: number;
-  upnl: number;
-  cash: number;
-};
-
 function n(v: unknown) {
   const x = Number(v);
   return Number.isFinite(x) ? x : 0;
 }
 
-/** Une seule règle : le bot trade sur les Perps. On n’additionne jamais Spot + Perps. */
 export type HlFill = {
   t: number;
   coin: string;
@@ -189,39 +175,15 @@ export async function readHlClosingFills(master: `0x${string}`): Promise<HlFill[
   return out.slice(0, 400);
 }
 
-export function classifyHl(perps: number, spot: number, withdrawable = 0, marginUsed = 0): HlBalances {
-  const p = n(perps);
-  const s = n(spot);
-  const w = n(withdrawable);
-  const m = n(marginUsed);
-  const unified = p > 0 && s > 0 && Math.abs(p - s) <= Math.max(1, 0.05 * Math.max(p, s));
-  const trading = p;
-  const free = w > 0 ? w : Math.max(0, p - m);
-  return {
-    perps: p,
-    spot: s,
-    total: trading,
-    withdrawable: w,
-    marginUsed: m,
-    unified,
-    trading,
-    free,
-    upnl: 0,
-    cash: trading,
-  };
-}
-
-export function hlTradingEquity(perps: number, spot: number) {
-  return classifyHl(perps, spot).trading;
-}
-
 export {
   orderTarget,
   marginCeiling,
   orderNotional,
   planSize,
+  classifyHl,
+  hlTradingEquity,
 } from "./sizing";
-export type { SizeBind, SizePlan } from "./sizing";
+export type { SizeBind, SizePlan, HlBalances } from "./sizing";
 
 export async function readHlBalances(master: `0x${string}`): Promise<HlBalances> {
   const info = new InfoClient({ transport: new HttpTransport() });
@@ -236,7 +198,8 @@ export async function readHlBalances(master: `0x${string}`): Promise<HlBalances>
   for (const row of perp.assetPositions) upnl += n(row.position.unrealizedPnl);
   const usdc = spot.balances.find((b) => "coin" in b && b.coin === "USDC");
   const spotUsd = usdc && "total" in usdc ? n(usdc.total) : 0;
-  const bal = classifyHl(perps, spotUsd, withdrawable, marginUsed);
+  const spotHold = usdc && "hold" in usdc ? n(usdc.hold) : 0;
+  const bal = classifyHl(perps, spotUsd, withdrawable, marginUsed, spotHold);
   return { ...bal, upnl, cash: perps - upnl };
 }
 
@@ -409,11 +372,14 @@ export async function submitDeptOrder(
     if (mid == null) return { ok: false, error: `${coin}: prix illisible, ordre ignoré.` };
 
     const bal = await readHlBalances(session.master);
-    if (Number(bal.spot) >= 5 && !bal.unified && Number(bal.spot) > 1) {
+    if (Number(bal.spotFree) >= 1) {
       try {
-        await exchange.usdClassTransfer({ amount: String(Math.floor(Number(bal.spot) * 100) / 100), toPerp: true });
+        await exchange.usdClassTransfer({
+          amount: String(Math.floor(Number(bal.spotFree) * 100) / 100),
+          toPerp: true,
+        });
       } catch {
-        /* Unified */
+        /* compte unifié, ou transfert refusé : planSize bornera sur `free`. */
       }
     }
 

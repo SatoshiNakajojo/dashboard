@@ -50,9 +50,10 @@ async function main() {
   const wallet = privateKeyToAccount(key);
   const exchange = new ExchangeClient({ transport, wallet });
 
-  const [meta, state, open, mids] = await Promise.all([
+  const [meta, state, spot, open, mids] = await Promise.all([
     info.meta(),
     info.clearinghouseState({ user: MASTER }),
+    info.spotClearinghouseState({ user: MASTER }),
     info.frontendOpenOrders({ user: MASTER }),
     info.allMids(),
   ]);
@@ -64,15 +65,27 @@ async function main() {
     .map((r) => r.position)
     .filter((p) => Number(p.szi) !== 0);
 
-  const nav = Number(state.marginSummary.accountValue);
+  const perp = Number(state.marginSummary.accountValue);
   const marge = Number(state.marginSummary.totalMarginUsed);
+
+  // `accountValue` ne vaut que la marge immobilisée sur un compte dont le
+  // collatéral vit en spot : relevé à 0,32 $ le 22/09 quand le capital réel
+  // était de 47,08 $. L'équité est le perp plus le spot LIBRE — le spot
+  // retenu garantit déjà la marge perp, l'additionner le compterait deux fois.
+  const usdc = spot.balances.find((b) => b.coin === "USDC");
+  const spotTotal = Number(usdc?.total ?? 0);
+  const spotHold = Number(usdc?.hold ?? 0);
+  const spotFree = Math.max(0, spotTotal - spotHold);
+  const nav = perp + spotFree;
 
   console.log(`\n  compte ${MASTER}`);
   console.log(`  agent  ${wallet.address}`);
   console.log(`  ${GO ? "MODE RÉEL — les ordres partent" : "constat seul — rien ne sera envoyé (ajouter --go)"}\n`);
-  console.log(`  valeur du compte   ${usd(nav)}`);
-  console.log(`  marge utilisée     ${usd(marge)}  (${nav > 0 ? ((marge / nav) * 100).toFixed(0) : "?"} % du compte)`);
-  console.log(`  retirable          ${usd(Number(state.withdrawable))}\n`);
+  console.log(`  ÉQUITÉ             ${usd(nav)}   ← le capital réel`);
+  console.log(`    perp             ${usd(perp)}  (accountValue : la marge immobilisée)`);
+  console.log(`    spot USDC libre  ${usd(spotFree)}  (sur ${usd(spotTotal)}, dont ${usd(spotHold)} retenus)`);
+  console.log(`  marge utilisée     ${usd(marge)}  (${nav > 0 ? ((marge / nav) * 100).toFixed(0) : "?"} % de l'équité)`);
+  console.log(`  retirable perps    ${usd(Number(state.withdrawable))}\n`);
 
   // ---- 1. les ordres au repos ----
   console.log(`  ── ${open.length} ordre(s) au repos ──`);
@@ -158,8 +171,13 @@ async function main() {
       info.frontendOpenOrders({ user: MASTER }),
     ]);
     const reste = after.assetPositions.filter((r) => Number(r.position.szi) !== 0);
+    const spotAfter = await info.spotClearinghouseState({ user: MASTER });
+    const uAfter = spotAfter.balances.find((b) => b.coin === "USDC");
+    const navAfter =
+      Number(after.marginSummary.accountValue) +
+      Math.max(0, Number(uAfter?.total ?? 0) - Number(uAfter?.hold ?? 0));
     console.log(`\n  ── après ──`);
-    console.log(`     valeur du compte  ${usd(Number(after.marginSummary.accountValue))}`);
+    console.log(`     ÉQUITÉ            ${usd(navAfter)}`);
     console.log(`     marge utilisée    ${usd(Number(after.marginSummary.totalMarginUsed))}`);
     console.log(`     positions         ${reste.length}`);
     console.log(`     ordres au repos   ${stillOpen.length}`);

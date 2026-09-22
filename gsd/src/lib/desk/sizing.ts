@@ -115,3 +115,79 @@ export function planSize(input: {
     },
   };
 }
+
+export type HlBalances = {
+  perps: number;
+  spot: number;
+  /** Part du spot immobilisée en collatéral des perps. */
+  spotHold: number;
+  /** Spot disponible, transférable vers les perps. */
+  spotFree: number;
+  total: number;
+  withdrawable: number;
+  marginUsed: number;
+  unified: boolean;
+  /** Équité économique : ce sur quoi on dimensionne le risque. */
+  trading: number;
+  /** Marge utilisable IMMÉDIATEMENT côté perps. Le spot libre n'en fait pas
+   *  partie : il faut un usdClassTransfer avant de pouvoir s'en servir. */
+  free: number;
+  upnl: number;
+  cash: number;
+};
+
+function n(v: unknown) {
+  const x = Number(v);
+  return Number.isFinite(x) ? x : 0;
+}
+
+/*
+ * Relevé du 22/09/2026, après la coupe des quatre positions :
+ *   spot USDC  total 47,078827  hold 0,323338
+ *   perp       accountValue 0,322794
+ * `accountValue` ne valait plus que la marge immobilisée. Lire l'équité
+ * dessus faisait croire à un compte de 0,32 $ au lieu de 47,08 $ — et tout
+ * dimensionnement en aval s'effondrait. L'équité est donc le perp PLUS le
+ * spot libre, les deux relevés séparément.
+ */
+export function classifyHl(
+  perps: number,
+  spot: number,
+  withdrawable = 0,
+  marginUsed = 0,
+  spotHold = 0,
+): HlBalances {
+  // Clampés : une valeur de compte négative n'existe pas chez l'exchange, et
+  // en laisser passer une contaminerait tout le dimensionnement en aval.
+  const p = Math.max(0, n(perps));
+  const s = Math.max(0, n(spot));
+  const w = Math.max(0, n(withdrawable));
+  const m = Math.max(0, n(marginUsed));
+  const h = Math.min(Math.max(0, n(spotHold)), s);
+  const spotFree = Math.max(0, s - h);
+
+  // Le spot immobilisé sert déjà de collatéral aux perps : le compter en plus
+  // du perp reviendrait à additionner deux fois la même garantie.
+  const trading = p + spotFree;
+  const free = w > 0 ? w : Math.max(0, p - m);
+  const unified = h > 0 && s > 0 && Math.abs(p - h) <= Math.max(0.5, 0.05 * Math.max(p, h));
+
+  return {
+    perps: p,
+    spot: s,
+    spotHold: h,
+    spotFree,
+    total: trading,
+    withdrawable: w,
+    marginUsed: m,
+    unified,
+    trading,
+    free,
+    upnl: 0,
+    cash: trading,
+  };
+}
+
+export function hlTradingEquity(perps: number, spot: number) {
+  return classifyHl(perps, spot).trading;
+}

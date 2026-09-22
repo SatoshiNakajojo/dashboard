@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { marginCeiling, orderNotional, orderTarget, planSize } from "./sizing.ts";
+import { classifyHl, marginCeiling, orderNotional, orderTarget, planSize } from "./sizing.ts";
 import {
   GSD_LEVERAGE,
   GSD_MAX_BOOK_PCT,
@@ -134,6 +134,63 @@ describe("plancher d'exécution", () => {
         const r = planSize({ equity: eq, free: eq, entry: 100, stop: 100 * (1 - d), bookNotional: 0 });
         if (r.ok) assert.ok(r.plan.notional >= GSD_MIN_NOTIONAL, `${eq}$ / stop ${d}`);
       }
+    }
+  });
+});
+
+describe("classifyHl — l'équité est le perp PLUS le spot libre", () => {
+  /*
+   * Deux relevés réels du compte 0x04E4…16a2, le 22/09/2026.
+   * Entre les deux, quatre positions ont été coupées : `accountValue` est
+   * passé de 47,33 à 0,32, non pas parce que l'argent avait disparu, mais
+   * parce qu'il ne mesurait plus que la marge immobilisée.
+   */
+
+  it("avant la coupe : tout le collatéral est immobilisé", () => {
+    const b = classifyHl(47.334176, 47.32868, 0, 50.885546, 47.32868);
+    assert.ok(Math.abs(b.trading - 47.334176) < 0.01, `équité lue ${b.trading}`);
+    assert.equal(b.spotFree, 0);
+    assert.equal(b.free, 0, "marge saturée : rien de libre");
+    assert.equal(b.unified, true);
+  });
+
+  it("après la coupe : 0,32 $ immobilisé, mais 47 $ d'équité", () => {
+    const b = classifyHl(0.322794, 47.078827, 0, 0.323339, 0.323338);
+    assert.ok(Math.abs(b.trading - 47.078283) < 0.01, `équité lue ${b.trading}`);
+    assert.ok(b.trading > 40, "le bug lisait 0,32 $ et refusait tout");
+    assert.ok(Math.abs(b.spotFree - 46.755489) < 0.01);
+  });
+
+  it("ne compte jamais deux fois le collatéral immobilisé", () => {
+    // Le spot retenu garantit déjà la marge perp : l'additionner doublerait.
+    const b = classifyHl(10, 10, 0, 10, 10);
+    assert.equal(b.trading, 10);
+  });
+
+  it("le spot libre n'est pas de la marge utilisable tout de suite", () => {
+    const b = classifyHl(0.32, 47.08, 0, 0.32, 0.32);
+    assert.ok(b.free < 1, "il faut un usdClassTransfer avant de s'en servir");
+    // Donc planSize refuse, et c'est le bon comportement.
+    const r = planSize({ equity: b.trading, free: b.free, entry: 100, stop: 97, bookNotional: 0 });
+    assert.equal(r.ok, false);
+    assert.match(r.ok ? "" : r.error, /marge/);
+  });
+
+  it("une fois le transfert fait, la taille se calcule normalement", () => {
+    const b = classifyHl(47.08, 0, 47.08, 0, 0);
+    assert.ok(Math.abs(b.trading - 47.08) < 0.01);
+    assert.ok(b.free > 40);
+    const r = planSize({ equity: b.trading, free: b.free, entry: 100, stop: 97, bookNotional: 0 });
+    assert.ok(r.ok, r.ok ? "" : r.error);
+    assert.equal(r.plan.bind, "risque");
+    assert.ok(Math.abs(r.plan.risqueUsd - 0.4708) < 0.01, "1 % de 47,08 $");
+  });
+
+  it("encaisse des valeurs absurdes sans produire de NaN", () => {
+    for (const b of [classifyHl(Number.NaN, Number.NaN), classifyHl(-5, -5, -5, -5, -5), classifyHl(0, 0)]) {
+      assert.ok(Number.isFinite(b.trading) && b.trading >= 0);
+      assert.ok(Number.isFinite(b.free) && b.free >= 0);
+      assert.ok(Number.isFinite(b.spotFree) && b.spotFree >= 0);
     }
   });
 });
