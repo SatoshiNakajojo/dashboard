@@ -724,6 +724,24 @@ Rien ne bloque. Ce qui suit est du confort :
   permission à l'écran, et sur iOS l'obligation que la PWA soit installée sur
   l'écran d'accueil (Safari ne notifie pas un onglet). Rien d'exotique, mais
   rien qui se déduise de ce qui est là.
+- **L'Oracle à plusieurs horizons.** `src/lib/horizons.ts` est posé et testé :
+  les six durées demandées (1 semaine, 3/6/12 mois, 5 et 10 ans), leur fenêtre
+  d'écriture propre, leur calendrier de verrouillage et de résolution, et les
+  graduations d'axe qui vont avec. Il n'est **pas encore branché**.
+
+  Ce qui reste n'est pas du câblage, c'est une refonte : un tracé est
+  aujourd'hui stocké en **coordonnées du repère** (360 × 285, 80 k$ – 200 k$
+  figés). Deux membres ne peuvent superposer leurs courbes que parce qu'ils
+  partagent ce repère. Sur dix ans, la bande de prix ne tient plus, et chaque
+  pari a besoin du sien — donc chaque tracé doit porter son repère, ou être
+  stocké en **prix** plutôt qu'en pixels.
+
+  La seconde solution est la bonne : un tracé devient `[[jour, prix]]`,
+  indépendant de tout affichage, et la comparaison entre membres redevient une
+  comparaison de prix réels. Mais elle impose de convertir les tracés déjà
+  déposés, donc de faire atterrir la migration et l'app **d'un seul tenant** :
+  une base convertie que l'app lit encore en pixels afficherait des courbes
+  absurdes. C'est pour ça que rien n'est branché à moitié.
 - **Autocomplétion des titres.** Les cryptos ont leur liste — CoinGecko
   autorise les appels navigateur. Les actions n'en ont pas : il faudrait
   relayer `v1/finance/search` de Yahoo par une fonction Edge, comme pour les
