@@ -55,6 +55,12 @@ export interface Ticker {
   entryBtcPrice: number | null;
   sizeUsd: number | null;
   thesis: string;
+  /**
+   * De quoi redemander un cours, sans quoi un call reste figé à son prix
+   * d'entrée. La base les stockait déjà ; ils étaient perdus à la lecture.
+   */
+  coingeckoId: string | null;
+  yahooSymbol: string | null;
   /** Dernier rafraîchissement réussi du cours. `null` si jamais rafraîchi. */
   priceUpdatedAt: string | null;
   createdAt: string;

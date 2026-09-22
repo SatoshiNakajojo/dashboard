@@ -24,7 +24,7 @@ import type { CallView } from '@/types/domain';
 
 type BagView = 'bag' | 'rekt';
 
-/** Onglet Le Bag — fil des calls et classements de la saison. */
+/** Onglet Calls — fil des calls et classements de la saison. */
 export default function BagScreen() {
   const { userId } = useSession();
   const { byId } = useMembers();
@@ -47,15 +47,16 @@ export default function BagScreen() {
   return (
     <>
       <ScreenShell
-        overline={isBag ? 'Calls en cours · perf vs ₿' : `Classement vs bitcoin · saison ${seasonAt().roman}`}
-        title={isBag ? 'Le Bag' : 'Rekt Board'}
+        overline={
+          isBag
+            ? 'Calls en cours · perf vs ₿'
+            : `Classement vs bitcoin · saison ${seasonAt().roman}`
+        }
+        title={isBag ? 'Les Calls' : 'Rekt Board'}
         me={me}
       >
-        <View
-          className="flex-row border-b border-border"
-          style={{ gap: 26, marginBottom: 20 }}
-        >
-          <ViewTab label="Le Bag" active={isBag} onPress={() => setView('bag')} />
+        <View className="flex-row border-b border-border" style={{ gap: 26, marginBottom: 20 }}>
+          <ViewTab label="En cours" active={isBag} onPress={() => setView('bag')} />
           <ViewTab label="Rekt Board" active={!isBag} onPress={() => setView('rekt')} />
         </View>
 
@@ -79,7 +80,9 @@ export default function BagScreen() {
       </ScreenShell>
 
       {/* Le FAB n'apparaît que sur la vue Bag, et disparaît sheet ouverte. */}
-      {isBag && !composerOpen ? <Fab label="Poster un call" onPress={() => setComposerOpen(true)} /> : null}
+      {isBag && !composerOpen ? (
+        <Fab label="Poster un call" onPress={() => setComposerOpen(true)} />
+      ) : null}
 
       <ComposerSheet
         visible={composerOpen}
@@ -112,7 +115,9 @@ function ViewTab({
         borderBottomColor: active ? c.gold : 'transparent',
       }}
     >
-      <Text style={{ fontFamily: f.serif, fontSize: 15, color: active ? c.ivory : c.sepiaMuted }}>
+      <Text
+        style={{ fontFamily: f.serif, fontSize: 15, color: active ? c.ivory : c.sepiaMuted }}
+      >
         {label}
       </Text>
     </Pressable>

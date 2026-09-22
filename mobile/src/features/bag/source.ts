@@ -18,8 +18,14 @@ export interface CallDraftInput {
   symbol: string;
   entryPrice: number;
   thesis: string;
-  /** Cours BTC au moment de la publication — fige le référentiel vs ₿. */
-  btcSpot: number;
+  /**
+   * Cours BTC au moment de la publication — fige le référentiel vs ₿.
+   *
+   * Nullable comme la colonne qui le reçoit : si le spot est introuvable, on
+   * enregistre l'absence plutôt qu'un zéro, et la carte affiche « — ». C'est
+   * la seule valeur du modèle qu'on ne pourra jamais retrouver après coup.
+   */
+  btcSpot: number | null;
   /** Identifiant CoinGecko, pour une crypto. */
   coingeckoId: string | null;
   /** Symbole Yahoo Finance, pour une action ou un ETF. */
@@ -80,6 +86,8 @@ function fromRow(row: Row): Ticker {
     entryBtcPrice: num(row.entry_btc_price),
     sizeUsd: num(row.size_usd),
     thesis: row.thesis,
+    coingeckoId: row.coingecko_id,
+    yahooSymbol: row.yahoo_symbol,
     priceUpdatedAt: row.price_updated_at,
     createdAt: row.created_at,
   };
@@ -208,6 +216,8 @@ function createMockSource(): CallsSource {
         entryBtcPrice: draft.btcSpot,
         sizeUsd: null,
         thesis: draft.thesis,
+        coingeckoId: draft.coingeckoId,
+        yahooSymbol: draft.yahooSymbol,
         priceUpdatedAt: new Date().toISOString(),
         createdAt: new Date().toISOString(),
       };

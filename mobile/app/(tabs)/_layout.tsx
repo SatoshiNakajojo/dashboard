@@ -16,7 +16,7 @@ type TabBarProps = Parameters<NonNullable<ComponentProps<typeof Tabs>['tabBar']>
 
 const LABELS: Record<string, string> = {
   index: 'NIGHTS',
-  bag: 'LE BAG',
+  bag: 'CALLS',
   oracle: 'ORACLE',
 };
 
@@ -34,7 +34,9 @@ function ClubTabBar({ state, navigation }: TabBarProps) {
     <View
       className="flex-row border-t border-hairline bg-ink"
       style={{
-        paddingTop: 12,
+        // Resserré : la barre faisait 68 pt une fois l'inset ajouté, pour trois
+        // mots sans icône. Elle en fait maintenant 54 sur un iPhone.
+        paddingTop: 10,
         paddingHorizontal: 16,
         paddingBottom: bottomInset(insets.bottom),
         gap: 6,
@@ -59,7 +61,7 @@ function ClubTabBar({ state, navigation }: TabBarProps) {
               if (!focused && !event.defaultPrevented) navigation.navigate(route.name);
             }}
             className="flex-1 items-center"
-            style={{ gap: 8 }}
+            style={{ gap: 6 }}
           >
             <View
               style={{

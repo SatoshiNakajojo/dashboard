@@ -12,10 +12,15 @@
  * le chargement des polices et pour le mobile natif. Les deux doivent se
  * ressembler : c'est ce qui rend le passage de l'une à l'autre invisible.
  *
+ * Ce ne sont plus des carrés mais des **blocs chaînés** : chaque bloc porte ses
+ * deux lignes de données, et un maillon le relie au suivant. Le maillon ne
+ * s'allume qu'avec le bloc d'après — c'est ce qui fait une chaîne et pas une
+ * rangée.
+ *
  * Les constantes d'animation suivent `src/lib/mining.ts` — huit blocs de
- * 150 ms, puis 450 ms de pause, soit un cycle de 1650 ms. Une barre de
- * progression mentirait sur un temps qu'on ne connaît pas ; des blocs qui se
- * minent ne promettent que « ça travaille ».
+ * 150 ms, puis 450 ms de pause. Une barre de progression mentirait sur un temps
+ * qu'on ne connaît pas ; des blocs qui se minent ne promettent que « ça
+ * travaille ».
  */
 
 export const BOOT_SENTINEL = 'id="boot"';
@@ -30,18 +35,45 @@ const BLOCK_COUNT = 8;
 const BLOCK_MS = 150;
 const PAUSE_MS = 450;
 const CYCLE_MS = BLOCK_COUNT * BLOCK_MS + PAUSE_MS;
+
+/** Géométrie d'un bloc et de son maillon, en pixels CSS. */
+const BLOCK = 16;
+const LINK = 8;
+
 /** Part du cycle où la chaîne se remplit ; le reste, elle reste pleine. */
 const FILL_END = ((BLOCK_COUNT * BLOCK_MS) / CYCLE_MS) * 100;
 
-const blocks = (klass) =>
-  Array.from({ length: BLOCK_COUNT }, () => `<i class="${klass}"></i>`).join('');
+/** Largeur du calque doré quand `k` blocs sont minés — s'arrête au bord du bloc. */
+const widthAt = (k) => (k === 0 ? 0 : k * BLOCK + (k - 1) * LINK);
+const CHAIN_WIDTH = widthAt(BLOCK_COUNT);
+
+/**
+ * Les paliers du remplissage, un par bloc.
+ *
+ * Des crans réguliers (`steps()`) tomberaient au milieu des maillons et
+ * laisseraient des tranches à l'écran. Ces paliers-là s'arrêtent au bord exact
+ * d'un bloc ; le maillon qui précède un bloc s'allume donc avec lui, ce qui est
+ * précisément ce qu'on veut voir.
+ */
+const FILL_STEPS = Array.from({ length: BLOCK_COUNT + 1 }, (_, k) => {
+  const at = ((k / BLOCK_COUNT) * FILL_END).toFixed(2);
+  return `        ${at}% { width: ${widthAt(k)}px; }`;
+}).join('\n');
+
+/** Un bloc : deux lignes de données. Un maillon le précède, sauf le premier. */
+const chain = (klass) =>
+  Array.from(
+    { length: BLOCK_COUNT },
+    (_, index) =>
+      `${index === 0 ? '' : `<u class="${klass}"></u>`}<i class="${klass}"><b></b><b></b></i>`,
+  ).join('');
 
 export const BOOT_SHELL = `
     <div id="boot" aria-label="Chargement" role="progressbar">
       <img id="boot-logo" src="icon-192.png" alt="" width="132" height="132" />
       <div id="boot-chain">
-        <div class="boot-row">${blocks('boot-b')}</div>
-        <div id="boot-fill"><div class="boot-row">${blocks('boot-b on')}</div></div>
+        <div class="boot-row">${chain('boot-b')}</div>
+        <div id="boot-fill"><div class="boot-row">${chain('boot-b on')}</div></div>
       </div>
       <p id="boot-label">MINAGE EN COURS</p>
     </div>
@@ -60,24 +92,34 @@ export const BOOT_SHELL = `
          d'être découpés par elle, et la chaîne se remplit de tranches au lieu
          de blocs. Le défaut ne se voit qu'une fois l'animation lancée.
          (Pas de guillemets obliques ici : on est dans un gabarit de chaîne.) */
-      .boot-row { display: flex; gap: 5px; width: max-content; }
+      .boot-row { display: flex; align-items: center; width: max-content; }
+      /* Le bloc. */
       .boot-b {
-        flex: none;
-        width: 11px; height: 11px; border-radius: 1px;
-        border: 1px solid ${DIAL}; box-sizing: border-box;
+        flex: none; box-sizing: border-box;
+        width: ${BLOCK}px; height: ${BLOCK}px; border-radius: 2px;
+        border: 1px solid ${DIAL};
+        display: flex; flex-direction: column; justify-content: center; gap: 2px;
+        padding: 0 3px;
+      }
+      /* Les deux lignes de données à l'intérieur. */
+      .boot-b b { display: block; height: 1px; background: ${DIAL}; }
+      .boot-b b:last-child { width: 60%; }
+      /* Le maillon vers le bloc suivant. */
+      u.boot-b {
+        width: ${LINK}px; height: 2px; border: 0; border-radius: 1px;
+        background: ${DIAL}; padding: 0;
       }
       .boot-b.on { border-color: ${GOLD}; background: ${GOLD}; }
-      /* Le remplissage est un calque découpé qui s'élargit par crans : chaque
-         cran tombe dans un intervalle entre deux blocs, jamais au milieu de
-         l'un d'eux — un demi-bloc doré se verrait comme un défaut. */
+      .boot-b.on b { background: ${INK}; }
+      u.boot-b.on { background: ${GOLD}; }
+      /* Le remplissage est un calque découpé qui s'élargit par paliers. */
       #boot-fill {
         position: absolute; inset: 0; overflow: hidden; width: 0;
-        animation: boot-mine ${CYCLE_MS}ms steps(${BLOCK_COUNT}, end) infinite;
+        animation: boot-mine ${CYCLE_MS}ms steps(1, end) infinite;
       }
       @keyframes boot-mine {
-        0% { width: 0; }
-        ${FILL_END.toFixed(2)}% { width: 100%; }
-        100% { width: 100%; }
+${FILL_STEPS}
+        100% { width: ${CHAIN_WIDTH}px; }
       }
       #boot-label {
         margin: 0; color: ${SEPIA};
@@ -87,7 +129,7 @@ export const BOOT_SHELL = `
       @media (prefers-reduced-motion: reduce) {
         /* Sans mouvement, la chaîne reste pleine : elle dit encore « ça
            travaille » sans imposer une animation à qui n'en veut pas. */
-        #boot-fill { animation: none; width: 100%; }
+        #boot-fill { animation: none; width: ${CHAIN_WIDTH}px; }
       }
     </style>
 `;

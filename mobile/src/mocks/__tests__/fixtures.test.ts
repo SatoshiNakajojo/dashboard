@@ -43,7 +43,7 @@ function toViews(tickers = MOCK_TICKERS): CallView[] {
 
 const round = (value: number | null) => (value === null ? null : Math.round(value * 10) / 10);
 
-describe('fixtures du fil « Le Bag »', () => {
+describe('fixtures du fil des calls', () => {
   it('reproduit les perfs en dollars du design', () => {
     // Le fil courant seul : les positions historiques portent les mêmes
     // tickers pour certains membres, avec d'autres prix d'entrée.

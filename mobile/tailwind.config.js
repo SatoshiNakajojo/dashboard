@@ -46,6 +46,7 @@ module.exports = {
         grid: '#16120D',
       },
       fontFamily: {
+        display: 'Marcellus_400Regular',
         serif: 'Fraunces_400Regular',
         serifItalic: 'Fraunces_400Regular_Italic',
         sans: 'PlusJakartaSans_400Regular',

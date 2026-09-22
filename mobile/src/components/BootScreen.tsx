@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import { Image, View } from 'react-native';
 
 import { Micro } from '@/components/ui/Micro';
@@ -8,6 +8,9 @@ import { c } from '@/theme/tokens';
 
 /**
  * L'écran d'attente : le logo, et une chaîne de blocs qui se mine.
+ *
+ * Des blocs chaînés, pas des carrés : chacun porte ses deux lignes de données
+ * et un maillon le relie au suivant.
  *
  * Il tient deux moments. Sur le web, la coquille HTML (`scripts/boot-shell.mjs`)
  * dessine exactement la même chose dès le premier octet, bien avant que les
@@ -32,26 +35,17 @@ export function BootScreen() {
       />
 
       <View
-        className="flex-row"
+        className="flex-row items-center"
         accessibilityRole="progressbar"
         accessibilityLabel="Chargement"
-        style={{ gap: 5 }}
       >
         {Array.from({ length: BLOCK_COUNT }, (_, index) => (
-          <View
-            key={index}
-            style={{
-              width: 11,
-              height: 11,
-              borderRadius: 1,
-              borderWidth: 1,
-              // Le bloc miné se remplit ; celui qui reste garde son contour,
-              // pour qu'on voie la longueur de la chaîne et pas seulement ce
-              // qui est fait.
-              borderColor: index < mined ? c.gold : c.dial,
-              backgroundColor: index < mined ? c.gold : 'transparent',
-            }}
-          />
+          <Fragment key={index}>
+            {/* Le maillon s'allume avec le bloc qu'il amène, pas avec celui
+                qu'il quitte : c'est ce qui fait une chaîne et pas une rangée. */}
+            {index > 0 ? <Link lit={index < mined} /> : null}
+            <Block mined={index < mined} />
+          </Fragment>
         ))}
       </View>
 
@@ -59,6 +53,48 @@ export function BootScreen() {
         MINAGE EN COURS
       </Micro>
     </View>
+  );
+}
+
+/** Géométrie partagée avec la coquille HTML — les deux doivent se ressembler. */
+const BLOCK = 16;
+const LINK = 8;
+
+/** Un bloc, avec ses deux lignes de données. */
+function Block({ mined }: { mined: boolean }) {
+  return (
+    <View
+      style={{
+        width: BLOCK,
+        height: BLOCK,
+        borderRadius: 2,
+        borderWidth: 1,
+        // Le bloc miné se remplit ; celui qui reste garde son contour, pour
+        // qu'on voie la longueur de la chaîne et pas seulement ce qui est fait.
+        borderColor: mined ? c.gold : c.dial,
+        backgroundColor: mined ? c.gold : 'transparent',
+        justifyContent: 'center',
+        paddingHorizontal: 3,
+        gap: 2,
+      }}
+    >
+      <View style={{ height: 1, backgroundColor: mined ? c.ink : c.dial }} />
+      <View style={{ height: 1, width: '60%', backgroundColor: mined ? c.ink : c.dial }} />
+    </View>
+  );
+}
+
+/** Le maillon entre deux blocs. */
+function Link({ lit }: { lit: boolean }) {
+  return (
+    <View
+      style={{
+        width: LINK,
+        height: 2,
+        borderRadius: 1,
+        backgroundColor: lit ? c.gold : c.dial,
+      }}
+    />
   );
 }
 

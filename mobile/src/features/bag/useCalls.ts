@@ -4,6 +4,8 @@ import { useBtcSpot } from '@/hooks/useBtcMarket';
 import { resolveCoingeckoId } from '@/lib/coingecko';
 import { providerFor, toYahooSymbol } from '@/lib/quotes';
 import { performancePercent, vsBitcoinPercent } from '@/lib/performance';
+import { entryBtcFor, mergeQuotes } from './quoteRefresh';
+import { useLiveQuotes } from './useLiveQuotes';
 import { describeError } from '@/lib/supabase';
 import type { CallView, Member, Ticker, Vote } from '@/types/domain';
 import { getCallsSource, type CallDraftInput, type VoteRow } from './source';
@@ -116,7 +118,9 @@ export function useCalls(
             const without = rows.filter(
               (v) => !(v.tickerId === tickerId && v.userId === currentUserId),
             );
-            return next ? [...without, { tickerId, userId: currentUserId, side: next }] : without;
+            return next
+              ? [...without, { tickerId, userId: currentUserId, side: next }]
+              : without;
           });
           setPendingVote((state) => {
             const copy = { ...state };
@@ -157,10 +161,19 @@ export function useCalls(
         // Un jeton choisi dans la liste fait foi : le re-résoudre reviendrait à
         // remplacer la décision du membre par un classement de capitalisation,
         // ce qu'il venait précisément de contredire.
-        const coingeckoId = yahoo ? null : (input.coingeckoId ?? (await resolveCoingeckoId(input.symbol)));
+        const coingeckoId = yahoo
+          ? null
+          : (input.coingeckoId ?? (await resolveCoingeckoId(input.symbol)));
 
         const ticker = await source.publish(
-          { ...input, btcSpot: spot.usd, coingeckoId, yahooSymbol },
+          {
+            ...input,
+            // Un call BTC est son propre référentiel : lui demander le spot
+            // serait un aller-retour pour redécouvrir son propre prix.
+            btcSpot: entryBtcFor(input.assetClass, input.entryPrice, spot.usd),
+            coingeckoId,
+            yahooSymbol,
+          },
           currentUserId,
         );
 
@@ -189,13 +202,22 @@ export function useCalls(
     return out;
   }, [votes]);
 
+  /**
+   * Les cours frais, recollés avant tout calcul.
+   *
+   * Sans ça, `current_price` reste le prix d'entrée écrit à la publication —
+   * et toutes les cartes affichent 0 %, ce qui est le défaut qu'on corrige ici.
+   */
+  const quotes = useLiveQuotes(tickers);
+  const priced = useMemo(() => mergeQuotes(tickers, quotes), [tickers, quotes]);
+
   const calls = useMemo<CallView[]>(
     () =>
-      tickers.map((ticker) => {
+      priced.map((ticker) => {
         const tally = tallies[ticker.id] ?? { bull: 0, bear: 0 };
-        const confirmed = votes.find(
-          (v) => v.tickerId === ticker.id && v.userId === currentUserId,
-        )?.side ?? null;
+        const confirmed =
+          votes.find((v) => v.tickerId === ticker.id && v.userId === currentUserId)?.side ??
+          null;
         const mine = ticker.id in pendingVote ? pendingVote[ticker.id]! : confirmed;
 
         // Le total serveur inclut déjà ma voix. Tant que l'écriture est en vol,
@@ -226,7 +248,7 @@ export function useCalls(
           myVote: mine,
         };
       }),
-    [tickers, tallies, votes, pendingVote, currentUserId, membersById, spot.usd],
+    [priced, tallies, votes, pendingVote, currentUserId, membersById, spot.usd],
   );
 
   return { calls, loading: !loaded, error, vote, publish, publishing };

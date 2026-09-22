@@ -8,6 +8,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as SplashScreen from 'expo-splash-screen';
 import { useFonts } from 'expo-font';
 import { Fraunces_400Regular, Fraunces_400Regular_Italic } from '@expo-google-fonts/fraunces';
+import { Marcellus_400Regular } from '@expo-google-fonts/marcellus';
 import {
   PlusJakartaSans_400Regular,
   PlusJakartaSans_500Medium,
@@ -36,6 +37,7 @@ export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({
     Fraunces_400Regular,
     Fraunces_400Regular_Italic,
+    Marcellus_400Regular,
     PlusJakartaSans_400Regular,
     PlusJakartaSans_500Medium,
     PlusJakartaSans_600SemiBold,

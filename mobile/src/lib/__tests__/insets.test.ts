@@ -18,9 +18,16 @@ describe('marge basse', () => {
     assert.equal(bottomInset(0), MIN_BOTTOM_PADDING);
   });
 
-  it('épouse la barre d’accueil quand elle est correctement annoncée', () => {
-    assert.equal(bottomInset(34), 34);
-    assert.equal(bottomInset(20), 20);
+  it('dégage la barre d’accueil sans lui offrir toute sa hauteur', () => {
+    // 34 pt est calibré pour des zones tactiles. Trois libellés de texte n'ont
+    // besoin que de ne pas passer sous l'indicateur lui-même.
+    assert.equal(bottomInset(34), 24);
+    assert.ok(bottomInset(34) < 34, 'sinon on reperd ce qu’on vient de gagner');
+  });
+
+  it('suit un inset modeste plutôt que de l’ignorer', () => {
+    assert.equal(bottomInset(20), 10);
+    assert.equal(bottomInset(28), 18);
   });
 
   it('borne une valeur aberrante', () => {

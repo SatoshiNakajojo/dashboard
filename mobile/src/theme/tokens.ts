@@ -81,6 +81,19 @@ export const a = {
  * tard sans voir des titres déborder.
  */
 export const f = {
+  /**
+   * La police des grands titres, et d'eux seuls.
+   *
+   * Marcellus est un roman inscriptionnel : la gravité d'une inscription
+   * gravée, qui répond au sceau du club mieux qu'un serif de texte. Elle n'a
+   * pas d'italique — raison pour laquelle elle ne remplace pas Fraunces, qui
+   * continue de porter les titres de cartes, les thèses en italique et les
+   * états vides.
+   *
+   * Une famille d'affichage et une famille de texte : c'est la hiérarchie que
+   * l'app n'avait pas.
+   */
+  display: 'Marcellus_400Regular',
   serif: 'Fraunces_400Regular',
   serifItalic: 'Fraunces_400Regular_Italic',
   sans: 'PlusJakartaSans_400Regular',

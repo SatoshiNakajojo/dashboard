@@ -397,7 +397,85 @@ jusqu'à la racine React, qui démonte tout.
 
 ---
 
-## Trois polices, et pourquoi celles-ci
+## Les calls affichaient 0 %, et c'était vrai
+
+Un membre a signalé que la perf de chaque carte restait à zéro. Ce n'était pas
+un défaut d'affichage : la valeur était juste, c'est la donnée qui ne bougeait
+pas.
+
+À la publication, `current_price` est écrit **égal** au prix d'entrée — la carte
+s'ouvre honnêtement à 0 %, sans perf inventée. La suite devait venir de
+`refresh-prices`, une fonction Edge appelée par un planificateur. Personne ne
+l'avait branché, et rien ne le signalait : le club a donc vu des zéros pendant
+des semaines, ce qui est exactement ce qu'un prix figé doit afficher.
+
+L'app sait pourtant interroger les mêmes sources — elle affiche déjà le spot
+BTC. Elle redemande donc les cours elle-même à l'ouverture de l'onglet
+(`useLiveQuotes`), en **une seule requête CoinGecko** pour tous les jetons du
+club : `/simple/price` accepte une liste, et sept membres sur `$BTC` ne doivent
+pas faire sept demandes. Le rafraîchissement planifié garde son intérêt — il
+alimente la base pour qui ouvre l'app hors ligne — mais il n'est plus la seule
+voie.
+
+Un détail du modèle rendait la chose invisible : `coingecko_id` et
+`yahoo_symbol` étaient **sélectionnés puis jetés** à la lecture. Sans eux, rien
+dans l'app ne savait quoi redemander.
+
+**Et le « — » de la colonne vs ₿.** Il vient d'ailleurs : `entry_btc_price` fige
+le référentiel au moment de l'entrée, et c'est la seule valeur du modèle qu'on
+ne peut jamais retrouver après coup. Elle restait vide quand le spot manquait à
+la publication — y compris pour un call **BTC**, qui est pourtant son propre
+référentiel et n'avait rien à demander à personne. `entryBtcFor()` distingue
+désormais les deux cas. Pour les calls déjà publiés sans elle, « — » reste la
+seule réponse honnête.
+
+---
+
+## Une police de titre, et une de texte
+
+Les grands titres passent à **Marcellus** : un roman inscriptionnel, la gravité
+d'une inscription gravée, qui répond au sceau du club mieux qu'un serif de
+texte.
+
+Elle ne remplace pas Fraunces, elle s'ajoute. Marcellus n'a pas d'italique, et
+l'italique porte les thèses des calls, les états vides et l'invite de l'Oracle.
+Fraunces garde donc les titres de cartes et tout le texte serif. Une famille
+d'affichage et une famille de texte : c'est la hiérarchie que l'app n'avait pas.
+
+Huit familles ont été rendues côte à côte, au même corps, sur le vrai fond, avec
+les vrais titres. Les plus élégantes — Cormorant Garamond, Italiana — sont aussi
+les plus fines, et s'effacent sur le noir : le défaut qu'on avait déjà corrigé
+en quittant Instrument Serif.
+
+---
+
+## Détails d'écran
+
+**Des blocs de blockchain.** Les huit carrés de l'écran d'attente sont devenus
+des blocs chaînés : chacun porte ses deux lignes de données, et un maillon le
+relie au suivant. Le maillon ne s'allume **qu'avec le bloc d'après** — c'est ce
+qui fait une chaîne et pas une rangée. Les paliers du remplissage s'arrêtent au
+bord exact d'un bloc ; des crans réguliers tomberaient au milieu des maillons.
+
+**« Le Bag » devient « CALLS ».** Le titre d'écran devient « Les Calls », et le
+sous-onglet « En cours », en face du Rekt Board.
+
+**Le halo du bouton « + » disparaît.** L'ombre dorée bavait sur le contenu et
+donnait au bouton un air de notification.
+
+**Le logo passe de 38 à 46 pt**, et s'ouvre en grand d'un appui. À 38, le
+cocotier et les lunettes du personnage étaient illisibles, ce qui réduisait un
+logo dessiné à une tache orange.
+
+**La barre d'onglets se resserre encore**, de 68 à 54 pt sur un iPhone. L'inset
+système (34 pt) est calibré pour des **zones tactiles**, qu'on ne veut pas voir
+happées par le geste de retour à l'accueil. Trois libellés de texte n'ont que
+besoin de ne pas passer sous l'indicateur, qui est un trait de 5 pt situé à une
+dizaine de points du bord.
+
+---
+
+## Le corps de texte, et pourquoi Fraunces
 
 Le serif d'affichage était **Instrument Serif**. Mesuré sur fond noir, ses
 pleins s'amincissent jusqu'à disparaître : c'est une police de magazine, faite

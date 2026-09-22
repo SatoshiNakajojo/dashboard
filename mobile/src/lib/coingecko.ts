@@ -9,7 +9,13 @@
 
 import { getJson } from './http';
 import { withCache } from './cache';
-import { bestCoin, normalizeTicker, rankCoins, type CoinMatch, type RawCoin } from './coinSearch';
+import {
+  bestCoin,
+  normalizeTicker,
+  rankCoins,
+  type CoinMatch,
+  type RawCoin,
+} from './coinSearch';
 import type { BtcSpot, MarketPoint } from '@/types/domain';
 import { DAYS } from './chart';
 import { historyDays, seasonAt } from './season';
@@ -61,6 +67,45 @@ export async function fetchBtcSpot(signal?: AbortSignal): Promise<BtcSpot> {
     fetchedAt: result.storedAt,
     stale: result.stale,
   };
+}
+
+/**
+ * Cours de plusieurs jetons en une seule requête.
+ *
+ * `/simple/price` accepte une liste d'identifiants : sept membres qui suivent
+ * cinq jetons font **une** demande, pas cinq. CoinGecko facture à la requête,
+ * et le quota gratuit est vite atteint autrement.
+ *
+ * Ne lève jamais pour une panne réseau : un cours absent laisse la carte sur
+ * son dernier prix connu, ce que `mergeQuotes` sait interpréter.
+ */
+export async function fetchCoinPrices(
+  ids: readonly string[],
+  signal?: AbortSignal,
+): Promise<Record<string, number>> {
+  if (ids.length === 0) return {};
+
+  // La clé de cache dépend de la liste demandée : deux listes différentes ne
+  // doivent pas se recouvrir, et l'ordre ne doit pas créer deux entrées.
+  const sorted = [...ids].sort();
+  const key = `coingecko.prices.${sorted.join(',')}`;
+
+  try {
+    const result = await withCache(key, SPOT_TTL_MS, async () => {
+      const payload = await getJson<Record<string, { usd?: number }>>(
+        url('/simple/price', { ids: sorted.join(','), vs_currencies: 'usd' }),
+        { signal },
+      );
+      const out: Record<string, number> = {};
+      for (const [id, value] of Object.entries(payload)) {
+        if (typeof value?.usd === 'number' && Number.isFinite(value.usd)) out[id] = value.usd;
+      }
+      return out;
+    });
+    return result.value;
+  } catch {
+    return {};
+  }
 }
 
 interface MarketChartResponse {
@@ -203,5 +248,3 @@ export async function resolveCoingeckoId(
     return null;
   }
 }
-
-

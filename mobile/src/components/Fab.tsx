@@ -26,13 +26,9 @@ export function Fab({ onPress, label }: { onPress: () => void; label: string }) 
           borderRadius: 24,
           alignItems: 'center',
           justifyContent: 'center',
-          // L'ombre porte le disque, pas le Pressable : appliquée au parent
-          // transparent, elle dessine un rectangle sombre sur le web.
-          shadowColor: c.gold,
-          shadowOpacity: 0.55,
-          shadowRadius: 15,
-          shadowOffset: { width: 0, height: 14 },
-          elevation: 12,
+          // Sans halo : l'ombre dorée bavait sur le contenu et donnait au
+          // bouton un air de notification. Le disque se voit très bien seul,
+          // sur un fond aussi sombre.
         }}
       >
         <View style={{ width: 15, height: 15 }}>
