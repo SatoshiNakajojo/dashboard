@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
-import { meanAbsoluteGap, priceAt, x as dayToX, y as priceToY, type Point } from '@/lib/chart';
+import { accuracyPercent } from '@/lib/accuracy';
+import { priceAt, samePath, x as dayToX, y as priceToY, type Point } from '@/lib/chart';
 import { seasonAt } from '@/lib/season';
 import { describeError, supabase } from '@/lib/supabase';
 import {
@@ -17,7 +18,16 @@ export interface PredictionsState {
   /** Mon tracé courant, dans le repère logique. */
   myPoints: Point[];
   setMyPoints: (points: Point[]) => void;
+  /** Écrit le tracé courant. Rien ne part avant qu'on le demande. */
+  saveMine: () => void;
+  /** Écriture en vol — le bouton s'en sert. */
+  saving: boolean;
+  /** Le tracé à l'écran diffère de celui qui est enregistré. */
+  dirty: boolean;
+  /** Efface **et** enregistre : l'appelant a déjà demandé confirmation. */
   clearMine: () => void;
+  /** Ma justesse sur la portion écoulée. `null` tant qu'il n'y a rien à comparer. */
+  myAccuracy: number | null;
   /** Vrai dès que `locked_at` est dépassé. */
   locked: boolean;
   /** Millisecondes avant verrouillage, décrémentées à la seconde. */
@@ -41,17 +51,24 @@ export interface PredictionsState {
 const SEASON = seasonAt().code;
 
 /** Commutateur « SIMULER T-0 ». Jamais actif dans une build livrée aux membres. */
-const DEMO_LOCK_ENABLED =
-  __DEV__ || process.env.EXPO_PUBLIC_ORACLE_DEMO_LOCK === '1';
-/** Délai avant persistance du tracé — un geste produit des dizaines de points. */
-const SAVE_DEBOUNCE_MS = 900;
+const DEMO_LOCK_ENABLED = __DEV__ || process.env.EXPO_PUBLIC_ORACLE_DEMO_LOCK === '1';
+/**
+ * Le tracé ne part plus tout seul.
+ *
+ * Il était enregistré 900 ms après le dernier point. Un membre qui relevait le
+ * doigt pour réfléchir avait donc déjà déposé sa prédiction, sans l'avoir
+ * décidé — et rien à l'écran ne le disait. Un pari se dépose sciemment : c'est
+ * maintenant un bouton.
+ */
 
 export function usePredictions(
   currentUserId: string | null,
   membersById: Map<string, Member>,
   btcSeries: readonly MarketPoint[],
 ): PredictionsState {
-  const [predictions, setPredictions] = useState<Prediction[]>(supabase ? [] : MOCK_PREDICTIONS);
+  const [predictions, setPredictions] = useState<Prediction[]>(
+    supabase ? [] : MOCK_PREDICTIONS,
+  );
   const [myPoints, setMyPointsState] = useState<Point[]>([]);
   const [lockAt, setLockAt] = useState<number>(() => Date.now() + MOCK_LOCK_DELAY_MS);
   const [hash, setHash] = useState<string | null>(null);
@@ -59,7 +76,9 @@ export function usePredictions(
   const [loading, setLoading] = useState(Boolean(supabase));
   const [error, setError] = useState<string | null>(null);
 
-  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** Ce qui est réellement enregistré, pour savoir ce qui ne l'est pas. */
+  const [savedPoints, setSavedPoints] = useState<Point[]>([]);
+  const [saving, setSaving] = useState(false);
 
   // --- Horloge du compte à rebours ----------------------------------------
 
@@ -108,6 +127,7 @@ export function usePredictions(
       const mine = rows.find((row) => row.userId === currentUserId);
       if (mine) {
         setMyPointsState(mine.pathData);
+        setSavedPoints(mine.pathData);
         setHash(mine.hash);
         if (mine.lockedAt) setLockAt(Date.parse(mine.lockedAt));
       }
@@ -120,23 +140,34 @@ export function usePredictions(
   // --- Persistance du tracé -----------------------------------------------
 
   const persist = useCallback(
-    (points: Point[]) => {
+    async (points: Point[]) => {
       const client = supabase;
-      if (!client || !currentUserId) return;
+      if (!currentUserId) return;
 
-      void client
-        .from('predictions')
-        .upsert(
-          {
-            user_id: currentUserId,
-            season: SEASON,
-            path_data: points as [number, number][],
-          },
-          { onConflict: 'user_id,season' },
-        )
-        .then(({ error: cause }) => {
-          if (cause) setError(describeError(cause));
-        });
+      // Sans backend, « enregistré » veut quand même dire quelque chose : le
+      // bouton doit s'éteindre, sinon on ne sait plus ce qui est déposé.
+      if (!client) {
+        setSavedPoints(points);
+        return;
+      }
+
+      setSaving(true);
+      const { error: cause } = await client.from('predictions').upsert(
+        {
+          user_id: currentUserId,
+          season: SEASON,
+          path_data: points as [number, number][],
+        },
+        { onConflict: 'user_id,season' },
+      );
+      setSaving(false);
+
+      if (cause) {
+        setError(describeError(cause));
+        return;
+      }
+      setError(null);
+      setSavedPoints(points);
     },
     [currentUserId],
   );
@@ -147,23 +178,27 @@ export function usePredictions(
       // mieux qu'une quand l'écriture est irréversible.
       if (locked) return;
       setMyPointsState(points);
-
-      if (saveTimer.current) clearTimeout(saveTimer.current);
-      saveTimer.current = setTimeout(() => persist(points), SAVE_DEBOUNCE_MS);
     },
-    [locked, persist],
+    [locked],
   );
 
+  const saveMine = useCallback(() => {
+    if (locked || saving) return;
+    void persist(myPoints);
+  }, [locked, saving, persist, myPoints]);
+
+  /**
+   * L'effacement, lui, part tout de suite.
+   *
+   * L'appelant a déjà demandé confirmation ; lui imposer ensuite un second
+   * geste pour enregistrer le vide serait une porte de trop, et laisserait un
+   * tracé déposé qu'on croit effacé.
+   */
   const clearMine = useCallback(() => {
     if (locked) return;
     setMyPointsState([]);
-    if (saveTimer.current) clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(() => persist([]), SAVE_DEBOUNCE_MS);
+    void persist([]);
   }, [locked, persist]);
-
-  useEffect(() => () => {
-    if (saveTimer.current) clearTimeout(saveTimer.current);
-  }, []);
 
   // --- Projection d'affichage ----------------------------------------------
 
@@ -188,11 +223,29 @@ export function usePredictions(
             color: '#8C7F68',
           },
           targetPrice: lastPoint ? priceAt(lastPoint[1]) : 0,
-          // L'écart n'a de sens qu'une fois les prédictions figées.
-          gapPercent: locked ? meanAbsoluteGap(prediction.pathData, actualPath) : null,
+          // La justesse se lit **dès** qu'une portion du cours recoupe le
+          // tracé : attendre le verrouillage privait le club du seul chiffre
+          // qui rend la superposition intéressante avant la résolution. Les
+          // tracés sont déjà visibles à l'écran — rien de nouveau n'est
+          // divulgué en les chiffrant.
+          accuracyPercent: accuracyPercent(prediction.pathData, actualPath),
         };
       });
-  }, [predictions, currentUserId, membersById, locked, actualPath]);
+  }, [predictions, currentUserId, membersById, actualPath]);
+
+  /** La mienne, calculée sur ce qui est à l'écran, pas sur ce qui est déposé. */
+  const myAccuracy = useMemo(
+    () => accuracyPercent(myPoints, actualPath),
+    [myPoints, actualPath],
+  );
+
+  /**
+   * Ce que j'ai à l'écran diffère de ce qui est enregistré.
+   *
+   * Comparé point à point : un tracé au doigt produit des dizaines de points,
+   * et comparer les références échouerait au premier rechargement.
+   */
+  const dirty = useMemo(() => !samePath(myPoints, savedPoints), [myPoints, savedPoints]);
 
   /** Bascule verrouillé ↔ ouvert, pour montrer les deux états sans attendre. */
   const simulateLock = useCallback(() => {
@@ -206,7 +259,11 @@ export function usePredictions(
     others,
     myPoints,
     setMyPoints,
+    saveMine,
+    saving,
+    dirty,
     clearMine,
+    myAccuracy,
     locked,
     remainingMs: Math.max(0, lockAt - now),
     resolutionLabel: MOCK_RESOLUTION_LABEL,

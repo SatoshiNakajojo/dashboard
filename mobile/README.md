@@ -475,6 +475,51 @@ dizaine de points du bord.
 
 ---
 
+## Un pari se dépose sciemment
+
+Le tracé de l'Oracle était enregistré **900 ms après le dernier point**. Un
+membre qui relevait le doigt pour réfléchir avait donc déjà déposé sa
+prédiction, sans l'avoir décidé, et rien à l'écran ne le disait.
+
+C'est maintenant un bouton : `DÉPOSER MA PRÉDICTION` tant que le tracé à
+l'écran diffère de ce qui est enregistré, `PRÉDICTION DÉPOSÉE` ensuite. La
+comparaison se fait **point à point** (`samePath`) et non par référence — le
+tracé rechargé depuis la base est un tableau neuf, et comparer les références
+allumerait le bouton à chaque ouverture.
+
+L'effacement, lui, part tout de suite — mais en deux temps sur le même bouton :
+`EFFACER MA COURBE` devient `CONFIRMER L'EFFACEMENT` en oxblood, et redevient
+lui-même au bout de quatre secondes si on ne confirme pas. Pas d'`Alert`
+système : elle ne s'affiche pas de la même façon sur le web et sur iOS, et
+sortirait du registre de l'écran. Une fois confirmé, le vide est enregistré
+sans second geste — demander ensuite « déposer » laisserait un tracé qu'on
+croit effacé.
+
+---
+
+## La justesse d'un tracé
+
+`meanAbsoluteGap` répondait déjà à la question, mais à l'envers : elle donne
+l'**erreur** moyenne, en pour cent du prix réel. Un membre lit mieux « 87 % de
+justesse » que « 13 % d'écart », et c'est la même mesure.
+
+Ce n'est volontairement **pas** un coefficient de corrélation. Une corrélation
+mesure l'accord de *forme* : un tracé parfaitement parallèle au cours, mais
+40 000 $ au-dessus, obtiendrait 100 %. Dans un club qui parie sur des niveaux de
+prix, ce serait un mensonge.
+
+Elle se lit ainsi : 100 % le tracé est confondu avec le cours ; 90 % on s'est
+trompé de 10 % en moyenne ; 0 % on s'est trompé d'au moins 100 %, c'est-à-dire
+du double ou de la moitié du prix — en dessous, la nuance n'intéresse plus
+personne.
+
+Elle s'affiche **dès** qu'une portion du cours recoupe le tracé, et non plus
+seulement après verrouillage : attendre privait le club du seul chiffre qui
+rend la superposition intéressante avant la résolution. Les tracés sont déjà
+visibles à l'écran — rien de nouveau n'est divulgué en les chiffrant.
+
+---
+
 ## Le corps de texte, et pourquoi Fraunces
 
 Le serif d'affichage était **Instrument Serif**. Mesuré sur fond noir, ses

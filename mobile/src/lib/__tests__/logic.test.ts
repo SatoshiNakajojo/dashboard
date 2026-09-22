@@ -17,6 +17,7 @@ import {
   interpolateY,
   meanAbsoluteGap,
   priceAt,
+  samePath,
   toAreaPath,
   toSvgPath,
   x,
@@ -79,7 +80,10 @@ describe('capture du tracé', () => {
   });
 
   it('refuse un retour en arrière — le tracé est monotone en X', () => {
-    const points: Point[] = [[34, 100], [120, 80]];
+    const points: Point[] = [
+      [34, 100],
+      [120, 80],
+    ];
     assert.equal(appendDrawPoint(points, [60, 90]), null);
   });
 
@@ -90,7 +94,13 @@ describe('capture du tracé', () => {
 
 describe('chemins SVG', () => {
   it('produit une polyligne', () => {
-    assert.equal(toSvgPath([[34, 100], [120, 80]]), 'M 34.0 100.0 L 120.0 80.0');
+    assert.equal(
+      toSvgPath([
+        [34, 100],
+        [120, 80],
+      ]),
+      'M 34.0 100.0 L 120.0 80.0',
+    );
   });
 
   it('renvoie une chaîne vide sans point', () => {
@@ -100,37 +110,144 @@ describe('chemins SVG', () => {
 
   it('referme l’aire sur la ligne de base', () => {
     assert.equal(
-      toAreaPath([[34, 100], [120, 80]]),
+      toAreaPath([
+        [34, 100],
+        [120, 80],
+      ]),
       'M 34.0 100.0 L 120.0 80.0 L 120.0 252 L 34.0 252 Z',
     );
   });
 });
 
+describe('deux tracés identiques', () => {
+  it('reconnaît un tableau reconstruit', () => {
+    // Le tracé rechargé depuis la base est un tableau neuf : comparer les
+    // références allumerait le bouton « déposer » à chaque ouverture.
+    const a: Point[] = [
+      [34, 100],
+      [120, 80],
+    ];
+    const b: Point[] = [
+      [34, 100],
+      [120, 80],
+    ];
+    assert.equal(samePath(a, b), true);
+    assert.equal(samePath(a, a), true);
+    assert.equal(samePath([], []), true);
+  });
+
+  it('voit une différence de longueur ou de position', () => {
+    const a: Point[] = [
+      [34, 100],
+      [120, 80],
+    ];
+    assert.equal(samePath(a, [[34, 100]]), false);
+    assert.equal(
+      samePath(a, [
+        [34, 100],
+        [120, 81],
+      ]),
+      false,
+    );
+    assert.equal(
+      samePath(a, [
+        [35, 100],
+        [120, 80],
+      ]),
+      false,
+    );
+    assert.equal(samePath(a, []), false);
+  });
+});
+
 describe('écart à la courbe réelle', () => {
   it('vaut zéro pour deux courbes identiques', () => {
-    const curve: Point[] = [[34, 100], [120, 80], [200, 60]];
+    const curve: Point[] = [
+      [34, 100],
+      [120, 80],
+      [200, 60],
+    ];
     const gap = meanAbsoluteGap(curve, curve);
     assert.ok(gap !== null && gap < 1e-9, `écart attendu nul, obtenu ${gap}`);
   });
 
   it('croît avec l’éloignement', () => {
-    const actual: Point[] = [[34, 100], [354, 100]];
-    const near: Point[] = [[34, 105], [354, 105]];
-    const far: Point[] = [[34, 160], [354, 160]];
+    const actual: Point[] = [
+      [34, 100],
+      [354, 100],
+    ];
+    const near: Point[] = [
+      [34, 105],
+      [354, 105],
+    ];
+    const far: Point[] = [
+      [34, 160],
+      [354, 160],
+    ];
     const gapNear = meanAbsoluteGap(near, actual)!;
     const gapFar = meanAbsoluteGap(far, actual)!;
     assert.ok(gapFar > gapNear, `${gapFar} doit dépasser ${gapNear}`);
   });
 
   it('renvoie null quand les plages ne se recouvrent pas', () => {
-    assert.equal(meanAbsoluteGap([[34, 10], [100, 10]], [[200, 10], [300, 10]]), null);
-    assert.equal(meanAbsoluteGap([[34, 10]], [[34, 10], [300, 10]]), null);
+    assert.equal(
+      meanAbsoluteGap(
+        [
+          [34, 10],
+          [100, 10],
+        ],
+        [
+          [200, 10],
+          [300, 10],
+        ],
+      ),
+      null,
+    );
+    assert.equal(
+      meanAbsoluteGap(
+        [[34, 10]],
+        [
+          [34, 10],
+          [300, 10],
+        ],
+      ),
+      null,
+    );
   });
 
   it('interpole entre deux points', () => {
-    assert.equal(interpolateY([[0, 0], [10, 100]], 5), 50);
-    assert.equal(interpolateY([[0, 0], [10, 100]], -5), 0, 'avant le début : borné');
-    assert.equal(interpolateY([[0, 0], [10, 100]], 50), 100, 'après la fin : borné');
+    assert.equal(
+      interpolateY(
+        [
+          [0, 0],
+          [10, 100],
+        ],
+        5,
+      ),
+      50,
+    );
+    assert.equal(
+      interpolateY(
+        [
+          [0, 0],
+          [10, 100],
+        ],
+        -5,
+      ),
+      0,
+      'avant le début : borné',
+    );
+    assert.equal(
+      interpolateY(
+        [
+          [0, 0],
+          [10, 100],
+        ],
+        50,
+      ),
+      100,
+      'après la fin : borné',
+    );
   });
 });
 
@@ -193,9 +310,16 @@ describe('classements', () => {
 
   it('classe au-dessus du seuil et ignore juste en dessous', () => {
     const above = { ...(scored(LEADERBOARD.fameThreshold) as object), id: 'pile' } as never;
-    const below = { ...(scored(LEADERBOARD.fameThreshold - 0.1) as object), id: 'sous' } as never;
+    const below = {
+      ...(scored(LEADERBOARD.fameThreshold - 0.1) as object),
+      id: 'sous',
+    } as never;
     const { fame } = splitLeaderboards([above, below]);
-    assert.deepEqual(fame.map((c) => c.id), ['pile'], 'le seuil est inclusif');
+    assert.deepEqual(
+      fame.map((c) => c.id),
+      ['pile'],
+      'le seuil est inclusif',
+    );
   });
 
   it('reproduit le Hall of Fame du design', () => {
@@ -220,12 +344,18 @@ describe('classements', () => {
       call('gme', -22, -30),
       call('ok', -19.9, -25),
     ]);
-    assert.deepEqual(rekt.map((c) => c.id), ['wif', 'ethw', 'gme']);
+    assert.deepEqual(
+      rekt.map((c) => c.id),
+      ['wif', 'ethw', 'gme'],
+    );
   });
 
   it('juge un call BTC sur sa perf en dollars — il est le référentiel', () => {
     const { fame } = splitLeaderboards([call('btc', 96, null, 'BTC')]);
-    assert.deepEqual(fame.map((c) => c.id), ['btc']);
+    assert.deepEqual(
+      fame.map((c) => c.id),
+      ['btc'],
+    );
   });
 
   it('ignore un call sans prix courant plutôt que de le classer à zéro', () => {

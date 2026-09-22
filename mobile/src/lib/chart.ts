@@ -104,6 +104,18 @@ export const X_TICKS = [
  * Les deux séries sont ré-échantillonnées sur les jours communs par
  * interpolation linéaire ; renvoie `null` si le recouvrement est vide.
  */
+/**
+ * Deux tracés sont-ils identiques, point pour point ?
+ *
+ * Comparer les références ne marche pas : le tracé rechargé depuis la base est
+ * un tableau neuf, et il serait signalé comme modifié dès l'ouverture de
+ * l'écran — donc un bouton « déposer » allumé sans qu'on ait rien fait.
+ */
+export function samePath(a: readonly Point[], b: readonly Point[]): boolean {
+  if (a.length !== b.length) return false;
+  return a.every((point, i) => point[0] === b[i]![0] && point[1] === b[i]![1]);
+}
+
 export function meanAbsoluteGap(
   prediction: readonly Point[],
   actual: readonly Point[],
@@ -111,10 +123,7 @@ export function meanAbsoluteGap(
   if (prediction.length < 2 || actual.length < 2) return null;
 
   const from = Math.max(prediction[0]![0], actual[0]![0]);
-  const to = Math.min(
-    prediction[prediction.length - 1]![0],
-    actual[actual.length - 1]![0],
-  );
+  const to = Math.min(prediction[prediction.length - 1]![0], actual[actual.length - 1]![0]);
   if (!(to > from)) return null;
 
   const SAMPLES = 64;

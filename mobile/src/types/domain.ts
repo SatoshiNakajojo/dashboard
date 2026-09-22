@@ -99,7 +99,12 @@ export interface PredictionView extends Prediction {
   /** Prix visé au jour 90. */
   targetPrice: number;
   /** Écart absolu moyen à la courbe réelle, en %. `null` avant résolution. */
-  gapPercent: number | null;
+  /**
+   * Justesse du tracé sur la portion écoulée, en pour cent — 100 % si la
+   * courbe est confondue avec le cours. Voir `src/lib/accuracy.ts` pour
+   * pourquoi ce n'est pas une corrélation.
+   */
+  accuracyPercent: number | null;
 }
 
 /** Un point de la série BTC : jour du repère + prix. */

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 
 import { OracleCanvas } from '@/components/OracleCanvas';
@@ -9,16 +9,20 @@ import { Avatar } from '@/components/ui/Avatar';
 import { Micro } from '@/components/ui/Micro';
 import { SectionTitle } from '@/components/ui/SectionTitle';
 import { usePredictions } from '@/features/oracle/usePredictions';
+import { accuracyLabel } from '@/lib/accuracy';
 import { useBtcHistory, useBtcSpot } from '@/hooks/useBtcMarket';
 import { useMembers } from '@/hooks/useMembers';
 import { useSession } from '@/hooks/useSession';
 import { DAYS } from '@/lib/chart';
-import { formatPercent, formatThousands, formatUsd } from '@/lib/format';
+import { formatThousands, formatUsd } from '@/lib/format';
 import { CLUB_SIZE } from '@/mocks/members';
-import { c, f, gapColor } from '@/theme/tokens';
+import { a, c, f, radius } from '@/theme/tokens';
 
 /** Membre dont la courbe est en pointillés dans le design de référence. */
 const DASHED_MEMBER = 'Marco';
+
+/** Au-delà, une confirmation restée en attente n'est plus une confirmation. */
+const CONFIRM_WINDOW_MS = 4000;
 
 /** Onglet Oracle — prédiction BTC à 90 jours, tracée au doigt puis scellée. */
 export default function OracleScreen() {
@@ -31,7 +35,11 @@ export default function OracleScreen() {
     others,
     myPoints,
     setMyPoints,
+    saveMine,
+    saving,
+    dirty,
     clearMine,
+    myAccuracy,
     locked,
     remainingMs,
     resolutionLabel,
@@ -40,6 +48,20 @@ export default function OracleScreen() {
   } = usePredictions(userId, byId, history.points);
 
   const [showOthers, setShowOthers] = useState(true);
+  /**
+   * L'effacement demande confirmation, en deux temps sur le même bouton.
+   *
+   * Une `Alert` système ne s'affiche pas de la même façon sur le web et sur
+   * iOS, et sortirait du registre de l'écran. Le libellé change, vire à
+   * l'oxblood, et redevient lui-même si on ne confirme pas.
+   */
+  const [confirmingClear, setConfirmingClear] = useState(false);
+
+  useEffect(() => {
+    if (!confirmingClear) return;
+    const timer = setTimeout(() => setConfirmingClear(false), CONFIRM_WINDOW_MS);
+    return () => clearTimeout(timer);
+  }, [confirmingClear]);
 
   const me = userId ? (byId.get(userId) ?? null) : null;
 
@@ -68,9 +90,7 @@ export default function OracleScreen() {
           <View className="flex-row items-end justify-between" style={{ marginBottom: 12 }}>
             <View>
               <Micro>BTC / USD · 90 JOURS</Micro>
-              <Text
-                style={{ fontFamily: f.serif, fontSize: 26, color: c.ivory, marginTop: 8 }}
-              >
+              <Text style={{ fontFamily: f.serif, fontSize: 26, color: c.ivory, marginTop: 8 }}>
                 {formatUsd(spot.usd)}
               </Text>
             </View>
@@ -109,28 +129,103 @@ export default function OracleScreen() {
               </Text>
             </Pressable>
 
-            <Pressable accessibilityRole="button" disabled={locked} onPress={clearMine}>
+            <Pressable
+              accessibilityRole="button"
+              disabled={locked || myPoints.length === 0}
+              onPress={() => {
+                if (confirmingClear) {
+                  setConfirmingClear(false);
+                  clearMine();
+                } else {
+                  setConfirmingClear(true);
+                }
+              }}
+            >
               <Text
                 style={{
                   fontFamily: f.monoMed,
                   fontSize: 9,
                   letterSpacing: 1.62,
-                  color: locked ? c.sepiaFaint : c.sepiaDim,
+                  color: locked
+                    ? c.sepiaFaint
+                    : myPoints.length === 0
+                      ? c.sepiaFaint
+                      : confirmingClear
+                        ? c.oxblood
+                        : c.sepiaDim,
                 }}
               >
-                {locked ? `FIGÉ · HASH ${hash ?? '····'}` : 'EFFACER MA COURBE'}
+                {locked
+                  ? `FIGÉ · HASH ${hash ?? '····'}`
+                  : confirmingClear
+                    ? 'CONFIRMER L’EFFACEMENT'
+                    : 'EFFACER MA COURBE'}
               </Text>
             </Pressable>
           </View>
+
+          {/* Le tracé ne part plus tout seul : il se dépose. */}
+          {!locked && myPoints.length > 1 ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityState={{ disabled: !dirty || saving }}
+              disabled={!dirty || saving}
+              onPress={saveMine}
+              style={{
+                marginTop: 14,
+                alignItems: 'center',
+                paddingVertical: 12,
+                borderRadius: radius.button,
+                borderWidth: 1,
+                backgroundColor: dirty ? a.rsvpGoldBg : 'transparent',
+                borderColor: dirty ? a.rsvpGoldBorder : c.border,
+              }}
+            >
+              <Text
+                style={{
+                  fontFamily: f.monoMed,
+                  fontSize: 10,
+                  letterSpacing: 1.8,
+                  color: saving ? c.sepiaMuted : dirty ? c.gold : c.sage,
+                }}
+              >
+                {saving
+                  ? 'ENREGISTREMENT…'
+                  : dirty
+                    ? 'DÉPOSER MA PRÉDICTION'
+                    : 'PRÉDICTION DÉPOSÉE'}
+              </Text>
+            </Pressable>
+          ) : null}
+
+          {myAccuracy !== null ? (
+            <View
+              className="flex-row items-baseline justify-between"
+              style={{ marginTop: 14, paddingHorizontal: 2 }}
+            >
+              <Micro tracking={1.6} style={{ color: c.sepiaMuted }}>
+                {`MA JUSTESSE · ${accuracyLabel(myAccuracy)}`}
+              </Micro>
+              <Text
+                style={{
+                  fontFamily: f.monoMed,
+                  fontSize: 13,
+                  color: accuracyColor(myAccuracy),
+                }}
+              >
+                {`${myAccuracy.toFixed(0)} %`}
+              </Text>
+            </View>
+          ) : null}
         </View>
 
         <View>
           <SectionTitle
             label="PRÉDICTIONS DÉPOSÉES"
-            hint={locked ? 'ÉCART MOYEN' : `${others.length} / ${CLUB_SIZE} MEMBRES`}
+            hint={locked ? 'JUSTESSE' : `${others.length} / ${CLUB_SIZE} MEMBRES`}
           />
           {others.map((prediction) => {
-            const gap = prediction.gapPercent;
+            const score = prediction.accuracyPercent;
             return (
               <View
                 key={prediction.id}
@@ -161,10 +256,10 @@ export default function OracleScreen() {
                     fontFamily: f.mono,
                     fontSize: 9,
                     letterSpacing: 1.08,
-                    color: gap === null ? c.sepiaFaint : gapColor(gap),
+                    color: score === null ? c.sepiaFaint : accuracyColor(score),
                   }}
                 >
-                  {gap === null ? 'VERROUILLÉ' : `ÉCART ${formatPercent(gap).replace('+', '')}`}
+                  {score === null ? 'EN ATTENTE' : `${score.toFixed(0)} % JUSTE`}
                 </Text>
               </View>
             );
@@ -173,4 +268,17 @@ export default function OracleScreen() {
       </View>
     </ScreenShell>
   );
+}
+
+/**
+ * La couleur d'un score de justesse.
+ *
+ * `gapColor` faisait l'inverse — elle colorait un **écart**, où plus c'est
+ * grand, pire c'est. Les seuils suivent ceux de `ACCURACY_TIERS` pour que la
+ * couleur et le mot ne puissent pas se contredire.
+ */
+function accuracyColor(percent: number): string {
+  if (percent >= 90) return c.sage;
+  if (percent >= 70) return c.gold;
+  return c.oxblood;
 }
