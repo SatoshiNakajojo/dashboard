@@ -101,7 +101,7 @@ export function PositionsLive({
                   </td>
                   <td className="tabular">{p.liq == null ? "—" : n(p.liq, 4)}</td>
                   <td className={cn("tabular", p.pnl >= 0 ? "text-ok" : "text-danger")}>{n(p.pnl)} $</td>
-                  <td className={cn("tabular", p.roe >= 0 ? "text-ok" : "text-danger")}>{n(p.roe, 1)}%</td>
+                  <td className={cn("tabular", p.roePct >= 0 ? "text-ok" : "text-danger")}>{n(p.roePct, 1)}%</td>
                   <td>
                     <button
                       type="button"

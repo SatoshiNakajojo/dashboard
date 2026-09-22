@@ -33,7 +33,7 @@ export function TickerTape({
     for (const p of opens) {
       items.push({
         k: `${p.side} ${p.coin}`,
-        v: `${p.entry.toFixed(2)} · ${p.pnl >= 0 ? "+" : ""}${p.pnl.toFixed(2)}$ · ${p.roe.toFixed(1)}%`,
+        v: `${p.entry.toFixed(2)} · ${p.pnl >= 0 ? "+" : ""}${p.pnl.toFixed(2)}$ · ${p.roePct.toFixed(1)}%`,
         tone: p.pnl >= 0 ? "ok" : "danger",
         asset: `${p.coin}USDT`,
         dir: p.pnl >= 0 ? 1 : -1,

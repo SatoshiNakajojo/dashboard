@@ -18,7 +18,7 @@ export async function adaptBook(
   const notes: string[] = [];
   if (!opens.length) return { managed, notes: ["REVUE book vide"], thesis: "" };
   const dd = peak > 0 ? (peak - nav) / peak : 0;
-  const losers = opens.filter((p) => p.roe < 0);
+  const losers = opens.filter((p) => p.roePct < 0);
   const briefing = JSON.stringify({
     nav: Number(nav.toFixed(2)),
     pic: Number(peak.toFixed(2)),
@@ -27,7 +27,7 @@ export async function adaptBook(
       coin: p.coin,
       side: p.side,
       entry: p.entry,
-      roe: Number(p.roe.toFixed(2)),
+      roe_pct: Number(p.roePct.toFixed(2)),
       pnl: Number(p.pnl.toFixed(2)),
       value: Number(p.value.toFixed(2)),
       journal: (managed[p.coin]?.log || []).slice(-4).map((l) => l.text),

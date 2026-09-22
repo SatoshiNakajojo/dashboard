@@ -1,5 +1,6 @@
 import { addDeptSize, orderNotional, orderTarget, readHlBalances, reduceDeptPosition, readHlPositions } from "./hl";
 import type { HlSession } from "./hl";
+import { GSD_BACKSTOP_R, GSD_DUST_NOTIONAL, GSD_RISK_PCT, GSD_TIME_STOP_H } from "./bot";
 import { notify } from "./alerts.server";
 import { fetchBars } from "./market";
 import { readEngines } from "./strats";
@@ -48,6 +49,8 @@ export async function manageOpens(
   const next: Record<string, Managed> = {};
   const bal = await readHlBalances(session.master);
   const targetN = orderNotional(bal.trading, bal.free);
+  /** Perte latente au-delà de laquelle on considère que le stop a échoué. */
+  const budget = GSD_RISK_PCT * (Number(bal.trading) || 0) * GSD_BACKSTOP_R;
   let dayDown = false;
   let halted = false;
   try {
@@ -58,7 +61,6 @@ export async function manageOpens(
   } catch {
     /* J0 optionnel */
   }
-  const ranked = [...opens].sort((a, b) => a.roe - b.roe);
   await helmNote(`revue ${opens.length} pos · NAV ${bal.trading.toFixed(2)} · halt=${halted}`);
 
   if (!opens.length) {
@@ -87,7 +89,6 @@ export async function manageOpens(
     const risk = Math.abs(m.entry - m.stop) || m.entry * 0.03;
     const mark = p.size > 0 ? (p.side === "LONG" ? p.entry + p.pnl / p.size : p.entry - p.pnl / p.size) : p.entry;
     const ageH = (Date.now() - m.openedAt) / 3_600_000;
-    const worst = ranked[0]?.coin === p.coin;
     let st1h: "LONG" | "SHORT" | "FLAT" = "FLAT";
     let st4h: "LONG" | "SHORT" | "FLAT" = "FLAT";
     try {
@@ -121,24 +122,27 @@ export async function manageOpens(
       await helmNote(why);
     }
 
-    if (p.value < 18) {
-      await cut(`BARRE · ON COUPE ${p.coin} miettes ${p.value.toFixed(1)}$`);
+    // Le contrôle du risque est le stop posé chez l'exchange. Ce qui suit ne
+    // coupe que sur un changement de thèse, un kill-switch, ou l'échec avéré
+    // du stop — jamais sur du bruit de marché. L'ancienne règle coupait dès
+    // que le ROE passait sous +0,5 % : elle liquidait tout, à chaque cycle,
+    // en payant le taker à l'aller comme au retour.
+    if (p.value < GSD_DUST_NOTIONAL) {
+      await cut(`BARRE · ON COUPE ${p.coin} miettes ${p.value.toFixed(2)}$`);
       continue;
     }
-    if (p.roe < 0.5 || p.pnl < 0) {
-      await cut(`BARRE · ON COUPE ${p.coin} ROE ${p.roe.toFixed(1)}% P&L ${p.pnl.toFixed(2)}$`);
+    if (budget > 0 && p.pnl < -budget) {
+      await cut(
+        `BARRE · FILET ${p.coin} perte ${p.pnl.toFixed(2)}$ > ${budget.toFixed(2)}$ (${GSD_BACKSTOP_R}R) — le stop n'a pas tenu`,
+      );
       continue;
     }
-    if (dayDown && p.roe < 2) {
-      await cut(`BARRE · journée rouge · ${p.coin} ROE ${p.roe.toFixed(1)}%`);
+    if (halted && p.pnl < 0) {
+      await cut(`BARRE · halt · ${p.coin} on libère la marge (${p.pnl.toFixed(2)}$)`);
       continue;
     }
-    if (halted && p.roe < 3) {
-      await cut(`BARRE · halt · ${p.coin} on libère la marge (ROE ${p.roe.toFixed(1)}%)`);
-      continue;
-    }
-    if (opens.length >= 2 && worst && p.roe < 3) {
-      await cut(`BARRE · plus mauvais ${p.coin} ROE ${p.roe.toFixed(1)}%`);
+    if (dayDown && budget > 0 && p.pnl < -budget * 0.5) {
+      await cut(`BARRE · journée rouge · ${p.coin} ${p.pnl.toFixed(2)}$`);
       continue;
     }
     const against = (t: string) => t !== "FLAT" && t !== p.side;
@@ -147,16 +151,16 @@ export async function manageOpens(
       await cut(`BARRE · ST contre ${p.coin} 1h=${st1h} 4h=${st4h}`);
       continue;
     }
-    if (ageH >= 6 && p.roe < 3) {
-      await cut(`BARRE · time-stop ${p.coin} ${ageH.toFixed(1)} h`);
+    if (ageH >= GSD_TIME_STOP_H && p.pnl <= 0) {
+      await cut(`BARRE · time-stop ${p.coin} ${ageH.toFixed(1)} h sans gain`);
       continue;
     }
 
-    const winner = p.roe >= 3 && !against(st4h) && (withUs(st4h) || withUs(st1h) || st4h === "FLAT");
+    const winner = p.roePct >= 3 && !against(st4h) && (withUs(st4h) || withUs(st1h) || st4h === "FLAT");
     if (winner && !m.scaled && p.value < targetN * 0.65 && bal.free > 12 && !halted) {
       const extra = Math.min(targetN - p.value, bal.free * 0.7 * 2, targetN * 0.5);
       if (extra >= 25) {
-        const r = await addDeptSize(session, p.coin, extra);
+        const r = await addDeptSize(session, p.coin, extra, m.stop);
         if (r.ok) {
           m.scaled = true;
           pushLog(m, `BARRE · +${extra.toFixed(0)}$ ${p.coin}`);
@@ -178,7 +182,7 @@ export async function manageOpens(
       continue;
     }
 
-    const hold = `BARRE · ON TIENT ${p.coin} ${p.side} ROE ${p.roe.toFixed(1)}% ${p.pnl.toFixed(2)}$ ${ageH.toFixed(1)}h ST ${st1h}/${st4h}`;
+    const hold = `BARRE · ON TIENT ${p.coin} ${p.side} ROE ${p.roePct.toFixed(1)}% ${p.pnl.toFixed(2)}$ ${ageH.toFixed(1)}h ST ${st1h}/${st4h}`;
     pushLog(m, hold);
     notes.push(hold);
     await helmNote(hold);

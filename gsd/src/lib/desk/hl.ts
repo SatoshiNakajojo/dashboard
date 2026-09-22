@@ -1,6 +1,17 @@
 import { ExchangeClient, HttpTransport, InfoClient } from "@nktkas/hyperliquid";
 import { privateKeyToAccount } from "viem/accounts";
-import { GSD_MAX_OPEN, GSD_MIN_NOTIONAL, GSD_NOTIONAL_USD, GSD_SLOT_PCT } from "./bot";
+import {
+  GSD_BACKSTOP_R,
+  GSD_DUST_NOTIONAL,
+  GSD_LEVERAGE,
+  GSD_MAX_BOOK_PCT,
+  GSD_MAX_OPEN,
+  GSD_MAX_STOP_FRAC,
+  GSD_MIN_NOTIONAL,
+  GSD_RISK_PCT,
+} from "./bot";
+import { marginCeiling, orderTarget, planSize } from "./sizing";
+import type { SizePlan } from "./sizing";
 
 const STORAGE = "gsd-hl-agent-v1";
 
@@ -54,7 +65,9 @@ export type HlOpenPos = {
   entry: number;
   value: number;
   pnl: number;
-  roe: number;
+  /** Retour sur la marge engagée, EN POURCENT. L'unité est dans le nom :
+   *  c'est une double conversion silencieuse qui a coûté un facteur 100. */
+  roePct: number;
   liq: number | null;
   margin: number;
   leverage: number;
@@ -77,10 +90,9 @@ export async function readHlPositions(master: `0x${string}`): Promise<HlOpenPos[
       entry: Number(p.entryPx),
       value: Number(p.positionValue),
       pnl: Number(p.unrealizedPnl),
-      roe: (() => {
-        const r = Number(p.returnOnEquity);
-        return Math.abs(r) <= 5 ? r * 100 : r;
-      })(),
+      // L'API rend une FRACTION. Une seule conversion, ici, sans deviner :
+      // toute normalisation supplémentaire en aval est un bug.
+      roePct: Number(p.returnOnEquity) * 100,
       liq: p.liquidationPx == null ? null : Number(p.liquidationPx),
       margin: Number(p.marginUsed),
       leverage: Number(p.leverage?.value ?? p.leverage ?? 0),
@@ -203,16 +215,13 @@ export function hlTradingEquity(perps: number, spot: number) {
   return classifyHl(perps, spot).trading;
 }
 
-export function orderTarget(equity: number) {
-  const eq = Number.isFinite(equity) ? Math.max(0, equity) : 0;
-  return Math.min(GSD_NOTIONAL_USD, eq * GSD_SLOT_PCT * 2);
-}
-
-export function orderNotional(equity: number, free?: number) {
-  let cap = orderTarget(equity);
-  if (free != null && Number.isFinite(free)) cap = Math.min(cap, Math.max(0, free) * 2 * 0.8);
-  return Number.isFinite(cap) ? cap : 0;
-}
+export {
+  orderTarget,
+  marginCeiling,
+  orderNotional,
+  planSize,
+} from "./sizing";
+export type { SizeBind, SizePlan } from "./sizing";
 
 export async function readHlBalances(master: `0x${string}`): Promise<HlBalances> {
   const info = new InfoClient({ transport: new HttpTransport() });
@@ -315,6 +324,63 @@ function fmtPx(px: number, szDecimals: number) {
   return maxDec === 0 ? String(Math.round(rounded)) : String(rounded);
 }
 
+/**
+ * Retire les TP/SL au repos d'un actif avant d'en reposer, ou avant de
+ * sortir. Sans ça ils s'accumulent : 24 ordres au repos pour 6 positions
+ * ont été relevés en production, dimensionnés jusqu'à 415 fois la position,
+ * et ce sont eux qui empêchaient la coupe d'urgence de passer.
+ */
+async function cancelCoinTriggers(
+  exchange: ExchangeClient,
+  info: InfoClient,
+  master: `0x${string}`,
+  coin: string,
+  idx: number,
+): Promise<number> {
+  try {
+    const open = await info.frontendOpenOrders({ user: master });
+    const cancels = open
+      .filter((o) => String(o.coin).toUpperCase() === coin.toUpperCase() && o.reduceOnly)
+      .map((o) => ({ a: idx, o: Number(o.oid) }))
+      .filter((c) => Number.isFinite(c.o));
+    if (!cancels.length) return 0;
+    await exchange.cancel({ cancels });
+    return cancels.length;
+  } catch {
+    return 0;
+  }
+}
+
+/** Taille réellement exécutée, lue dans la réponse — jamais la taille demandée. */
+function filledSize(status: unknown): { filled: number; oid: string; avgPx: number | null } {
+  if (status && typeof status === "object") {
+    if ("filled" in status) {
+      const f = (status as { filled: { totalSz: string; avgPx: string; oid: number } }).filled;
+      return {
+        filled: Math.abs(Number(f.totalSz)) || 0,
+        oid: String(f.oid),
+        avgPx: finitePx(f.avgPx),
+      };
+    }
+    if ("resting" in status) {
+      return { filled: 0, oid: String((status as { resting: { oid: number } }).resting.oid), avgPx: null };
+    }
+  }
+  return { filled: 0, oid: "ok", avgPx: null };
+}
+
+export type DeptOrderOk = {
+  ok: true;
+  oid: string;
+  /** Taille DEMANDÉE. */
+  requested: number;
+  /** Taille EXÉCUTÉE, lue chez l'exchange. Peut être très inférieure. */
+  size: number;
+  avgPx: number | null;
+  plan: SizePlan;
+  notes: string[];
+};
+
 export async function submitDeptOrder(
   session: HlSession,
   input: {
@@ -324,7 +390,7 @@ export async function submitDeptOrder(
     stop: number;
     target?: number | null;
   },
-): Promise<{ ok: true; oid: string; size: number } | { ok: false; error: string }> {
+): Promise<DeptOrderOk | { ok: false; error: string }> {
   try {
     const wallet = privateKeyToAccount(session.key);
     const transport = new HttpTransport();
@@ -343,10 +409,6 @@ export async function submitDeptOrder(
     if (mid == null) return { ok: false, error: `${coin}: prix illisible, ordre ignoré.` };
 
     const bal = await readHlBalances(session.master);
-    const equity = Number(bal.trading ?? bal.perps ?? 0);
-    if (!Number.isFinite(equity) || (equity < 5 && Number(bal.spot) < 5)) {
-      return { ok: false, error: `Fonds insuffisants (${Number.isFinite(equity) ? equity.toFixed(2) : "?"} USDC Perps).` };
-    }
     if (Number(bal.spot) >= 5 && !bal.unified && Number(bal.spot) > 1) {
       try {
         await exchange.usdClassTransfer({ amount: String(Math.floor(Number(bal.spot) * 100) / 100), toPerp: true });
@@ -354,83 +416,162 @@ export async function submitDeptOrder(
         /* Unified */
       }
     }
+
     const fresh = await readHlBalances(session.master);
-    const trading = Number(fresh.trading ?? fresh.perps ?? 0);
-    const freeN = Number(fresh.free);
+    const equity = Number(fresh.trading ?? fresh.perps ?? 0);
+    const free = Number(fresh.free);
+    if (!Number.isFinite(equity) || equity < 5) {
+      return { ok: false, error: `Fonds insuffisants (${Number.isFinite(equity) ? equity.toFixed(2) : "?"} USDC Perps).` };
+    }
+
     const opensNow = await readHlPositions(session.master);
     if (opensNow.length >= GSD_MAX_OPEN && !opensNow.some((o) => o.coin === coin)) {
       return {
         ok: false,
-        error: `déjà ${opensNow.map((o) => o.coin).join(",")} — max ${GSD_MAX_OPEN} slots (20 % chacun).`,
+        error: `déjà ${opensNow.map((o) => o.coin).join(",")} — max ${GSD_MAX_OPEN} positions.`,
       };
     }
-    const notional = orderNotional(trading, Number.isFinite(freeN) ? freeN : undefined);
-    const size = lotSize(notional, mid, szDecimals);
+    const bookNotional = opensNow.reduce((s, o) => s + (Number.isFinite(o.value) ? o.value : 0), 0);
+
+    // Le stop décide de la taille. Le prix de référence est le mid courant,
+    // pas la clôture de barre du signal : c'est là qu'on entre réellement.
+    const planned = planSize({ equity, free, entry: mid, stop: input.stop, bookNotional });
+    if (!planned.ok) return { ok: false, error: `${coin}: ${planned.error}` };
+    const plan = planned.plan;
+
+    const size = lotSize(plan.notional, mid, szDecimals);
     if (!size || Number(size) * mid < GSD_MIN_NOTIONAL) {
-      return {
-        ok: false,
-        error: `${coin}: ticket trop petit (min ${GSD_MIN_NOTIONAL}$ · NAV ${Number.isFinite(trading) ? trading.toFixed(2) : "?"} · px ${mid}). Ignoré.`,
-      };
+      return { ok: false, error: `${coin}: ticket ${plan.notional.toFixed(2)} $ non arrondissable au lot.` };
     }
 
     const limitPx = fmtPx(isBuy ? mid * 1.02 : mid * 0.98, szDecimals);
-    const stopN = finitePx(input.stop) ?? (isBuy ? mid * 0.97 : mid * 1.03);
-    const stopPx = fmtPx(stopN, szDecimals);
-    if (!limitPx || !stopPx) return { ok: false, error: `${coin}: prix de lot illisible, ordre ignoré.` };
+    if (!limitPx) return { ok: false, error: `${coin}: prix limite illisible, ordre ignoré.` };
+    if (!Number.isFinite(Number(size)) || Number(size) <= 0) {
+      return { ok: false, error: `${coin}: NaN bloqué avant envoi (size=${size}).` };
+    }
 
-    type HlOrder = {
-      a: number;
-      b: boolean;
-      p: string;
-      s: string;
-      r: boolean;
-      t: { limit: { tif: "FrontendMarket" } } | { trigger: { isMarket: boolean; triggerPx: string; tpsl: "tp" | "sl" } };
-    };
-    const orders: HlOrder[] = [
-      { a: idx, b: isBuy, p: String(limitPx), s: size, r: false, t: { limit: { tif: "FrontendMarket" } } },
-      { a: idx, b: !isBuy, p: String(stopPx), s: size, r: true, t: { trigger: { isMarket: true, triggerPx: String(stopPx), tpsl: "sl" } } },
+    const notes: string[] = [
+      `taille bridée par « ${plan.bind} » · risque ${plan.risqueUsd.toFixed(2)} $ · stop ${(plan.stopFrac * 100).toFixed(1)} %`,
     ];
-    const tgt = finitePx(input.target);
-    if (tgt != null) {
-      const tp = fmtPx(tgt, szDecimals);
-      const half = lotSize(notional * 0.5, mid, szDecimals);
-      if (tp && half) {
-        orders.push({
-          a: idx,
-          b: !isBuy,
-          p: tp,
-          s: half,
-          r: true,
-          t: { trigger: { isMarket: true, triggerPx: tp, tpsl: "tp" } },
-        });
-      }
-    }
 
-    for (const o of orders) {
-      if (!Number.isFinite(Number(o.s)) || Number(o.s) <= 0 || !Number.isFinite(Number(o.p)) || Number(o.p) <= 0) {
-        return { ok: false, error: `${coin}: NaN bloqué avant envoi (size=${o.s} px=${o.p}).` };
-      }
-    }
+    // Les triggers de l'entrée précédente partent AVANT, sinon ils s'empilent.
+    const purgés = await cancelCoinTriggers(exchange, info, session.master, coin, idx);
+    if (purgés) notes.push(`${purgés} trigger(s) périmé(s) annulé(s)`);
 
-    await exchange.updateLeverage({ asset: idx, isCross: true, leverage: 2 });
-    const res = await exchange.order({ orders, grouping: "normalTpsl" });
+    await exchange.updateLeverage({ asset: idx, isCross: true, leverage: GSD_LEVERAGE });
+
+    // L'entrée part SEULE. Le bracket « normalTpsl » dimensionnait le TP/SL
+    // sur l'ordre parent : ordre de 433, exécution de 1, stop de 415.
+    const res = await exchange.order({
+      orders: [{ a: idx, b: isBuy, p: String(limitPx), s: size, r: false, t: { limit: { tif: "FrontendMarket" } } }],
+      grouping: "na",
+    });
     const status = res.response.data.statuses[0];
     if (status && typeof status === "object" && "error" in status) {
-      return { ok: false, error: String(status.error) };
+      return { ok: false, error: String((status as { error: string }).error) };
     }
-    const oid =
-      status && typeof status === "object" && "resting" in status
-        ? String(status.resting.oid)
-        : status && typeof status === "object" && "filled" in status
-          ? String(status.filled.oid)
-          : "ok";
-    return { ok: true, oid, size: Number(size) };
+    const { filled, oid, avgPx } = filledSize(status);
+    const requested = Number(size);
+
+    if (filled <= 0) {
+      await cancelCoinTriggers(exchange, info, session.master, coin, idx);
+      return { ok: false, error: `${coin}: aucune exécution (demandé ${requested}).` };
+    }
+    if (filled < requested * 0.999) {
+      notes.push(`exécution PARTIELLE ${filled}/${requested} — la marge n'autorisait pas plus`);
+    }
+
+    // Vérité de l'exchange, pas la mémoire du bot.
+    const after = (await readHlPositions(session.master)).find((p) => p.coin === coin);
+    if (!after || after.size <= 0) {
+      return { ok: false, error: `${coin}: exécuté ${filled} mais aucune position lue — état incohérent, rien n'a été armé.` };
+    }
+    if (after.value < GSD_DUST_NOTIONAL) {
+      notes.push(`position ${after.value.toFixed(2)} $ sous le seuil de miette — on referme`);
+      await cancelCoinTriggers(exchange, info, session.master, coin, idx);
+      await reduceDeptPosition(session, coin, 1);
+      return { ok: false, error: `${coin}: exécution résiduelle ${after.value.toFixed(2)} $, refermée.` };
+    }
+
+    // TP/SL dimensionnés sur la position RÉELLE.
+    const arme = {
+      idx,
+      szDecimals,
+      isBuy,
+      size: after.size,
+      stop: input.stop,
+      target: input.target ?? null,
+      entry: after.entry,
+    };
+    let armed = await armProtection(exchange, arme);
+    if (armed.startsWith("STOP NON ARMÉ")) armed = await armProtection(exchange, arme);
+
+    // Une position sans stop dans un bot qui ne repasse que toutes les cinq
+    // minutes, c'est exactement comme naît un −36 %. On préfère la refermer.
+    if (armed.startsWith("STOP NON ARMÉ")) {
+      const close = await reduceDeptPosition(session, coin, 1);
+      return {
+        ok: false,
+        error: `${coin}: stop impossible à poser (${armed}) — position ${close.ok ? "refermée" : "À FERMER À LA MAIN"}.`,
+      };
+    }
+    notes.push(armed);
+
+    return { ok: true, oid, requested, size: after.size, avgPx, plan, notes };
   } catch (e) {
     const msg = e instanceof Error ? e.message : "ordre Hyperliquid refusé";
     if (/NaN|not finite/i.test(msg)) {
       return { ok: false, error: `${coinOf(input.asset)}: taille/prix invalide, ordre ignoré.` };
     }
     return { ok: false, error: msg };
+  }
+}
+
+/** Pose le stop (taille pleine) et le TP (moitié) sur la position réelle. */
+async function armProtection(
+  exchange: ExchangeClient,
+  a: {
+    idx: number;
+    szDecimals: number;
+    isBuy: boolean;
+    size: number;
+    stop: number;
+    target: number | null;
+    entry: number;
+  },
+): Promise<string> {
+  const f = 10 ** a.szDecimals;
+  const full = (Math.floor(a.size * f + 1e-9) / f).toFixed(a.szDecimals);
+  const half = (Math.floor(a.size * 0.5 * f + 1e-9) / f).toFixed(a.szDecimals);
+  const stopPx = fmtPx(a.stop, a.szDecimals);
+  if (!stopPx || !(Number(full) > 0)) return "STOP NON ARMÉ — position nue, à surveiller";
+
+  const orders: Array<Record<string, unknown>> = [
+    {
+      a: a.idx,
+      b: !a.isBuy,
+      p: String(stopPx),
+      s: full,
+      r: true,
+      t: { trigger: { isMarket: true, triggerPx: String(stopPx), tpsl: "sl" } },
+    },
+  ];
+  const tp = a.target != null ? fmtPx(a.target, a.szDecimals) : null;
+  if (tp && Number(half) > 0) {
+    orders.push({
+      a: a.idx,
+      b: !a.isBuy,
+      p: String(tp),
+      s: half,
+      r: true,
+      t: { trigger: { isMarket: true, triggerPx: String(tp), tpsl: "tp" } },
+    });
+  }
+  try {
+    await exchange.order({ orders: orders as never, grouping: "na" });
+    return `stop ${stopPx} sur ${full}${tp ? ` · TP ${tp} sur ${half}` : ""}`;
+  } catch (e) {
+    return `STOP NON ARMÉ (${e instanceof Error ? e.message : "refus"}) — position nue`;
   }
 }
 
@@ -454,6 +595,12 @@ export async function reduceDeptPosition(
     const mids = await info.allMids();
     const mid = pickMid(mids, pos.coin, pos.entry);
     if (mid == null) return { ok: false, error: `${coin}: mid illisible` };
+
+    // Les triggers reduceOnly au repos bloquent une sortie reduceOnly quand
+    // leur taille cumulée dépasse la position. C'est l'hypothèse la mieux
+    // étayée de l'audit pour expliquer AVAX à −13 % jamais coupé.
+    await cancelCoinTriggers(exchange, info, session.master, pos.coin, idx);
+
     const raw = pos.size * frac;
     const f = 10 ** szDecimals;
     const sz = (Math.floor(raw * f + 1e-9) / f).toFixed(szDecimals);
@@ -467,27 +614,52 @@ export async function reduceDeptPosition(
     });
     const st = res.response.data.statuses[0];
     if (st && typeof st === "object" && "error" in st) return { ok: false, error: String(st.error) };
-    return { ok: true, closed: Number(sz) };
+    const { filled } = filledSize(st);
+    if (filled <= 0) return { ok: false, error: `${coin}: sortie sans exécution (demandé ${sz})` };
+
+    // Si on a soldé, plus rien ne doit rester au repos.
+    if (frac >= 1) await cancelCoinTriggers(exchange, info, session.master, pos.coin, idx);
+    return { ok: true, closed: filled };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "close refusé" };
   }
 }
 
+/**
+ * Filet de sécurité, pas la sortie principale.
+ *
+ * Le contrôle du risque est le stop posé chez l'exchange. Cette fonction ne
+ * se déclenche que s'il a échoué : perte latente au-delà de GSD_BACKSTOP_R
+ * fois le risque prévu. L'ancienne règle coupait à −1 % de ROE sur un ROE
+ * lu avec un facteur 100 d'erreur — elle liquidait du bruit de marché.
+ */
 export async function flattenLosers(session: HlSession): Promise<string[]> {
   const opens = await readHlPositions(session.master);
   const notes: string[] = [];
+  if (!opens.length) return notes;
+
+  const bal = await readHlBalances(session.master);
+  const equity = Number(bal.trading) || 0;
+  const budget = GSD_RISK_PCT * equity * GSD_BACKSTOP_R;
+
   for (const p of opens) {
-    const roePct = Math.abs(p.roe) <= 8 && Math.abs(p.roe) > 0 && Math.abs(p.roe) < 1 ? p.roe * 100 : p.roe;
-    if (!(roePct <= -1 || p.pnl < -0.2)) continue;
+    const miette = p.value < GSD_DUST_NOTIONAL;
+    const creve = budget > 0 && p.pnl < -budget;
+    if (!miette && !creve) continue;
+    const pourquoi = miette
+      ? `miette ${p.value.toFixed(2)} $`
+      : `perte ${p.pnl.toFixed(2)} $ > ${budget.toFixed(2)} $ (${GSD_BACKSTOP_R}R)`;
     const r = await reduceDeptPosition(session, p.coin, 1);
     notes.push(
       r.ok
-        ? `COUPE ${p.coin} ${p.side} ROE ${roePct.toFixed(1)}% P&L ${p.pnl.toFixed(2)}$`
-        : `COUPE FAIL ${p.coin} ROE ${roePct.toFixed(1)}% → ${r.error}`,
+        ? `COUPE ${p.coin} ${p.side} — ${pourquoi} · ROE ${p.roePct.toFixed(1)} %`
+        : `COUPE FAIL ${p.coin} — ${pourquoi} → ${r.error}`,
     );
   }
-  if (!notes.length && opens.length) {
-    notes.push(`barre a vu ${opens.map((p) => `${p.coin} ${p.roe.toFixed(1)}%`).join(", ")} — rien sous −1%`);
+  if (!notes.length) {
+    notes.push(
+      `barre a vu ${opens.map((p) => `${p.coin} ${p.roePct.toFixed(1)} %`).join(", ")} — rien au-delà de ${budget.toFixed(2)} $`,
+    );
   }
   return notes;
 }
@@ -496,6 +668,8 @@ export async function addDeptSize(
   session: HlSession,
   coin: string,
   extraUsd: number,
+  /** Stop de la position, pour réarmer sur la taille agrandie. */
+  stop?: number,
 ): Promise<{ ok: true; size: number } | { ok: false; error: string }> {
   try {
     if (!Number.isFinite(extraUsd) || extraUsd < GSD_MIN_NOTIONAL) return { ok: false, error: "add trop petit" };
@@ -512,7 +686,22 @@ export async function addDeptSize(
     const mids = await info.allMids();
     const mid = pickMid(mids, pos.coin, pos.entry);
     if (mid == null) return { ok: false, error: `${coin}: mid illisible` };
-    const size = lotSize(extraUsd, mid, szDecimals);
+
+    // Un renfort reste borné par la marge et par le livre, comme une entrée.
+    const bal = await readHlBalances(session.master);
+    const opens = await readHlPositions(session.master);
+    const book = opens.reduce((s, o) => s + (Number.isFinite(o.value) ? o.value : 0), 0);
+    const plafond = Math.min(
+      marginCeiling(Number(bal.free)),
+      Math.max(0, Number(bal.trading) * GSD_MAX_BOOK_PCT - book),
+      Math.max(0, orderTarget(Number(bal.trading)) - pos.value),
+    );
+    const montant = Math.min(extraUsd, plafond);
+    if (montant < GSD_MIN_NOTIONAL) {
+      return { ok: false, error: `${coin}: renfort ${montant.toFixed(2)} $ sous le minimum` };
+    }
+
+    const size = lotSize(montant, mid, szDecimals);
     if (!size) return { ok: false, error: `${coin}: taille add nulle` };
     const isBuy = pos.side === "LONG";
     const px = fmtPx(isBuy ? mid * 1.02 : mid * 0.98, szDecimals);
@@ -523,7 +712,33 @@ export async function addDeptSize(
     });
     const st = res.response.data.statuses[0];
     if (st && typeof st === "object" && "error" in st) return { ok: false, error: String(st.error) };
-    return { ok: true, size: Number(size) };
+    const { filled } = filledSize(st);
+    if (filled <= 0) return { ok: false, error: `${coin}: renfort sans exécution` };
+
+    // Le stop doit couvrir la position agrandie, pas l'ancienne.
+    const after = (await readHlPositions(session.master)).find((x) => x.coin === pos.coin);
+    if (after) {
+      await cancelCoinTriggers(exchange, info, session.master, pos.coin, idx);
+      const stopN =
+        Number.isFinite(stop) && (stop as number) > 0
+          ? (stop as number)
+          : pos.side === "LONG"
+            ? after.entry * (1 - GSD_MAX_STOP_FRAC / 2)
+            : after.entry * (1 + GSD_MAX_STOP_FRAC / 2);
+      const armed = await armProtection(exchange, {
+        idx,
+        szDecimals,
+        isBuy,
+        size: after.size,
+        stop: stopN,
+        target: null,
+        entry: after.entry,
+      });
+      if (armed.startsWith("STOP NON ARMÉ")) {
+        return { ok: false, error: `${coin}: renfort exécuté mais stop non réarmé — ${armed}` };
+      }
+    }
+    return { ok: true, size: filled };
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : "add refusé" };
   }
@@ -535,7 +750,7 @@ export async function placeDeptOrder(input: {
   entry: number;
   stop: number;
   target?: number | null;
-}): Promise<{ ok: true; oid: string; size: number } | { ok: false; error: string }> {
+}): Promise<DeptOrderOk | { ok: false; error: string }> {
   const session = loadHlSession();
   if (!session) return { ok: false, error: "Clé API Hyperliquid non configurée." };
   return submitDeptOrder(session, input);

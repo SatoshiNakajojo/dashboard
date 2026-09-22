@@ -46,7 +46,7 @@ export function ChainPanel() {
       kill_reasons?: string[];
       equity?: number;
     } | null;
-    opens?: { coin: string; side: string; roe: number; pnl: number }[];
+    opens?: { coin: string; side: string; roePct: number; pnl: number }[];
   } | undefined;
   const r = extra.data?.regime || p?.regime;
   const open = r?.can_open_new_trade !== false && !r?.halted;
@@ -97,7 +97,7 @@ export function ChainPanel() {
             )}
             {(p?.opens ?? []).map((o) => (
               <li key={o.coin}>
-                {o.side} {o.coin} · ROE {Number(o.roe).toFixed(1)}% · {Number(o.pnl).toFixed(2)}$
+                {o.side} {o.coin} · ROE {Number(o.roePct).toFixed(1)}% · {Number(o.pnl).toFixed(2)}$
               </li>
             ))}
             {reviews.map((x) => (

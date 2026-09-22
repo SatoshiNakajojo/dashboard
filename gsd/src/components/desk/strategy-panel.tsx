@@ -79,7 +79,7 @@ export function StrategyPanel({
                 </div>
                 <div>
                   <dt className="text-muted-foreground">ROE</dt>
-                  <dd className="tabular">{p.roe.toFixed(1)}%</dd>
+                  <dd className="tabular">{p.roePct.toFixed(1)}%</dd>
                 </div>
                 <div>
                   <dt className="text-muted-foreground">Taille</dt>
