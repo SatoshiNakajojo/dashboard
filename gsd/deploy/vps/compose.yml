@@ -1,0 +1,19 @@
+services:
+  gsd:
+    build:
+      context: ../..
+      dockerfile: deploy/vps/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "80:3000"
+    env_file:
+      - .env
+    environment:
+      GSD_DATA_DIR: /app/data
+      HOST: "0.0.0.0"
+      PORT: "3000"
+    volumes:
+      - gsd-data:/app/data
+
+volumes:
+  gsd-data:

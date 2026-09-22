@@ -1,0 +1,9 @@
+node_modules
+.vercel
+.output
+screenshots
+artifacts
+.git
+.grok
+*.log
+deploy/vps/setup.sh
