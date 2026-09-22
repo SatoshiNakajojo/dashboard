@@ -1,6 +1,8 @@
 import type { AssetClass } from '@/theme/tokens';
 import type { Point } from '@/lib/chart';
 
+import type { ProfileLink } from '@/lib/profileLinks';
+
 export type Uuid = string;
 
 /** Membre du club — `profiles`. Une couleur par membre, stable partout. */
@@ -9,6 +11,10 @@ export interface Member {
   displayName: string;
   initials: string;
   color: string;
+  /** Photo de profil. `null` = on affiche les initiales, comme avant. */
+  avatarUrl: string | null;
+  /** Ce que le membre partage au club : GitHub, adresse BTC, MetaMask… */
+  links: ProfileLink[];
 }
 
 /** `events` */

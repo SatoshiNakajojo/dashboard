@@ -15,6 +15,10 @@ export type ProfileRow = {
   display_name: string;
   initials: string;
   color: string;
+  /** Photo de profil, dans le bucket `avatars`. */
+  avatar_url: string | null;
+  /** `[{"label":"GitHub","url":"https://…"}]` — relu par `parseLinks`. */
+  links: unknown;
   created_at: string;
 };
 

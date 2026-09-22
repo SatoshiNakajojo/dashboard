@@ -5,14 +5,64 @@ import type { Member } from '@/types/domain';
  * Les identifiants sont des UUID stables : le seed Supabase reprend les mêmes,
  * ce qui permet de basculer mock ↔ serveur sans changer une seule vue.
  */
+/**
+ * Les fixtures n'ont ni photo ni liens : c'est l'état d'un profil neuf.
+ *
+ * Pas de `as const` — `links` doit rester un tableau modifiable, sinon chaque
+ * membre hérite d'un `readonly []` que `Member` refuse.
+ */
+const bare = (): Pick<Member, 'avatarUrl' | 'links'> => ({ avatarUrl: null, links: [] });
+
 export const MEMBERS: Record<string, Member> = {
-  john: { id: '11111111-1111-4111-8111-000000000001', displayName: 'John', initials: 'JD', color: '#E8903D' },
-  alex: { id: '11111111-1111-4111-8111-000000000002', displayName: 'Alex', initials: 'AX', color: '#6E9A78' },
-  marco: { id: '11111111-1111-4111-8111-000000000003', displayName: 'Marco', initials: 'MC', color: '#8C7BA8' },
-  sofia: { id: '11111111-1111-4111-8111-000000000004', displayName: 'Sofia', initials: 'SF', color: '#B3574F' },
-  rayan: { id: '11111111-1111-4111-8111-000000000005', displayName: 'Rayan', initials: 'RY', color: '#5B8A9A' },
-  lea: { id: '11111111-1111-4111-8111-000000000006', displayName: 'Léa', initials: 'LE', color: '#C9A227' },
-  me: { id: '11111111-1111-4111-8111-000000000007', displayName: 'Toi', initials: 'TU', color: '#F2EBDD' },
+  john: {
+    id: '11111111-1111-4111-8111-000000000001',
+    displayName: 'John',
+    initials: 'JD',
+    color: '#E8903D',
+    ...bare(),
+  },
+  alex: {
+    id: '11111111-1111-4111-8111-000000000002',
+    displayName: 'Alex',
+    initials: 'AX',
+    color: '#6E9A78',
+    ...bare(),
+  },
+  marco: {
+    id: '11111111-1111-4111-8111-000000000003',
+    displayName: 'Marco',
+    initials: 'MC',
+    color: '#8C7BA8',
+    ...bare(),
+  },
+  sofia: {
+    id: '11111111-1111-4111-8111-000000000004',
+    displayName: 'Sofia',
+    initials: 'SF',
+    color: '#B3574F',
+    ...bare(),
+  },
+  rayan: {
+    id: '11111111-1111-4111-8111-000000000005',
+    displayName: 'Rayan',
+    initials: 'RY',
+    color: '#5B8A9A',
+    ...bare(),
+  },
+  lea: {
+    id: '11111111-1111-4111-8111-000000000006',
+    displayName: 'Léa',
+    initials: 'LE',
+    color: '#C9A227',
+    ...bare(),
+  },
+  me: {
+    id: '11111111-1111-4111-8111-000000000007',
+    displayName: 'Toi',
+    initials: 'TU',
+    color: '#F2EBDD',
+    ...bare(),
+  },
 };
 
 export const MEMBER_LIST: Member[] = Object.values(MEMBERS);

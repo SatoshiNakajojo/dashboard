@@ -113,7 +113,18 @@ export function useAuth(): AuthState {
     setError(null);
   }, []);
 
-  return { step, email, setEmail, code, setCode, busy, error, requestCode, verifyCode, changeEmail };
+  return {
+    step,
+    email,
+    setEmail,
+    code,
+    setCode,
+    busy,
+    error,
+    requestCode,
+    verifyCode,
+    changeEmail,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -152,12 +163,17 @@ export interface ProfileBootstrap {
 let bootstrapRevision = 0;
 const bootstrapListeners = new Set<() => void>();
 
-function announceProfileChange(): void {
+export function announceProfileChange(): void {
   bootstrapRevision += 1;
   for (const listener of bootstrapListeners) listener();
 }
 
-function subscribeToProfileChange(listener: () => void): () => void {
+/** Le numéro de révision courant — ce qui change quand un profil change. */
+export function profileRevision(): number {
+  return bootstrapRevision;
+}
+
+export function subscribeToProfileChange(listener: () => void): () => void {
   bootstrapListeners.add(listener);
   return () => {
     bootstrapListeners.delete(listener);

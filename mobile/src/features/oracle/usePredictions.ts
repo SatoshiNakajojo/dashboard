@@ -221,6 +221,8 @@ export function usePredictions(
             displayName: 'Membre',
             initials: '··',
             color: '#8C7F68',
+            avatarUrl: null,
+            links: [],
           },
           targetPrice: lastPoint ? priceAt(lastPoint[1]) : 0,
           // La justesse se lit **dès** qu'une portion du cours recoupe le

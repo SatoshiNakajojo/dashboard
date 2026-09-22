@@ -77,6 +77,9 @@ export default function RootLayout() {
           >
             <Stack.Screen name="(tabs)" />
             <Stack.Screen name="(auth)/sign-in" />
+            {/* Hors des onglets : le profil se superpose et se referme, il
+              n'est pas un quatrième onglet permanent. */}
+            <Stack.Screen name="profile" options={{ presentation: 'modal' }} />
           </Stack>
         </View>
       </SafeAreaProvider>

@@ -475,6 +475,53 @@ dizaine de points du bord.
 
 ---
 
+## Une page de profil
+
+Un membre pouvait changer son nom en se réinscrivant, et rien d'autre. Un appui
+sur l'avatar ouvre maintenant une page : le nom, une photo, et ce qu'on veut
+partager au club — un GitHub, une adresse de dépôt BTC, un MetaMask.
+
+**Les liens sont la seule zone de l'app où un membre écrit du texte que six
+autres verront et pourront toucher.** C'est ce qui justifie `profileLinks.ts` :
+on n'ouvre que `http:` et `https:`. Une entrée `javascript:` collée là
+s'exécuterait chez les six autres. Tout le reste — une adresse de portefeuille,
+mais aussi `data:` ou `file:` — s'affiche et **se copie**, jamais ne s'ouvre.
+
+Deux détails qui comptent plus qu'ils n'en ont l'air :
+
+- L'adresse raccourcie **élide son milieu, jamais sa fin** : sur une clé de
+  portefeuille, les derniers caractères sont ceux qu'on vérifie du regard avant
+  d'envoyer des fonds.
+- Elle garde sa **casse**. Une adresse Ethereum porte sa somme de contrôle dans
+  la casse de ses lettres ; l'afficher en capitales en fait une adresse fausse
+  sous les yeux de qui la vérifie. C'est le seul endroit de l'app où `Micro`,
+  qui met tout en capitales, ne convient pas.
+
+La photo est redimensionnée à 512 px et compressée avant d'être téléversée : un
+iPhone produit des images de 4 000 px et plusieurs mégaoctets, que les six
+autres membres retéléchargeraient à chaque ouverture pour les afficher dans un
+cercle de 34 points. En écriture, chacun n'a que son propre dossier dans le
+bucket — la politique vérifie que le chemin commence par son identifiant.
+
+`links` est du jsonb plutôt qu'une table : sept membres, une poignée de liens
+chacun, toujours lus d'un bloc avec le profil. Les bornes sont portées par une
+contrainte, parce que l'app n'est pas la seule porte — la clé publiable permet
+d'écrire directement dans PostgREST.
+
+**Le défaut trouvé en l'exécutant.** La première version de la contrainte
+laissait passer `[{"label":"GitHub"}]`, sans url : une clé **absente** donne
+`jsonb_typeof(NULL)` = NULL, et `NULL <> 'string'` vaut NULL, pas vrai. Il a
+fallu l'appliquer sur un vrai PostgreSQL 16 et lui soumettre les sept cas
+qu'elle doit refuser pour le voir ; la relire ne suffisait pas.
+
+**Et l'annuaire se relit.** Un membre qui changeait son nom gardait ses
+anciennes initiales dans l'en-tête, sur ses cartes et sur sa courbe de l'Oracle
+jusqu'au prochain démarrage — il avait donc l'impression que l'enregistrement
+n'avait rien fait. `useMembers` s'abonne désormais au même signal que la garde
+de route.
+
+---
+
 ## Un pari se dépose sciemment
 
 Le tracé de l'Oracle était enregistré **900 ms après le dernier point**. Un

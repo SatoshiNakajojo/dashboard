@@ -42,6 +42,8 @@ const UNKNOWN_MEMBER: Omit<Member, 'id'> = {
   displayName: 'Membre',
   initials: '··',
   color: '#8C7F68',
+  avatarUrl: null,
+  links: [],
 };
 
 /**
