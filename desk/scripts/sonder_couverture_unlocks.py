@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
 """Pourquoi 166 perpétuels sur 234 n'ont-ils pas de calendrier ?
 
-    python3 scripts/sonder_couverture_unlocks.py            # le diagnostic
-    python3 scripts/sonder_couverture_unlocks.py --profond  # + les détails
+    /opt/desk/.venv/bin/python scripts/sonder_couverture_unlocks.py
 
 **À lancer depuis le VPS.** `defillama-datasets.llama.fi` et
 `api.coingecko.com` ne sont pas joignables depuis l'environnement de
 développement ; le VPS les atteint, c'est lui qui alimente le rituel.
+
+**Avec le Python du venv, pas celui du système.** Le VPS n'héberge que la
+collecte : ses dépendances vivent dans `/opt/desk/.venv`, et `python3` tout
+court n'a pas pydantic. C'est le même interpréteur que celui du rituel.
 
 ## Ce que ce script cherche, et pourquoi il vient avant le code
 
@@ -67,11 +70,25 @@ from pathlib import Path
 RACINE = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(RACINE / "src"))
 
-from trading_desk.sentinelle.triggers import (  # noqa: E402
-    DEBLOCAGE_PART_MAX,
-    DEBLOCAGE_PART_MIN,
-    deblocages_retenus,
-)
+try:
+    # La regle vient de `sentinelle.triggers`, jamais recopiee ici : une
+    # copie derive un jour, et la derive ne se voit pas dans les chiffres.
+    # Le prix a payer est l'import de pydantic, via `features.bars`.
+    from trading_desk.sentinelle.triggers import (  # noqa: E402
+        DEBLOCAGE_PART_MAX,
+        DEBLOCAGE_PART_MIN,
+        deblocages_retenus,
+    )
+except ModuleNotFoundError as manquant:  # pragma: no cover - chemin VPS
+    # Une trace de vingt lignes finissant par « No module named 'pydantic' »
+    # n'indique pas quoi taper. Celle-ci si.
+    raise SystemExit(
+        f"\n  Dépendance absente : {manquant.name}\n\n"
+        "  Sur le VPS, utilisez le Python du venv plutôt que celui du "
+        "système :\n\n"
+        "      /opt/desk/.venv/bin/python "
+        "scripts/sonder_couverture_unlocks.py\n"
+    ) from manquant
 
 DATASETS = "https://defillama-datasets.llama.fi"
 HYPERLIQUID = "https://api.hyperliquid.xyz/info"
