@@ -121,9 +121,10 @@ et sur les échelles longues ce refus couvre la majorité des signaux.
 
 ## Ce qui reste ouvert
 
-- Aucune variante du moteur n'a été testée — ni time-stop, ni autre rapport
-  cible/stop, ni filtre de régime. Chaque variante ajoutée augmente le nombre
-  d'hypothèses, donc de faux positifs attendus. Avant d'en tester une, se
+- Une seule variante a été testée : les sorties du gestionnaire (section
+  suivante), pré-enregistrée. Aucune autre — ni autre rapport cible/stop, ni
+  filtre de régime. Chaque variante ajoutée augmente le nombre d'hypothèses,
+  donc de faux positifs attendus. Avant d'en tester une, se
   demander si elle a une raison économique d'exister, ou seulement l'espoir de
   faire apparaître une survivante.
 - Le seul edge qui ait survécu dans l'un ou l'autre projet est celui du desk
