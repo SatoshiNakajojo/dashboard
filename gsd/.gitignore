@@ -19,3 +19,4 @@ coupe-now.mjs
 .DS_Store
 .project_id
 .node_modules.lock
+__pycache__/

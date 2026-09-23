@@ -131,3 +131,60 @@ campagne. Même sous-jacent, carnet différent ; sur des barres de 15 minutes à
 12 heures l'écart est négligeable, et Hyperliquid est la plateforme où
 l'exécution a réellement lieu. C'est déclaré ici parce qu'une déviation non
 déclarée est une déviation qui finit par expliquer un résultat.
+
+---
+
+## Addendum du 23/09/2026, en cours de campagne
+
+Découvert après le lancement, avant la lecture du verdict.
+
+**`fundingHistory` d'Hyperliquid ne sert qu'environ cinquante jours**, quelle que
+soit la date de départ demandée. Les bougies, elles, remontent à 2022 sur les
+échelles longues. Le financement n'est donc compté que sur une fraction du temps
+passé en position — 3 % sur ETH 12h, mesuré.
+
+Le sens de l'erreur décide de ce qu'on peut en faire. Le moteur est
+structurellement long sur des actifs à financement positif, donc **du côté qui
+paie**. Sous-compter le financement **flatte** la stratégie : le résultat mesuré
+est un *majorant* de sa performance.
+
+Cet addendum ne déplace donc pas la cible, il la rapproche : il durcit la lecture
+du résultat au lieu de l'assouplir. `financement_sensibilite.py` mesure la
+couverture réelle et recharge les heures manquantes au taux médian de chaque
+actif. C'est une extrapolation déclarée comme telle, destinée à **borner**
+l'erreur, pas à la corriger.
+
+Si le verdict de la campagne était positif, cette limite suffirait à le
+suspendre jusqu'à disposer d'un historique de financement complet. S'il est
+négatif, elle ne le menace pas — elle l'atténue.
+
+---
+
+## Second addendum du 23/09/2026 — le premier était faux sur un point
+
+Le premier addendum affirmait que le moteur est « structurellement long », et en
+déduisait que le financement non compté **flattait** la stratégie. Mesuré sur les
+2 517 trades de la campagne :
+
+| | longs | courts |
+|---|---:|---:|
+| trades | 1 369 (54 %) | 1 148 (46 %) |
+| **temps en position** | **38 %** | **62 %** |
+
+Le moteur est à deux sens, et **surtout court par le temps passé en position**,
+qui est ce que le financement facture : les courts pris dans un marché baissier
+courent longtemps avant d'atteindre un stop éloigné. L'affirmation venait du
+compte live, observé quatre jours dans un seul régime et 100 % long à ce
+moment-là — une généralisation à partir d'un échantillon d'une semaine.
+
+`financement_sensibilite.py` le confirme dans le sens contraire à ma prédiction :
+recharger les heures non couvertes au taux médian **améliore** le R total
+(+27,1 → +33,3). Mais cette extrapolation applique le taux de 2026 à des courts
+de 2022, année où le financement était souvent négatif — c'est-à-dire où les
+courts *payaient*. **Le signe de l'erreur n'est donc pas connaissable avec ces
+données.** Son ordre de grandeur, lui, est borné : environ 6 R sur la grille.
+
+Ce qui ne change pas : les p sont calculés contre un nul **apparié en sens**,
+de durées comparables, soumis au même traitement du financement. Le financement
+manquant décale la stratégie et son nul d'autant, et le verdict de
+Benjamini-Hochberg n'en dépend pas.

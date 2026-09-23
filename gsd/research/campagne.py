@@ -38,7 +38,7 @@ DONCHIAN_PERIOD = 20
 ST_PERIOD, ST_MULT = 10, 3
 RR = 1.5
 WARMUP = 25                    # `i >= 25` dans readEngines
-MS = {"15m": 900_000, "1h": 3_600_000, "4h": 14_400_000, "12h": 43_200_000}
+MS = {"15m": 900_000, "1h": 3_600_000, "4h": 14_400_000, "12h": 43_200_000, "1d": 86_400_000}
 
 SEED = 20260923                # fixé : la campagne est reproductible
 
