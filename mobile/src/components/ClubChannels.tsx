@@ -13,7 +13,7 @@ const GLYPH: Record<ClubChannel['key'], string> = {
 };
 
 /**
- * Les trois groupes Facebook du club, sous l'agenda.
+ * Les trois groupes Messenger du club, sous l'agenda.
  *
  * C'est là que le club discute ; l'app y renvoie plutôt que de doubler la
  * conversation avec une messagerie à elle (voir `src/lib/clubChannels.ts`).
@@ -21,7 +21,7 @@ const GLYPH: Record<ClubChannel['key'], string> = {
 export function ClubChannels() {
   return (
     <View>
-      <SectionTitle label="LES GROUPES DU CLUB" hint="FACEBOOK" />
+      <SectionTitle label="LES GROUPES DU CLUB" hint="MESSENGER" />
       {CLUB_CHANNELS.map((channel) => (
         <ChannelLine key={channel.key} channel={channel} />
       ))}
@@ -37,7 +37,7 @@ function ChannelLine({ channel }: { channel: ClubChannel }) {
       accessibilityRole="link"
       accessibilityLabel={
         url
-          ? `Ouvrir le groupe Facebook ${channel.name}`
+          ? `Ouvrir le groupe Messenger ${channel.name}`
           : `${channel.name} — lien pas encore renseigné`
       }
       accessibilityState={{ disabled: !url }}

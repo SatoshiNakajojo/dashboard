@@ -516,7 +516,7 @@ dizaine de points du bord.
 ## Les groupes du club, plutôt qu'une messagerie
 
 Une messagerie interne a été envisagée, puis écartée : le club discute déjà
-dans trois groupes Facebook — **Bitcoin Club**, **Stocks Club**,
+dans trois groupes Messenger — **Bitcoin Club**, **Stocks Club**,
 **Vibe-Coding Club** —, un par sorte de soirée. En refaire une dans l'app,
 c'était dédoubler la conversation et perdre la moitié des messages entre les
 deux.
@@ -525,6 +525,8 @@ Sous l'agenda des Nights, une section **LES GROUPES DU CLUB** renvoie vers
 chacun, dans un nouvel onglet. Les adresses se renseignent à un seul endroit,
 `src/lib/clubChannels.ts` ; un groupe sans adresse reste listé, marqué
 `LIEN À VENIR`, et ne s'ouvre pas. Seules les adresses `https://` s'ouvrent.
+Une adresse `messenger.com/t/…` n'ouvre la conversation qu'à ceux qui en font
+partie : la publier dans l'app ne donne accès à personne d'autre.
 
 ---
 

@@ -17,10 +17,25 @@ describe('les groupes du club', () => {
     );
   });
 
-  it('portent les noms des groupes Facebook', () => {
+  it('portent les noms des groupes du club', () => {
     assert.deepEqual(
       CLUB_CHANNELS.map((channel) => channel.name),
       ['Bitcoin Club', 'Stocks Club', 'Vibe-Coding Club'],
+    );
+  });
+
+  it('ont chacun leur adresse Messenger', () => {
+    for (const channel of CLUB_CHANNELS) {
+      assert.match(
+        channelUrl(channel) ?? '',
+        /^https:\/\/www\.messenger\.com\/t\/\d+\/?$/,
+        channel.name,
+      );
+    }
+    assert.equal(
+      new Set(CLUB_CHANNELS.map((channel) => channel.url)).size,
+      3,
+      'trois conversations distinctes',
     );
   });
 
@@ -35,8 +50,8 @@ describe('les groupes du club', () => {
 });
 
 describe('ouverture d’un groupe', () => {
-  it('ouvre une adresse Facebook', () => {
-    const url = 'https://www.facebook.com/groups/bitcoinclubnoumea';
+  it('ouvre une adresse Messenger', () => {
+    const url = 'https://www.messenger.com/t/1805657527264885/';
     assert.equal(channelUrl({ url }), url);
   });
 

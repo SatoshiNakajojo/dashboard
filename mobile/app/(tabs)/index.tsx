@@ -130,7 +130,7 @@ export default function NightsScreen() {
             ))
           )}
 
-          {/* Le club discute sur Facebook : l'app y renvoie plutôt que de
+          {/* Le club discute sur Messenger : l'app y renvoie plutôt que de
               doubler la conversation. */}
           <ClubChannels />
 
