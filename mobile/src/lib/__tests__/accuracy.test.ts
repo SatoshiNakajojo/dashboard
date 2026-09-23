@@ -10,12 +10,12 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
 import { ACCURACY_TIERS, PERFECT, accuracyLabel, accuracyPercent } from '@/lib/accuracy';
-import { x as dayToX, y as priceToY, type Point } from '@/lib/chart';
+import type { PricePoint } from '@/lib/chart';
 
-/** Un tracé horizontal à ce prix, du jour 0 au jour 90. */
-const flat = (price: number): Point[] => [
-  [dayToX(0), priceToY(price)],
-  [dayToX(90), priceToY(price)],
+/** Un tracé horizontal à ce prix, du jour 0 au jour 90 — en prix, pas en pixels. */
+const flat = (price: number): PricePoint[] => [
+  [0, price],
+  [90, price],
 ];
 
 describe('justesse', () => {
@@ -39,15 +39,16 @@ describe('justesse', () => {
   });
 
   it('ne descend jamais sous zéro', () => {
-    // Le repère monte à 200 000 : un tracé au plafond contre un cours au
-    // plancher donne plus de 100 % d'erreur, et -150 % n'est pas une justesse.
+    // Un tracé à 200 000 contre un cours à 80 000 : 150 % d'erreur, et -50 %
+    // n'est pas une justesse.
     const score = accuracyPercent(flat(200_000), flat(80_000));
     assert.ok(score !== null && score >= 0, `obtenu ${score}`);
   });
 
   it('reste dans 0–100 quoi qu’on lui donne', () => {
-    for (const mien of [80_000, 100_000, 120_000, 160_000, 200_000]) {
-      for (const réel of [80_000, 100_000, 120_000, 200_000]) {
+    // Jusqu'à dix ans d'horizon : les prix ne sont plus bornés par un repère.
+    for (const mien of [8_000, 80_000, 120_000, 400_000, 2_000_000]) {
+      for (const réel of [8_000, 80_000, 120_000, 2_000_000]) {
         const score = accuracyPercent(flat(mien), flat(réel));
         assert.ok(
           score !== null && score >= 0 && score <= PERFECT,
@@ -65,12 +66,12 @@ describe('justesse', () => {
     assert.equal(
       accuracyPercent(
         [
-          [300, 100],
-          [354, 100],
+          [60, 100_000],
+          [90, 100_000],
         ],
         [
-          [34, 100],
-          [80, 100],
+          [0, 100_000],
+          [30, 100_000],
         ],
       ),
       null,

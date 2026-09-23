@@ -1,9 +1,8 @@
 import { useEffect, useState } from 'react';
 
-import { fetchBlockHeight, fetchBtcHistory, fetchBtcSpot } from '@/lib/coingecko';
+import { fetchBlockHeight, fetchBtcSince, fetchBtcSpot } from '@/lib/coingecko';
 import { MOCK_BTC_CHANGE_24H, MOCK_BTC_SPOT, MOCK_BLOCK_HEIGHT } from '@/mocks/calls';
-import { seasonAt } from '@/lib/season';
-import { MOCK_TODAY_INDEX, mockBtcSeries } from '@/mocks/oracle';
+import { mockBtcSince } from '@/mocks/oracle';
 import type { BtcSpot, MarketPoint } from '@/types/domain';
 
 /** Repli hors ligne du bandeau : le dernier prix connu, marqué périmé. */
@@ -64,49 +63,96 @@ export function useBtcSpot(): BtcSpotState {
 }
 
 export interface BtcHistoryState {
-  points: MarketPoint[];
   /**
-   * Index du jour courant dans la fenêtre de 90 jours.
-   *
-   * Il vient du **calendrier**, plus du dernier point reçu. Un jour où
-   * CoinGecko ne répond pas ne doit pas faire reculer le curseur de la saison,
-   * ni ramener la toile à un avenir qu'on aurait déjà consommé.
+   * L'origine réellement employée : celle demandée, arrondie à l'heure. Les
+   * jours de `points` se comptent depuis **elle** — les recaler sur l'origine
+   * demandée décalerait la courbe de près d'une heure.
    */
-  today: number;
+  origin: number | null;
+  /** `day` = jours écoulés depuis `origin`. */
+  points: MarketPoint[];
   loading: boolean;
   stale: boolean;
+  /**
+   * La série est celle de démonstration, pas le vrai cours.
+   *
+   * Sans backend, c'est le mode démo et elle a toute sa place. Avec un
+   * backend, elle ne doit jamais passer pour le cours réel : on jugerait des
+   * paris sur une courbe inventée.
+   */
+  simulated: boolean;
 }
 
-/** Historique 90 jours pour la courbe réelle de l'Oracle. */
-export function useBtcHistory(): BtcHistoryState {
-  // Repli cohérent avec lui-même : la série de démonstration s'arrête à son
-  // propre jour 34. Il est remplacé par le calendrier dès que CoinGecko répond,
-  // et conservé tel quel s'il ne répond pas — une grille vide serait illisible.
-  const [state, setState] = useState<BtcHistoryState>({
-    points: mockBtcSeries(),
-    today: MOCK_TODAY_INDEX,
-    loading: true,
+const IDLE: BtcHistoryState = {
+  origin: null,
+  points: [],
+  loading: false,
+  stale: false,
+  simulated: false,
+};
+
+/**
+ * Le cours du bitcoin depuis une origine donnée — celle du repère affiché.
+ *
+ * L'origine est arrondie à l'heure avant de servir de dépendance : elle vient
+ * d'un calcul sur des instants, et une milliseconde de différence entre deux
+ * rendus relancerait sinon la requête à chaque fois.
+ *
+ * `null` : rien à charger. Un hook ne s'appelle pas sous condition, d'où cette
+ * valeur plutôt qu'un appel omis.
+ *
+ * Sans réponse de CoinGecko, on sert la série de démonstration, marquée
+ * `simulated` — c'est à l'appelant de décider s'il peut s'en servir.
+ */
+export function useBtcSince(originMs: number | null): BtcHistoryState {
+  const hour = originMs === null ? null : Math.floor(originMs / 3_600_000) * 3_600_000;
+
+  const [state, setState] = useState<BtcHistoryState>(() => ({
+    origin: hour,
+    points: hour === null ? [] : mockBtcSince(hour),
+    loading: hour !== null,
     stale: true,
-  });
+    simulated: hour !== null,
+  }));
 
   useEffect(() => {
+    if (hour === null) return;
     const controller = new AbortController();
 
     (async () => {
       try {
-        const { points, stale } = await fetchBtcHistory(controller.signal);
-        if (controller.signal.aborted || points.length === 0) return;
-        setState({ points, today: seasonAt().day, loading: false, stale });
+        const { points, stale } = await fetchBtcSince(hour, controller.signal);
+        if (controller.signal.aborted) return;
+        if (points.length === 0) throw new Error('Série vide');
+        setState({ origin: hour, points, loading: false, stale, simulated: false });
       } catch {
-        // On conserve la série de repli : la grille seule serait illisible.
-        if (!controller.signal.aborted) {
-          setState((current) => ({ ...current, loading: false, stale: true }));
-        }
+        if (controller.signal.aborted) return;
+        setState({
+          origin: hour,
+          points: mockBtcSince(hour),
+          loading: false,
+          stale: true,
+          simulated: true,
+        });
       }
     })();
 
     return () => controller.abort();
-  }, []);
+  }, [hour]);
 
+  if (hour === null) return IDLE;
+
+  // Tant que la réponse pour la nouvelle origine n'est pas arrivée, l'ancienne
+  // série est fausse — elle compte ses jours depuis une autre origine. On sert
+  // la série de démonstration recalée plutôt qu'une courbe décalée.
+  if (state.origin !== hour) {
+    return {
+      origin: hour,
+      points: mockBtcSince(hour),
+      loading: true,
+      stale: true,
+      simulated: true,
+    };
+  }
   return state;
 }

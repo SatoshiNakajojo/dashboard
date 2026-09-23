@@ -1,72 +1,116 @@
-import { DAYS, PMAX, PMIN, x, y, type Point } from '@/lib/chart';
-import type { MarketPoint, Prediction } from '@/types/domain';
+/**
+ * L'Oracle sans serveur — DONNEES_FICTIVES §Oracle.
+ *
+ * Un monde cohérent avec lui-même : un cours du bitcoin défini pour **tout
+ * instant**, et des paris ouverts à des dates différentes qui s'y comparent.
+ * C'est ce qui permet de vérifier l'alignement calendaire des courbes à
+ * l'écran — avec une seule date d'ouverture commune, un défaut de décalage
+ * serait invisible.
+ */
+
+import type { Bet } from '@/features/oracle/betting';
+import type { PricePoint } from '@/lib/chart';
+import { scheduleFor, type HorizonKey } from '@/lib/horizons';
+import type { MarketPoint } from '@/types/domain';
 import { MEMBERS } from './members';
 
-/** Saison courante de l'Oracle. */
-export const MOCK_SEASON = '2026-S3';
-
-/** Jour courant dans la fenêtre de 90 jours — `JOUR 34 / 90`. */
-export const MOCK_TODAY_INDEX = 34;
+const DAY = 86_400_000;
 
 /**
- * Courbe BTC « réelle » simulée — DONNEES_FICTIVES §Générateurs.
- * Remplacée en production par `market_chart?days=90&interval=daily`,
- * tronquée au jour courant.
+ * L'ancre du monde fictif : minuit, il y a 34 jours.
+ *
+ * Calculée une fois au chargement, pour que tous les paris et la série du
+ * cours voient la même histoire pendant toute la session.
  */
-export function mockBtcSeries(): MarketPoint[] {
+const TODAY = Math.floor(Date.now() / DAY) * DAY;
+const ANCHOR = TODAY - 34 * DAY;
+
+/** Le cours fictif du jour : celui du bandeau, pour que les deux se répondent. */
+const SPOT_TODAY = 120_911;
+
+/**
+ * Le cours fictif à un instant donné — lisse, haussier, avec du relief.
+ *
+ * Tendance **exponentielle**, ancrée sur aujourd'hui : une tendance linéaire
+ * passait sous zéro un an en arrière, ce que le repère à dix ans montre.
+ */
+export function mockBtcAt(ms: number): number {
+  const d = (ms - TODAY) / DAY;
+  const a = (ms - ANCHOR) / DAY;
+  return SPOT_TODAY * Math.exp(0.0016 * d) * (1 + 0.028 * Math.sin(a * 0.37) + 0.012 * Math.cos(a * 1.1));
+}
+
+/**
+ * La série « réelle » depuis une origine, jusqu'à maintenant.
+ *
+ * Un point toutes les six heures : assez fin pour qu'un pari d'une semaine ait
+ * une courbe, pas assez pour alourdir le rendu.
+ */
+export function mockBtcSince(originMs: number, now: number = Date.now()): MarketPoint[] {
   const out: MarketPoint[] = [];
-  let price = 104_000;
-  for (let day = 0; day <= MOCK_TODAY_INDEX; day++) {
-    price *= 1 + 0.0042 + 0.011 * Math.sin(day * 1.7) + 0.006 * Math.cos(day * 0.53);
-    out.push({ day, price });
+  const step = DAY / 4;
+  for (let t = originMs; t <= now; t += step) {
+    out.push({ day: (t - originMs) / DAY, price: mockBtcAt(t) });
   }
   return out;
 }
 
 /**
- * Courbes des membres — un point tous les 6 jours, bornées dans le repère.
- * Remplacées en production par `predictions.path_data`.
+ * Un tracé plausible pour un membre : il part du cours du jour d'ouverture et
+ * dérive selon son tempérament. Stocké **relativement à son ouverture**.
  */
-const DRIFTS = [0.62, -0.28, 1.05, 0.18, -0.55];
-
-function mockMemberCurve(index: number): Point[] {
-  const drift = DRIFTS[index] ?? 0;
-  const points: Point[] = [];
-  for (let day = 0; day <= DAYS; day += 6) {
-    const raw =
-      118_000 * (1 + drift * (day / DAYS) * 0.55 + 0.045 * Math.sin(day / 11 + index * 1.9));
-    const price = Math.max(PMIN + 3_000, Math.min(PMAX - 3_000, raw));
-    points.push([x(day), y(price)]);
+function mockPath(openedAt: number, days: number, drift: number, seed: number): PricePoint[] {
+  const start = mockBtcAt(openedAt);
+  const step = Math.max(1, days / 15);
+  const out: PricePoint[] = [];
+  for (let day = 0; day <= days + 1e-9; day += step) {
+    const t = day / days;
+    out.push([day, start * (1 + drift * t + 0.035 * Math.sin(day / (days / 7) + seed * 1.9))]);
   }
-  return points;
+  return out;
 }
 
-const CURVE_MEMBERS = [MEMBERS.john!, MEMBERS.alex!, MEMBERS.marco!, MEMBERS.sofia!, MEMBERS.rayan!];
-
-/** Prédictions déposées par les autres membres (5 sur 7). */
-export const MOCK_PREDICTIONS: Prediction[] = CURVE_MEMBERS.map((member, index) => ({
-  id: `55555555-5555-4555-8555-${String(index + 1).padStart(12, '0')}`,
-  userId: member.id,
-  season: MOCK_SEASON,
-  pathData: mockMemberCurve(index),
-  lockedAt: null,
-  hash: null,
-}));
+let sequence = 0;
+function mockBet(userId: string, horizon: HorizonKey, openedAt: number, drift: number): Bet {
+  sequence += 1;
+  const schedule = scheduleFor(horizon, openedAt);
+  const days = (schedule.resolvesAt - schedule.openedAt) / DAY;
+  return {
+    id: `55555555-5555-4555-8555-${String(sequence).padStart(12, '0')}`,
+    userId,
+    horizon,
+    openedAt: schedule.openedAt,
+    lockedAt: schedule.locksAt,
+    resolvesAt: schedule.resolvesAt,
+    path: mockPath(openedAt, days, drift, sequence),
+    // Un pari verrouillé a son empreinte ; les autres aussi, puisqu'elle suit
+    // le tracé — la base la recalcule à chaque écriture.
+    hash: ['8F2A', '3C71', 'B04E', '19DD', '7A5F', 'E2C8', '5B90', 'D4A6'][sequence % 8]!,
+  };
+}
 
 /**
- * Courbe pré-tracée du prototype. **Non utilisée par défaut** : en production
- * l'écran démarre vide avec son placeholder. Gardée pour les captures d'écran
- * et les tests de rendu.
+ * Les paris du club.
+ *
+ * Chaque état d'un pari est représenté, pour qu'on puisse tous les voir sans
+ * attendre des jours :
+ *
+ *   • trois mois — six membres, ouverts à des dates différentes, ce qui
+ *     exerce l'alignement ; le mien (« Toi ») est **verrouillé** ;
+ *   • une semaine — un pari en cours chez Léa, deux clos pour l'historique, et
+ *     aucun à moi : c'est là qu'on essaie d'en déposer un ;
+ *   • un an — le mien, ouvert il y a cinq jours, encore **révisable** ;
+ *   • six mois, cinq et dix ans — vides, comme au premier jour.
  */
-export const MOCK_MY_PATH: Point[] = [
-  [34, 168], [78, 150], [122, 158], [166, 120], [210, 96], [254, 84], [298, 62], [352, 44],
+export const MOCK_BETS: Bet[] = [
+  mockBet(MEMBERS.me!.id, '3m', ANCHOR - 2 * DAY, 0.3),
+  mockBet(MEMBERS.john!.id, '3m', ANCHOR, 0.42),
+  mockBet(MEMBERS.alex!.id, '3m', ANCHOR + 3 * DAY, -0.22),
+  mockBet(MEMBERS.marco!.id, '3m', ANCHOR + 6 * DAY, 0.78),
+  mockBet(MEMBERS.sofia!.id, '3m', ANCHOR + 12 * DAY, 0.12),
+  mockBet(MEMBERS.rayan!.id, '3m', ANCHOR + 20 * DAY, -0.38),
+  mockBet(MEMBERS.lea!.id, '1w', TODAY - 2 * DAY, 0.06),
+  mockBet(MEMBERS.alex!.id, '1w', TODAY - 20 * DAY, 0.09),
+  mockBet(MEMBERS.marco!.id, '1w', TODAY - 11 * DAY, -0.04),
+  mockBet(MEMBERS.me!.id, '12m', TODAY - 5 * DAY, 0.9),
 ];
-
-/** Verrouillage initial : `2j 07:41:00` — DONNEES_FICTIVES §Oracle. */
-export const MOCK_LOCK_DELAY_MS = (2 * 86_400 + 7 * 3_600 + 41 * 60) * 1_000;
-
-/** Empreinte affichée après verrouillage. */
-export const MOCK_HASH = '8F2A';
-
-/** Date de résolution affichée sur la carte verrouillée. */
-export const MOCK_RESOLUTION_LABEL = '03 déc · J+56';

@@ -19,7 +19,7 @@
  *     la moitié du prix. En dessous, la nuance n'intéresse plus personne.
  */
 
-import { meanAbsoluteGap, type Point } from './chart';
+import { meanAbsoluteGap, type PricePoint } from './chart';
 
 /** En dessous, la précision d'un tracé au doigt n'a plus de sens. */
 export const PERFECT = 100;
@@ -27,14 +27,18 @@ export const PERFECT = 100;
 /**
  * La justesse d'un tracé sur la portion déjà écoulée.
  *
+ * Les deux courbes sont en **prix** (`[jour, dollars]`), pas en coordonnées de
+ * toile. Le compilateur ne distingue pas les deux — ce sont deux paires de
+ * nombres — et c'est précisément pourquoi la signature le dit.
+ *
  * `null` tant qu'il n'y a rien à comparer : un tracé de moins de deux points,
  * ou un cours réel qui n'a pas encore rejoint le début du tracé. Renvoyer zéro
  * dans ce cas se lirait comme « vous vous trompez complètement », alors qu'on
  * ne sait simplement pas encore.
  */
 export function accuracyPercent(
-  prediction: readonly Point[],
-  actual: readonly Point[],
+  prediction: readonly PricePoint[],
+  actual: readonly PricePoint[],
 ): number | null {
   const error = meanAbsoluteGap(prediction, actual);
   if (error === null) return null;

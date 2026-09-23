@@ -17,8 +17,6 @@ import {
   type RawCoin,
 } from './coinSearch';
 import type { BtcSpot, MarketPoint } from '@/types/domain';
-import { DAYS } from './chart';
-import { historyDays, seasonAt } from './season';
 
 const BASE = 'https://api.coingecko.com/api/v3';
 
@@ -113,37 +111,51 @@ interface MarketChartResponse {
 }
 
 export interface BtcHistory {
+  /** `day` = jours écoulés depuis l'origine demandée. */
   points: MarketPoint[];
   stale: boolean;
 }
 
 /**
- * Historique BTC depuis le début de la saison, projeté dans le repère.
- *
- * Le jour 0 est **le début de la saison**, pas le premier point renvoyé par
- * CoinGecko. C'est toute la différence : demander « les 90 derniers jours » et
- * numéroter à partir du premier point plaçait aujourd'hui au jour 90 sur 90,
- * la courbe réelle couvrait la toile entière, et l'Oracle n'avait plus aucun
- * avenir à prédire. Le défaut ne pouvait pas se voir sur les mocks, qui fixent
- * aujourd'hui au jour 34.
- *
- * On ne demande donc que les jours écoulés, et on les date depuis l'ancrage.
+ * L'API publique de CoinGecko ne rend pas plus d'un an d'historique : au-delà,
+ * elle répond 401 et on n'aurait **rien**. Un pari à cinq ans ouvert il y a
+ * deux ans se juge donc sur sa dernière année — la justesse ne compare que ce
+ * qui se recoupe (`meanAbsoluteGap`), elle ne s'invente pas le reste.
  */
-export async function fetchBtcHistory(signal?: AbortSignal): Promise<BtcHistory> {
-  const season = seasonAt();
-  const days = historyDays(season);
+export const MAX_HISTORY_DAYS = 365;
 
-  // La saison et le jour font partie de la clé : au changement de jour, la
-  // fenêtre s'allonge d'un point et le cache doit suivre.
-  const key = `coingecko.btc.history.${season.code}.${season.day}`;
+/**
+ * Le cours du bitcoin depuis un instant donné.
+ *
+ * Elle était ancrée sur la saison : 90 jours, comptés depuis une époque fixe.
+ * Les paris ont désormais chacun leur ouverture, d'une semaine à dix ans ; on
+ * demande donc la série **depuis l'origine du repère affiché**, et chaque pari
+ * s'y compare dans sa propre base de temps (`seriesForBet`).
+ *
+ * La granularité suit la durée, et c'est voulu : sur une semaine, des points
+ * journaliers ne feraient que huit points et une justesse grossière. CoinGecko
+ * rend des points horaires jusqu'à 90 jours si on ne force pas `daily`.
+ */
+export async function fetchBtcSince(originMs: number, signal?: AbortSignal): Promise<BtcHistory> {
+  const now = Date.now();
+  const elapsed = Math.max(0, now - originMs) / 86_400_000;
+  // Au moins deux jours : en deçà, la réponse est vide ou d'une granularité
+  // de cinq minutes, qui n'apporte rien à un tracé au doigt.
+  const days = Math.min(MAX_HISTORY_DAYS, Math.max(2, Math.ceil(elapsed) + 1));
+  const daily = days > 90;
 
-  const result = await withCache(key, HISTORY_TTL_MS, async () => {
+  // L'origine est arrondie à l'heure : sans ça, chaque rendu produirait une
+  // clé neuve et le cache ne servirait jamais.
+  const hour = Math.floor(originMs / 3_600_000);
+  const key = `coingecko.btc.since.${hour}.${days}`;
+  const ttl = daily ? HISTORY_TTL_MS : SPOT_TTL_MS * 30;
+
+  const result = await withCache(key, ttl, async () => {
+    const params: Record<string, string> = { vs_currency: 'usd', days: String(days) };
+    if (daily) params.interval = 'daily';
+
     const payload = await getJson<MarketChartResponse>(
-      url('/coins/bitcoin/market_chart', {
-        vs_currency: 'usd',
-        days: String(days),
-        interval: 'daily',
-      }),
+      url('/coins/bitcoin/market_chart', params),
       { signal, timeoutMs: 12_000 },
     );
 
@@ -151,15 +163,12 @@ export async function fetchBtcHistory(signal?: AbortSignal): Promise<BtcHistory>
     if (prices.length === 0) {
       throw new Error('Réponse CoinGecko inexploitable : historique vide');
     }
-
-    return prices.map(([timestamp, price]) => ({
-      day: Math.round((timestamp - season.startedAt) / 86_400_000),
-      price,
-    }));
+    return prices.map(([timestamp, price]) => ({ timestamp, price }));
   });
 
   const points = result.value
-    .filter((p) => p.day >= 0 && p.day <= DAYS && Number.isFinite(p.price))
+    .map(({ timestamp, price }) => ({ day: (timestamp - originMs) / 86_400_000, price }))
+    .filter((p) => p.day >= 0 && Number.isFinite(p.price) && p.price > 0)
     .sort((a, b) => a.day - b.day);
 
   return { points, stale: result.stale };

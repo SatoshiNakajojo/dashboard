@@ -1,5 +1,4 @@
 import type { AssetClass } from '@/theme/tokens';
-import type { Point } from '@/lib/chart';
 
 import type { ProfileLink } from '@/lib/profileLinks';
 
@@ -87,31 +86,12 @@ export interface CallView extends Ticker {
 export type Vote = 'bull' | 'bear';
 
 /** `predictions` — le tracé d'un membre pour la saison. */
-export interface Prediction {
-  id: Uuid;
-  userId: Uuid;
-  season: string;
-  /** Points dans le repère logique 360 × 285. */
-  pathData: Point[];
-  /** Date de verrouillage. Passée ⇒ lecture seule. */
-  lockedAt: string | null;
-  /** Empreinte courte calculée au verrouillage, affichée `HASH 8F2A`. */
-  hash: string | null;
-}
-
-/** Prédiction enrichie pour la liste « prédictions déposées ». */
-export interface PredictionView extends Prediction {
-  author: Member;
-  /** Prix visé au jour 90. */
-  targetPrice: number;
-  /** Écart absolu moyen à la courbe réelle, en %. `null` avant résolution. */
-  /**
-   * Justesse du tracé sur la portion écoulée, en pour cent — 100 % si la
-   * courbe est confondue avec le cours. Voir `src/lib/accuracy.ts` pour
-   * pourquoi ce n'est pas une corrélation.
-   */
-  accuracyPercent: number | null;
-}
+/*
+ * `Prediction` et `PredictionView` ont disparu : un pari de l'Oracle est un
+ * `Bet` (`src/features/oracle/betting.ts`), avec son horizon, son calendrier
+ * fixé par le serveur, et un tracé stocké en prix plutôt qu'en coordonnées de
+ * toile. Voir la migration `20260923090000_prediction_horizons.sql`.
+ */
 
 /** Un point de la série BTC : jour du repère + prix. */
 export interface MarketPoint {

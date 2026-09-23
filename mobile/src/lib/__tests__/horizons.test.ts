@@ -12,12 +12,13 @@ import { describe, it } from 'node:test';
 import {
   DEFAULT_HORIZON,
   HORIZONS,
-  elapsedFraction,
-  historyDaysFor,
+  bandFor,
+  editingLabel,
   horizonOf,
+  isHorizonKey,
+  lookbackDays,
   phaseOf,
   scheduleFor,
-  timeTicks,
 } from '@/lib/horizons';
 
 const DAY = 86_400_000;
@@ -74,6 +75,13 @@ describe('résolution d’une clé', () => {
   });
 });
 
+describe('reconnaissance d’une clé', () => {
+  it('accepte les six horizons, et rien d’autre', () => {
+    for (const horizon of HORIZONS) assert.ok(isHorizonKey(horizon.key));
+    for (const autre of ['20y', '', null, 3, '3M']) assert.equal(isHorizonKey(autre), false);
+  });
+});
+
 describe('calendrier d’un pari', () => {
   it('verrouille avant de résoudre', () => {
     for (const horizon of HORIZONS) {
@@ -115,68 +123,43 @@ describe('état d’un pari', () => {
   });
 });
 
-describe('part écoulée', () => {
-  const s = scheduleFor('12m', T0);
-
-  it('va de zéro à un', () => {
-    assert.equal(elapsedFraction(s, T0), 0);
-    assert.ok(Math.abs(elapsedFraction(s, T0 + 182.5 * DAY) - 0.5) < 0.01);
-    assert.equal(elapsedFraction(s, s.resolvesAt), 1);
+describe('bande de prix minimale', () => {
+  it('encadre toujours le cours du jour', () => {
+    for (const horizon of HORIZONS) {
+      const { low, high } = bandFor(horizon.key);
+      assert.ok(low < 1 && high > 1, horizon.key);
+    }
   });
 
-  it('reste bornée quand l’horloge sort du cadre', () => {
-    // Une horloge qui recule ne doit pas sortir le trait « aujourd'hui » du
-    // repère.
-    assert.equal(elapsedFraction(s, T0 - 400 * DAY), 0);
-    assert.equal(elapsedFraction(s, s.resolvesAt + 400 * DAY), 1);
+  it('s’élargit avec l’horizon', () => {
+    // Plus le pari est long, plus on doit pouvoir viser loin.
+    const hauts = HORIZONS.map((h) => bandFor(h.key).high);
+    assert.deepEqual(
+      hauts,
+      [...hauts].sort((a, b) => a - b),
+    );
+  });
+
+  it('laisse tracer un bitcoin à 1 M$ sur dix ans depuis 110 k$', () => {
+    assert.ok(110_000 * bandFor('10y').high >= 1_000_000);
   });
 });
 
-describe('graduations de l’axe', () => {
-  it('compte en jours sur une semaine, en mois sur un an, en années sur dix', () => {
-    assert.ok(timeTicks('1w').every((t) => /^J\+/.test(t.label)));
-    assert.ok(timeTicks('12m').some((t) => /^M\+/.test(t.label)));
-    assert.ok(timeTicks('10y').some((t) => /^A\+/.test(t.label)));
-  });
-
-  it('en pose assez pour lire, pas assez pour se chevaucher', () => {
-    // Le repère fait 320 points de large : au-delà de sept repères, ils se
-    // touchent.
+describe('recul avant aujourd’hui', () => {
+  it('montre du passé sur chaque horizon, sans dépasser un an', () => {
+    // Un an : la limite de l'historique gratuit de CoinGecko.
     for (const horizon of HORIZONS) {
-      const ticks = timeTicks(horizon.key);
-      assert.ok(ticks.length >= 3, `${horizon.key} : ${ticks.length}`);
-      assert.ok(ticks.length <= 7, `${horizon.key} : ${ticks.length}`);
-    }
-  });
-
-  it('ne place jamais une graduation hors du pari', () => {
-    for (const horizon of HORIZONS) {
-      for (const tick of timeTicks(horizon.key)) {
-        assert.ok(tick.day >= 0 && tick.day <= horizon.days, `${horizon.key} → ${tick.day}`);
-      }
-    }
-  });
-
-  it('commence toujours à l’origine', () => {
-    for (const horizon of HORIZONS) {
-      assert.equal(timeTicks(horizon.key)[0]!.day, 0, horizon.key);
+      const days = lookbackDays(horizon.key);
+      assert.ok(days > 0 && days <= 365, `${horizon.key} : ${days} j`);
+      assert.ok(days <= horizon.days, `${horizon.key} : plus de passé que d’avenir`);
     }
   });
 });
 
-describe('historique à demander', () => {
-  it('ne demande que ce qui est écoulé', () => {
-    assert.equal(historyDaysFor('10y', T0, T0 + 30 * DAY), 30);
-  });
-
-  it('ne dépasse pas la durée du pari', () => {
-    assert.equal(historyDaysFor('1w', T0, T0 + 400 * DAY), 7);
-  });
-
-  it('en demande au moins deux jours', () => {
-    // CoinGecko rend une série vide en deçà, et un repère sans courbe réelle
-    // n'a rien à quoi se comparer.
-    assert.equal(historyDaysFor('3m', T0, T0), 2);
-    assert.equal(historyDaysFor('3m', T0, T0 - 10 * DAY), 2);
+describe('fenêtre de révision, affichée', () => {
+  it('parle en heures sous deux jours, en jours au-delà', () => {
+    assert.equal(editingLabel('1w'), '24 H');
+    assert.equal(editingLabel('3m'), '3 J');
+    assert.equal(editingLabel('10y'), '14 J');
   });
 });

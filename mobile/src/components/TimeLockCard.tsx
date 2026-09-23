@@ -1,34 +1,30 @@
 import { useEffect, useState } from 'react';
-import { Animated, Easing, Pressable, Text, View } from 'react-native';
+import { Animated, Easing, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 
 import { Micro } from '@/components/ui/Micro';
-import { formatCountdown } from '@/lib/format';
 import { a, c, f, radius } from '@/theme/tokens';
 
 export interface TimeLockCardProps {
+  /** Scellé : le cadenas se ferme, vire à l'oxblood, et l'animation s'arrête. */
   locked: boolean;
-  /** Millisecondes restantes avant verrouillage. Ignoré si `locked`. */
-  remainingMs: number;
-  /** Libellé de résolution affiché une fois verrouillé — `03 déc · J+56`. */
-  resolutionLabel: string;
-  /** Commutateur de démo. Absent en production (README §5.4). */
-  onSimulateLock?: () => void;
+  /** `VERROUILLAGE DANS`, `RÉSOLUTION DANS`… */
+  title: string;
+  /** Le compte à rebours, ou la règle de l'horizon quand aucun pari n'est ouvert. */
+  value: string;
 }
 
 /**
  * Carte du time-lock.
  *
- * L'animation `gleam` ne tourne que tant que la prédiction est modifiable :
- * une fois scellée, plus rien ne bouge. C'est la seule animation continue de
- * l'app.
+ * Elle ne décide plus de son texte. Avec un seul pari par saison, deux états
+ * suffisaient — ouvert, scellé. Avec plusieurs horizons il en faut trois (pas
+ * de pari, révisable, verrouillé), et c'est l'écran qui sait lequel.
+ *
+ * L'animation `gleam` ne tourne que tant que le pari est modifiable : une fois
+ * scellé, plus rien ne bouge. C'est la seule animation continue de l'app.
  */
-export function TimeLockCard({
-  locked,
-  remainingMs,
-  resolutionLabel,
-  onSimulateLock,
-}: TimeLockCardProps) {
+export function TimeLockCard({ locked, title, value }: TimeLockCardProps) {
   // `useState` avec initialiseur paresseux plutôt que `useRef(...).current` :
   // lire `.current` pendant le rendu est interdit par les règles React.
   const [gleam] = useState(() => new Animated.Value(0.45));
@@ -95,7 +91,7 @@ export function TimeLockCard({
 
       <View className="flex-1">
         <Micro tracking={1.8} numberOfLines={1}>
-          {locked ? 'PRÉDICTIONS VERROUILLÉES' : 'VERROUILLAGE DANS'}
+          {title}
         </Micro>
         <Text
           numberOfLines={1}
@@ -107,28 +103,9 @@ export function TimeLockCard({
             marginTop: 6,
           }}
         >
-          {locked ? resolutionLabel : formatCountdown(remainingMs)}
+          {value}
         </Text>
       </View>
-
-      {onSimulateLock ? (
-        <Pressable
-          accessibilityRole="button"
-          onPress={onSimulateLock}
-          style={{
-            padding: 8,
-            borderRadius: radius.button,
-            borderWidth: 1,
-            borderColor: c.borderSheet,
-          }}
-        >
-          <Text
-            style={{ fontFamily: f.monoMed, fontSize: 8.5, letterSpacing: 0.85, color: c.sepia }}
-          >
-            {locked ? 'LECTURE SEULE' : 'SIMULER T-0'}
-          </Text>
-        </Pressable>
-      ) : null}
     </LinearGradient>
   );
 }

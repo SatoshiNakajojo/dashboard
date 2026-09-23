@@ -166,17 +166,22 @@ PostgreSQL local :
 initdb -D /tmp/ssc && pg_ctl -D /tmp/ssc -o '-p 55432' start
 createdb -p 55432 ssc
 
-# Doublures des objets fournis par la plateforme
-psql -p 55432 -d ssc -c "create schema auth; create table auth.users (id uuid primary key);
-  create function auth.uid() returns uuid language sql stable as \$\$ select null::uuid \$\$;"
+# Doublures des objets fournis par la plateforme (auth, storage, rôles)
+psql -p 55432 -d ssc -v ON_ERROR_STOP=1 -f supabase/tests/doubles.sql
 
-psql -p 55432 -d ssc -v ON_ERROR_STOP=1 -f supabase/migrations/20260905120000_init.sql
+# Toutes les migrations, dans l'ordre
+for m in supabase/migrations/*.sql; do
+  psql -p 55432 -d ssc -v ON_ERROR_STOP=1 -f "$m" || break
+done
+
 psql -p 55432 -d ssc -f supabase/tests/schema_test.sql
 ```
 
-Le dernier fichier vérifie douze comportements : la course sur une ligne de
-potluck, le gel d'un call publié, le scellement d'une prédiction, la validation
-de forme d'un tracé. Voir `supabase/README.md`.
+Le dernier fichier vérifie seize comportements : la course sur une ligne de
+potluck, le gel d'un call publié, le calendrier d'un pari de l'Oracle fixé par
+la base, un seul pari en cours par horizon, le scellement du tracé, le retrait
+d'un pari encore révisable, les couleurs lisibles avant l'adhésion. Voir
+`supabase/README.md`.
 
 Avec la CLI Supabase, c'est plus court :
 

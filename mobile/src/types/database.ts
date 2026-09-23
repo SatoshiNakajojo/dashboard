@@ -77,10 +77,16 @@ export type TickerVoteRow = {
 export type PredictionRow = {
   id: string;
   user_id: string;
-  season: string;
-  /** Tableau de couples `[x, y]` dans le repère logique 360 × 285. */
+  /** Ancienne saison de 90 jours. `null` pour les paris ouverts depuis. */
+  season: string | null;
+  /** `1w`, `3m`, `6m`, `12m`, `5y`, `10y` — voir `src/lib/horizons.ts`. */
+  horizon: string;
+  /** Couples `[jour depuis l'ouverture, prix en dollars]`. */
   path_data: [number, number][];
-  locked_at: string | null;
+  /** Les trois instants du calendrier, fixés par la base à l'insertion. */
+  opened_at: string;
+  locked_at: string;
+  resolves_at: string;
   hash: string | null;
   created_at: string;
   updated_at: string;
@@ -115,6 +121,7 @@ export type Database = {
     Functions: {
       is_member: { Args: Record<string, never>; Returns: boolean };
       is_valid_path: { Args: { path: unknown }; Returns: boolean };
+      is_valid_price_path: { Args: { path: unknown }; Returns: boolean };
       taken_profile_colors: { Args: Record<string, never>; Returns: string[] };
     };
     Enums: {

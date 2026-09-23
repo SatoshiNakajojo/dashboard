@@ -1,6 +1,6 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Text, View, type LayoutChangeEvent } from 'react-native';
-import Svg, { Circle, Defs, G, LinearGradient, Path, Stop } from 'react-native-svg';
+import Svg, { Circle, Defs, G, LinearGradient, Path, Rect, Stop } from 'react-native-svg';
 import {
   Gesture,
   GestureDetector,
@@ -10,51 +10,66 @@ import {
 
 import {
   BASELINE_Y,
+  DRAW_BOUNDS,
   H,
   MIN_X_STEP,
   PAD,
   W,
-  X_TICKS,
-  Y_TICKS,
   appendDrawPoint,
   clampToCanvas,
+  compactPrice,
+  priceTicks,
   toAreaPath,
+  toCanvas,
+  toPrices,
   toSvgPath,
   x as dayToX,
   y as priceToY,
+  type DrawBounds,
+  type Frame,
   type Point,
+  type PricePoint,
 } from '@/lib/chart';
+import type { TimeTick } from '@/lib/calendarTicks';
 import { a, c, f } from '@/theme/tokens';
-import type { MarketPoint } from '@/types/domain';
 
 type PanEvent = GestureUpdateEvent<PanGestureHandlerEventPayload>;
 
 export interface OracleCurve {
   id: string;
   color: string;
-  points: readonly Point[];
+  /** En `[jour depuis l'origine du repère, prix]`. */
+  path: readonly PricePoint[];
   /** Pointillés — la courbe de Marco dans le design de référence. */
   dashed?: boolean;
 }
 
 export interface OracleGraphProps {
-  /** Courbe BTC réelle (CoinGecko), en `{ jour, prix }`. */
-  btcSeries: readonly MarketPoint[];
-  /** Index du jour courant — position du point « aujourd'hui ». */
-  todayIndex: number;
-  /** Prédictions des autres membres. */
+  /** Le domaine affiché : durée de la fenêtre et bande de prix. */
+  frame: Frame;
+  /** Cours réel, en `[jour depuis l'origine, prix]`. */
+  btc: readonly PricePoint[];
+  /** Position de maintenant, en jours depuis l'origine. */
+  today: number;
+  /** Graduations de l'axe des temps. */
+  timeTicks: readonly TimeTick[];
+  /** Paris des autres membres. */
   curves: readonly OracleCurve[];
   showOthers: boolean;
-  /** Ma prédiction, dans le repère logique 360 × 285. */
-  points: readonly Point[];
+  /** Mon tracé, en `[jour depuis l'origine, prix]`. */
+  path: readonly PricePoint[];
   /** Couleur du tracé de l'utilisateur courant. */
   color: string;
   /**
-   * Time-lock. `true` ⇒ le geste est désactivé et le trait passe en plein.
-   * L'état vient de `predictions.locked_at`, pas d'un booléen d'UI.
+   * Où le doigt peut tracer, en jours depuis l'origine. `null` : lecture
+   * seule — pari verrouillé, ou personne de connecté.
    */
-  locked: boolean;
-  onPointsChange: (points: Point[]) => void;
+  drawRange: { from: number; to: number } | null;
+  /** Mon pari est scellé : le trait passe en plein. */
+  sealed: boolean;
+  /** Invite affichée tant qu'il n'y a pas de tracé. `null` : aucune. */
+  hint: string | null;
+  onPathChange: (path: PricePoint[]) => void;
 }
 
 /**
@@ -70,44 +85,79 @@ export interface OracleGraphProps {
  * recompilait ensuite en `SkPath`. Les passer directement à `react-native-svg`
  * retire une conversion, 7,7 Mo de binaire, et le risque avec.
  *
- * Deux invariants tiennent tout le composant :
+ * Trois invariants tiennent tout le composant :
  *
  *   1. **Un seul facteur d'échelle.** Le repère logique 360 × 285 est peint
  *      tel quel dans un `Group` mis à l'échelle. Rien ne re-dérive une
- *      géométrie en pixels, sinon `path_data` deviendrait dépendant du device
- *      et deux membres ne pourraient plus superposer leurs courbes.
+ *      géométrie en pixels.
  *
- *   2. **Le verrou est une porte, pas un style.** `locked` coupe le geste à la
- *      source : il n'existe aucun chemin de code qui modifie le tracé quand la
- *      prédiction est scellée.
+ *   2. **Des prix en entrée, des prix en sortie.** Les courbes arrivent en
+ *      `[jour, prix]` et le tracé repart en `[jour, prix]`. Les coordonnées de
+ *      toile n'existent qu'ici : c'est ce qui permet à deux membres de voir
+ *      des bandes de prix différentes sans que leurs courbes se décalent.
+ *
+ *   3. **Le verrou est une porte, pas un style.** Sans `drawRange`, le geste
+ *      est coupé à la source : il n'existe aucun chemin de code qui modifie un
+ *      pari scellé. Et avec, le doigt est borné à partir d'aujourd'hui — on ne
+ *      trace pas le passé.
  *
  * Les étiquettes d'axes sont rendues en `<Text>` RN par-dessus la toile,
  * plutôt qu'en `<Text>` SVG : la typographie reste strictement celle du reste
  * de l'app, sans seconde pile de rendu de texte.
  */
 export function OracleGraph({
-  btcSeries,
-  todayIndex,
+  frame,
+  btc,
+  today,
+  timeTicks,
   curves,
   showOthers,
-  points,
+  path,
   color,
-  locked,
-  onPointsChange,
+  drawRange,
+  sealed,
+  hint,
+  onPathChange,
 }: OracleGraphProps) {
   const [width, setWidth] = useState(0);
   const scale = width > 0 ? width / W : 0;
   const height = scale * H;
 
   /**
-   * Le tracé en cours vit dans une ref.
+   * Le tracé en cours vit dans une ref, en coordonnées de toile.
    *
-   * Un geste produit jusqu'à 80 points : relire la prop `points` depuis la
+   * Un geste produit jusqu'à 80 points : relire la prop `path` depuis la
    * closure du handler donnerait une valeur périmée d'une frame, et
    * reconstruire le geste à chaque point risquerait d'interrompre le geste en
    * cours. La ref n'est lue que dans les handlers, jamais pendant le rendu.
    */
   const draft = useRef<Point[]>([]);
+
+  /** Où le doigt peut aller, en coordonnées de toile. */
+  const bounds = useMemo<DrawBounds | null>(
+    () =>
+      drawRange
+        ? {
+            ...DRAW_BOUNDS,
+            minX: Math.max(DRAW_BOUNDS.minX, dayToX(drawRange.from, frame)),
+            maxX: Math.min(DRAW_BOUNDS.maxX, dayToX(drawRange.to, frame)),
+          }
+        : null,
+    [drawRange, frame],
+  );
+
+  /**
+   * Ce que les handlers lisent au moment du geste.
+   *
+   * Le repère glisse d'une minute à l'autre (le trait « aujourd'hui »
+   * avance) : recomposer le geste à chaque fois pourrait couper un tracé en
+   * cours. Les handlers lisent donc la dernière valeur par une ref, mise à
+   * jour après chaque rendu.
+   */
+  const live = useRef({ bounds, frame, onPathChange, scale });
+  useEffect(() => {
+    live.current = { bounds, frame, onPathChange, scale };
+  }, [bounds, frame, onPathChange, scale]);
 
   const onLayout = useCallback((event: LayoutChangeEvent) => {
     setWidth(event.nativeEvent.layout.width);
@@ -115,30 +165,27 @@ export function OracleGraph({
 
   // --- Geste de tracé ------------------------------------------------------
 
-  const toLogical = useCallback(
-    (px: number, py: number): Point => clampToCanvas(px / scale, py / scale),
-    [scale],
-  );
+  const beginStroke = useCallback((event: PanEvent) => {
+    const { bounds: b, scale: k } = live.current;
+    if (!b || !(k > 0)) return;
+    // Un simple contact ne remplace pas le tracé déposé : on attend que le
+    // doigt ait bougé. Sinon, poser le pouce pour faire défiler l'écran
+    // effacerait un pari.
+    draft.current = [clampToCanvas(event.x / k, event.y / k, b)];
+  }, []);
 
-  const beginStroke = useCallback(
-    (event: PanEvent) => {
-      draft.current = [toLogical(event.x, event.y)];
-      onPointsChange(draft.current);
-    },
-    [onPointsChange, toLogical],
-  );
+  const extendStroke = useCallback((event: PanEvent) => {
+    const { bounds: b, frame: current, onPathChange: emit, scale: k } = live.current;
+    if (!b || !(k > 0) || draft.current.length === 0) return;
+    const next = appendDrawPoint(draft.current, clampToCanvas(event.x / k, event.y / k, b));
+    // `null` = le point est trop proche du précédent en X. On l'ignore :
+    // c'est la règle de monotonie du design, pas une optimisation.
+    if (!next) return;
+    draft.current = next;
+    emit(toPrices(next, current));
+  }, []);
 
-  const extendStroke = useCallback(
-    (event: PanEvent) => {
-      const next = appendDrawPoint(draft.current, toLogical(event.x, event.y));
-      // `null` = le point est trop proche du précédent en X. On l'ignore :
-      // c'est la règle de monotonie du design, pas une optimisation.
-      if (!next) return;
-      draft.current = next;
-      onPointsChange(next);
-    },
-    [onPointsChange, toLogical],
-  );
+  const drawable = bounds !== null && bounds.maxX > bounds.minX;
 
   const gesture = useMemo(
     () =>
@@ -147,12 +194,12 @@ export function OracleGraph({
         // plutôt que d'ouvrir un pont worklet pour un tracé au doigt.
         .runOnJS(true)
         // Le verrou coupe le geste à la source — aucun chemin de code ne
-        // modifie une prédiction scellée.
-        .enabled(!locked && scale > 0)
+        // modifie un pari scellé.
+        .enabled(drawable && scale > 0)
         // Un tracé commence au premier contact, sans seuil de déplacement.
         .minDistance(0)
         // `react-hooks/refs` signale ces deux lignes : la composition du geste
-        // a lieu au rendu et les handlers lisent `draft`. L'analyse est
+        // a lieu au rendu et les handlers lisent des refs. L'analyse est
         // conservatrice — un handler de geste ne s'exécute jamais pendant le
         // rendu. L'alternative (recomposer le geste à chaque point capturé)
         // interromprait le tracé en cours ; on préfère la suppression ciblée.
@@ -160,39 +207,38 @@ export function OracleGraph({
         .onBegin(beginStroke)
         // eslint-disable-next-line react-hooks/refs
         .onUpdate(extendStroke),
-    [beginStroke, extendStroke, locked, scale],
+    [beginStroke, extendStroke, drawable, scale],
   );
 
   // --- Chemins -------------------------------------------------------------
-  //
-  // Ce sont les chaînes SVG de `chart.ts`, passées telles quelles : plus de
-  // compilation en `SkPath`, donc plus rien à initialiser avant de peindre.
 
-  const btcPoints = useMemo<Point[]>(
-    () => btcSeries.map(({ day, price }) => [dayToX(day), priceToY(price)] as Point),
-    [btcSeries],
-  );
-
+  const btcPoints = useMemo(() => toCanvas(btc, frame), [btc, frame]);
   const btcPath = useMemo(() => toSvgPath(btcPoints), [btcPoints]);
   const btcArea = useMemo(() => toAreaPath(btcPoints), [btcPoints]);
-  const myPath = useMemo(() => (points.length > 1 ? toSvgPath(points) : ''), [points]);
-
-  const gridPath = useMemo(
-    () =>
-      Y_TICKS.map((price) => {
-        const gy = priceToY(price).toFixed(1);
-        return `M ${PAD.l} ${gy} L ${W - PAD.r} ${gy}`;
-      }).join(' '),
-    [],
+  const myPath = useMemo(
+    () => (path.length > 1 ? toSvgPath(toCanvas(path, frame)) : ''),
+    [path, frame],
   );
 
-  const todayPath = useMemo(() => {
-    const tx = dayToX(todayIndex).toFixed(1);
-    return `M ${tx} ${PAD.t} L ${tx} ${BASELINE_Y}`;
-  }, [todayIndex]);
+  const yTicks = useMemo(() => priceTicks(frame), [frame]);
+  const gridPath = useMemo(
+    () =>
+      yTicks
+        .map((price) => {
+          const gy = priceToY(price, frame).toFixed(1);
+          return `M ${PAD.l} ${gy} L ${W - PAD.r} ${gy}`;
+        })
+        .join(' '),
+    [yTicks, frame],
+  );
+
+  const todayX = dayToX(today, frame);
+  const todayPath = `M ${todayX.toFixed(1)} ${PAD.t} L ${todayX.toFixed(1)} ${BASELINE_Y}`;
 
   const last = btcPoints[btcPoints.length - 1];
-  const hasDrawing = points.length > 1;
+  const hasDrawing = path.length > 1;
+  /** Assez de place à droite d'aujourd'hui pour y poser l'invite. */
+  const futureRoom = W - PAD.r - todayX >= 150;
 
   return (
     <View>
@@ -206,9 +252,9 @@ export function OracleGraph({
             <View
               accessibilityRole="adjustable"
               accessibilityLabel={
-                locked
-                  ? 'Prédiction verrouillée, lecture seule'
-                  : 'Toile de prédiction — tracez votre courbe au doigt'
+                drawable
+                  ? 'Toile de prédiction — tracez votre courbe au doigt, à partir d’aujourd’hui'
+                  : 'Paris du club, lecture seule'
               }
               style={{ width, height }}
             >
@@ -246,21 +292,33 @@ export function OracleGraph({
                     <Path d={gridPath} stroke={c.grid} strokeWidth={1} fill="none" />
                   ) : null}
 
+                  {/* 2 — le passé, légèrement voilé : on ne trace qu'à partir d'aujourd'hui */}
+                  {todayX > PAD.l ? (
+                    <Rect
+                      x={PAD.l}
+                      y={PAD.t}
+                      width={Math.min(todayX, W - PAD.r) - PAD.l}
+                      height={BASELINE_Y - PAD.t}
+                      fill={c.surfaceDeep}
+                      opacity={0.35}
+                    />
+                  ) : null}
+
                   {/* 4 — courbes des autres membres, sous la courbe réelle */}
                   {showOthers
-                    ? curves.map((curve) => <MemberCurve key={curve.id} curve={curve} />)
+                    ? curves.map((curve) => (
+                        <MemberCurve key={curve.id} curve={curve} frame={frame} />
+                      ))
                     : null}
 
                   {/* 5 — ligne « aujourd'hui » */}
-                  {todayPath ? (
-                    <Path
-                      d={todayPath}
-                      stroke={c.borderSheet}
-                      strokeWidth={1}
-                      strokeDasharray="2,5"
-                      fill="none"
-                    />
-                  ) : null}
+                  <Path
+                    d={todayPath}
+                    stroke={c.borderSheet}
+                    strokeWidth={1}
+                    strokeDasharray="2,5"
+                    fill="none"
+                  />
 
                   {/* 6 — aire dégradée sous la courbe BTC */}
                   {btcArea ? <Path d={btcArea} fill="url(#btcFill)" /> : null}
@@ -301,30 +359,39 @@ export function OracleGraph({
                       strokeWidth={2.2}
                       strokeLinecap="round"
                       strokeLinejoin="round"
-                      strokeDasharray={locked ? undefined : '5,5'}
+                      strokeDasharray={sealed ? undefined : '5,5'}
                       fill="none"
                     />
                   ) : null}
                 </G>
               </Svg>
 
-              <AxisLabels scale={scale} />
+              <AxisLabels scale={scale} frame={frame} yTicks={yTicks} timeTicks={timeTicks} />
 
-              {hasDrawing ? null : (
+              {hasDrawing || !hint ? null : (
+                // En haut de la zone à venir : au centre, l'invite passait
+                // par-dessus le cours et les courbes du club.
                 <View
                   pointerEvents="none"
                   style={{
                     position: 'absolute',
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
+                    top: (PAD.t + 14) * scale,
+                    left: (futureRoom ? todayX + 8 : PAD.l) * scale,
+                    right: PAD.r * scale,
                     alignItems: 'center',
-                    justifyContent: 'center',
                   }}
                 >
-                  <Text style={{ fontFamily: f.serifItalic, fontSize: 15, color: c.sepia }}>
-                    {locked ? 'Aucune prédiction déposée' : 'Tracez votre prédiction au doigt'}
+                  <Text
+                    style={{
+                      fontFamily: f.serifItalic,
+                      fontSize: 14,
+                      lineHeight: 19,
+                      color: c.sepia,
+                      textAlign: 'center',
+                      paddingHorizontal: 8,
+                    }}
+                  >
+                    {hint}
                   </Text>
                 </View>
               )}
@@ -338,8 +405,8 @@ export function OracleGraph({
 
 // ---------------------------------------------------------------------------
 
-function MemberCurve({ curve }: { curve: OracleCurve }) {
-  const d = curve.points.length > 1 ? toSvgPath(curve.points) : '';
+function MemberCurve({ curve, frame }: { curve: OracleCurve; frame: Frame }) {
+  const d = curve.path.length > 1 ? toSvgPath(toCanvas(curve.path, frame)) : '';
   if (!d) return null;
 
   return (
@@ -355,17 +422,30 @@ function MemberCurve({ curve }: { curve: OracleCurve }) {
   );
 }
 
+/** Largeur réservée à une étiquette de date, en unités du repère. */
+const TICK_BOX = 40;
+
 /**
  * Étiquettes d'axes, positionnées dans le repère logique puis mises à
  * l'échelle — donc alignées au pixel près sur la grille peinte en SVG.
  */
-function AxisLabels({ scale }: { scale: number }) {
+function AxisLabels({
+  scale,
+  frame,
+  yTicks,
+  timeTicks,
+}: {
+  scale: number;
+  frame: Frame;
+  yTicks: readonly number[];
+  timeTicks: readonly TimeTick[];
+}) {
   return (
     <View
       pointerEvents="none"
       style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}
     >
-      {Y_TICKS.map((price) => (
+      {yTicks.map((price) => (
         <Text
           key={price}
           style={{
@@ -373,33 +453,40 @@ function AxisLabels({ scale }: { scale: number }) {
             left: 2 * scale,
             // `y(p) + 3` place la ligne de base du texte sur la graduation ;
             // en RN on positionne le haut de la boîte, d'où le retrait.
-            top: (priceToY(price) + 3 - 8) * scale,
+            top: (priceToY(price, frame) + 3 - 8) * scale,
             fontFamily: f.mono,
             fontSize: 8 * scale,
             letterSpacing: 0.4 * scale,
             color: c.sepiaFaint,
           }}
         >
-          {price / 1000}k
+          {compactPrice(price)}
         </Text>
       ))}
 
-      {X_TICKS.map(({ label, day }) => (
-        <Text
-          key={label}
-          style={{
-            position: 'absolute',
-            left: (dayToX(day) - 2) * scale,
-            top: (268 - 8) * scale,
-            fontFamily: f.mono,
-            fontSize: 8 * scale,
-            letterSpacing: 1.12 * scale,
-            color: c.sepiaFaint,
-          }}
-        >
-          {label}
-        </Text>
-      ))}
+      {timeTicks.map(({ label, day }) => {
+        // Centrée sur sa date, mais jamais coupée par les bords de la toile.
+        const center = dayToX(day, frame);
+        const left = Math.min(W - TICK_BOX, Math.max(PAD.l - 4, center - TICK_BOX / 2));
+        return (
+          <Text
+            key={`${label}-${day}`}
+            style={{
+              position: 'absolute',
+              left: left * scale,
+              width: TICK_BOX * scale,
+              textAlign: 'center',
+              top: (268 - 8) * scale,
+              fontFamily: f.mono,
+              fontSize: 8 * scale,
+              letterSpacing: 1.12 * scale,
+              color: c.sepiaFaint,
+            }}
+          >
+            {label}
+          </Text>
+        );
+      })}
     </View>
   );
 }

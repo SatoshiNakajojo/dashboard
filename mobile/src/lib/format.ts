@@ -45,6 +45,22 @@ export function formatThousands(value: number): string {
   return `${Math.round(value / 1000)}${NBSP}k$`;
 }
 
+/**
+ * Le prix visé par un pari : `164 k$`, et `1,2 M$` au-delà du million.
+ *
+ * Sur dix ans, « 1 200 k$ » se lit mal et déborde de sa colonne.
+ */
+export function formatTarget(value: number): string {
+  if (Math.abs(value) >= 1_000_000) {
+    const body = new Intl.NumberFormat('fr-FR', {
+      minimumFractionDigits: 1,
+      maximumFractionDigits: 1,
+    }).format(value / 1_000_000);
+    return `${normalizeSpaces(body)}${NBSP}M$`;
+  }
+  return formatThousands(value);
+}
+
 /** `12500` → `12,5 k$` — taille de position. */
 export function formatSize(value: number): string {
   const body = new Intl.NumberFormat('fr-FR', {
@@ -110,6 +126,36 @@ export function formatCountdown(remainingMs: number): string {
   const seconds = Math.floor(ms / 1000) % 60;
   const p2 = (v: number) => String(v).padStart(2, '0');
   return `${days}j ${p2(hours)}:${p2(minutes)}:${p2(seconds)}`;
+}
+
+/** `03 DÉC 2026` — une date de pari, à l'heure du club. */
+export function formatClubDate(ms: number): string {
+  if (!Number.isFinite(ms)) return '';
+  const d = atClub(new Date(ms).toISOString());
+  if (!d) return '';
+  const day = String(d.getUTCDate()).padStart(2, '0');
+  return `${day} ${MONTHS_SHORT[d.getUTCMonth()] ?? ''} ${d.getUTCFullYear()}`;
+}
+
+/**
+ * Le temps qui reste, à la grosse maille : `9 ans`, `4 mois`, `71 j`, `5 h`.
+ *
+ * Un compte à rebours à la seconde sur dix ans n'aide personne ; c'est
+ * l'ordre de grandeur qui compte. On arrondit **vers le bas** : annoncer
+ * « 1 an » à 360 jours ferait croire le pari plus loin qu'il ne l'est.
+ */
+export function formatLeft(ms: number): string {
+  const safe = Math.max(0, ms);
+  const days = safe / 86_400_000;
+  if (days >= 365) {
+    const years = Math.floor(days / 365);
+    return `${years}${NBSP}an${years > 1 ? 's' : ''}`;
+  }
+  if (days >= 60) return `${Math.floor(days / 30)}${NBSP}mois`;
+  if (days >= 2) return `${Math.floor(days)}${NBSP}j`;
+  const hours = Math.floor(safe / 3_600_000);
+  if (hours >= 1) return `${hours}${NBSP}h`;
+  return `${Math.floor(safe / 60_000)}${NBSP}min`;
 }
 
 /** Horodatage relatif court : `il y a 2 h`, `hier`, `il y a 5 j`. */

@@ -25,9 +25,12 @@ import {
   type Point,
 } from '../chart.ts';
 import {
+  formatClubDate,
   formatCountdown,
+  formatLeft,
   formatPercent,
   formatPrice,
+  formatTarget,
   formatThousands,
   formatUsd,
 } from '../format.ts';
@@ -65,6 +68,13 @@ describe('repère de l’Oracle', () => {
     assert.deepEqual(clampToCanvas(-50, -50), [34, 10]);
     assert.deepEqual(clampToCanvas(9999, 9999), [354, 232]);
     assert.deepEqual(clampToCanvas(200, 120), [200, 120]);
+  });
+
+  it('borne un point à la fenêtre du pari', () => {
+    // On ne trace pas le passé : le doigt posé avant « aujourd'hui » y est ramené.
+    const bounds = { minX: 150, maxX: 300, minY: 10, maxY: 232 };
+    assert.deepEqual(clampToCanvas(40, 100, bounds), [150, 100]);
+    assert.deepEqual(clampToCanvas(340, 100, bounds), [300, 100]);
   });
 });
 
@@ -269,6 +279,29 @@ describe('formatage français', () => {
     assert.equal(formatCountdown((2 * 86400 + 7 * 3600 + 41 * 60) * 1000), '2j 07:41:00');
     assert.equal(formatCountdown(0), '0j 00:00:00');
     assert.equal(formatCountdown(-5000), '0j 00:00:00', 'le verrouillage ne recule pas');
+  });
+
+  it('date un pari à l’heure de Nouméa', () => {
+    // 22 décembre 2026, 14 h UTC : déjà le 23 à Nouméa (UTC+11).
+    assert.equal(formatClubDate(Date.UTC(2026, 11, 22, 14)), `23 DÉC 2026`);
+    assert.equal(formatClubDate(Date.UTC(2036, 8, 10, 0)), `10 SEPT 2036`);
+    assert.equal(formatClubDate(Number.NaN), '');
+  });
+
+  it('écrit un prix visé en k$, puis en M$', () => {
+    assert.equal(formatTarget(164_000), `164${NB}k$`);
+    assert.equal(formatTarget(1_240_000), `1,2${NB}M$`);
+  });
+
+  it('dit le temps restant à la grosse maille, arrondi vers le bas', () => {
+    const DAY = 86_400_000;
+    assert.equal(formatLeft(3650 * DAY), `10${NB}ans`);
+    assert.equal(formatLeft(400 * DAY), `1${NB}an`);
+    assert.equal(formatLeft(364 * DAY), `12${NB}mois`, 'pas encore un an');
+    assert.equal(formatLeft(71 * DAY), `2${NB}mois`);
+    assert.equal(formatLeft(59 * DAY), `59${NB}j`);
+    assert.equal(formatLeft(30 * 3_600_000), `30${NB}h`);
+    assert.equal(formatLeft(-1), `0${NB}min`);
   });
 });
 

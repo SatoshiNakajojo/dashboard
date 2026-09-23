@@ -49,6 +49,11 @@ export const HORIZONS: readonly Horizon[] = [
   { key: '10y', label: '10 ANS', long: 'Dix ans', days: 10 * 365, editingHours: 336 },
 ] as const;
 
+/** Vrai si la clé désigne un horizon connu de cette version de l'app. */
+export function isHorizonKey(key: unknown): key is HorizonKey {
+  return typeof key === 'string' && HORIZONS.some((horizon) => horizon.key === key);
+}
+
 /** L'horizon par défaut : celui de l'ancienne saison, pour ne dérouter personne. */
 export const DEFAULT_HORIZON: HorizonKey = '3m';
 
@@ -101,56 +106,60 @@ export function phaseOf(schedule: Schedule, now: number): BetPhase {
 }
 
 /**
- * La part du pari déjà écoulée, de 0 à 1.
+ * La bande de prix minimale d'un horizon, en multiples du cours du jour.
  *
- * Sert au repère : c'est là que se place le trait « aujourd'hui ». Bornée des
- * deux côtés — une horloge qui recule ne doit pas sortir le trait du cadre.
+ * Le repère se cale sur ce qu'il affiche — mais au moment d'ouvrir un pari à
+ * dix ans, il n'affiche que quelques jours de cours, serrés autour du prix du
+ * jour. Sans plancher de bande, on ne pourrait pas tracer un bitcoin à 1 M$ :
+ * le doigt butterait sur un plafond à 130 k$.
+ *
+ * La bande ne dépend **jamais** du tracé en cours. Sinon l'échelle se
+ * recalculerait sous le doigt à chaque point, et la courbe glisserait pendant
+ * qu'on la dessine.
  */
-export function elapsedFraction(schedule: Schedule, now: number): number {
-  const span = schedule.resolvesAt - schedule.openedAt;
-  if (!(span > 0)) return 0;
-  return Math.min(1, Math.max(0, (now - schedule.openedAt) / span));
+export function bandFor(key: string): { low: number; high: number } {
+  switch (horizonOf(key).key) {
+    case '1w':
+      return { low: 0.85, high: 1.15 };
+    case '3m':
+      return { low: 0.6, high: 1.6 };
+    case '6m':
+      return { low: 0.5, high: 2 };
+    case '12m':
+      return { low: 0.4, high: 2.6 };
+    case '5y':
+      return { low: 0.3, high: 6 };
+    case '10y':
+      return { low: 0.3, high: 12 };
+  }
 }
 
 /**
- * Les graduations de l'axe des temps, pour cet horizon.
+ * Combien de jours de cours montrer **avant** aujourd'hui, pour cet horizon.
  *
- * Un axe en mois sur un pari d'une semaine ne dit rien ; un axe en jours sur
- * dix ans est illisible. L'unité suit la durée, et on vise quatre à six
- * repères — au-delà, ils se chevauchent sur 320 points de large.
+ * On ne trace pas une suite sans voir ce qui précède : un repère qui commence
+ * pile au moment du pari n'offre aucun cours auquel raccrocher sa courbe. Un
+ * tiers de l'horizon, environ — sauf au-delà d'un an, borné par ce que
+ * CoinGecko rend gratuitement (`MAX_HISTORY_DAYS` dans `coingecko.ts`).
  */
-export function timeTicks(key: string): { label: string; day: number }[] {
-  const horizon = horizonOf(key);
-  const { days } = horizon;
-
-  if (days <= 14) {
-    // Une semaine : on compte en jours.
-    return [0, 2, 4, 6].filter((d) => d <= days).map((d) => ({ label: `J+${d}`, day: d }));
+export function lookbackDays(key: string): number {
+  switch (horizonOf(key).key) {
+    case '1w':
+      return 3;
+    case '3m':
+      return 30;
+    case '6m':
+      return 60;
+    case '12m':
+      return 120;
+    case '5y':
+    case '10y':
+      return 360;
   }
-  if (days <= 400) {
-    // Quelques mois à un an : on compte en mois.
-    const step = days <= 100 ? 1 : days <= 200 ? 2 : 3;
-    const out: { label: string; day: number }[] = [];
-    for (let month = 0; month * 30 <= days; month += step) {
-      out.push({ label: month === 0 ? 'DÉBUT' : `M+${month}`, day: month * 30 });
-    }
-    return out;
-  }
-  // Plusieurs années : on compte en années.
-  const years = Math.round(days / 365);
-  const step = years <= 5 ? 1 : 2;
-  const out: { label: string; day: number }[] = [];
-  for (let year = 0; year <= years; year += step) {
-    out.push({ label: year === 0 ? 'DÉBUT' : `A+${year}`, day: year * 365 });
-  }
-  return out;
 }
 
-/** Combien de jours d'historique demander pour dessiner ce pari. */
-export function historyDaysFor(key: string, openedAt: number, now: number): number {
-  const horizon = horizonOf(key);
-  const elapsed = Math.ceil((now - openedAt) / DAY_MS);
-  // Au moins deux jours : CoinGecko rend une série vide en deçà, et un repère
-  // sans courbe réelle n'a rien à quoi se comparer.
-  return Math.min(horizon.days, Math.max(2, elapsed));
+/** `24 H`, `3 J`, `14 J` — la fenêtre de révision, dite comme on la lit. */
+export function editingLabel(key: string): string {
+  const hours = horizonOf(key).editingHours;
+  return hours < 48 ? `${hours} H` : `${Math.round(hours / 24)} J`;
 }

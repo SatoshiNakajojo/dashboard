@@ -11,8 +11,8 @@ Trois onglets, trois mécaniques :
 | Onglet | Ce qu'il fait |
 |---|---|
 | **Nights** | Agenda des Crypto Nights et checklist potluck partagée en temps réel |
-| **Le Bag** | Fil des calls d'investissement, Hall of Fame et Rekt Board |
-| **Oracle** | Prédiction BTC à 90 jours tracée au doigt, scellée par un time-lock |
+| **Calls** | Fil des calls d'investissement, Hall of Fame et Rekt Board |
+| **Oracle** | Paris sur le cours du BTC, tracés au doigt — d'une semaine à dix ans, en parallèle, chacun avec son verrou et sa date de jugement |
 
 Registre visuel : club privé, feutré. L'orange Bitcoin y est un **or**, en
 accent rare, sur fond encre chaude. Référence : `Bitcoin Club v2.dc.html`.
@@ -82,24 +82,28 @@ interruption, aucune boîte de dialogue.
 
 ### `OracleGraph` — SVG, time-lock, superposition CoinGecko
 
-Deux invariants :
+Trois invariants :
 
 1. **Un seul facteur d'échelle.** Le repère logique 360 × 285 est peint tel quel
-   dans un `Group` mis à l'échelle. Rien ne re-dérive une géométrie en pixels,
-   sinon `path_data` deviendrait dépendant du téléphone et deux membres ne
-   pourraient plus superposer leurs courbes.
-2. **Le verrou est une porte, pas un style.** `locked` coupe le geste à la
-   source. Trois garde-fous indépendants : le geste désactivé, le `setMyPoints`
-   qui refuse, et le déclencheur `predictions_seal` en base.
+   dans un `Group` mis à l'échelle. Rien ne re-dérive une géométrie en pixels.
+2. **Des prix en entrée, des prix en sortie.** Les courbes arrivent en
+   `[jour, prix]` et le tracé repart en `[jour, prix]` ; les coordonnées de
+   toile n'existent que dans le graphe. Deux membres peuvent voir des bandes de
+   prix différentes sans que leurs courbes se décalent.
+3. **Le verrou est une porte, pas un style.** Sans `drawRange`, le geste est
+   coupé à la source. Trois garde-fous indépendants : le geste désactivé, le
+   `setDraft` qui refuse, et le déclencheur `predictions_guard` en base. Et le
+   doigt ne trace qu'à partir d'aujourd'hui : le passé est déjà écrit.
 
 Le tracé est monotone en X — un point n'est retenu que s'il dépasse le précédent
-de 4 unités — et borné dans le repère.
+de 4 unités. Un simple toucher ne remplace pas un pari déposé : il faut que le
+doigt ait bougé.
 
 ---
 
 ## Ce qui a été vérifié
 
-- `npm run typecheck`, `npm run lint`, `npm test` — propres (212 tests).
+- `npm run typecheck`, `npm run lint`, `npm test` — propres (374 tests).
 - **Règles pures** : bornes et inversibilité du repère, monotonie du tracé,
   écart à la courbe réelle, espaces insécables du formatage français, perf vs ₿
   comme ratio et non soustraction, seuils et tri des deux classements.
@@ -110,9 +114,12 @@ de 4 unités — et borné dans le repère.
   unicité des couleurs sur un club de sept.
 - **Plan de rafraîchissement** : on n'efface jamais un prix connu, on ne
   réécrit jamais un prix inchangé.
-- **Schéma** : migration appliquée à un PostgreSQL 16 réel, réexécutée pour
-  l'idempotence, puis `supabase/tests/schema_test.sql` — 13 assertions passent,
-  dont celle qui manquait : un membre lit les couleurs déjà prises **avant**
+- **Schéma** : toutes les migrations appliquées dans l'ordre à un PostgreSQL 16
+  neuf (doublures `supabase/tests/doubles.sql`), réexécutées pour l'idempotence,
+  puis `supabase/tests/schema_test.sql` — 16 assertions passent, dont les sept
+  des paris de l'Oracle (calendrier fixé par la base, un pari en cours par
+  horizon, scellement, retrait avant verrou seulement), et celle qui
+  manquait : un membre lit les couleurs déjà prises **avant**
   d'être membre, là où la RLS lui refuse toute ligne.
   Le seed reproduit exactement les pourcentages du design (`+14,9 %`, `+12,4 %`,
   `+21,8 %`, `+11,2 %`, `-61,0 %`) et les perfs vs ₿ (`-2,5 %`, `+6,9 %`,
@@ -253,34 +260,65 @@ veut.
 
 ---
 
-## La saison ancre la courbe, pas seulement l'étiquette
+## L'Oracle à plusieurs horizons
 
-L'Oracle prédit 90 jours. Encore faut-il savoir à quelle date correspond le
-jour 0 du repère.
+L'Oracle ne connaissait qu'une saison de 90 jours : une prédiction par membre,
+et tout se verrouillait le même jour. Le club voulait parier sur une semaine
+**et** sur dix ans, en parallèle, sans que les paris se bloquent ni se jugent
+tous ensemble.
 
-Il n'y avait pas de réponse : l'historique BTC était demandé sur « les 90
-derniers jours » et numéroté depuis le premier point reçu. Avec de vraies
-données, aujourd'hui tombait donc au **jour 90 sur 90** — la courbe réelle
-couvrait la toile entière, et il ne restait aucun avenir à tracer. Le jeu de
-démonstration place aujourd'hui au jour 34, ce qui masquait le défaut
-complètement : il ne pouvait apparaître qu'une fois Supabase et CoinGecko
-branchés.
+| Horizon | Révisable après le dépôt | Jugé à |
+|---|---|---|
+| 1 semaine | 24 h | J+7 |
+| 3 mois | 3 jours | J+90 |
+| 6 mois | 5 jours | J+182 |
+| 1 an | 7 jours | J+365 |
+| 5 ans | 14 jours | J+1 825 |
+| 10 ans | 14 jours | J+3 650 |
 
-`src/lib/season.ts` donne cet ancrage. Une saison dure 90 jours et démarre à
-l'ouverture du club — `SEASON_EPOCH`, minuit à Nouméa, **la seule ligne à
-changer** et pas à la légère : `predictions.season` en dérive, et des tracés
-déposés se retrouveraient orphelins d'une saison qui n'existe plus.
+On choisit l'horizon en haut de l'écran ; le repère, le cadenas et la liste
+parlent alors de celui-là. Un point sur un horizon signale qu'on y a un pari
+en cours — or s'il est encore révisable, oxblood s'il est verrouillé. En bas,
+l'**historique** mélange tous les horizons : c'est là qu'on relit qui avait vu
+juste.
 
-Trois choses en découlent, qui étaient figées à trois endroits différents :
+Quatre décisions portent l'ensemble :
 
-- On ne demande à CoinGecko que les jours écoulés, datés depuis le début de
-  saison — 13 jours au douzième jour, pas 90.
-- Le compteur `JOUR n / 90` vient du **calendrier**. Un jour où CoinGecko ne
-  répond pas ne fait plus reculer le curseur de la saison.
-- `predictions` porte un `unique (user_id, season)`. Tant que l'étiquette était
-  figée, un membre ayant scellé son tracé ne pouvait plus jamais en déposer un
-  autre. La saison tourne maintenant d'elle-même, et chacun repart d'une toile
-  vierge.
+- **La base fixe le calendrier.** Avant, le verrou n'était qu'un compte à
+  rebours affiché par l'app : `locked_at` n'était écrit par personne, et rien
+  n'empêchait de redessiner après l'heure. Le déclencheur `predictions_guard`
+  fixe désormais l'ouverture, le verrouillage et la résolution à l'insertion,
+  ignore ce que le client envoie dans ces colonnes, et refuse qu'on les change.
+  Les durées vivent donc deux fois — en SQL et dans `src/lib/horizons.ts` — et
+  `scripts/__tests__/horizons-sql.test.mjs` échoue si les deux divergent.
+- **Un tracé se stocke en prix.** `[jour depuis l'ouverture, dollars]`, et non
+  plus en coordonnées de toile : sur dix ans, la bande 80 k$ – 200 k$ ne tenait
+  plus, et deux membres ne superposaient leurs courbes que parce qu'ils
+  partageaient ce repère figé. La migration convertit les tracés déjà déposés
+  et en fait des paris à trois mois, datés du début de leur saison.
+- **Le repère est calendaire.** Son origine est la plus ancienne ouverture en
+  vue — ou un peu avant aujourd'hui, pour voir le cours auquel raccrocher sa
+  courbe (`lookbackDays`) — et chaque tracé y est décalé de l'écart entre son
+  ouverture et cette origine. L'axe porte de vraies dates, à l'heure de Nouméa :
+  des jours sur une semaine, des mois jusqu'à deux ans, des années au-delà.
+- **La bande de prix suit ce qu'on affiche**, jamais le tracé en cours — sinon
+  l'échelle glisserait sous le doigt. Elle a un plancher par horizon
+  (`bandFor`) : à l'ouverture d'un pari à dix ans, on doit pouvoir viser un
+  bitcoin à 1 M$ même si le cours n'a encore rien montré.
+
+Un pari encore révisable se **retire** (`RETIRER MON PARI`, confirmé en deux
+temps) ; après le verrou, il appartient à l'historique du club. Sans ça, un
+tracé déposé par erreur bloquerait l'horizon jusqu'à sa résolution — dix ans
+pour le plus long.
+
+**Limite connue :** l'API publique de CoinGecko ne rend pas plus d'un an
+d'historique. Un pari à cinq ans ouvert il y a deux ans se juge donc sur sa
+dernière année : la justesse ne compare que ce qui se recoupe, elle ne
+s'invente pas le reste. Et si CoinGecko ne répond pas, l'écran le dit
+(`COURS INDISPONIBLE`) plutôt que de juger les paris sur une courbe de
+démonstration.
+
+`src/lib/season.ts` ne sert plus qu'aux classements des Calls (« saison IV »).
 
 ---
 
@@ -528,19 +566,25 @@ Le tracé de l'Oracle était enregistré **900 ms après le dernier point**. Un
 membre qui relevait le doigt pour réfléchir avait donc déjà déposé sa
 prédiction, sans l'avoir décidé, et rien à l'écran ne le disait.
 
-C'est maintenant un bouton : `DÉPOSER MA PRÉDICTION` tant que le tracé à
-l'écran diffère de ce qui est enregistré, `PRÉDICTION DÉPOSÉE` ensuite. La
-comparaison se fait **point à point** (`samePath`) et non par référence — le
-tracé rechargé depuis la base est un tableau neuf, et comparer les références
-allumerait le bouton à chaque ouverture.
+C'est maintenant un bouton : `DÉPOSER MON PARI · 3 MOIS` pour ouvrir un pari,
+`METTRE À JOUR MON PARI` quand on redessine un pari encore révisable,
+`PARI DÉPOSÉ` quand l'écran et la base disent la même chose. La comparaison se
+fait **point à point** (`samePath`) et non par référence — le tracé rechargé
+depuis la base est un tableau neuf, et comparer les références allumerait le
+bouton à chaque ouverture.
 
-L'effacement, lui, part tout de suite — mais en deux temps sur le même bouton :
-`EFFACER MA COURBE` devient `CONFIRMER L'EFFACEMENT` en oxblood, et redevient
-lui-même au bout de quatre secondes si on ne confirme pas. Pas d'`Alert`
-système : elle ne s'affiche pas de la même façon sur le web et sur iOS, et
-sortirait du registre de l'écran. Une fois confirmé, le vide est enregistré
-sans second geste — demander ensuite « déposer » laisserait un tracé qu'on
-croit effacé.
+Sous le repère, un seul bouton, trois gestes qu'il ne faut pas confondre :
+
+- `EFFACER MON TRACÉ` — un brouillon jamais déposé ;
+- `REVENIR AU PARI DÉPOSÉ` — on a redessiné sans déposer : rien ne se perd,
+  pas de confirmation ;
+- `RETIRER MON PARI` — le pari est supprimé en base, donc en deux temps :
+  `CONFIRMER LE RETRAIT` en oxblood, qui redevient lui-même au bout de quatre
+  secondes. Pas d'`Alert` système : elle ne s'affiche pas de la même façon sur
+  le web et sur iOS, et sortirait du registre de l'écran.
+
+Le brouillon est gardé **par horizon** : passer de « 1 SEM » à « 5 ANS » ne
+jette pas ce qu'on était en train de dessiner.
 
 ---
 
@@ -724,33 +768,20 @@ Rien ne bloque. Ce qui suit est du confort :
   permission à l'écran, et sur iOS l'obligation que la PWA soit installée sur
   l'écran d'accueil (Safari ne notifie pas un onglet). Rien d'exotique, mais
   rien qui se déduise de ce qui est là.
-- **L'Oracle à plusieurs horizons.** `src/lib/horizons.ts` est posé et testé :
-  les six durées demandées (1 semaine, 3/6/12 mois, 5 et 10 ans), leur fenêtre
-  d'écriture propre, leur calendrier de verrouillage et de résolution, et les
-  graduations d'axe qui vont avec. Il n'est **pas encore branché**.
-
-  Ce qui reste n'est pas du câblage, c'est une refonte : un tracé est
-  aujourd'hui stocké en **coordonnées du repère** (360 × 285, 80 k$ – 200 k$
-  figés). Deux membres ne peuvent superposer leurs courbes que parce qu'ils
-  partagent ce repère. Sur dix ans, la bande de prix ne tient plus, et chaque
-  pari a besoin du sien — donc chaque tracé doit porter son repère, ou être
-  stocké en **prix** plutôt qu'en pixels.
-
-  La seconde solution est la bonne : un tracé devient `[[jour, prix]]`,
-  indépendant de tout affichage, et la comparaison entre membres redevient une
-  comparaison de prix réels. Mais elle impose de convertir les tracés déjà
-  déposés, donc de faire atterrir la migration et l'app **d'un seul tenant** :
-  une base convertie que l'app lit encore en pixels afficherait des courbes
-  absurdes. C'est pour ça que rien n'est branché à moitié.
 - **Autocomplétion des titres.** Les cryptos ont leur liste — CoinGecko
   autorise les appels navigateur. Les actions n'en ont pas : il faudrait
   relayer `v1/finance/search` de Yahoo par une fonction Edge, comme pour les
   cotations. Le sélecteur de place couvre le besoin en attendant.
 - **Taille de position.** La colonne existe et les cartes l'affichent, mais le
   composer ne la collecte pas — le design ne lui donne pas de champ.
-- **Ouverture d'une saison à la main.** Elles tournent seules tous les 90 jours
-  (`src/lib/season.ts`). Si le club veut décider lui-même quand une saison
-  s'ouvre, il faudra une table `seasons` et un écran pour l'administrer.
+- **Ouverture d'une saison des Calls à la main.** Elles tournent seules tous
+  les 90 jours (`src/lib/season.ts`). Si le club veut décider lui-même quand
+  une saison s'ouvre, il faudra une table `seasons` et un écran pour
+  l'administrer.
+- **Historique CoinGecko au-delà d'un an.** Pour juger un pari à cinq ou dix
+  ans sur toute sa durée, il faudra soit une clé CoinGecko payante, soit
+  archiver soi-même un cours quotidien dans une table (la fonction planifiée
+  `refresh-prices` s'y prêterait).
 - **Sous-ligne des classements.** Le design y met de la prose
   (« DCA 2 ans · 0,84 ₿ ») ; faute de colonne pour ça, elle est dérivée
   (« +31 % vs ₿ »), ce qui recouvre quatre des six lignes du design.

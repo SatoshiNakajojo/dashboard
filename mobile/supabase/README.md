@@ -4,7 +4,8 @@
 |---|---|
 | `migrations/20260905120000_init.sql` | Tables, contraintes, déclencheurs, RLS, Realtime |
 | `seed.sql` | Jeu de `DONNEES_FICTIVES.md`, UUID identiques à `src/mocks` |
-| `tests/schema_test.sql` | Douze assertions sur les règles métier |
+| `tests/doubles.sql` | Doublures de `auth`, `storage` et des rôles, pour tester hors plateforme |
+| `tests/schema_test.sql` | Seize assertions sur les règles métier |
 
 ## Les sept tables
 
@@ -56,7 +57,7 @@ rapide », et qui déclenche son rollback. Le client n'arbitre rien.
 | Déclencheur | Règle |
 |---|---|
 | `tickers_freeze` | « Non modifiable après publication » : seul `current_price` évolue |
-| `predictions_seal` | Après `locked_at`, le tracé ne change plus et le verrou ne se défait pas ; l'empreinte `HASH 8F2A` est calculée au scellement |
+| `predictions_guard` | La base fixe le calendrier d'un pari à l'insertion (`opened_at`, `locked_at`, `resolves_at` selon l'horizon) et refuse qu'on le change ; un seul pari en cours par membre et par horizon ; après `locked_at`, le tracé ne bouge plus ; l'empreinte `HASH 8F2A` suit le tracé |
 | `*_touch` | `updated_at` |
 
 `tickers.performance_percentage` est une **colonne générée** : elle ne peut pas
@@ -65,9 +66,16 @@ calculée côté client — elle dépend du cours BTC courant, qui n'est pas en 
 
 ### Validation de forme d'un tracé
 
-`path_data` doit être un tableau de couples `[x, y]` numériques, dans les bornes
-du repère 360 × 285. Un `CHECK` n'acceptant pas de sous-requête, la validation
-passe par `public.is_valid_path(jsonb)`, déclarée `immutable`.
+`path_data` est un tableau de couples `[jour, prix]` — le jour compté depuis
+l'ouverture du pari (0 à 3 700), le prix en dollars, strictement positif, au
+plus 400 points. Un `CHECK` n'acceptant pas de sous-requête, la validation
+passe par `public.is_valid_price_path(jsonb)`, déclarée `immutable`.
+
+Les tracés d'avant les horizons étaient stockés en coordonnées de toile
+(360 × 285, 80 k$ – 200 k$ figés). La migration `20260923090000_prediction_horizons`
+les convertit en prix et en fait des paris à trois mois, datés du début de leur
+saison. Un membre retire son pari (`predictions_delete_own`) tant qu'il est
+révisable, jamais après.
 
 ## Realtime
 

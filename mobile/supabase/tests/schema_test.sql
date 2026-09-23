@@ -1,9 +1,8 @@
 -- ============================================================================
 -- Tests du schéma — RLS, triggers et contraintes.
 --
--- Exécution (voir docs/SETUP.md §« Vérifier le schéma ») :
---   psql -d <base> -v ON_ERROR_STOP=1 -f supabase/migrations/*_init.sql
---   psql -d <base> -f supabase/tests/schema_test.sql
+-- Exécution (voir docs/SETUP.md §« Vérifier le schéma ») : toutes les
+-- migrations, dans l'ordre, puis ce fichier.
 --
 -- Chaque cas affiche `ok` ou lève. Un test qui doit échouer est enveloppé dans
 -- un bloc qui capture l'exception : c'est l'absence d'exception qui est un bug.
@@ -114,49 +113,103 @@ begin
   raise notice 'ok · tickers : seul current_price évolue';
 end $$;
 
+-- --- Oracle : des paris, pas une saison ---------------------------------------
+--
+-- Le calendrier d'un pari est une frontière de sécurité : c'est la base qui le
+-- fixe, et le client ne peut ni l'allonger ni le rouvrir.
+
 do $$
 declare
-  sealed text;
-  failed boolean;
+  semaine  uuid;
+  dix_ans  uuid;
+  opened   timestamptz;
+  locks    timestamptz;
+  resolves timestamptz;
+  sealed   text;
+  failed   boolean;
+  affected integer;
 begin
-  insert into public.predictions (id, user_id, season, path_data)
-  values ('eeeeeeee-0000-4000-8000-000000000001', 'aaaaaaaa-0000-4000-8000-000000000001',
-          '2026-S3', '[[34,168],[78,150],[352,44]]'::jsonb);
+  -- 1. Ce que le client envoie dans le calendrier est ignoré.
+  insert into public.predictions (user_id, horizon, path_data, opened_at, locked_at, resolves_at)
+  values ('aaaaaaaa-0000-4000-8000-000000000001', '1w', '[[0,110000],[7,125000]]'::jsonb,
+          now() - interval '1 year', now() + interval '10 years', now() + interval '20 years')
+  returning id, opened_at, locked_at, resolves_at into semaine, opened, locks, resolves;
+  assert opened = now(), 'l’ouverture doit être l’instant du dépôt';
+  assert locks = now() + interval '24 hours', 'un pari d’une semaine se révise 24 h';
+  assert resolves = now() + interval '7 days', 'un pari d’une semaine se juge à J+7';
+  raise notice 'ok · predictions : le calendrier vient de la base, pas du client';
 
+  -- 2. Un pari en cours par horizon, mais plusieurs horizons en parallèle.
   failed := false;
   begin
-    insert into public.predictions (user_id, season, path_data)
-    values ('aaaaaaaa-0000-4000-8000-000000000002', '2026-S3', '[[34,168],[999,150]]'::jsonb);
+    insert into public.predictions (user_id, horizon, path_data)
+    values ('aaaaaaaa-0000-4000-8000-000000000001', '1w', '[[0,110000],[7,90000]]'::jsonb);
+  exception when unique_violation then failed := true;
+  end;
+  assert failed, 'un second pari d’une semaine en cours doit être refusé';
+
+  insert into public.predictions (user_id, horizon, path_data)
+  values ('aaaaaaaa-0000-4000-8000-000000000001', '10y', '[[0,110000],[3650,1200000]]'::jsonb)
+  returning id into dix_ans;
+  raise notice 'ok · predictions : un pari en cours par horizon, les horizons en parallèle';
+
+  -- 3. Un tracé se stocke en prix : jour dans le pari, prix strictement positif.
+  failed := false;
+  begin
+    insert into public.predictions (user_id, horizon, path_data)
+    values ('aaaaaaaa-0000-4000-8000-000000000002', '3m', '[[0,110000],[45,-5]]'::jsonb);
   exception when check_violation then failed := true;
   end;
-  assert failed, 'un point hors repère doit être refusé';
-  raise notice 'ok · predictions : un tracé hors du repère 360×285 est refusé';
-
-  update public.predictions set locked_at = now()
-   where id = 'eeeeeeee-0000-4000-8000-000000000001';
-  select hash into sealed from public.predictions
-   where id = 'eeeeeeee-0000-4000-8000-000000000001';
-  assert sealed is not null and length(sealed) = 4,
-    format('empreinte attendue sur 4 signes, obtenue %s', coalesce(sealed, 'NULL'));
-  raise notice 'ok · predictions : empreinte calculée au verrouillage (HASH %)', sealed;
+  assert failed, 'un prix négatif doit être refusé';
 
   failed := false;
   begin
-    update public.predictions set path_data = '[[34,10],[350,20]]'::jsonb
-     where id = 'eeeeeeee-0000-4000-8000-000000000001';
+    insert into public.predictions (user_id, horizon, path_data)
+    values ('aaaaaaaa-0000-4000-8000-000000000002', '20y', '[[0,110000]]'::jsonb);
+  exception when check_violation then failed := true;
+  end;
+  assert failed, 'un horizon inconnu doit être refusé';
+  raise notice 'ok · predictions : un tracé hors bornes ou un horizon inconnu est refusé';
+
+  -- 4. Le calendrier ne se réécrit pas.
+  failed := false;
+  begin
+    update public.predictions set locked_at = now() + interval '1 year' where id = semaine;
+  exception when check_violation then failed := true;
+  end;
+  assert failed, 'on ne rallonge pas sa fenêtre de révision';
+  raise notice 'ok · predictions : le calendrier d’un pari est immuable';
+
+  -- 5. L'empreinte suit le tracé.
+  select hash into sealed from public.predictions where id = semaine;
+  assert sealed is not null and length(sealed) = 4,
+    format('empreinte attendue sur 4 signes, obtenue %s', coalesce(sealed, 'NULL'));
+  raise notice 'ok · predictions : empreinte calculée au dépôt (HASH %)', sealed;
+
+  -- 6. Verrouillé, le tracé ne bouge plus. On avance l'horloge du pari en
+  --    contournant le gardien — seule la base de test peut le faire.
+  alter table public.predictions disable trigger predictions_guard_trigger;
+  update public.predictions set locked_at = now() - interval '1 minute' where id = semaine;
+  alter table public.predictions enable trigger predictions_guard_trigger;
+
+  failed := false;
+  begin
+    update public.predictions set path_data = '[[0,110000],[7,200000]]'::jsonb where id = semaine;
   exception when check_violation then failed := true;
   end;
   assert failed, 'un tracé verrouillé ne doit plus changer';
   raise notice 'ok · predictions : le tracé est scellé après verrouillage';
 
-  failed := false;
-  begin
-    update public.predictions set locked_at = null
-     where id = 'eeeeeeee-0000-4000-8000-000000000001';
-  exception when check_violation then failed := true;
-  end;
-  assert failed, 'le verrouillage doit être définitif';
-  raise notice 'ok · predictions : le verrouillage est définitif';
+  -- 7. On retire son pari tant qu'il est révisable, jamais après.
+  set local role authenticated;
+  delete from public.predictions where id = semaine;
+  get diagnostics affected = row_count;
+  assert affected = 0, 'un pari verrouillé ne se retire pas';
+  delete from public.predictions where id = dix_ans;
+  get diagnostics affected = row_count;
+  assert affected = 1, 'un pari encore révisable se retire';
+  reset role;
+  raise notice 'ok · predictions : un pari se retire avant verrouillage, pas après';
 end $$;
 
 -- ============================================================================
