@@ -91,3 +91,72 @@ que le script du desk le fait : ses chiffres ne coïncident pas avec cette sonde
 Le script `scripts/paper_supertrend_live.py` et le backtest qui l'a validé. La
 question à lui poser est précise : **à quel prix, et à quelle barre, l'entrée est-
 elle remplie par rapport à la barre qui a produit le signal ?**
+
+---
+
+## 23/09 — le script reçu : la cause est trouvée, et vérifiée
+
+`paper_supertrend_live.py` a été fourni. `script_du_desk.py` porte son
+`supertrend()` et son `check_exit()` **ligne pour ligne** et les rejoue sur les
+208 jours.
+
+### Le défaut
+
+```python
+if st is not None:
+    if side == "long" and st > stop:
+        stop = st                  # ← remonté AVANT de vérifier la barre
+...
+stop_hit = lo <= stop if side == "long" else hi >= stop
+if stop_hit:
+    return {"event": "exit", "exit_px": stop, "reason": "stop", ...}
+```
+
+Le stop est remonté avec la ligne Supertrend **de la barre en cours** avant de
+vérifier si cette barre l'a touché. Sur une barre de retournement, cette ligne
+n'est plus la bande basse : c'est la **bande haute**, au-dessus du prix. Le code
+la prend pour stop (elle est bien « plus haute »), constate que le bas de la barre
+est en dessous — forcément — et enregistre la sortie **à la bande haute : un prix
+au-dessus du plus haut de la barre, jamais coté**. Symétriquement pour un court.
+
+### La vérification
+
+| | n | réussite | E[R] | PF |
+|---|---:|---:|---:|---:|
+| **déclaré par le desk** | 120 | 55,8 % | **+0,222** | 1,92 |
+| code du desk tel quel (ATR Wilder) | 149 | 54,4 % | **+0,217** | 1,88 |
+| code du desk, `check_exit` corrigé | 149 | 35,6 % | **−0,140** | 0,67 |
+
+Le code tel quel **retrouve le backtest déclaré à la deuxième décimale.** Sur ses
+149 sorties, **54 sont enregistrées hors de la barre**, en moyenne **+0,57 R
+au-delà du prix coté**. Corrigé, il perd.
+
+`hl_common.atr_series` n'a pas été fourni ; une ATR en moyenne simple donne
++0,319 (tel quel) et −0,121 (corrigé). Le verdict ne dépend pas de ce choix.
+
+L'hypothèse pré-enregistrée (prédiction 2) visait ce mécanisme mais dans sa forme
+prudente — ligne de la barre en cours *seulement si la direction n'a pas changé*.
+C'est la forme brute, celle qui franchit le retournement, qui est dans le code.
+
+### Ce que ça veut dire
+
+**Supertrend V3-1B ne passe pas les critères du desk lui-même** une fois corrigée :
+E[R] −0,140 pour un seuil à +0,05, PF 0,67 pour un seuil à 1,1. Son PASS reposait
+entièrement sur des prix impossibles.
+
+Et le même `check_exit` écrit les événements du **paper** : chaque trade qui se
+termine sur une barre de retournement y est inscrit comme sortant à la bande
+opposée. Un relevé paper produit par ce code est structurellement gagnant.
+
+### Deux défauts de plus, propres au paper — lus dans le code, non quantifiés
+
+1. **La barre en formation est traitée comme close.** Hyperliquid renvoie la
+   bougie en cours ; `df.iloc[-1]` est donc une barre vieille de cinq minutes à
+   chaque passage de :05. La boucle de gestion la marque traitée
+   (`last_processed_bar_ts`), et le passage suivant la saute. **Une barre sur
+   deux n'est jamais vue que sur ses cinq premières minutes** : un stop touché
+   pendant les 55 autres n'est jamais constaté.
+2. **Les entrées ne sont cherchées que sur la dernière barre**, et la routine
+   tourne toutes les deux heures : les retournements de la barre intermédiaire
+   ne sont jamais vus. Le paper n'échantillonne qu'une partie des signaux — et
+   sur une barre incomplète, dont le signal peut disparaître à la clôture.
