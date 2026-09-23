@@ -22,8 +22,8 @@
         flex: 1;
       }
     </style>
-  <link rel="icon" href="/dashboard/club/favicon.ico"/><link rel="preload" href="/dashboard/club/_expo/static/css/web-152bbb8814fb4beed3570c49067aa85a.css" as="style">
-<link rel="stylesheet" href="/dashboard/club/_expo/static/css/web-152bbb8814fb4beed3570c49067aa85a.css">
+  <link rel="icon" href="/dashboard/club/favicon.ico"/><link rel="preload" href="/dashboard/club/_expo/static/css/web-59690b47b3fa1f5464d8f307a0db2db2.css" as="style">
+<link rel="stylesheet" href="/dashboard/club/_expo/static/css/web-59690b47b3fa1f5464d8f307a0db2db2.css">
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -55,13 +55,13 @@
     </noscript>
     <!-- The root element for your Expo app. -->
     <div id="root"></div>
-  <script src="/dashboard/club/_expo/static/js/web/entry-d71ff7c5d0eb297bc8419d8897aec182.js" defer></script>
+  <script src="/dashboard/club/_expo/static/js/web/entry-6a76a1eae63853bd0ba50704ad109f92.js" defer></script>
 
     <div id="boot" aria-label="Chargement" role="progressbar">
       <img id="boot-logo" src="icon-192.png" alt="" width="132" height="132" />
       <div id="boot-chain">
-        <div class="boot-row"><i class="boot-b"></i><i class="boot-b"></i><i class="boot-b"></i><i class="boot-b"></i><i class="boot-b"></i><i class="boot-b"></i><i class="boot-b"></i><i class="boot-b"></i></div>
-        <div id="boot-fill"><div class="boot-row"><i class="boot-b on"></i><i class="boot-b on"></i><i class="boot-b on"></i><i class="boot-b on"></i><i class="boot-b on"></i><i class="boot-b on"></i><i class="boot-b on"></i><i class="boot-b on"></i></div></div>
+        <div class="boot-row"><i class="boot-b"><b></b><b></b></i><u class="boot-b"></u><i class="boot-b"><b></b><b></b></i><u class="boot-b"></u><i class="boot-b"><b></b><b></b></i><u class="boot-b"></u><i class="boot-b"><b></b><b></b></i><u class="boot-b"></u><i class="boot-b"><b></b><b></b></i><u class="boot-b"></u><i class="boot-b"><b></b><b></b></i><u class="boot-b"></u><i class="boot-b"><b></b><b></b></i><u class="boot-b"></u><i class="boot-b"><b></b><b></b></i></div>
+        <div id="boot-fill"><div class="boot-row"><i class="boot-b on"><b></b><b></b></i><u class="boot-b on"></u><i class="boot-b on"><b></b><b></b></i><u class="boot-b on"></u><i class="boot-b on"><b></b><b></b></i><u class="boot-b on"></u><i class="boot-b on"><b></b><b></b></i><u class="boot-b on"></u><i class="boot-b on"><b></b><b></b></i><u class="boot-b on"></u><i class="boot-b on"><b></b><b></b></i><u class="boot-b on"></u><i class="boot-b on"><b></b><b></b></i><u class="boot-b on"></u><i class="boot-b on"><b></b><b></b></i></div></div>
       </div>
       <p id="boot-label">MINAGE EN COURS</p>
     </div>
@@ -80,24 +80,42 @@
          d'être découpés par elle, et la chaîne se remplit de tranches au lieu
          de blocs. Le défaut ne se voit qu'une fois l'animation lancée.
          (Pas de guillemets obliques ici : on est dans un gabarit de chaîne.) */
-      .boot-row { display: flex; gap: 5px; width: max-content; }
+      .boot-row { display: flex; align-items: center; width: max-content; }
+      /* Le bloc. */
       .boot-b {
-        flex: none;
-        width: 11px; height: 11px; border-radius: 1px;
-        border: 1px solid #3A2F1E; box-sizing: border-box;
+        flex: none; box-sizing: border-box;
+        width: 16px; height: 16px; border-radius: 2px;
+        border: 1px solid #3A2F1E;
+        display: flex; flex-direction: column; justify-content: center; gap: 2px;
+        padding: 0 3px;
+      }
+      /* Les deux lignes de données à l'intérieur. */
+      .boot-b b { display: block; height: 1px; background: #3A2F1E; }
+      .boot-b b:last-child { width: 60%; }
+      /* Le maillon vers le bloc suivant. */
+      u.boot-b {
+        width: 8px; height: 2px; border: 0; border-radius: 1px;
+        background: #3A2F1E; padding: 0;
       }
       .boot-b.on { border-color: #E8903D; background: #E8903D; }
-      /* Le remplissage est un calque découpé qui s'élargit par crans : chaque
-         cran tombe dans un intervalle entre deux blocs, jamais au milieu de
-         l'un d'eux — un demi-bloc doré se verrait comme un défaut. */
+      .boot-b.on b { background: #0A0806; }
+      u.boot-b.on { background: #E8903D; }
+      /* Le remplissage est un calque découpé qui s'élargit par paliers. */
       #boot-fill {
         position: absolute; inset: 0; overflow: hidden; width: 0;
-        animation: boot-mine 1650ms steps(8, end) infinite;
+        animation: boot-mine 1650ms steps(1, end) infinite;
       }
       @keyframes boot-mine {
-        0% { width: 0; }
-        72.73% { width: 100%; }
-        100% { width: 100%; }
+        0.00% { width: 0px; }
+        9.09% { width: 16px; }
+        18.18% { width: 40px; }
+        27.27% { width: 64px; }
+        36.36% { width: 88px; }
+        45.45% { width: 112px; }
+        54.55% { width: 136px; }
+        63.64% { width: 160px; }
+        72.73% { width: 184px; }
+        100% { width: 184px; }
       }
       #boot-label {
         margin: 0; color: #6D6455;
@@ -107,7 +125,7 @@
       @media (prefers-reduced-motion: reduce) {
         /* Sans mouvement, la chaîne reste pleine : elle dit encore « ça
            travaille » sans imposer une animation à qui n'en veut pas. */
-        #boot-fill { animation: none; width: 100%; }
+        #boot-fill { animation: none; width: 184px; }
       }
     </style>
 </body>
