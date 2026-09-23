@@ -185,7 +185,7 @@ function Field({ label, mono, style, ...rest }: FieldProps) {
           placeholderTextColor={c.sepiaFaint}
           style={[
             {
-              fontFamily: mono ? f.monoMed : f.serif,
+              fontFamily: mono ? f.labelMed : f.serif,
               fontSize: mono ? 22 : 20,
               letterSpacing: mono ? 6 : 0,
               color: c.ivory,
@@ -225,7 +225,7 @@ function PrimaryButton({
         style={{ alignItems: 'center', paddingVertical: 14, borderRadius: radius.button }}
       >
         <Text
-          style={{ fontFamily: f.monoSemi, fontSize: 10, letterSpacing: 2.4, color: c.onGold }}
+          style={{ fontFamily: f.labelSemi, fontSize: 10, letterSpacing: 2.4, color: c.onGold }}
         >
           {label}
         </Text>

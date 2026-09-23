@@ -70,7 +70,7 @@ const chain = (klass) =>
 
 export const BOOT_SHELL = `
     <div id="boot" aria-label="Chargement" role="progressbar">
-      <img id="boot-logo" src="icon-192.png" alt="" width="132" height="132" />
+      <img id="boot-logo" src="icon-512.png" alt="" width="240" height="240" />
       <div id="boot-chain">
         <div class="boot-row">${chain('boot-b')}</div>
         <div id="boot-fill"><div class="boot-row">${chain('boot-b on')}</div></div>
@@ -85,7 +85,9 @@ export const BOOT_SHELL = `
         transition: opacity .25s ease-out;
       }
       #boot.done { opacity: 0; pointer-events: none; }
-      #boot-logo { width: 132px; height: 132px; }
+      /* Le sceau d'abord : 60 % de la largeur, 240 px au plus. L'image de
+         512 px reste nette sur un écran Retina à cette taille. */
+      #boot-logo { width: min(60vw, 240px); height: auto; aspect-ratio: 1; }
       #boot-chain { position: relative; }
       /* « width: max-content » et « flex: none » ensemble : sans eux, les
          blocs du calque doré se compriment dans la largeur animée au lieu
@@ -123,7 +125,9 @@ ${FILL_STEPS}
       }
       #boot-label {
         margin: 0; color: ${SEPIA};
-        font: 500 9px/1 ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+        /* La police système : Inter n'est pas encore chargée à ce stade, et ses
+           capitales espacées ressemblent à celles d'Inter. */
+        font: 500 9px/1 -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
         letter-spacing: 2.2px;
       }
       @media (prefers-reduced-motion: reduce) {

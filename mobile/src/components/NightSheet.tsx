@@ -150,7 +150,7 @@ export function NightSheet({
             </Text>
             <Pressable accessibilityRole="button" onPress={onClose}>
               <Text
-                style={{ fontFamily: f.monoMed, fontSize: 9, letterSpacing: 1.62, color: c.sepiaMuted }}
+                style={{ fontFamily: f.labelMed, fontSize: 9, letterSpacing: 1.62, color: c.sepiaMuted }}
               >
                 FERMER
               </Text>
@@ -197,7 +197,7 @@ export function NightSheet({
                     >
                       <Text
                         style={{
-                          fontFamily: f.monoMed,
+                          fontFamily: f.labelMed,
                           fontSize: 9,
                           letterSpacing: 1.08,
                           color: on ? c.gold : c.sepiaMuted,
@@ -297,7 +297,7 @@ export function NightSheet({
               style={{ alignItems: 'center', paddingVertical: 14, borderRadius: radius.button }}
             >
               <Text
-                style={{ fontFamily: f.monoSemi, fontSize: 10, letterSpacing: 2.4, color: c.onGold }}
+                style={{ fontFamily: f.labelSemi, fontSize: 10, letterSpacing: 2.4, color: c.onGold }}
               >
                 {creating ? 'CRÉATION…' : 'INSCRIRE AU CALENDRIER'}
               </Text>
@@ -347,7 +347,7 @@ function Line({
         autoCorrect={false}
         placeholderTextColor={c.sepiaFaint}
         style={{
-          fontFamily: mono ? f.monoMed : f.serif,
+          fontFamily: mono ? f.labelMed : f.serif,
           fontSize: mono ? 15 : 20,
           color: c.ivory,
           marginTop: 7,

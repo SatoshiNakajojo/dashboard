@@ -70,6 +70,12 @@ export interface OracleGraphProps {
   /** Invite affichée tant qu'il n'y a pas de tracé. `null` : aucune. */
   hint: string | null;
   onPathChange: (path: PricePoint[]) => void;
+  /**
+   * Toucher la toile alors qu'un tracé existe : on ne l'efface pas, on
+   * demande. L'écran ouvre sa fenêtre de confirmation, et vide le tracé si le
+   * membre le veut — le geste suivant dessine alors sur une toile vierge.
+   */
+  onRequestRedraw: () => void;
 }
 
 /**
@@ -118,6 +124,7 @@ export function OracleGraph({
   sealed,
   hint,
   onPathChange,
+  onRequestRedraw,
 }: OracleGraphProps) {
   const [width, setWidth] = useState(0);
   const scale = width > 0 ? width / W : 0;
@@ -154,10 +161,11 @@ export function OracleGraph({
    * cours. Les handlers lisent donc la dernière valeur par une ref, mise à
    * jour après chaque rendu.
    */
-  const live = useRef({ bounds, frame, onPathChange, scale });
+  const hasPath = path.length > 1;
+  const live = useRef({ bounds, frame, onPathChange, onRequestRedraw, scale, hasPath });
   useEffect(() => {
-    live.current = { bounds, frame, onPathChange, scale };
-  }, [bounds, frame, onPathChange, scale]);
+    live.current = { bounds, frame, onPathChange, onRequestRedraw, scale, hasPath };
+  }, [bounds, frame, onPathChange, onRequestRedraw, scale, hasPath]);
 
   const onLayout = useCallback((event: LayoutChangeEvent) => {
     setWidth(event.nativeEvent.layout.width);
@@ -166,11 +174,15 @@ export function OracleGraph({
   // --- Geste de tracé ------------------------------------------------------
 
   const beginStroke = useCallback((event: PanEvent) => {
-    const { bounds: b, scale: k } = live.current;
+    const { bounds: b, scale: k, hasPath: drawn, onRequestRedraw: ask } = live.current;
     if (!b || !(k > 0)) return;
-    // Un simple contact ne remplace pas le tracé déposé : on attend que le
-    // doigt ait bougé. Sinon, poser le pouce pour faire défiler l'écran
-    // effacerait un pari.
+    // Un tracé est déjà là : le toucher ne l'efface pas, il demande. Le reste
+    // du geste est ignoré — `draft` vide, `extendStroke` ne fait rien.
+    if (drawn) {
+      draft.current = [];
+      ask();
+      return;
+    }
     draft.current = [clampToCanvas(event.x / k, event.y / k, b)];
   }, []);
 
@@ -236,7 +248,6 @@ export function OracleGraph({
   const todayPath = `M ${todayX.toFixed(1)} ${PAD.t} L ${todayX.toFixed(1)} ${BASELINE_Y}`;
 
   const last = btcPoints[btcPoints.length - 1];
-  const hasDrawing = path.length > 1;
   /** Assez de place à droite d'aujourd'hui pour y poser l'invite. */
   const futureRoom = W - PAD.r - todayX >= 150;
 
@@ -368,7 +379,7 @@ export function OracleGraph({
 
               <AxisLabels scale={scale} frame={frame} yTicks={yTicks} timeTicks={timeTicks} />
 
-              {hasDrawing || !hint ? null : (
+              {hasPath || !hint ? null : (
                 // En haut de la zone à venir : au centre, l'invite passait
                 // par-dessus le cours et les courbes du club.
                 <View
@@ -454,7 +465,7 @@ function AxisLabels({
             // `y(p) + 3` place la ligne de base du texte sur la graduation ;
             // en RN on positionne le haut de la boîte, d'où le retrait.
             top: (priceToY(price, frame) + 3 - 8) * scale,
-            fontFamily: f.mono,
+            fontFamily: f.label,
             fontSize: 8 * scale,
             letterSpacing: 0.4 * scale,
             color: c.sepiaFaint,
@@ -477,7 +488,7 @@ function AxisLabels({
               width: TICK_BOX * scale,
               textAlign: 'center',
               top: (268 - 8) * scale,
-              fontFamily: f.mono,
+              fontFamily: f.label,
               fontSize: 8 * scale,
               letterSpacing: 1.12 * scale,
               color: c.sepiaFaint,

@@ -59,7 +59,7 @@ export function MonthCalendar({
       <View className="flex-row items-center justify-between" style={{ marginBottom: 14 }}>
         <Arrow label="Mois précédent" direction="left" onPress={() => onShiftMonth(-1)} />
         <Text
-          style={{ fontFamily: f.monoMed, fontSize: 11, letterSpacing: 1.8, color: c.ivory }}
+          style={{ fontFamily: f.labelMed, fontSize: 11, letterSpacing: 1.8, color: c.ivory }}
         >
           {monthLabel(year, month)}
         </Text>
@@ -103,7 +103,7 @@ export function MonthCalendar({
               >
                 <Text
                   style={{
-                    fontFamily: f.monoMed,
+                    fontFamily: f.labelMed,
                     fontSize: 12,
                     color: !day.inMonth
                       ? c.sepiaFaint

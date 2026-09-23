@@ -25,9 +25,19 @@ export function Micro({
 }: MicroProps) {
   return (
     <Text
-      className={cn('font-mono text-sepia', className)}
+      className={cn('font-label text-sepia', className)}
       // Les micro-labels sont toujours en majuscules (SPEC §0, helper `microLabel`).
-      style={[{ fontSize: size, letterSpacing: tracking, textTransform: 'uppercase' }, style]}
+      // Chiffres tabulaires : Inter les a, et un compteur ou un montant ne
+      // doit pas bouger de largeur d'une valeur à l'autre.
+      style={[
+        {
+          fontSize: size,
+          letterSpacing: tracking,
+          textTransform: 'uppercase',
+          fontVariant: ['tabular-nums'],
+        },
+        style,
+      ]}
       {...rest}
     >
       {children}

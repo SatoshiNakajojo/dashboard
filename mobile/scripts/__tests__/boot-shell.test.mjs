@@ -53,8 +53,8 @@ describe('ce que la coquille charge', () => {
     const sources = [...BOOT_SHELL.matchAll(/src="([^"]+)"/g)].map((m) => m[1]);
     assert.deepEqual(
       sources,
-      ['icon-192.png'],
-      'la seule image est celle que la PWA a en cache',
+      ['icon-512.png'],
+      'la seule image est l’icône de la PWA, en 512 px pour rester nette en grand',
     );
   });
 

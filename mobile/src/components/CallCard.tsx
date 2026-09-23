@@ -30,7 +30,7 @@ export const CallCard = memo(function CallCard({ call, onVote }: CallCardProps) 
           <Text style={{ fontFamily: f.sansSemi, fontSize: 12, color: c.bone }}>
             {call.author.displayName}
           </Text>
-          <Text style={{ fontFamily: f.mono, fontSize: 10, color: c.sepiaMuted, marginTop: 3 }}>
+          <Text style={{ fontFamily: f.label, fontSize: 10, color: c.sepiaMuted, marginTop: 3 }}>
             {formatRelative(call.createdAt)}
           </Text>
         </View>
@@ -109,7 +109,7 @@ export const CallCard = memo(function CallCard({ call, onVote }: CallCardProps) 
         />
         <View className="flex-1" />
         {call.sizeUsd === null ? null : (
-          <Text style={{ fontFamily: f.mono, fontSize: 10, color: c.sepiaFaint }}>
+          <Text style={{ fontFamily: f.label, fontSize: 10, color: c.sepiaFaint }}>
             {formatSize(call.sizeUsd)}
           </Text>
         )}
@@ -140,7 +140,7 @@ function Stat({ label, value, labelColor = c.sepiaMuted, valueColor = c.bone, di
       <Micro size={8.5} tracking={1.7} style={{ color: labelColor }}>
         {label}
       </Micro>
-      <Text style={{ fontFamily: f.monoMed, fontSize: 12, color: valueColor, marginTop: 5 }}>
+      <Text style={{ fontFamily: f.labelMed, fontSize: 12, color: valueColor, marginTop: 5 }}>
         {value}
       </Text>
     </View>
@@ -167,7 +167,7 @@ function VoteButton({ side, count, active, onPress }: VoteButtonProps) {
       style={{ gap: 8 }}
     >
       <Triangle color={color} pointingUp={side === 'bull'} />
-      <Text style={{ fontFamily: f.monoMed, fontSize: 10, letterSpacing: 1.6, color }}>
+      <Text style={{ fontFamily: f.labelMed, fontSize: 10, letterSpacing: 1.6, color }}>
         {`${side.toUpperCase()} ${count}`}
       </Text>
     </Pressable>

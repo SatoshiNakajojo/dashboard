@@ -12,6 +12,7 @@ import { describe, it } from 'node:test';
 import {
   EMPTY_QUOTES,
   entryBtcFor,
+  liveBtc,
   freshPrice,
   mergeQuotes,
   quoteTargets,
@@ -159,5 +160,16 @@ describe('prix du BTC à l’entrée', () => {
       null,
       'un prix d’entrée nul n’est pas un prix',
     );
+  });
+});
+
+describe('spot BTC utilisable', () => {
+  it('écarte le cours de repli, jamais reçu', () => {
+    // Pris comme référence, il donnait une perf BTC nulle — « vs ₿ » = perf.
+    assert.equal(liveBtc({ usd: 120_911, fetchedAt: 0 }), null);
+  });
+
+  it('garde un cours reçu, même ancien', () => {
+    assert.equal(liveBtc({ usd: 112_000, fetchedAt: 1_758_600_000_000 }), 112_000);
   });
 });

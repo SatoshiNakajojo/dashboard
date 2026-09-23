@@ -122,7 +122,7 @@ const PotluckLine = memo(function PotluckLine({ row, interactive, onToggle }: Po
         }}
       >
         {row.isFree ? null : (
-          <Text style={{ fontFamily: f.mono, fontSize: 8, color: c.onAvatar }}>✓</Text>
+          <Text style={{ fontFamily: f.label, fontSize: 8, color: c.onAvatar }}>✓</Text>
         )}
       </View>
 

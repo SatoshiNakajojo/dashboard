@@ -87,6 +87,7 @@ export default function BagScreen() {
       <ComposerSheet
         visible={composerOpen}
         publishing={publishing}
+        error={error}
         onClose={() => setComposerOpen(false)}
         onPublish={handlePublish}
       />

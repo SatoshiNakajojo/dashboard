@@ -32,7 +32,7 @@ export function BtcTicker() {
         <BitcoinGlyph size={13} />
       </LinearGradient>
 
-      <Text style={{ fontFamily: f.monoMed, fontSize: 14, letterSpacing: -0.14, color: c.ivory }}>
+      <Text style={{ fontFamily: f.labelMed, fontSize: 14, letterSpacing: -0.14, color: c.ivory }}>
         {formatUsd(spot.usd)}
       </Text>
 
@@ -42,7 +42,7 @@ export function BtcTicker() {
         </Micro>
       ) : (
         <Text
-          style={{ fontFamily: f.monoMed, fontSize: 10, color: perfColor(spot.change24h) }}
+          style={{ fontFamily: f.labelMed, fontSize: 10, color: perfColor(spot.change24h) }}
         >
           {formatPercent(spot.change24h, 2)}
         </Text>

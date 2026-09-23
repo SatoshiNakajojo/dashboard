@@ -155,7 +155,7 @@ export function EventCard({
                 {going ? <Check color={c.sage} /> : null}
                 <Text
                   style={{
-                    fontFamily: f.monoMed,
+                    fontFamily: f.labelMed,
                     fontSize: 10,
                     letterSpacing: 1.8,
                     color: going ? c.sage : c.gold,
@@ -166,21 +166,6 @@ export function EventCard({
               </View>
             </Pressable>
 
-            <View
-              style={{
-                paddingVertical: 11,
-                paddingHorizontal: 15,
-                borderRadius: radius.button,
-                borderWidth: 1,
-                borderColor: c.borderLift,
-              }}
-            >
-              <Text
-                style={{ fontFamily: f.monoMed, fontSize: 10, letterSpacing: 1.8, color: c.sepia }}
-              >
-                PLAN
-              </Text>
-            </View>
           </View>
 
           <PotluckList

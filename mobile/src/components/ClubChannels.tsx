@@ -1,7 +1,6 @@
 import { Linking, Pressable, Text, View } from 'react-native';
 
 import { Micro } from '@/components/ui/Micro';
-import { SectionTitle } from '@/components/ui/SectionTitle';
 import { CLUB_CHANNELS, channelUrl, type ClubChannel } from '@/lib/clubChannels';
 import { a, c, f, radius } from '@/theme/tokens';
 
@@ -13,15 +12,16 @@ const GLYPH: Record<ClubChannel['key'], string> = {
 };
 
 /**
- * Les trois groupes Messenger du club, sous l'agenda.
+ * Les trois groupes Messenger du club.
  *
- * C'est là que le club discute ; l'app y renvoie plutôt que de doubler la
- * conversation avec une messagerie à elle (voir `src/lib/clubChannels.ts`).
+ * Ils vivent sous le sceau, dans la vue plein écran du logo : c'est l'endroit
+ * où l'on va chercher « le club » lui-même, pas l'agenda d'une soirée. L'app y
+ * renvoie plutôt que de doubler la conversation avec une messagerie à elle
+ * (voir `src/lib/clubChannels.ts`).
  */
 export function ClubChannels() {
   return (
     <View>
-      <SectionTitle label="LES GROUPES DU CLUB" hint="MESSENGER" />
       {CLUB_CHANNELS.map((channel) => (
         <ChannelLine key={channel.key} channel={channel} />
       ))}
@@ -67,7 +67,7 @@ function ChannelLine({ channel }: { channel: ClubChannel }) {
         >
           <Text
             style={{
-              fontFamily: f.monoMed,
+              fontFamily: f.labelMed,
               fontSize: channel.key === 'vibe' ? 9 : 13,
               color: url ? c.gold : c.sepiaMuted,
             }}
@@ -87,7 +87,7 @@ function ChannelLine({ channel }: { channel: ClubChannel }) {
 
         <Text
           style={{
-            fontFamily: f.monoMed,
+            fontFamily: f.labelMed,
             fontSize: 9,
             letterSpacing: 1.62,
             color: url ? c.gold : c.sepiaFaint,

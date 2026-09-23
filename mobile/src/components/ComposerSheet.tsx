@@ -6,6 +6,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Micro } from '@/components/ui/Micro';
 import { useCoinSearch } from '@/features/bag/useCoinSearch';
 import { useSuggestedPrice } from '@/features/bag/useSuggestedPrice';
+import { checkEntryDate } from '@/lib/btcAtDate';
+import { todayInClub } from '@/lib/clubTime';
 import { formatUsd } from '@/lib/format';
 import { normalizeTicker, type CoinMatch } from '@/lib/coinSearch';
 import { DEFAULT_EXCHANGE, EXCHANGES, providerFor, type ExchangeKey } from '@/lib/quotes';
@@ -33,12 +35,19 @@ export interface CallDraft {
    * résoudre le ticker elle-même, au mieux classé.
    */
   coingeckoId: string | null;
+  /** Jour de l'entrée, `JJ/MM/AAAA`. Vide : aujourd'hui. */
+  entryDate: string;
 }
 
 export interface ComposerSheetProps {
   visible: boolean;
   /** Écriture en cours : le bouton se verrouille et annonce l'attente. */
   publishing?: boolean;
+  /**
+   * Pourquoi la dernière publication a échoué. Affiché **dans** la sheet :
+   * l'écran derrière est masqué, un message posé là ne serait jamais lu.
+   */
+  error?: string | null;
   onClose: () => void;
   /** Résout `true` si le call est parti ; la sheet ne se ferme qu'alors. */
   onPublish: (draft: CallDraft) => Promise<boolean> | boolean;
@@ -51,12 +60,20 @@ const THESIS_MAX = 140;
 export function ComposerSheet({
   visible,
   publishing = false,
+  error = null,
   onClose,
   onPublish,
 }: ComposerSheetProps) {
   const [assetClass, setAssetClass] = useState<AssetClass>('BTC');
   const [symbol, setSymbol] = useState('$BTC');
   const [entry, setEntry] = useState('');
+  /**
+   * Le jour de l'entrée. Vide : aujourd'hui.
+   *
+   * Sans lui, un prix d'achat vieux de six mois se comparait au bitcoin des
+   * dernières minutes, et la colonne « vs ₿ » recopiait la perf.
+   */
+  const [entryDate, setEntryDate] = useState('');
   const [thesis, setThesis] = useState('');
   const [exchange, setExchange] = useState<ExchangeKey>(DEFAULT_EXCHANGE);
   const [picked, setPicked] = useState<CoinMatch | null>(null);
@@ -81,17 +98,23 @@ export function ComposerSheet({
   // pour une action ou un ETF, rien pour un alt — plutôt qu'un prix faux.
   const suggested = useSuggestedPrice(assetClass, symbol, exchange);
 
-  /** Le prix saisi, ou le cours proposé à défaut. */
+  const when = checkEntryDate(entryDate);
+
+  /**
+   * Le prix saisi, ou le cours proposé à défaut — mais seulement pour une
+   * entrée du jour : le cours d'aujourd'hui n'est pas le prix d'un achat passé.
+   */
   const entryPrice = (() => {
     const parsed = Number(entry.replace(/[^\d.,]/g, '').replace(',', '.'));
     if (Number.isFinite(parsed) && parsed > 0) return parsed;
-    return suggested.price ?? 0;
+    return when.kind === 'today' ? (suggested.price ?? 0) : 0;
   })();
 
   const reset = () => {
     setAssetClass('BTC');
     setSymbol('$BTC');
     setEntry('');
+    setEntryDate('');
     setThesis('');
     setExchange(DEFAULT_EXCHANGE);
     setPicked(null);
@@ -105,6 +128,7 @@ export function ComposerSheet({
       thesis: thesis.trim(),
       exchange,
       coingeckoId: pinned?.id ?? null,
+      entryDate: entryDate.trim(),
     });
     // Sur échec, on garde la saisie : le membre ne doit pas réécrire sa thèse.
     if (sent) reset();
@@ -123,13 +147,19 @@ export function ComposerSheet({
    */
   const blockedReason = !symbolValid
     ? 'Un ticker comme « $BTC », lettres et chiffres.'
-    : entryPrice <= 0
-      ? suggested.loading
-        ? 'Recherche du cours…'
-        : 'Indiquez votre prix d’entrée.'
-      : thesis.trim().length === 0
-        ? 'Une thèse, même courte.'
-        : null;
+    : when.kind === 'invalid'
+      ? 'Une date d’entrée comme 12/03/2026.'
+      : when.kind === 'future'
+        ? 'La date d’entrée est dans le futur.'
+        : entryPrice <= 0
+          ? when.kind === 'past'
+            ? 'Indiquez le prix d’entrée de ce jour-là.'
+            : suggested.loading
+              ? 'Recherche du cours…'
+              : 'Indiquez votre prix d’entrée.'
+          : thesis.trim().length === 0
+            ? 'Une thèse, même courte.'
+            : null;
 
   const canPublish = blockedReason === null && !publishing;
 
@@ -170,7 +200,7 @@ export function ComposerSheet({
             </Text>
             <Pressable accessibilityRole="button" onPress={onClose}>
               <Text
-                style={{ fontFamily: f.monoMed, fontSize: 9, letterSpacing: 1.62, color: c.sepiaMuted }}
+                style={{ fontFamily: f.labelMed, fontSize: 9, letterSpacing: 1.62, color: c.sepiaMuted }}
               >
                 FERMER
               </Text>
@@ -207,7 +237,7 @@ export function ComposerSheet({
                   >
                     <Text
                       style={{
-                        fontFamily: f.monoMed,
+                        fontFamily: f.labelMed,
                         fontSize: 9,
                         letterSpacing: 1.08,
                         color: style.fg,
@@ -266,7 +296,7 @@ export function ComposerSheet({
                 }
                 placeholderTextColor={c.sepiaFaint}
                 style={{
-                  fontFamily: f.monoMed,
+                  fontFamily: f.labelMed,
                   fontSize: 14,
                   color: c.ivory,
                   marginTop: 8,
@@ -274,6 +304,39 @@ export function ComposerSheet({
                 }}
               />
             </View>
+          </View>
+
+          <View style={{ paddingBottom: 13, borderBottomWidth: 1, borderColor: c.hairline }}>
+            <Micro size={8.5} tracking={1.7} style={{ color: c.sepiaMuted }}>
+              DATE D’ENTRÉE
+            </Micro>
+            <TextInput
+              value={entryDate}
+              onChangeText={setEntryDate}
+              keyboardType="numbers-and-punctuation"
+              placeholder={`Aujourd’hui · ${todayInClub()}`}
+              placeholderTextColor={c.sepiaFaint}
+              accessibilityLabel="Date d’entrée, au format jour, mois, année"
+              style={{
+                fontFamily: f.labelMed,
+                fontSize: 14,
+                color: when.kind === 'invalid' || when.kind === 'future' ? c.oxblood : c.ivory,
+                marginTop: 8,
+                padding: 0,
+              }}
+            />
+            {when.kind === 'past' && assetClass !== 'BTC' ? (
+              <Text
+                style={{
+                  fontFamily: f.serifItalic,
+                  fontSize: 13,
+                  color: c.sepia,
+                  marginTop: 6,
+                }}
+              >
+                Le bitcoin sera comparé depuis ce jour-là.
+              </Text>
+            ) : null}
           </View>
 
           {isStock && (
@@ -304,7 +367,7 @@ export function ComposerSheet({
                     >
                       <Text
                         style={{
-                          fontFamily: f.monoMed,
+                          fontFamily: f.labelMed,
                           fontSize: 9,
                           letterSpacing: 1.08,
                           color: style.fg,
@@ -361,7 +424,7 @@ export function ComposerSheet({
                   >
                     <Text
                       style={{
-                        fontFamily: f.monoMed,
+                        fontFamily: f.labelMed,
                         fontSize: 10,
                         letterSpacing: 1.08,
                         color: style.fg,
@@ -375,7 +438,7 @@ export function ComposerSheet({
                     >
                       {coin.name}
                     </Text>
-                    <Text style={{ fontFamily: f.monoMed, fontSize: 9, color: c.sepiaFaint }}>
+                    <Text style={{ fontFamily: f.labelMed, fontSize: 9, color: c.sepiaFaint }}>
                       {coin.rank === null ? 'HORS RANG' : `#${coin.rank}`}
                     </Text>
                   </Pressable>
@@ -440,7 +503,7 @@ export function ComposerSheet({
             >
               <Text
                 style={{
-                  fontFamily: f.monoSemi,
+                  fontFamily: f.labelSemi,
                   fontSize: 10,
                   letterSpacing: 2.4,
                   color: c.onGold,
@@ -456,12 +519,13 @@ export function ComposerSheet({
               fontFamily: f.sans,
               fontSize: 10,
               lineHeight: 16,
-              color: blockedReason ? c.sepia : c.sepiaFaint,
+              color: error && !publishing ? c.oxblood : blockedReason ? c.sepia : c.sepiaFaint,
               textAlign: 'center',
             }}
           >
-            {blockedReason ??
-              'Perf calculée en dollars et vs ₿ depuis ce prix. Non modifiable après publication.'}
+            {(!publishing && error) ||
+              blockedReason ||
+              'Perf calculée en dollars et vs ₿ depuis ce prix et cette date. Non modifiable après publication.'}
           </Text>
         </View>
       </View>

@@ -37,7 +37,7 @@ export function LeaderboardRow({
           style={
             isFame
               ? { fontFamily: f.serif, fontSize: 20, color: c.goldMuted }
-              : { fontFamily: f.mono, fontSize: 11, color: c.oxbloodMuted }
+              : { fontFamily: f.label, fontSize: 11, color: c.oxbloodMuted }
           }
         >
           {marker}
@@ -57,7 +57,7 @@ export function LeaderboardRow({
         >
           {member.displayName}
         </Text>
-        <Text style={{ fontFamily: f.mono, fontSize: 10, color: c.sepiaMuted, marginTop: 3 }}>
+        <Text style={{ fontFamily: f.label, fontSize: 10, color: c.sepiaMuted, marginTop: 3 }}>
           {`${symbol} · ${note}`}
         </Text>
       </View>

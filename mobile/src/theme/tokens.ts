@@ -66,42 +66,36 @@ export const a = {
 } as const;
 
 /**
- * Trois familles, trois rôles qui ne s'échangent pas.
+ * Les polices du dashboard JCGI, et leurs rôles.
  *
- * Le serif d'affichage était Instrument Serif. Mesuré sur fond noir, ses
- * pleins s'amincissent jusqu'à disparaître : c'est une police de magazine,
- * faite pour de l'encre sur du papier. Fraunces tient le même registre avec
- * des fûts qui survivent au fond sombre, et sa chaleur de vieille affiche
- * répond au badge du club mieux qu'un didone.
+ * Fraunces, Marcellus, Plus Jakarta Sans et JetBrains Mono faisaient une app
+ * soignée mais « outil » — le monospace surtout, qui donnait aux libellés un
+ * air de terminal. Le club voulait plus de tenue : on reprend le registre du
+ * dashboard JCGI, qui tient déjà ce ton-là.
  *
- * Elle est en revanche **1,42 fois plus large** à taille égale — Instrument
- * Serif est exceptionnellement étroite, et aucune police plus solide ne
- * l'égale sur ce point. Les tailles d'affichage ont donc été reprises là où
- * la largeur comptait ; ce n'est pas un détail qu'on peut remettre à plus
- * tard sans voir des titres déborder.
+ *   • **Cinzel** — les titres d'écran. Des capitales romaines d'inscription :
+ *     la gravité d'un sceau, qui répond au blason du club ;
+ *   • **Cormorant Garamond** — les grands chiffres, les titres de carte, et
+ *     l'italique (thèses, invites, états vides). C'est un Garamond de titrage :
+ *     petit œil, donc des tailles un cran au-dessus d'un serif de texte ;
+ *   • **Inter** — le texte courant **et** les libellés en capitales espacées
+ *     (`label`), à chiffres tabulaires pour que les montants restent alignés.
+ *
+ * Les fichiers sont des sous-ensembles latins (`assets/fonts/`, licence OFL
+ * jointe) : les versions complètes pesaient 2,1 Mo, cyrillique et vietnamien
+ * compris ; celles-ci 0,9 Mo, le poids des anciennes.
  */
 export const f = {
-  /**
-   * La police des grands titres, et d'eux seuls.
-   *
-   * Marcellus est un roman inscriptionnel : la gravité d'une inscription
-   * gravée, qui répond au sceau du club mieux qu'un serif de texte. Elle n'a
-   * pas d'italique — raison pour laquelle elle ne remplace pas Fraunces, qui
-   * continue de porter les titres de cartes, les thèses en italique et les
-   * états vides.
-   *
-   * Une famille d'affichage et une famille de texte : c'est la hiérarchie que
-   * l'app n'avait pas.
-   */
-  display: 'Marcellus_400Regular',
-  serif: 'Fraunces_400Regular',
-  serifItalic: 'Fraunces_400Regular_Italic',
-  sans: 'PlusJakartaSans_400Regular',
-  sansMed: 'PlusJakartaSans_500Medium',
-  sansSemi: 'PlusJakartaSans_600SemiBold',
-  mono: 'JetBrainsMono_400Regular',
-  monoMed: 'JetBrainsMono_500Medium',
-  monoSemi: 'JetBrainsMono_600SemiBold',
+  display: 'Cinzel_600SemiBold',
+  serif: 'CormorantGaramond_500Medium',
+  serifItalic: 'CormorantGaramond_500Medium_Italic',
+  sans: 'Inter_400Regular',
+  sansMed: 'Inter_500Medium',
+  sansSemi: 'Inter_600SemiBold',
+  /** Libellés en capitales espacées, montants, compteurs. */
+  label: 'Inter_400Regular',
+  labelMed: 'Inter_500Medium',
+  labelSemi: 'Inter_600SemiBold',
 } as const;
 
 export const radius = { card: 4, button: 2, sheetTop: 20, sheetBottom: 39 } as const;

@@ -7,6 +7,12 @@
  * est un bug, pas un cas limite.
  */
 
+import {
+  coingeckoCovers,
+  coingeckoDate,
+  parseCoingeckoHistory,
+  parseMempoolHistory,
+} from './btcAtDate';
 import { getJson } from './http';
 import { withCache } from './cache';
 import {
@@ -172,6 +178,38 @@ export async function fetchBtcSince(originMs: number, signal?: AbortSignal): Pro
     .sort((a, b) => a.day - b.day);
 
   return { points, stale: result.stale };
+}
+
+/**
+ * Le cours du BTC un jour passé, ou `null` si aucune source ne répond.
+ *
+ * CoinGecko d'abord, tant qu'il couvre la date (un an sur l'API publique) ;
+ * mempool.space ensuite, qui remonte bien plus loin. Ne lève jamais : c'est à
+ * l'appelant de dire au membre que le cours est introuvable.
+ */
+export async function fetchBtcOn(ms: number, signal?: AbortSignal): Promise<number | null> {
+  if (coingeckoCovers(ms)) {
+    try {
+      const payload = await getJson<unknown>(
+        url('/coins/bitcoin/history', { date: coingeckoDate(ms), localization: 'false' }),
+        { signal, timeoutMs: 12_000 },
+      );
+      const usd = parseCoingeckoHistory(payload);
+      if (usd !== null) return usd;
+    } catch {
+      // Quota épuisé ou date refusée : on essaie la seconde source.
+    }
+  }
+
+  try {
+    const payload = await getJson<unknown>(
+      `https://mempool.space/api/v1/historical-price?currency=USD&timestamp=${Math.floor(ms / 1000)}`,
+      { signal, timeoutMs: 12_000 },
+    );
+    return parseMempoolHistory(payload);
+  } catch {
+    return null;
+  }
 }
 
 /**

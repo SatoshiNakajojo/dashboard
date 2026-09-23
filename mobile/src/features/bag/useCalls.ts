@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { useBtcSpot } from '@/hooks/useBtcMarket';
-import { resolveCoingeckoId } from '@/lib/coingecko';
+import { checkEntryDate } from '@/lib/btcAtDate';
+import { fetchBtcOn, resolveCoingeckoId } from '@/lib/coingecko';
 import { providerFor, toYahooSymbol } from '@/lib/quotes';
 import { performancePercent, vsBitcoinPercent } from '@/lib/performance';
-import { entryBtcFor, mergeQuotes } from './quoteRefresh';
+import { entryBtcFor, liveBtc, mergeQuotes } from './quoteRefresh';
 import { useLiveQuotes } from './useLiveQuotes';
-import { describeError } from '@/lib/supabase';
+import { describeError, supabase } from '@/lib/supabase';
 import type { CallView, Member, Ticker, Vote } from '@/types/domain';
 import { getCallsSource, type CallDraftInput, type VoteRow } from './source';
 
@@ -19,6 +20,13 @@ export interface PublishInput {
   exchange?: string | null;
   /** Jeton choisi dans le composer ; à défaut, on résout le ticker nous-mêmes. */
   coingeckoId?: string | null;
+  /**
+   * Jour de l'entrée, `JJ/MM/AAAA` à l'heure du club. Vide : aujourd'hui.
+   *
+   * C'est lui qui fixe le référentiel vs ₿ : le bitcoin se compare depuis le
+   * même jour que le titre, pas depuis la publication.
+   */
+  entryDate?: string;
 }
 
 export interface CallsState {
@@ -150,6 +158,40 @@ export function useCalls(
       setPublishing(true);
 
       try {
+        // Le référentiel vs ₿ : le cours du bitcoin **le jour de l'entrée**.
+        // Pris à la publication, il ne couvrait que quelques minutes, et un
+        // prix d'achat vieux de six mois se comparait à un bitcoin immobile.
+        const when = checkEntryDate(input.entryDate ?? '');
+        if (when.kind === 'invalid') {
+          setError('Date d’entrée illisible — format JJ/MM/AAAA.');
+          return false;
+        }
+        if (when.kind === 'future') {
+          setError('La date d’entrée ne peut pas être dans le futur.');
+          return false;
+        }
+
+        let btcAtEntry: number | null = null;
+        if (input.assetClass !== 'BTC') {
+          btcAtEntry =
+            (when.kind === 'today'
+              ? (liveBtc(spot) ?? (await fetchBtcOn(Date.now())))
+              : await fetchBtcOn(when.ms)) ??
+            // Mode démo, sans réseau : le cours de repli fait l'affaire, rien
+            // n'est enregistré nulle part.
+            (supabase ? null : spot.usd);
+          // Sans ce cours, la colonne « vs ₿ » serait vide pour toujours : il
+          // ne se retrouve pas après coup. Mieux vaut réessayer que publier.
+          if (btcAtEntry === null) {
+            setError(
+              when.kind === 'today'
+                ? 'Cours du bitcoin indisponible pour l’instant — réessayez dans un moment.'
+                : `Cours du bitcoin au ${input.entryDate} introuvable — réessayez dans un moment.`,
+            );
+            return false;
+          }
+        }
+
         // Un actif a un fournisseur, pas deux (contrainte
         // `tickers_one_quote_source`) : la classe d'actif décide, et la
         // résolution du symbole suit.
@@ -172,7 +214,7 @@ export function useCalls(
             ...input,
             // Un call BTC est son propre référentiel : lui demander le spot
             // serait un aller-retour pour redécouvrir son propre prix.
-            btcSpot: entryBtcFor(input.assetClass, input.entryPrice, spot.usd),
+            btcSpot: entryBtcFor(input.assetClass, input.entryPrice, btcAtEntry),
             coingeckoId,
             yahooSymbol,
           },
@@ -189,7 +231,7 @@ export function useCalls(
         setPublishing(false);
       }
     },
-    [currentUserId, publishing, source, spot.usd],
+    [currentUserId, publishing, source, spot],
   );
 
   // --- Projection d'affichage ----------------------------------------------
@@ -243,14 +285,17 @@ export function useCalls(
                   ticker.entryPrice,
                   ticker.currentPrice,
                   ticker.entryBtcPrice,
-                  spot.usd,
+                  // Le cours de repli n'est pas un cours : « — » plutôt qu'un
+                  // bitcoin figé qui ferait recopier la perf. En mode démo,
+                  // il est le seul cours du monde fictif.
+                  supabase ? liveBtc(spot) : spot.usd,
                 ),
           bull: displayed.bull,
           bear: displayed.bear,
           myVote: mine,
         };
       }),
-    [priced, tallies, votes, pendingVote, currentUserId, membersById, spot.usd],
+    [priced, tallies, votes, pendingVote, currentUserId, membersById, spot],
   );
 
   return { calls, loading: !loaded, error, vote, publish, publishing };

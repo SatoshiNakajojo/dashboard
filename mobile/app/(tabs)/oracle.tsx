@@ -3,6 +3,7 @@ import { Pressable, Text, View } from 'react-native';
 
 import { OracleCanvas } from '@/components/OracleCanvas';
 import type { OracleCurve } from '@/components/OracleGraph';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { ScreenShell } from '@/components/ScreenShell';
 import { TimeLockCard } from '@/components/TimeLockCard';
 import { Avatar } from '@/components/ui/Avatar';
@@ -67,6 +68,8 @@ export default function OracleScreen() {
    * l'oxblood, et redevient lui-même si on ne confirme pas.
    */
   const [confirmingClear, setConfirmingClear] = useState(false);
+  /** Toucher la toile sur un tracé existant ouvre cette fenêtre, sans rien effacer. */
+  const [askingRedraw, setAskingRedraw] = useState(false);
 
   useEffect(() => {
     if (!confirmingClear) return;
@@ -191,6 +194,7 @@ export default function OracleScreen() {
             sealed={sealed}
             hint={hint}
             onPathChange={oracle.setDraft}
+            onRequestRedraw={() => setAskingRedraw(true)}
           />
 
           {oracle.btcUnavailable ? (
@@ -203,7 +207,7 @@ export default function OracleScreen() {
             <Pressable accessibilityRole="button" onPress={() => setShowOthers((on) => !on)}>
               <Text
                 style={{
-                  fontFamily: f.monoMed,
+                  fontFamily: f.labelMed,
                   fontSize: 9,
                   letterSpacing: 1.62,
                   color: showOthers ? c.gold : c.sepiaMuted,
@@ -216,7 +220,7 @@ export default function OracleScreen() {
             {sealed ? (
               <Text
                 style={{
-                  fontFamily: f.monoMed,
+                  fontFamily: f.labelMed,
                   fontSize: 9,
                   letterSpacing: 1.62,
                   color: c.sepiaFaint,
@@ -239,7 +243,7 @@ export default function OracleScreen() {
               >
                 <Text
                   style={{
-                    fontFamily: f.monoMed,
+                    fontFamily: f.labelMed,
                     fontSize: 9,
                     letterSpacing: 1.62,
                     color: confirmingClear && clearAction.confirm ? c.oxblood : c.sepiaDim,
@@ -272,7 +276,7 @@ export default function OracleScreen() {
             >
               <Text
                 style={{
-                  fontFamily: f.monoMed,
+                  fontFamily: f.labelMed,
                   fontSize: 10,
                   letterSpacing: 1.8,
                   color: saving ? c.sepiaMuted : dirty ? c.gold : c.sage,
@@ -313,7 +317,7 @@ export default function OracleScreen() {
               </Micro>
               <Text
                 style={{
-                  fontFamily: f.monoMed,
+                  fontFamily: f.labelMed,
                   fontSize: 13,
                   color: accuracyColor(mine.accuracy),
                 }}
@@ -377,7 +381,7 @@ export default function OracleScreen() {
                 >
                   <Text
                     style={{
-                      fontFamily: f.monoMed,
+                      fontFamily: f.labelMed,
                       fontSize: 9,
                       letterSpacing: 1.62,
                       color: c.gold,
@@ -393,6 +397,24 @@ export default function OracleScreen() {
           )}
         </View>
       </View>
+
+      <ConfirmDialog
+        visible={askingRedraw}
+        title="Effacer votre tracé ?"
+        message={
+          mine
+            ? 'Votre pari déposé reste enregistré tant que vous ne déposez pas le nouveau tracé.'
+            : 'Le tracé en cours sera effacé, pour que vous puissiez en dessiner un autre.'
+        }
+        confirmLabel="EFFACER"
+        onCancel={() => setAskingRedraw(false)}
+        onConfirm={() => {
+          setAskingRedraw(false);
+          // Une toile vierge : le prochain geste dessine. Le pari déposé, lui,
+          // ne bouge pas avant un nouveau dépôt.
+          oracle.setDraft([]);
+        }}
+      />
     </ScreenShell>
   );
 }
@@ -440,7 +462,7 @@ function HorizonPicker({
             <Text
               numberOfLines={1}
               style={{
-                fontFamily: f.monoMed,
+                fontFamily: f.labelMed,
                 fontSize: 9,
                 letterSpacing: 0.9,
                 color: active ? c.gold : c.sepiaDim,
@@ -522,14 +544,14 @@ function BetLine({
           {detail}
         </Micro>
       </View>
-      <Text style={{ fontFamily: f.mono, fontSize: 11, color: c.sepia }}>
+      <Text style={{ fontFamily: f.label, fontSize: 11, color: c.sepia }}>
         {target === null ? '—' : formatTarget(target)}
       </Text>
       <Text
         style={{
           width: 72,
           textAlign: 'right',
-          fontFamily: f.mono,
+          fontFamily: f.label,
           fontSize: 9,
           letterSpacing: 1.08,
           color: status !== null || accuracy === null ? c.sepiaFaint : accuracyColor(accuracy),

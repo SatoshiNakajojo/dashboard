@@ -7,18 +7,6 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as SplashScreen from 'expo-splash-screen';
 import { useFonts } from 'expo-font';
-import { Fraunces_400Regular, Fraunces_400Regular_Italic } from '@expo-google-fonts/fraunces';
-import { Marcellus_400Regular } from '@expo-google-fonts/marcellus';
-import {
-  PlusJakartaSans_400Regular,
-  PlusJakartaSans_500Medium,
-  PlusJakartaSans_600SemiBold,
-} from '@expo-google-fonts/plus-jakarta-sans';
-import {
-  JetBrainsMono_400Regular,
-  JetBrainsMono_500Medium,
-  JetBrainsMono_600SemiBold,
-} from '@expo-google-fonts/jetbrains-mono';
 
 import { BootScreen } from '@/components/BootScreen';
 import { hideBootShell } from '@/lib/bootShell';
@@ -32,18 +20,16 @@ import '../global.css';
 void SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
-  // Les trois familles ont des rôles non interchangeables (README §4.4) :
-  // l'app n'affiche rien tant qu'elles ne sont pas toutes chargées.
+  // Les trois familles ont des rôles non interchangeables (`tokens.ts`) :
+  // l'app n'affiche rien tant qu'elles ne sont pas toutes chargées. Ce sont
+  // des sous-ensembles latins, embarqués dans le projet (`assets/fonts/`).
   const [fontsLoaded, fontError] = useFonts({
-    Fraunces_400Regular,
-    Fraunces_400Regular_Italic,
-    Marcellus_400Regular,
-    PlusJakartaSans_400Regular,
-    PlusJakartaSans_500Medium,
-    PlusJakartaSans_600SemiBold,
-    JetBrainsMono_400Regular,
-    JetBrainsMono_500Medium,
-    JetBrainsMono_600SemiBold,
+    Cinzel_600SemiBold: require('../assets/fonts/Cinzel-600.ttf'),
+    CormorantGaramond_500Medium: require('../assets/fonts/CormorantGaramond-500.ttf'),
+    CormorantGaramond_500Medium_Italic: require('../assets/fonts/CormorantGaramond-500Italic.ttf'),
+    Inter_400Regular: require('../assets/fonts/Inter-400.ttf'),
+    Inter_500Medium: require('../assets/fonts/Inter-500.ttf'),
+    Inter_600SemiBold: require('../assets/fonts/Inter-600.ttf'),
   });
 
   useEffect(() => {

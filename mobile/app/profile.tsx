@@ -240,7 +240,7 @@ function ProfileForm({ state, profile }: { state: ProfileState; profile: Member 
                 accessibilityLabel={`Libellé du lien ${index + 1}`}
                 style={{
                   width: 104,
-                  fontFamily: f.monoMed,
+                  fontFamily: f.labelMed,
                   fontSize: 11,
                   letterSpacing: 0.6,
                   color: c.bone,
@@ -293,7 +293,7 @@ function ProfileForm({ state, profile }: { state: ProfileState; profile: Member 
                        une adresse fausse sous les yeux de qui la vérifie. */
                     <Text
                       style={{
-                        fontFamily: f.mono,
+                        fontFamily: f.label,
                         fontSize: 9,
                         letterSpacing: 0.6,
                         color: c.gold,
@@ -350,7 +350,7 @@ function ProfileForm({ state, profile }: { state: ProfileState; profile: Member 
       >
         <Text
           style={{
-            fontFamily: f.monoMed,
+            fontFamily: f.labelMed,
             fontSize: 10,
             letterSpacing: 1.8,
             color: saving ? c.sepiaMuted : saved ? c.sage : dirty ? c.gold : c.sepiaMuted,

@@ -96,8 +96,10 @@ Trois invariants :
    doigt ne trace qu'à partir d'aujourd'hui : le passé est déjà écrit.
 
 Le tracé est monotone en X — un point n'est retenu que s'il dépasse le précédent
-de 4 unités. Un simple toucher ne remplace pas un pari déposé : il faut que le
-doigt ait bougé.
+de 4 unités. Toucher la toile alors qu'un tracé est déjà là ne l'efface pas :
+une fenêtre demande « Effacer votre tracé ? ». Si l'on confirme, la toile se
+vide et le geste suivant dessine ; un pari déposé, lui, reste enregistré tant
+qu'on n'a pas déposé le nouveau tracé.
 
 ---
 
@@ -467,23 +469,45 @@ référentiel et n'avait rien à demander à personne. `entryBtcFor()` distingue
 désormais les deux cas. Pour les calls déjà publiés sans elle, « — » reste la
 seule réponse honnête.
 
+**Puis « vs ₿ » recopiait la perf.** Signalé sur un call SMR : les deux
+colonnes affichaient le même chiffre. Le référentiel BTC était pris **à la
+publication**, alors que le prix d'entrée saisi était celui d'un achat passé.
+La perf de SMR courait depuis l'achat ; celle du bitcoin, depuis quelques
+minutes — soit à peu près zéro. Le rapport des deux retombait sur la perf.
+
+Le composer demande maintenant la **date d'entrée** (vide : aujourd'hui), et le
+référentiel est le cours du bitcoin **ce jour-là** — CoinGecko pour la dernière
+année, mempool.space au-delà (`src/lib/btcAtDate.ts`). Sans ce cours, la
+publication est refusée avec un message plutôt que de figer un référentiel
+faux, puisqu'il ne se corrige pas après coup. Même règle pour le cours de repli
+du bandeau (`HORS LIGNE`) : il se lit, il ne sert plus de référentiel.
+
 ---
 
-## Une police de titre, et une de texte
+## Les polices du dashboard JCGI
 
-Les grands titres passent à **Marcellus** : un roman inscriptionnel, la gravité
-d'une inscription gravée, qui répond au sceau du club mieux qu'un serif de
-texte.
+L'app reprend le registre typographique du dashboard JCGI :
 
-Elle ne remplace pas Fraunces, elle s'ajoute. Marcellus n'a pas d'italique, et
-l'italique porte les thèses des calls, les états vides et l'invite de l'Oracle.
-Fraunces garde donc les titres de cartes et tout le texte serif. Une famille
-d'affichage et une famille de texte : c'est la hiérarchie que l'app n'avait pas.
+| Rôle | Police | Où |
+|---|---|---|
+| Titres d'écran | **Cinzel** 600 | « Les Nights », « L'Oracle », le nom du club sous le sceau |
+| Serif | **Cormorant Garamond** 500 et 500 italique | titres de carte, grands chiffres, thèses, invites |
+| Texte et libellés | **Inter** 400 / 500 / 600 | texte courant, libellés en capitales espacées, montants |
 
-Huit familles ont été rendues côte à côte, au même corps, sur le vrai fond, avec
-les vrais titres. Les plus élégantes — Cormorant Garamond, Italiana — sont aussi
-les plus fines, et s'effacent sur le noir : le défaut qu'on avait déjà corrigé
-en quittant Instrument Serif.
+Le monospace (JetBrains Mono) disparaît : il donnait aux libellés un air de
+terminal. Les libellés sont maintenant en Inter, en capitales espacées comme
+les sous-titres du JCGI, avec des **chiffres tabulaires** pour que les
+montants et le compte à rebours de l'Oracle ne bougent pas de largeur.
+
+Une précédente comparaison avait écarté Cormorant Garamond parce que sa
+graisse normale s'efface sur fond noir. On prend donc la graisse **500**, un
+cran au-dessus, comme le JCGI pour ses chiffres ; chaque écran a été repassé
+dans le navigateur sans débordement.
+
+Les polices sont des **sous-ensembles latins** embarqués dans
+`assets/fonts/` (licence OFL jointe, méthode dans `assets/fonts/README.md`) :
+0,9 Mo au lieu de 2,1 Mo pour les fichiers complets, soit le poids des
+anciennes polices.
 
 ---
 
@@ -521,8 +545,9 @@ dans trois groupes Messenger — **Bitcoin Club**, **Stocks Club**,
 c'était dédoubler la conversation et perdre la moitié des messages entre les
 deux.
 
-Sous l'agenda des Nights, une section **LES GROUPES DU CLUB** renvoie vers
-chacun, dans un nouvel onglet. Les adresses se renseignent à un seul endroit,
+Un appui sur le logo, en haut à gauche, l'ouvre en grand ; les trois groupes
+sont listés dessous, sous « NOUMÉA · 2020 », et chacun s'ouvre dans un nouvel
+onglet. Les adresses se renseignent à un seul endroit,
 `src/lib/clubChannels.ts` ; un groupe sans adresse reste listé, marqué
 `LIEN À VENIR`, et ne s'ouvre pas. Seules les adresses `https://` s'ouvrent.
 Une adresse `messenger.com/t/…` n'ouvre la conversation qu'à ceux qui en font
@@ -625,29 +650,6 @@ Elle s'affiche **dès** qu'une portion du cours recoupe le tracé, et non plus
 seulement après verrouillage : attendre privait le club du seul chiffre qui
 rend la superposition intéressante avant la résolution. Les tracés sont déjà
 visibles à l'écran — rien de nouveau n'est divulgué en les chiffrant.
-
----
-
-## Le corps de texte, et pourquoi Fraunces
-
-Le serif d'affichage était **Instrument Serif**. Mesuré sur fond noir, ses
-pleins s'amincissent jusqu'à disparaître : c'est une police de magazine, faite
-pour de l'encre sur du papier, et le club la lisait sur un écran sombre.
-
-Onze familles ont été rendues côte à côte, au même corps, sur le vrai fond de
-l'app, avec le vrai texte des cartes. **Fraunces** l'emporte : des fûts qui
-survivent au fond sombre, et une chaleur de vieille affiche qui répond au badge
-du club mieux qu'un didone. Le corps passe à **Plus Jakarta Sans**, plus ouvert
-que Manrope aux petites tailles. **JetBrains Mono** ne bouge pas — c'est le
-registre technique, il était juste.
-
-La mesure qui a compté : Fraunces est **1,42 fois plus large** qu'Instrument
-Serif à corps égal. Ce n'est pas un détail de goût. Instrument Serif est
-exceptionnellement étroite, et sur les onze candidates, **aucune** n'approche sa
-largeur sans retomber dans le défaut qu'on corrigeait — les deux plus étroites,
-EB Garamond et Crimson Pro, sont aussi les plus fines. Changer de serif impose
-donc de changer de gabarit : c'est assumé, et chaque écran a été repassé en
-navigateur pour vérifier qu'aucun texte ne déborde ni ne se coupe.
 
 ---
 

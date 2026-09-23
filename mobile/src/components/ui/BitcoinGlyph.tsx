@@ -15,15 +15,15 @@ export interface BitcoinGlyphProps {
  * plateforme substituer sa propre police, donc un ₿ différent sur iOS, Android
  * et le web — l'inverse de ce que « au pixel près » veut dire.
  *
- * JetBrains Mono le contient, et c'est déjà une police du projet. Un seul
- * composant pour que l'arbitrage se change en un endroit.
+ * Inter le contient (Cinzel et Cormorant non), et c'est déjà une police du
+ * projet. Un seul composant pour que l'arbitrage se change en un endroit.
  */
 export function BitcoinGlyph({ size = 13, color = c.onGold }: BitcoinGlyphProps) {
   return (
     <Text
       accessibilityLabel="Bitcoin"
       style={{
-        fontFamily: f.monoMed,
+        fontFamily: f.labelMed,
         fontSize: size,
         lineHeight: size * 1.25,
         color,

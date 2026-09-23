@@ -49,7 +49,7 @@ export function Avatar({ initials, color, photo, size = 24, ringColor, dimmed }:
           accessibilityLabel={initials}
         />
       ) : (
-        <Text style={{ fontFamily: f.monoMed, fontSize, color: c.onAvatar }}>{initials}</Text>
+        <Text style={{ fontFamily: f.labelMed, fontSize, color: c.onAvatar }}>{initials}</Text>
       )}
     </View>
   );

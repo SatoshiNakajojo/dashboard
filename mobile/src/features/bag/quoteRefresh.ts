@@ -123,3 +123,15 @@ export function entryBtcFor(
     ? btcSpot
     : null;
 }
+
+/**
+ * Le spot BTC, s'il a vraiment été reçu — `null` sinon.
+ *
+ * Quand CoinGecko n'a jamais répondu, le bandeau affiche un cours de repli,
+ * marqué `HORS LIGNE`. Il est fait pour être lu, pas pour être calculé : pris
+ * comme référentiel d'entrée **et** comme cours courant, il donnait une perf
+ * du bitcoin nulle, et la colonne « vs ₿ » recopiait la perf du titre.
+ */
+export function liveBtc(spot: { usd: number; fetchedAt: number }): number | null {
+  return spot.fetchedAt > 0 && Number.isFinite(spot.usd) && spot.usd > 0 ? spot.usd : null;
+}

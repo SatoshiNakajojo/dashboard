@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useState } from 'react';
-import { Image, View } from 'react-native';
+import { Image, View, useWindowDimensions } from 'react-native';
 
 import { Micro } from '@/components/ui/Micro';
 import { BLOCK_COUNT, BLOCK_MS, minedAt } from '@/lib/mining';
@@ -24,12 +24,16 @@ import { c } from '@/theme/tokens';
  */
 export function BootScreen() {
   const mined = useMining();
+  // La même taille que la coquille HTML (`min(60vw, 240px)`) : le relais de
+  // l'une à l'autre ne doit pas faire sauter le logo.
+  const { width } = useWindowDimensions();
+  const logo = Math.min(width * 0.6, 240);
 
   return (
     <View className="flex-1 bg-ink items-center justify-center" style={{ gap: 26 }}>
       <Image
         source={require('../../assets/brand/logo.png')}
-        style={{ width: 132, height: 132 }}
+        style={{ width: logo, height: logo }}
         resizeMode="contain"
         accessibilityLabel={brand.name}
       />

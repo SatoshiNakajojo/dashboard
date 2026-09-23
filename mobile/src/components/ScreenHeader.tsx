@@ -93,7 +93,7 @@ export function ScreenHeader({ overline, title, me }: ScreenHeaderProps) {
               justifyContent: 'center',
             }}
           >
-            <Text style={{ fontFamily: f.monoMed, fontSize: 11, color: c.gold }}>
+            <Text style={{ fontFamily: f.labelMed, fontSize: 11, color: c.gold }}>
               {me?.initials ?? '··'}
             </Text>
           </LinearGradient>

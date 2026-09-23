@@ -96,11 +96,14 @@ export function TimeLockCard({ locked, title, value }: TimeLockCardProps) {
         <Text
           numberOfLines={1}
           style={{
-            fontFamily: f.monoMed,
+            fontFamily: f.labelMed,
             fontSize: 15,
             letterSpacing: -0.15,
             color: c.ivory,
             marginTop: 6,
+            // Le compte à rebours change chaque seconde : sans chiffres
+            // tabulaires, la ligne tremblerait.
+            fontVariant: ['tabular-nums'],
           }}
         >
           {value}

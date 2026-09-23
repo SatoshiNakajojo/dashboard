@@ -2,7 +2,6 @@ import { useCallback, useMemo, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 
 import { AttendanceNotices } from '@/components/AttendanceNotices';
-import { ClubChannels } from '@/components/ClubChannels';
 import { EventCard } from '@/components/EventCard';
 import { Fab } from '@/components/Fab';
 import { MonthCalendar } from '@/components/MonthCalendar';
@@ -130,12 +129,8 @@ export default function NightsScreen() {
             ))
           )}
 
-          {/* Le club discute sur Messenger : l'app y renvoie plutôt que de
-              doubler la conversation. */}
-          <ClubChannels />
-
-          {/* De quoi faire défiler la dernière ligne au-dessus du bouton « + ». */}
-          <View style={{ height: 64 }} />
+          {/* De quoi faire défiler la dernière carte au-dessus du bouton « + ». */}
+          <View style={{ height: 44 }} />
         </View>
       </ScreenShell>
 
