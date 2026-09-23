@@ -160,3 +160,44 @@ opposée. Un relevé paper produit par ce code est structurellement gagnant.
    tourne toutes les deux heures : les retournements de la barre intermédiaire
    ne sont jamais vus. Le paper n'échantillonne qu'une partie des signaux — et
    sur une barre incomplète, dont le signal peut disparaître à la clôture.
+
+---
+
+## Le relevé paper, rejoué : d'où viennent « que des gagnants »
+
+`corrige/simulation_paper.py` fait tourner le logger — l'original et le corrigé —
+comme la routine du desk, passage par passage, sur les 50 derniers jours.
+L'API simulée rend, comme Hyperliquid, les bougies closes **et la bougie en
+cours**, reconstituée depuis le premier quart d'heure de l'heure (les passages
+ont donc lieu à :15 plutôt qu'à :05 — déclaré, le mécanisme est le même).
+
+| | trades | réussite | E[R] | PF | sorties à un prix jamais coté |
+|---|---:|---:|---:|---:|---:|
+| **logger d'origine, toutes les 2 h** | **8** | **62,5 %** | **+0,492** | **11,78** | **6 sur 8** |
+| logger corrigé, toutes les heures | 32 | 34,4 % | −0,167 | 0,64 | 0 |
+
+Le logger d'origine ne voit qu'un trade sur quatre, et en inscrit six sur huit à
+un prix que le marché n'a pas coté. **C'est lui qui fabrique le relevé
+gagnant.** Correctement enregistrée, la stratégie perd sur la même période, en
+cohérence avec le backtest corrigé (35,6 %, −0,140).
+
+## Le correctif
+
+Livré à part — le dépôt est public, le script est celui du desk. Trois
+corrections, aucun paramètre modifié :
+
+1. **`check_exit`** : le stop en place pendant une barre est celui connu à la
+   clôture précédente ; il n'est remonté qu'après les vérifications, jamais
+   par-dessus un retournement ; une sortie au stop se fait au pire de
+   l'ouverture et du stop.
+2. **Barres closes seulement** : la bougie en cours est écartée.
+3. **Toutes les barres closes depuis le passage précédent**, rejouées dans
+   l'ordre, pour les sorties et les entrées.
+
+Le script corrigé refuse de démarrer sur un état ou un journal de l'ancienne
+version : ils ont été écrits par le `check_exit` défectueux, et doivent être
+archivés. Vérifié dans le banc d'essai : zéro passage en échec sur 1 200.
+
+**Le correctif ne rend pas V3-1B gagnante. Il la rend mesurable, et la mesure
+dit qu'elle perd.** Par les propres critères PASS du desk, elle doit sortir du
+cadre live v1.
