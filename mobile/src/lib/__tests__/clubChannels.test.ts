@@ -24,6 +24,15 @@ describe('les groupes du club', () => {
     );
   });
 
+  it('mènent chacun à sa propre conversation', () => {
+    // L'ordre a déjà été inversé une fois : chaque groupe est vérifié par son
+    // identifiant, pas par sa position.
+    const par = Object.fromEntries(CLUB_CHANNELS.map((channel) => [channel.name, channel.url]));
+    assert.match(par['Bitcoin Club']!, /\/t\/6297551800348681\/?$/);
+    assert.match(par['Stocks Club']!, /\/t\/29620817444229107\/?$/);
+    assert.match(par['Vibe-Coding Club']!, /\/t\/1805657527264885\/?$/);
+  });
+
   it('ont chacun leur adresse Messenger', () => {
     for (const channel of CLUB_CHANNELS) {
       assert.match(

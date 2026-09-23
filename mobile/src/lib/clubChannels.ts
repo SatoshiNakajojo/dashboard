@@ -30,19 +30,19 @@ export const CLUB_CHANNELS: readonly ClubChannel[] = [
     key: 'bitcoin',
     name: 'Bitcoin Club',
     theme: 'Crypto Night',
-    url: 'https://www.messenger.com/t/1805657527264885/',
+    url: 'https://www.messenger.com/t/6297551800348681',
   },
   {
     key: 'stocks',
     name: 'Stocks Club',
     theme: 'Stock Night',
-    url: 'https://www.messenger.com/t/6297551800348681',
+    url: 'https://www.messenger.com/t/29620817444229107',
   },
   {
     key: 'vibe',
     name: 'Vibe-Coding Club',
     theme: 'Vibe Coding Night',
-    url: 'https://www.messenger.com/t/29620817444229107',
+    url: 'https://www.messenger.com/t/1805657527264885/',
   },
 ];
 
