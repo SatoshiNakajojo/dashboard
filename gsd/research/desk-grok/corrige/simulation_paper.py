@@ -1,21 +1,24 @@
 #!/usr/bin/env python3
 """
-Banc d'essai : fait tourner le logger paper du desk — l'original et le corrigé —
+Banc d'essai : fait tourner un logger paper du desk — l'original et le corrigé —
 exactement comme la routine le ferait, passage par passage, sur l'historique.
 
+- Le VRAI `hl_common.py` du desk est chargé ; seuls `fetch_candles` (l'API) et
+  `ROOT` (le dossier d'écriture) sont remplacés. Indicateurs, frais et plancher
+  sont donc ceux du desk.
 - Horloge simulée. À chaque passage, l'API simulée rend les bougies 1h closes
   ET la bougie en cours, comme Hyperliquid. La bougie en cours est reconstituée
   à partir du premier quart d'heure de l'heure (bougies 15 min) : les passages
   ont donc lieu à :15 au lieu de :05. Déclaré — le mécanisme est identique.
-- L'original tourne toutes les DEUX heures, comme la routine du desk.
-  Le corrigé tourne toutes les heures.
-- `hl_common` n'a pas été fourni : un substitut minimal est écrit, avec une ATR
-  de Wilder — celle qui retrouve le backtest déclaré à la deuxième décimale.
+- L'original tourne toutes les DEUX heures, comme la routine du desk. Le corrigé
+  tourne toutes les heures ; `--cadence-corrige 2` le fait tourner toutes les
+  deux heures pour vérifier qu'il trouve les mêmes trades.
 
-    PYTHONPATH=<pandas> python3 simulation_paper.py --cache /chemin/cache \
-        --orig paper_supertrend_live.py --fix paper_supertrend_live.corrige.py
+    PYTHONPATH=<pandas> python3 simulation_paper.py --cache /chemin/cache \\
+        --hl-common hl_common.py --script paper_supertrend_live.py \\
+        --orig <original> --fix <corrigé> --signaux supertrend_signals.jsonl
 
-Les deux scripts du desk ne sont pas dans ce dépôt, qui est public : ils sont
+Les scripts du desk ne sont pas dans ce dépôt, qui est public : ils sont
 passés en argument.
 """
 
@@ -28,12 +31,25 @@ import shutil
 import statistics
 import sys
 import tempfile
+import time
 from pathlib import Path
 
 H = 3_600_000
 Q = 900_000
 TICKERS = ["BTC", "ETH", "SOL"]
 FEE = 0.00035
+
+SURCHARGE = '''
+
+# ---- surcharges du banc d'essai : l'API et le dossier d'écriture ----------
+ROOT = Path(__file__).resolve().parent
+DATA = ROOT / "data"
+MARCHE = None
+
+
+def fetch_candles(coin, interval, start_ms, end_ms):
+    return MARCHE.candles(coin, start_ms, end_ms)
+'''
 
 
 class Marche:
@@ -58,60 +74,25 @@ class Marche:
         return out
 
 
-STUB = '''
-import json, math
-from datetime import datetime, timezone
-from pathlib import Path
-import pandas as pd
-
-ROOT = Path(__file__).resolve().parent
-DATA = ROOT / "data"
-TICKERS = ["BTC", "ETH", "SOL"]
-MIN_STOP_PCT = 0.004
-MARCHE = None
-
-def fetch_candles(coin, interval, start, end):
-    return MARCHE.candles(coin, start, end)
-
-def atr_series(df, n):
-    prev = df["close"].shift(1)
-    tr = pd.concat([df["high"] - df["low"], (df["high"] - prev).abs(), (df["low"] - prev).abs()], axis=1).max(axis=1)
-    return tr.ewm(alpha=1 / n, adjust=False).mean()
-
-def ms_to_iso(ms):
-    return datetime.fromtimestamp(ms / 1000, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-
-def write_json(path, obj):
-    Path(path).write_text(json.dumps(obj, default=str))
-'''
-
-
-class Horloge:
-    def __init__(self, marche):
-        self.m = marche
-
-    def time(self):
-        return self.m.now_ms / 1000
-
-
-def charger(script: Path, nom: str, marche: Marche, dossier: Path):
+def charger(hl_common: Path, script: Path, nom_script: str, nom: str,
+            marche: Marche, dossier: Path):
     dossier.mkdir(parents=True, exist_ok=True)
-    (dossier / "hl_common.py").write_text(STUB)
-    shutil.copy(script, dossier / "paper_supertrend_live.py")
+    (dossier / "hl_common.py").write_text(hl_common.read_text(encoding="utf-8") + SURCHARGE, encoding="utf-8")
+    shutil.copy(script, dossier / nom_script)
     sys.modules.pop("hl_common", None)
     sys.path.insert(0, str(dossier))
-    spec = importlib.util.spec_from_file_location(nom, dossier / "paper_supertrend_live.py")
+    spec = importlib.util.spec_from_file_location(nom, dossier / nom_script)
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     sys.modules["hl_common"].MARCHE = marche
-    mod.time = Horloge(marche)
     sys.path.remove(str(dossier))
     return mod
 
 
-def trades(dossier: Path, marche: Marche):
+def trades(dossier: Path, signaux: str, marche: Marche):
     barres = {t: {int(c["t"]): c for c in marche.h1[t]} for t in TICKERS}
-    evts = [json.loads(l) for l in (dossier / "paper" / "supertrend_signals.jsonl").read_text().splitlines() if l.strip()]
+    lignes = (dossier / "paper" / signaux).read_text().splitlines()
+    evts = [json.loads(ligne) for ligne in lignes if ligne.strip()]
     out, ouvert = [], None
     for e in evts:
         if e["event"] == "entry":
@@ -122,11 +103,10 @@ def trades(dossier: Path, marche: Marche):
             risque = abs(ent - float(ouvert["stop"]))
             brut = (px - ent) if L else (ent - px)
             b = barres[e["ticker"]][int(e["bar_ts"])]
-            haut, bas = float(b["h"]), float(b["l"])
             out.append({
                 "R": (brut - FEE * (ent + px)) / risque,
                 "motif": e["exit_reason"],
-                "hors_barre": px > haut + 1e-9 or px < bas - 1e-9,
+                "hors_barre": px > float(b["h"]) + 1e-9 or px < float(b["l"]) - 1e-9,
             })
             ouvert = None
     return out
@@ -139,50 +119,66 @@ def resume(tr):
     g, p = sum(x for x in Rs if x > 0), -sum(x for x in Rs if x <= 0)
     hors = sum(1 for t in tr if t["hors_barre"])
     return (f"n={len(Rs):>3}  réussite {sum(1 for x in Rs if x > 0)/len(Rs)*100:5.1f} %  "
-            f"E[R] {statistics.fmean(Rs):+.3f}  PF {g/p if p else float('inf'):.2f}  "
+            f"E[R] {statistics.fmean(Rs):+.3f}  PF {g/p if p else float('inf'):5.2f}  "
             f"sorties hors de la barre : {hors}")
 
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--cache", required=True, type=Path)
+    ap.add_argument("--hl-common", required=True, type=Path)
+    ap.add_argument("--script", required=True, help="nom de fichier attendu, ex. paper_donchian_live.py")
     ap.add_argument("--orig", required=True, type=Path)
     ap.add_argument("--fix", required=True, type=Path)
+    ap.add_argument("--signaux", required=True, help="ex. donchian_signals.jsonl")
     ap.add_argument("--jours", type=int, default=50)
+    ap.add_argument("--cadence-corrige", type=int, default=1, choices=(1, 2))
     args = ap.parse_args()
 
     marche = Marche(args.cache)
+    # Les scripts du desk importent parfois `time` à l'intérieur d'une fonction :
+    # seule une horloge remplacée au niveau du module `time` les atteint tous.
+    time.time = lambda: marche.now_ms / 1000
+
     debut_q = max(min(marche.q[t]) for t in TICKERS)
     fin = min(int(marche.h1[t][-1]["t"]) for t in TICKERS)
     t0 = max((debut_q // H + 1) * H, fin - args.jours * 24 * H)
     heures = list(range(t0, fin, H))
 
     base = Path(tempfile.mkdtemp(prefix="banc_"))
-    orig = charger(args.orig, "paper_origine", marche, base / "origine")
-    fix = charger(args.fix, "paper_corrige", marche, base / "corrige")
+    orig = charger(args.hl_common, args.orig, args.script, "logger_origine", marche, base / "origine")
+    fix = charger(args.hl_common, args.fix, args.script, "logger_corrige", marche, base / "corrige")
 
     erreurs = {"origine": 0, "corrige": 0}
     for h in heures:
         marche.now_ms = h + Q
-        if (h // H) % 2 == 0:
+        pair = (h // H) % 2 == 0
+        if pair:
             try:
                 orig.run_once()
             except Exception as exc:
                 erreurs["origine"] += 1
                 if erreurs["origine"] < 3:
                     print("origine :", repr(exc))
-        try:
-            fix.run_once()
-        except Exception as exc:
-            erreurs["corrige"] += 1
-            if erreurs["corrige"] < 3:
-                print("corrigé :", repr(exc))
+        if args.cadence_corrige == 1 or pair:
+            try:
+                fix.run_once()
+            except Exception as exc:
+                erreurs["corrige"] += 1
+                if erreurs["corrige"] < 3:
+                    print("corrigé :", repr(exc))
+    # un dernier passage, pour que le corrigé toutes les deux heures rattrape la fin
+    marche.now_ms = fin + H + Q
+    try:
+        fix.run_once()
+    except Exception:
+        pass
 
-    print(f"fenêtre simulée : {len(heures)} heures ({len(heures)//24} jours) · "
+    cad = "toutes les heures" if args.cadence_corrige == 1 else "toutes les 2 h"
+    print(f"{args.script} — {len(heures)} heures simulées ({len(heures)//24} jours) · "
           f"passages en échec : origine {erreurs['origine']}, corrigé {erreurs['corrige']}")
-    print()
-    print(f"  logger d'origine, toutes les 2 h    {resume(trades(base / 'origine', marche))}")
-    print(f"  logger corrigé, toutes les heures   {resume(trades(base / 'corrige', marche))}")
+    print(f"  logger d'origine, toutes les 2 h   {resume(trades(base / 'origine', args.signaux, marche))}")
+    print(f"  logger corrigé, {cad:<17} {resume(trades(base / 'corrige', args.signaux, marche))}")
     shutil.rmtree(base, ignore_errors=True)
     return 0
 

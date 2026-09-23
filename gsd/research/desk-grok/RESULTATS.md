@@ -201,3 +201,75 @@ archivés. Vérifié dans le banc d'essai : zéro passage en échec sur 1 200.
 **Le correctif ne rend pas V3-1B gagnante. Il la rend mesurable, et la mesure
 dit qu'elle perd.** Par les propres critères PASS du desk, elle doit sortir du
 cadre live v1.
+
+---
+
+## 23/09, soir — `hl_common.py` et `paper_donchian_live.py` reçus
+
+### Le harnais du desk lui-même, sur les 208 jours
+
+`harnais_du_desk.py` n'imite plus rien : il appelle `run_portfolio`,
+`compute_metrics` et `verdict_v2` de `hl_common`, avec ses indicateurs et le
+`check_exit` des scripts paper.
+
+| | n | réussite | E[R] | PF | max DD | `verdict_v2` |
+|---|---:|---:|---:|---:|---:|---|
+| V3-1B déclaré | 120 | 55,8 % | +0,222 | 1,92 | −2,3 % | PASS |
+| **V3-1B, code du desk tel quel** | 116 | 55,2 % | **+0,219** | **1,90** | **−2,3 %** | PASS |
+| **V3-1B, `check_exit` corrigé** | 116 | 34,5 % | **−0,123** | **0,69** | −7,5 % | **FAIL** |
+| Donchian B′ déclaré | 193 | 29 % | +0,106 | 1,24 | −3,7 % | PASS |
+| **Donchian B′, code du desk tel quel** | 192 | 29,2 % | **+0,112** | 1,26 | **−3,7 %** | PASS |
+
+Le backtest du desk est reproduit presque à l'identique, drawdown compris. **Et
+son propre `verdict_v2` fait passer V3-1B de PASS à FAIL dès que `check_exit` est
+corrigé.**
+
+**Une correction sur ce qui précède.** J'ai d'abord écrit qu'avec l'ATR réelle
+du desk — une moyenne simple, découverte dans `hl_common` — le code tel quel
+donnait +0,319 et non +0,222. Ce +0,319 venait de *ma* boucle de portefeuille,
+qui gérait la ré-entrée autrement que `run_portfolio` (qui ignore tout signal
+sur la barre de sortie). Avec le vrai harnais, l'ATR simple retrouve le chiffre
+déclaré. L'affirmation initiale tenait — pour une autre raison que celle que je
+croyais.
+
+### Donchian B′ : `check_exit` sain, boucle défectueuse
+
+Son `check_exit` vérifie le stop connu au début de la barre avant tout, et
+n'arme le break-even qu'à la barre suivante. Une seule sortie hors barre sur
+192 : un stop franchi en gap, inscrit au niveau du stop au lieu de l'ouverture.
+C'est ce qui explique que la reproduction indépendante collait déjà (+0,122).
+
+Son logger paper, en revanche, a la même boucle que celui de Supertrend : la
+bougie en cours prise pour close — son propre commentaire dit de « préférer la
+précédente », le code prend `iloc[-1]` — et les entrées cherchées sur la seule
+dernière barre.
+
+### Les deux loggers, rejoués avec le vrai `hl_common`
+
+Banc d'essai : vrai `hl_common`, dont seuls l'API et le dossier d'écriture sont
+remplacés. 50 jours, passages à :15.
+
+| 50 derniers jours | trades | réussite | E[R] | PF | sorties jamais cotées |
+|---|---:|---:|---:|---:|---:|
+| Supertrend, logger d'origine (2 h) | 12 | 50,0 % | +0,659 | 6,55 | **7 sur 12** |
+| Supertrend, logger corrigé | 37 | 32,4 % | **−0,231** | 0,49 | 0 |
+| Donchian, logger d'origine (2 h) | 27 | 22,2 % | −0,111 | 0,81 | 1 |
+| Donchian, logger corrigé | 57 | 31,6 % | **+0,203** | 1,49 | 0 |
+
+Les deux loggers corrigés trouvent **exactement les mêmes trades** à une heure
+et à deux heures de cadence.
+
+La table Supertrend de la section précédente (8 trades, 62,5 %, PF 11,78)
+avait été obtenue avec un `hl_common` de substitution, ATR de Wilder. Celle-ci
+la remplace ; le constat est le même.
+
+**Les défauts de boucle ne flattent pas toujours : ils déforment.** Sur
+Supertrend, le `check_exit` domine et gonfle le relevé. Sur Donchian, dont le
+`check_exit` est sain, les entrées prises sur une bougie à peine ouverte
+captent des cassures qui n'existent plus à la clôture — et le relevé paper
+**sous-estime** une stratégie qui, correctement enregistrée, gagnait sur cette
+période.
+
+Ces 50 jours ne changent pas le verdict de fond sur Donchian B′ : une fenêtre
+favorable sur trois actifs corrélés n'est pas un test hors échantillon, et
+celui-ci reste à 7 perps positifs sur 16.
