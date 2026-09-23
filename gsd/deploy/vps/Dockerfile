@@ -9,4 +9,4 @@ ENV HOST=0.0.0.0
 ENV PORT=3000
 RUN mkdir -p /app/data
 EXPOSE 3000
-CMD ["node", ".output/server/index.mjs"]
+CMD ["node", "scripts/vps-start.mjs"]

@@ -116,39 +116,19 @@ export function hlReady() {
   return hlSession() != null;
 }
 
+/**
+ * Cette fonction dupliquait le calcul de solde, avec le même défaut :
+ * `trading: p` lisait l'équité sur le seul `accountValue`, qui ne vaut que la
+ * marge immobilisée quand le collatéral vit en spot. Elle alimente l'affichage
+ * du pupitre ET `book.snapshot()` — la courbe d'équité du livre était donc
+ * enregistrée sur ce chiffre faux. Un seul calcul désormais, dans `classifyHl`.
+ */
 export async function liveWallet() {
   const s = hlSession();
   if (!s) return { error: "HL_AGENT_KEY / HL_MASTER absents" };
   try {
-    const { InfoClient, HttpTransport } = await import("@nktkas/hyperliquid");
-    const info = new InfoClient({ transport: new HttpTransport() });
-    const [perp, spot] = await Promise.all([
-      info.clearinghouseState({ user: s.master }),
-      info.spotClearinghouseState({ user: s.master }),
-    ]);
-    const p = Number(perp.marginSummary.accountValue) || 0;
-    const m = Number(perp.marginSummary.totalMarginUsed) || 0;
-    const w = Number(perp.withdrawable) || 0;
-    let upnl = 0;
-    for (const row of perp.assetPositions) {
-      upnl += Number(row.position.unrealizedPnl) || 0;
-    }
-    const usdc = spot.balances.find((b) => "coin" in b && b.coin === "USDC");
-    const sp = usdc && "total" in usdc ? Number(usdc.total) || 0 : 0;
-    const unified = p > 0 && sp > 0 && Math.abs(p - sp) <= Math.max(1, 0.05 * Math.max(p, sp));
-    const free = w > 0 ? w : Math.max(0, p - m);
-    return {
-      perps: p,
-      spot: sp,
-      total: p,
-      withdrawable: w,
-      marginUsed: m,
-      unified,
-      trading: p,
-      free,
-      upnl,
-      cash: p - upnl,
-    };
+    const { readHlBalances } = await import("./hl");
+    return await readHlBalances(s.master);
   } catch (e) {
     return { error: e instanceof Error ? e.message : "lecture Hyperliquid refusee" };
   }
@@ -544,6 +524,31 @@ export async function tickPilot(force?: boolean) {
     writePilot(s);
   } finally {
     g.__gsdBusy = false;
+    journalCycle(s);
+  }
+}
+
+/**
+ * Une ligne par cycle sur la sortie standard.
+ *
+ * Sans elle, `docker logs` ne montrait que « Listening on: … » : sept heures
+ * de silence total ressemblaient exactement à sept heures de fonctionnement
+ * normal. Le journal doit permettre de distinguer les deux d'un coup d'œil.
+ */
+function journalCycle(s: PilotFile) {
+  try {
+    const bribes = [
+      `cycle ${s.cycles ?? 0}`,
+      s.autonome ? "autonome" : "manuel",
+      s.kill ? "KILL" : null,
+      s.lastStage ? `étape ${s.lastStage}` : null,
+      s.lastOrder ? `ordre ${s.lastOrder}` : null,
+      s.lastError ? `ERREUR ${s.lastError}` : null,
+      s.lastReason || null,
+    ].filter(Boolean);
+    console.log(`[gsd] ${bribes.join(" · ")}`);
+  } catch {
+    /* journal */
   }
 }
 
@@ -580,6 +585,9 @@ async function snapshotNavOnly() {
           sCut.lastReason = cuts.join(" · ");
           sCut.lastAt = Date.now();
           writePilot(sCut);
+          // Une coupe est l'événement le plus important du bot : elle ne passe
+          // jamais en silence, même hors cycle.
+          console.log(`[gsd] ${cuts.join(" · ")}`);
         }
       }
     }
