@@ -131,3 +131,54 @@ et sur les échelles longues ce refus couvre la majorité des signaux.
   réponse monotone avec la taille du déblocage, quatre cellules survivantes à
   Benjamini-Hochberg, et six contrôles tenus dont un décalage calendaire en bloc.
   Ce n'est pas le GSD, mais c'est la seule piste que les données soutiennent.
+
+## La variante pré-enregistrée, qui manquait — et une objection de terrain
+
+Le pré-enregistrement annonçait les sorties de `manage.server.ts` comme variante.
+Elles n'avaient pas été testées ; elles l'ont été le 23/09 après l'objection
+suivante : *un bot Grok qui applique cette stratégie en paper ne fait que des
+trades gagnants.*
+
+**J'avais prédit que le gestionnaire ferait monter le taux de réussite** — solder
+50 % à +1R puis remonter le stop à l'entrée transforme des perdants en petits
+gagnants. C'était faux. Le time-stop domine (3 465 sorties sur 5 572) et ferme
+les positions qui ne gagnent pas après 24 heures, sur de petites pertes :
+
+| sorties | trades | réussite | gain moyen | perte moyenne | R moyen |
+|---|---:|---:|---:|---:|---:|
+| `strats.ts` : −1R / +1,5R | 1 312 | 41,1 % | +1,431 | −1,015 | −0,010 |
+| gestionnaire : 50 % à +1R, stop à l'entrée, 24 h | 5 572 | **26,6 %** | +0,974 | −0,342 | +0,009 |
+
+Et hors échantillon, avec les mêmes sorties : R moyen +0,004. Le signe se
+reproduit, la taille est nulle — t naïf de 0,96 et 0,38, avant même de tenir
+compte de la corrélation de 0,6 entre actifs, qui les réduit encore. **Le
+gestionnaire fait passer la stratégie de légèrement négative à nulle.** Ce n'est
+pas un edge. Le time-stop de 24 heures est d'ailleurs une valeur que j'ai choisie
+en corrigeant le code — non optimisée, mais pas celle du bot d'origine.
+
+**Sur l'objection elle-même**, trois constats :
+
+1. **La semaine écoulée est la meilleure fenêtre récente de la stratégie.**
+
+   | fenêtre | trades clos | réussite | R total |
+   |---|---:|---:|---:|
+   | 7 jours | 69 | **54 %** | +29,3 |
+   | 14 jours | 126 | 44 % | +14,8 |
+   | 30 jours | 235 | 38 % | −13,3 |
+   | 365 jours | 839 | 41 % | −9,3 |
+
+   Un bot démarré récemment voit ses meilleurs chiffres. Un test qui se serait
+   arrêté cette semaine aurait conclu l'inverse de celui-ci — c'est la leçon du
+   portage de financement du desk, à l'identique.
+
+2. **Même dans cette semaine-là, la stratégie a clos 32 perdants sur 69.**
+   « Uniquement des gagnants » n'est ce qu'elle produit avec aucune des deux
+   logiques de sortie. Si un relevé paper le montre sur plus d'une poignée de
+   trades, c'est que le relevé ne compte pas les pertes latentes, ou que le bot
+   n'applique pas ces sorties, ou que la simulation flatte.
+
+3. **Le compte réel l'a déjà montré.** Le 22/09, les trades clos étaient BNB
+   +0,06 $ et DOGE +0,02 $ — des gagnants — pendant qu'AVAX −3,32 $ et APT
+   −0,67 $ restaient ouverts. Un relevé des trades clos ressemblait à un bot
+   gagnant ; le compte était à −8 %. Les pertes n'apparaissent qu'au moment où on
+   les réalise.
