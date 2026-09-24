@@ -357,6 +357,7 @@ export function schemaNote(checks) {
  */
 export const RPCS = [
   { name: 'taken_profile_colors', migration: '20260919090000_profile_colors.sql' },
+  { name: 'notify_status', migration: '20260927090000_push_notifications.sql' },
 ];
 
 export function interpretRpc({ name, migration }, { status, body }) {
@@ -465,6 +466,8 @@ export function interpretSiteUrl({ status, headers }) {
 export const EDGE_FUNCTIONS = [
   { name: 'quote', path: 'quote?symbol=AAPL', method: 'GET', refusal: /réservé aux membres/i },
   { name: 'refresh-prices', path: 'refresh-prices', method: 'POST', refusal: /non autorisé/i },
+  // Sans secret de battement, `notify` croit à un essai et exige un membre.
+  { name: 'notify', path: 'notify', method: 'POST', refusal: /réservé aux membres/i },
 ];
 
 /**

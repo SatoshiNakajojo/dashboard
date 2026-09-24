@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Avatar } from '@/components/ui/Avatar';
 import { Micro } from '@/components/ui/Micro';
 import { SectionTitle } from '@/components/ui/SectionTitle';
+import { NotificationSettings } from '@/components/NotificationSettings';
 import { colorChoices, type ColorChoice } from '@/features/profile/colors';
 import { useProfile, type ProfileState } from '@/features/profile/useProfile';
 import { colorName } from '@/features/auth/profile';
@@ -76,7 +77,12 @@ export default function ProfileScreen() {
              depuis le profil chargé. Sans elle il faudrait un effet de
              synchronisation, qui écraserait la saisie en cours à chaque
              rafraîchissement du profil. */
-          <ProfileForm key={state.profile.id} state={state} profile={state.profile} />
+          <>
+            <ProfileForm key={state.profile.id} state={state} profile={state.profile} />
+            {/* Hors du formulaire : ces réglages s'enregistrent au toucher, le
+                bouton « enregistrer » du profil ne les concerne pas. */}
+            <NotificationSettings userId={userId} />
+          </>
         )}
       </ScrollView>
     </View>
@@ -407,6 +413,9 @@ function ColorPicker({
             key={choice.hex}
             accessibilityRole="radio"
             accessibilityState={{ selected, disabled: taken }}
+            // React Native Web ignore `selected` ; `aria-checked` est l'état
+            // qu'un lecteur d'écran attend d'un bouton radio.
+            aria-checked={selected}
             accessibilityLabel={
               taken ? `${choice.name}, portée par ${choice.takenBy!.displayName}` : choice.name
             }

@@ -105,7 +105,7 @@ qu'on n'a pas déposé le nouveau tracé.
 
 ## Ce qui a été vérifié
 
-- `npm run typecheck`, `npm run lint`, `npm test` — propres (443 tests).
+- `npm run typecheck`, `npm run lint`, `npm test` — propres (481 tests).
 - **Règles pures** : bornes et inversibilité du repère, monotonie du tracé,
   écart à la courbe réelle, espaces insécables du formatage français, perf vs ₿
   comme ratio et non soustraction, seuils et tri des deux classements.
@@ -118,11 +118,13 @@ qu'on n'a pas déposé le nouveau tracé.
   réécrit jamais un prix inchangé.
 - **Schéma** : toutes les migrations appliquées dans l'ordre à un PostgreSQL 16
   neuf (doublures `supabase/tests/doubles.sql`), réexécutées pour l'idempotence,
-  puis `supabase/tests/schema_test.sql` — 25 assertions passent, dont celles
+  puis `supabase/tests/schema_test.sql` — 34 assertions passent, dont celles
   des paris de l'Oracle (calendrier fixé par la base, un pari en cours par
   horizon, scellement, déblocage seulement quand personne d'autre n'a parié),
   celles des calls (titre figé, corrections datées par la base, clôture qui
-  fige la perf, sortie jamais avant l'entrée ni dans le futur), et celle qui
+  fige la perf, sortie jamais avant l'entrée ni dans le futur), celles des
+  notifications (file fermée aux membres, rappel du jour J une seule fois,
+  battement qui lit son secret dans le coffre-fort), et celle qui
   manquait : un membre lit les couleurs déjà prises **avant**
   d'être membre, là où la RLS lui refuse toute ligne.
   Le seed reproduit exactement les pourcentages du design (`+14,9 %`, `+12,4 %`,
@@ -716,6 +718,30 @@ définition — et un call se publie toujours ouvert.
 
 ---
 
+## Les notifications
+
+Quatre occasions de prévenir le club sans qu'il ait à ouvrir l'app : une
+soirée proposée, le rappel du jour J (à 9 h à Nouméa), un call publié ou
+clôturé, un pari résolu. Chacune se coche ou se décoche dans **Mon profil →
+Notifications** ; les réglages valent pour tous les appareils du membre,
+l'activation se fait appareil par appareil.
+
+C'est du Web Push, sans dépendance : le message est chiffré pour chaque
+appareil (RFC 8291) et chaque envoi est signé (VAPID, RFC 8292), en WebCrypto
+(`supabase/functions/_shared/webpush.ts`). Le chiffrement rejoue octet pour
+octet le vecteur de test de la RFC, et un vrai service de push (FCM) accepte
+la signature — et refuse une signature altérée. Le reste du chemin — file en
+base, battement pg_cron, fonction `notify` — est décrit dans
+`supabase/functions/README.md`.
+
+Sur iPhone, Safari n'ouvre le push qu'aux apps ajoutées à l'écran d'accueil ;
+le profil le dit au lieu de montrer un bouton inerte. Toucher une
+notification ouvre l'onglet dont elle parle.
+
+Mise en place : `npm run push:setup` (voir `docs/INSTALLATION.md`).
+
+---
+
 ## Le classement des oracles
 
 Chaque pari résolu rapporte des **points** : sa justesse (0 à 100), multipliée
@@ -919,14 +945,10 @@ Deux garanties tiennent l'ensemble (`src/lib/coinSearch.ts`, testé) :
 
 Rien ne bloque. Ce qui suit est du confort :
 
-- **Notifications sur le téléphone.** Les annonces de présence sont
-  **dans l'app** : elles ne s'affichent que si elle est ouverte. Une vraie
-  notification — écran verrouillé, app fermée — est une autre construction :
-  une paire de clés VAPID, une table `push_subscriptions` avec sa RLS, une
-  fonction Edge qui chiffre en `aes128gcm` et signe en VAPID, une demande de
-  permission à l'écran, et sur iOS l'obligation que la PWA soit installée sur
-  l'écran d'accueil (Safari ne notifie pas un onglet). Rien d'exotique, mais
-  rien qui se déduise de ce qui est là.
+- **Les présences en notification.** « Alex vient à la soirée » reste une
+  annonce **dans l'app**. La passer en push est une ligne de plus dans la
+  file (`notification_outbox`) et un réglage de plus — à décider : à sept,
+  chaque clic sur « Je viens » ferait sonner six téléphones.
 - **Autocomplétion des titres.** Les cryptos ont leur liste — CoinGecko
   autorise les appels navigateur. Les actions n'en ont pas : il faudrait
   relayer `v1/finance/search` de Yahoo par une fonction Edge, comme pour les

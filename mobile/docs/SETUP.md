@@ -177,9 +177,10 @@ done
 psql -p 55432 -d ssc -f supabase/tests/schema_test.sql
 ```
 
-Le dernier fichier vérifie vingt-cinq comportements : la course sur une ligne de
+Le dernier fichier vérifie trente-quatre comportements : la course sur une ligne de
 potluck, ce qui reste figé dans un call publié et la datation de ses
 corrections, la clôture d'un call (perf figée, sortie cohérente, réouverture),
+les notifications (abonnements, réglages, file, rappels du jour J, battement),
 le calendrier d'un pari de l'Oracle fixé par la base, un seul pari
 en cours par horizon, le scellement du tracé, le retrait et le déblocage d'un
 pari, les couleurs lisibles avant l'adhésion, et le refus d'une couleur déjà portée. Voir

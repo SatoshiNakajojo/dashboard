@@ -358,8 +358,18 @@ describe('fonctions Edge', () => {
     assert.match(check.detail, /pas le sien/);
   });
 
+  it('lit le refus de notify, sans secret de battement, comme une preuve de déploiement', () => {
+    const NOTIFY = EDGE_FUNCTIONS.find((fn) => fn.name === 'notify').refusal;
+    const refused = { status: 401, body: { error: 'Réservé aux membres' } };
+    assert.equal(interpretFunction('notify', refused, NOTIFY).level, 'ok');
+    const unset = { status: 500, body: { error: 'Configuration incomplète — voir npm run push:setup' } };
+    const check = interpretFunction('notify', unset, NOTIFY);
+    assert.equal(check.level, 'fail');
+    assert.match(check.detail, /push:setup/);
+  });
+
   it('couvre chaque fonction du club', () => {
-    assert.deepEqual(EDGE_FUNCTIONS.map((fn) => fn.name), ['quote', 'refresh-prices']);
+    assert.deepEqual(EDGE_FUNCTIONS.map((fn) => fn.name), ['quote', 'refresh-prices', 'notify']);
     for (const fn of EDGE_FUNCTIONS) assert.ok(fn.refusal instanceof RegExp, fn.name);
   });
 

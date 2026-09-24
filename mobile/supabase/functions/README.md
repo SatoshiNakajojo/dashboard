@@ -164,3 +164,76 @@ update public.tickers set yahoo_symbol = 'AI.PA' where symbol = '$AI';
 ```
 
 `src/lib/quotes.ts` porte la table des suffixes et la conversion, côté app.
+
+---
+
+## `notify`
+
+Envoie les notifications push du club. Quatre occasions, chacune réglable par
+le membre dans **Mon profil → Notifications** :
+
+| Fait | Réglage | Qui est prévenu |
+|---|---|---|
+| Une soirée est proposée | `nights` | tout le club, sauf qui la propose |
+| C'est ce soir (à partir de 9 h à Nouméa) | `reminders` | tout le club |
+| Un call est publié, ou clôturé | `calls` | tout le club, sauf son auteur |
+| Un de mes paris est résolu | `oracle` | l'auteur du pari |
+
+### Le chemin d'une notification
+
+1. Un déclencheur range le **fait** dans `notification_outbox`, dans la même
+   transaction que ce qui l'a causé. Les rappels, qui dépendent de l'heure,
+   y sont rangés par `enqueue_due_notifications()`.
+2. Chaque minute, pg_cron appelle `notify_tick()` : rappels dus, puis — s'il y
+   a quelque chose à envoyer, et seulement alors — un appel à `notify` via
+   pg_net, avec l'en-tête `x-notify-secret`. Une minute sans nouvelle ne coûte
+   qu'une requête, pas un appel de fonction.
+3. `notify` réclame les faits (`claim_notifications`, `for update skip
+   locked` : deux passages ne prennent jamais le même), rédige le message
+   (`_shared/notifyMessages.ts`), le chiffre pour chaque appareil
+   (`_shared/webpush.ts`) et l'envoie.
+
+Un envoi dont **tous** les appareils ont échoué pour une raison passagère
+(réseau, 429, 5xx) est retenté, cinq fois au plus. S'il a atteint au moins un
+appareil, il est clos : le retenter ferait sonner deux fois les autres. Un
+abonnement que le service de push déclare disparu (404, 410) est supprimé.
+
+### Mettre en place
+
+```bash
+npm run push:setup
+```
+
+Voir `scripts/push-setup.mjs` pour le détail des six étapes. Le secret d'appel
+et l'adresse de la fonction vivent dans le **coffre-fort** de la base (Vault),
+jamais en clair dans `cron.job`. La migration pose la planification elle-même ;
+si pg_cron ou pg_net refusent de s'activer, le script le dit — il suffit alors
+de les activer dans **Database → Extensions** et de le relancer.
+
+### Diagnostiquer
+
+Dans le SQL Editor :
+
+```sql
+select public.notify_tick();     -- « rien à envoyer », « appel envoyé », ou ce qui manque
+select public.notify_status();   -- planification, coffre-fort, file, appareils
+select kind, created_at, attempts, sent_at, report
+  from public.notification_outbox order by id desc limit 20;
+```
+
+`report` dit, pour chaque fait, combien d'appareils l'ont reçu et pourquoi les
+autres non.
+
+### Ce qu'elle ne fait pas
+
+- **Écrire à n'importe quelle adresse.** Un abonnement n'est accepté que vers
+  un service de push connu (Apple, Google, Mozilla, Microsoft) — contrainte en
+  base, et second contrôle à l'envoi. Sans ce filtre, un membre pourrait faire
+  émettre au serveur des requêtes vers l'adresse de son choix.
+- **Mettre la justesse d'un pari dans la notification.** Elle se calcule dans
+  l'app, sur les séries canoniques de l'Oracle ; un second calcul côté serveur
+  finirait par différer d'un point. La notification donne ce qui est sûr — ce
+  que visait le tracé, le cours du moment — et renvoie à l'Oracle.
+- **Déranger la nuit.** Les seuls envois programmés sont les rappels, à partir
+  de 9 h à Nouméa ; les autres suivent un geste d'un membre.
+

@@ -102,6 +102,27 @@ export type PredictionRow = {
   updated_at: string;
 };
 
+/** Un appareil abonné aux notifications. Écrit par deux fonctions, jamais directement. */
+export type PushSubscriptionRow = {
+  id: string;
+  user_id: string;
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+  user_agent: string | null;
+  created_at: string;
+};
+
+/** Ce qu'un membre veut recevoir. Pas de ligne : tout. */
+export type NotificationPrefsRow = {
+  user_id: string;
+  nights: boolean;
+  reminders: boolean;
+  calls: boolean;
+  oracle: boolean;
+  updated_at: string;
+};
+
 /**
  * Les lignes sont des **alias de type**, jamais des interfaces : une interface
  * n'obtient pas de signature d'index implicite et ne satisfait donc pas
@@ -126,6 +147,8 @@ export type Database = {
       tickers: Table<TickerRow, Omit<Partial<TickerRow>, 'performance_percentage'>>;
       ticker_votes: Table<TickerVoteRow>;
       predictions: Table<PredictionRow>;
+      push_subscriptions: Table<PushSubscriptionRow>;
+      notification_prefs: Table<NotificationPrefsRow>;
     };
     Views: Record<never, never>;
     Functions: {
@@ -133,6 +156,16 @@ export type Database = {
       is_valid_path: { Args: { path: unknown }; Returns: boolean };
       is_valid_price_path: { Args: { path: unknown }; Returns: boolean };
       taken_profile_colors: { Args: Record<string, never>; Returns: string[] };
+      register_push_subscription: {
+        Args: {
+          p_endpoint: string;
+          p_p256dh: string;
+          p_auth: string;
+          p_user_agent?: string | null;
+        };
+        Returns: undefined;
+      };
+      unregister_push_subscription: { Args: { p_endpoint: string }; Returns: undefined };
     };
     Enums: {
       asset_class: AssetClassRow;

@@ -128,6 +128,27 @@ d'entrée. D'où le `echo` : la planification a besoin de la valeur en clair, et
 
 Planifiez le rafraîchissement : voir `supabase/functions/README.md`.
 
+#### Les notifications push — une commande
+
+Une fois la migration `20260927090000_push_notifications` passée
+(`npx supabase db push`), depuis `mobile/` :
+
+```bash
+npm run push:setup
+```
+
+Le script génère les clés VAPID (gardées dans `.env`), pose les secrets de la
+fonction `notify`, la déploie, range son adresse et son secret d'appel dans le
+coffre-fort de la base, vérifie la planification, puis appelle la fonction pour
+prouver que la chaîne tient. Il n'affiche aucun secret, et se relance sans
+risque. Il a besoin de `SUPABASE_SERVICE_ROLE_KEY` dans `.env` — la même que
+pour `members:add`.
+
+Reconstruisez ensuite l'app (§ 2.2) : la clé publique y est embarquée à la
+build. Chaque membre active les notifications dans **Mon profil →
+Notifications** ; sur iPhone, depuis l'app ouverte **depuis l'écran
+d'accueil**.
+
 ### 1.5 Un vrai serveur d'envoi — **rien d'autre ne marche sans lui**
 
 Ce n'est pas une optimisation, c'est un verrou. Tant que le serveur partagé de
@@ -433,8 +454,9 @@ La version *maskable* est volontairement plus petite : Android rogne jusqu'à
 
 À dire aux membres, pour qu'ils ne les prennent pas pour des pannes :
 
-- **Pas de notifications push sur iOS** avant iOS 16.4, et seulement une fois
-  l'app ajoutée à l'écran d'accueil. L'app n'en envoie pas aujourd'hui.
+- **Notifications sur iPhone** : iOS 16.4 ou plus récent, et seulement depuis
+  l'app **ajoutée à l'écran d'accueil** — dans un onglet Safari, l'API n'existe
+  pas. Le profil le dit au membre au lieu de lui montrer un bouton inerte.
 - **iOS peut purger les données** d'un site web inutilisé pendant sept jours.
   Une app installée sur l'écran d'accueil y échappe — raison de plus pour
   l'installer plutôt que de garder l'onglet.
