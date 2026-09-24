@@ -67,9 +67,19 @@ async function call(url, options) {
   }
 }
 
-/** La CLI Supabase, sortie à l'écran : ses propres messages valent mieux qu'un résumé. */
+/**
+ * La CLI Supabase, sortie à l'écran : ses propres messages valent mieux qu'un
+ * résumé.
+ *
+ * Sans entrée clavier (`ignore`) : ces commandes n'ont rien à demander avec
+ * `--project-ref`, et une invite ouverte avalait les lignes collées après
+ * `npm run push:setup` — `build:web` et `deploy` ne s'exécutaient jamais.
+ */
 function supabaseCli(args) {
-  const result = spawnSync('npx', ['supabase', ...args], { cwd: ROOT, stdio: 'inherit' });
+  const result = spawnSync('npx', ['supabase', ...args], {
+    cwd: ROOT,
+    stdio: ['ignore', 'inherit', 'inherit'],
+  });
   return result.status === 0;
 }
 
