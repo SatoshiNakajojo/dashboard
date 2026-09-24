@@ -177,10 +177,11 @@ done
 psql -p 55432 -d ssc -f supabase/tests/schema_test.sql
 ```
 
-Le dernier fichier vérifie seize comportements : la course sur une ligne de
-potluck, le gel d'un call publié, le calendrier d'un pari de l'Oracle fixé par
-la base, un seul pari en cours par horizon, le scellement du tracé, le retrait
-d'un pari encore révisable, les couleurs lisibles avant l'adhésion. Voir
+Le dernier fichier vérifie dix-neuf comportements : la course sur une ligne de
+potluck, ce qui reste figé dans un call publié et la datation de ses
+corrections, le calendrier d'un pari de l'Oracle fixé par la base, un seul pari
+en cours par horizon, le scellement du tracé, le retrait et le déblocage d'un
+pari, les couleurs lisibles avant l'adhésion. Voir
 `supabase/README.md`.
 
 Avec la CLI Supabase, c'est plus court :

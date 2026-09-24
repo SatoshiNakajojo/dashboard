@@ -69,6 +69,13 @@ export interface Ticker {
   /** Dernier rafraîchissement réussi du cours. `null` si jamais rafraîchi. */
   priceUpdatedAt: string | null;
   createdAt: string;
+  /**
+   * Jour de l'entrée, `AAAA-MM-JJ` à Nouméa. `null` pour les calls d'avant la
+   * colonne : leur jour d'entrée est celui de leur publication.
+   */
+  enteredOn: string | null;
+  /** Dernière modification par l'auteur — posée par la base, affichée sur la carte. */
+  editedAt: string | null;
 }
 
 /** Call prêt à l'affichage : perfs calculées, votes agrégés. */

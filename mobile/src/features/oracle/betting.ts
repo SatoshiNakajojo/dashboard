@@ -253,3 +253,36 @@ export function upsertBet(bets: readonly Bet[], bet: Bet): Bet[] {
   next[index] = bet;
   return next;
 }
+
+/** Un tracé d'au moins deux points : en deçà, ce n'est pas un pari. */
+export function hasPath(bet: Pick<Bet, 'path'>): boolean {
+  return bet.path.length >= 2;
+}
+
+/**
+ * Ce pari peut-il être retiré par son auteur ?
+ *
+ *   • **révisable** — toujours : c'est le retrait ordinaire ;
+ *   • **verrouillé** — seulement s'il ne lèse personne : son tracé est vide
+ *     (un reste de l'ancienne saison, qui bloquait l'horizon pour rien), ou
+ *     personne d'autre n'a parié sur cet horizon. Le verrou protège la
+ *     sincérité du pari **face aux autres** ; seul sur l'horizon, il n'y a
+ *     personne à protéger, et il ne faisait que bloquer un nouveau pari ;
+ *   • **résolu** — jamais : il appartient à l'historique du club.
+ *
+ * La base applique la même règle (`prediction_withdrawable`) : ceci ne sert
+ * qu'à montrer ou non le bouton.
+ */
+export function withdrawable(bet: Bet, bets: readonly Bet[], now: number): boolean {
+  const phase = phaseOfBet(bet, now);
+  if (phase === 'resolved') return false;
+  if (phase === 'open') return true;
+  if (!hasPath(bet)) return true;
+  return !bets.some(
+    (other) =>
+      other.horizon === bet.horizon &&
+      other.userId !== bet.userId &&
+      other.resolvesAt > now &&
+      hasPath(other),
+  );
+}

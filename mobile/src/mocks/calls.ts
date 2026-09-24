@@ -42,6 +42,8 @@ export const MOCK_CURRENT_TICKERS: Ticker[] = [
     coingeckoId: 'bitcoin',
     yahooSymbol: null,
     priceUpdatedAt: ago(0),
+    enteredOn: null,
+    editedAt: null,
     createdAt: ago(2 * HOUR),
   },
   {
@@ -57,6 +59,8 @@ export const MOCK_CURRENT_TICKERS: Ticker[] = [
     coingeckoId: null,
     yahooSymbol: 'MSTR',
     priceUpdatedAt: ago(0),
+    enteredOn: null,
+    editedAt: null,
     createdAt: ago(DAY),
   },
   {
@@ -72,6 +76,8 @@ export const MOCK_CURRENT_TICKERS: Ticker[] = [
     coingeckoId: 'ethereum',
     yahooSymbol: null,
     priceUpdatedAt: ago(0),
+    enteredOn: null,
+    editedAt: null,
     createdAt: ago(2 * DAY),
   },
   {
@@ -87,6 +93,8 @@ export const MOCK_CURRENT_TICKERS: Ticker[] = [
     coingeckoId: null,
     yahooSymbol: 'IBIT',
     priceUpdatedAt: ago(0),
+    enteredOn: null,
+    editedAt: null,
     createdAt: ago(3 * DAY),
   },
   {
@@ -102,6 +110,8 @@ export const MOCK_CURRENT_TICKERS: Ticker[] = [
     coingeckoId: 'dogwifcoin',
     yahooSymbol: null,
     priceUpdatedAt: ago(0),
+    enteredOn: null,
+    editedAt: null,
     createdAt: ago(5 * DAY),
   },
 ];
@@ -222,6 +232,8 @@ const HISTORY_TICKERS: Ticker[] = HISTORY.map((entry, index) => ({
   coingeckoId: null,
   yahooSymbol: null,
   priceUpdatedAt: ago(0),
+    enteredOn: null,
+    editedAt: null,
   createdAt: ago(entry.ageDays * DAY),
 }));
 

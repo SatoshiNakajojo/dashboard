@@ -100,7 +100,9 @@ function mockBet(userId: string, horizon: HorizonKey, openedAt: number, drift: n
  *   • une semaine — un pari en cours chez Léa, deux clos pour l'historique, et
  *     aucun à moi : c'est là qu'on essaie d'en déposer un ;
  *   • un an — le mien, ouvert il y a cinq jours, encore **révisable** ;
- *   • six mois, cinq et dix ans — vides, comme au premier jour.
+ *   • cinq ans — le mien, verrouillé, et **seul** sur l'horizon : c'est le cas
+ *     où l'on peut le débloquer ;
+ *   • six mois et dix ans — vides, comme au premier jour.
  */
 export const MOCK_BETS: Bet[] = [
   mockBet(MEMBERS.me!.id, '3m', ANCHOR - 2 * DAY, 0.3),
@@ -113,4 +115,5 @@ export const MOCK_BETS: Bet[] = [
   mockBet(MEMBERS.alex!.id, '1w', TODAY - 20 * DAY, 0.09),
   mockBet(MEMBERS.marco!.id, '1w', TODAY - 11 * DAY, -0.04),
   mockBet(MEMBERS.me!.id, '12m', TODAY - 5 * DAY, 0.9),
+  mockBet(MEMBERS.me!.id, '5y', TODAY - 20 * DAY, 2.4),
 ];

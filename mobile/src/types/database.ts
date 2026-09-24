@@ -63,6 +63,10 @@ export type TickerRow = {
   yahoo_symbol: string | null;
   price_updated_at: string | null;
   created_at: string;
+  /** Jour de l'entrée (`AAAA-MM-JJ`). */
+  entered_on: string | null;
+  /** Posée par le déclencheur `tickers_freeze`, jamais par le client. */
+  edited_at: string | null;
   /** Colonne générée : jamais écrite par le client. */
   performance_percentage: number | null;
 };

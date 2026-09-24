@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 
 import { CallCard } from '@/components/CallCard';
 import { ComposerSheet, type CallDraft } from '@/components/ComposerSheet';
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { Fab } from '@/components/Fab';
 import { LeaderboardRow } from '@/components/LeaderboardRow';
 import { ScreenShell } from '@/components/ScreenShell';
@@ -28,19 +29,42 @@ type BagView = 'bag' | 'rekt';
 export default function BagScreen() {
   const { userId } = useSession();
   const { byId } = useMembers();
-  const { calls, loading, error, vote, publish, publishing } = useCalls(userId, byId);
+  const { calls, loading, error, vote, publish, edit, remove, publishing } = useCalls(
+    userId,
+    byId,
+  );
 
   const [view, setView] = useState<BagView>('bag');
   const [composerOpen, setComposerOpen] = useState(false);
+  /** Le call en cours de correction — la feuille s'ouvre alors en « modifier ». */
+  const [editing, setEditing] = useState<CallView | null>(null);
+  /** Le call dont on demande la suppression. */
+  const [deleting, setDeleting] = useState<CallView | null>(null);
+
+  // Stables : `CallCard` est mémoïsée, et une fonction neuve à chaque rendu
+  // redessinerait toutes les cartes.
+  const startEdit = useCallback((call: CallView) => setEditing(call), []);
+  const askDelete = useCallback((call: CallView) => setDeleting(call), []);
+
+  const closeSheet = () => {
+    setComposerOpen(false);
+    setEditing(null);
+  };
 
   const me = userId ? (byId.get(userId) ?? null) : null;
   const isBag = view === 'bag';
 
   const handlePublish = async (draft: CallDraft) => {
-    const sent = await publish(draft);
+    const sent = editing
+      ? await edit(editing.id, {
+          entryPrice: draft.entryPrice,
+          entryDate: draft.entryDate,
+          thesis: draft.thesis,
+        })
+      : await publish(draft);
     // La sheet ne se referme que si le call est parti : sur échec, la saisie
     // reste à l'écran avec le message d'erreur.
-    if (sent) setComposerOpen(false);
+    if (sent) closeSheet();
     return sent;
   };
 
@@ -71,7 +95,20 @@ export default function BagScreen() {
             {!loading && !error && calls.length === 0 ? (
               <Empty message="Aucun call ce mois-ci" />
             ) : (
-              calls.map((call) => <CallCard key={call.id} call={call} onVote={vote} />)
+              calls.map((call) => {
+                // On ne corrige ni ne supprime que ses propres calls ; la base
+                // le vérifie aussi (RLS).
+                const mine = call.userId === userId;
+                return (
+                  <CallCard
+                    key={call.id}
+                    call={call}
+                    onVote={vote}
+                    onEdit={mine ? startEdit : undefined}
+                    onDelete={mine ? askDelete : undefined}
+                  />
+                );
+              })
             )}
           </View>
         ) : (
@@ -80,16 +117,33 @@ export default function BagScreen() {
       </ScreenShell>
 
       {/* Le FAB n'apparaît que sur la vue Bag, et disparaît sheet ouverte. */}
-      {isBag && !composerOpen ? (
+      {isBag && !composerOpen && !editing ? (
         <Fab label="Poster un call" onPress={() => setComposerOpen(true)} />
       ) : null}
 
       <ComposerSheet
-        visible={composerOpen}
+        // Une feuille neuve par call corrigé : son état s'initialise à partir
+        // du call, sans effet de recopie.
+        key={editing?.id ?? 'nouveau'}
+        visible={composerOpen || editing !== null}
+        editing={editing}
         publishing={publishing}
         error={error}
-        onClose={() => setComposerOpen(false)}
+        onClose={closeSheet}
         onPublish={handlePublish}
+      />
+
+      <ConfirmDialog
+        visible={deleting !== null}
+        title="Supprimer ce call ?"
+        message={`${deleting?.symbol ?? ''} disparaît du fil et des classements, avec ses votes. Impossible de revenir en arrière.`}
+        confirmLabel="SUPPRIMER"
+        onCancel={() => setDeleting(null)}
+        onConfirm={() => {
+          const target = deleting;
+          setDeleting(null);
+          if (target) void remove(target.id);
+        }}
       />
     </>
   );

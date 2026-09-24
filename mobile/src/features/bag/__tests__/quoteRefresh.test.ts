@@ -33,6 +33,8 @@ const call = (id: string, assetClass: AssetClass, extra: Partial<Ticker> = {}): 
   thesis: '',
   coingeckoId: null,
   yahooSymbol: null,
+  enteredOn: null,
+  editedAt: null,
   priceUpdatedAt: null,
   createdAt: '2026-01-01T00:00:00Z',
   ...extra,

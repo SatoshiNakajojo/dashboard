@@ -25,9 +25,10 @@ export interface LogoViewerProps {
 export function LogoViewer({ visible, onClose }: LogoViewerProps) {
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
-  // Le sceau cède de la place aux groupes sur un petit écran : jamais plus de
-  // 86 % de la largeur, ni plus de 42 % de la hauteur.
-  const seal = Math.min(width * 0.86, height * 0.42, 420);
+  // Le sceau cède de la place aux groupes et au crédit sur un petit écran :
+  // jamais plus de 86 % de la largeur, ni plus de 36 % de la hauteur.
+  const seal = Math.min(width * 0.86, height * 0.36, 400);
+  const gap = height < 720 ? 16 : 22;
 
   return (
     <Modal
@@ -42,7 +43,7 @@ export function LogoViewer({ visible, onClose }: LogoViewerProps) {
         accessibilityLabel="Fermer le logo"
         onPress={onClose}
         className="flex-1 bg-ink items-center justify-center"
-        style={{ paddingTop: insets.top, paddingBottom: insets.bottom, gap: 24 }}
+        style={{ paddingTop: insets.top + 8, paddingBottom: insets.bottom + 8, gap }}
       >
         {/* Le carré est porté par la vue, pas par l'image : en flex colonne,
             `aspectRatio` sur une image la laisse s'étirer sur la place libre,
@@ -72,10 +73,29 @@ export function LogoViewer({ visible, onClose }: LogoViewerProps) {
           <ClubChannels />
         </View>
 
-        <Micro tracking={1.6} style={{ color: c.sepiaFaint }}>
-          TOUCHER POUR FERMER
-        </Micro>
+        <About />
       </Pressable>
     </Modal>
+  );
+}
+
+/** Le crédit, en bas de la vue : qui l'a codée, qui l'a dessinée. */
+function About() {
+  const line = { fontFamily: f.serifItalic, fontSize: 14, lineHeight: 20, color: c.sepia };
+  const name = { fontFamily: f.labelMed, fontSize: 9, letterSpacing: 1.4, color: c.goldMuted };
+
+  return (
+    <View className="items-center" style={{ width: '86%', maxWidth: 420, gap: 6 }}>
+      <Micro tracking={2.2} size={8} style={{ color: c.sepiaFaint, marginBottom: 2 }}>
+        À PROPOS
+      </Micro>
+      <Text style={[line, { textAlign: 'center' }]}>
+        vibe-coded by <Text style={name}>SATOSHI NAKAJOJO</Text>
+      </Text>
+      <Text style={[line, { textAlign: 'center' }]}>
+        design by{' '}
+        <Text style={name}>J.C. GLOBAL INVESTMENTS SOFTWARE DEPARTMENT, NEW CALEDONIA</Text>
+      </Text>
+    </View>
   );
 }

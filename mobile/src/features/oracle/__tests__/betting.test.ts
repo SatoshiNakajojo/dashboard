@@ -25,6 +25,7 @@ import {
   unshiftPath,
   upsertBet,
   windowFor,
+  withdrawable,
   type Bet,
 } from '@/features/oracle/betting';
 import { scheduleFor, type HorizonKey } from '@/lib/horizons';
@@ -283,5 +284,42 @@ describe('mise à jour de la liste', () => {
 
   it('ajoute un pari inconnu', () => {
     assert.equal(upsertBet([], bet('a', JOHN, '3m', NOW)).length, 1);
+  });
+});
+
+describe('retrait d’un pari', () => {
+  const mien = bet('m', JOHN, '3m', NOW - 10 * DAY_MS); // verrouillé (72 h)
+
+  it('toujours possible tant qu’il est révisable', () => {
+    const frais = bet('f', JOHN, '1w', NOW - 3_600_000);
+    assert.equal(withdrawable(frais, [frais, bet('x', ALEX, '1w', NOW)], NOW), true);
+  });
+
+  it('possible une fois verrouillé si personne d’autre n’a parié', () => {
+    assert.equal(withdrawable(mien, [mien], NOW), true);
+  });
+
+  it('impossible une fois verrouillé si un autre membre a parié', () => {
+    // Le verrou protège la sincérité du pari face aux autres.
+    const autre = bet('a', ALEX, '3m', NOW - 5 * DAY_MS);
+    assert.equal(withdrawable(mien, [mien, autre], NOW), false);
+  });
+
+  it('ne compte ni les autres horizons, ni les paris clos, ni les tracés vides', () => {
+    const autreHorizon = bet('h', ALEX, '1w', NOW - DAY_MS);
+    const clos = bet('c', ALEX, '3m', NOW - 200 * DAY_MS);
+    const vide = { ...bet('v', ALEX, '3m', NOW - DAY_MS), path: [] };
+    assert.equal(withdrawable(mien, [mien, autreHorizon, clos, vide], NOW), true);
+  });
+
+  it('toujours possible pour un pari au tracé vide', () => {
+    // Un reste de l'ancienne saison : il bloquait l'horizon sans rien parier.
+    const vide = { ...mien, path: [] };
+    assert.equal(withdrawable(vide, [vide, bet('a', ALEX, '3m', NOW - DAY_MS)], NOW), true);
+  });
+
+  it('jamais pour un pari résolu', () => {
+    const clos = bet('c', JOHN, '1w', NOW - 30 * DAY_MS);
+    assert.equal(withdrawable(clos, [clos], NOW), false);
   });
 });

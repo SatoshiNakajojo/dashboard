@@ -30,6 +30,22 @@ export interface CallDraftInput {
   coingeckoId: string | null;
   /** Symbole Yahoo Finance, pour une action ou un ETF. */
   yahooSymbol: string | null;
+  /** Jour de l'entrée, `AAAA-MM-JJ`. */
+  enteredOn: string;
+}
+
+/**
+ * Ce qu'un auteur peut corriger sur son call.
+ *
+ * Pas le titre, ni la classe : changer de titre, c'est un autre call. La base
+ * le refuse aussi (`tickers_freeze_call`).
+ */
+export interface CallPatch {
+  entryPrice: number;
+  /** Recalculé seulement si le jour d'entrée change ; sinon on renvoie l'ancien. */
+  entryBtcPrice: number | null;
+  enteredOn: string;
+  thesis: string;
 }
 
 export interface VoteRow {
@@ -45,12 +61,16 @@ export interface CallsSource {
   publish(draft: CallDraftInput, userId: string): Promise<Ticker>;
   /** `null` retire le vote. */
   setVote(tickerId: string, userId: string, side: Vote | null): Promise<void>;
+  /** Corrige un call. Le ticker renvoyé porte `editedAt`, posé par la base. */
+  update(tickerId: string, patch: CallPatch): Promise<Ticker>;
+  /** Supprime un call — ses votes partent avec lui. */
+  remove(tickerId: string): Promise<void>;
 }
 
 // ---------------------------------------------------------------------------
 
 const COLUMNS =
-  'id, user_id, symbol, asset_class, entry_price, current_price, entry_btc_price, size_usd, thesis, coingecko_id, yahoo_symbol, price_updated_at, created_at';
+  'id, user_id, symbol, asset_class, entry_price, current_price, entry_btc_price, size_usd, thesis, coingecko_id, yahoo_symbol, price_updated_at, created_at, entered_on, edited_at';
 
 interface Row {
   id: string;
@@ -66,6 +86,8 @@ interface Row {
   yahoo_symbol: string | null;
   price_updated_at: string | null;
   created_at: string;
+  entered_on: string | null;
+  edited_at: string | null;
 }
 
 /** `numeric` revient en chaîne depuis PostgREST : on ne suppose jamais un nombre. */
@@ -90,6 +112,8 @@ function fromRow(row: Row): Ticker {
     yahooSymbol: row.yahoo_symbol,
     priceUpdatedAt: row.price_updated_at,
     createdAt: row.created_at,
+    enteredOn: row.entered_on,
+    editedAt: row.edited_at,
   };
 }
 
@@ -137,12 +161,42 @@ function createSupabaseSource(client: NonNullable<typeof supabase>): CallsSource
           // `tickers_one_quote_source` le vérifie côté base.
           coingecko_id: draft.coingeckoId,
           yahoo_symbol: draft.yahooSymbol,
+          entered_on: draft.enteredOn,
         })
         .select(COLUMNS)
         .single();
 
       if (error) throw error;
       return fromRow(data as unknown as Row);
+    },
+
+    async update(tickerId, patch) {
+      const { data, error } = await client
+        .from('tickers')
+        .update({
+          entry_price: patch.entryPrice,
+          entry_btc_price: patch.entryBtcPrice,
+          entered_on: patch.enteredOn,
+          thesis: patch.thesis,
+        })
+        .eq('id', tickerId)
+        .select(COLUMNS)
+        .single();
+
+      if (error) throw error;
+      return fromRow(data as unknown as Row);
+    },
+
+    async remove(tickerId) {
+      // `select` pour savoir si la ligne est partie : la RLS ne lève pas sur
+      // le call d'un autre, elle n'en supprime aucun.
+      const { data, error } = await client
+        .from('tickers')
+        .delete()
+        .eq('id', tickerId)
+        .select('id');
+      if (error) throw error;
+      if (!data || data.length === 0) throw new Error('Ce call ne peut pas être supprimé.');
     },
 
     async setVote(tickerId, userId, side) {
@@ -220,9 +274,33 @@ function createMockSource(): CallsSource {
         yahooSymbol: draft.yahooSymbol,
         priceUpdatedAt: new Date().toISOString(),
         createdAt: new Date().toISOString(),
+        enteredOn: draft.enteredOn,
+        editedAt: null,
       };
       tickers.unshift(ticker);
       return { ...ticker };
+    },
+
+    async update(tickerId, patch) {
+      await delay(MOCK_LATENCY_MS);
+      const index = tickers.findIndex((t) => t.id === tickerId);
+      if (index === -1) throw new Error('Call introuvable');
+      const next: Ticker = {
+        ...tickers[index]!,
+        ...patch,
+        editedAt: new Date().toISOString(),
+      };
+      tickers[index] = next;
+      return { ...next };
+    },
+
+    async remove(tickerId) {
+      await delay(MOCK_LATENCY_MS);
+      const index = tickers.findIndex((t) => t.id === tickerId);
+      if (index !== -1) tickers.splice(index, 1);
+      for (let i = votes.length - 1; i >= 0; i--) {
+        if (votes[i]!.tickerId === tickerId) votes.splice(i, 1);
+      }
     },
 
     async setVote(tickerId, userId, side) {

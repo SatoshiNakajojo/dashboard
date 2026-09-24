@@ -5,7 +5,7 @@
 | `migrations/20260905120000_init.sql` | Tables, contraintes, déclencheurs, RLS, Realtime |
 | `seed.sql` | Jeu de `DONNEES_FICTIVES.md`, UUID identiques à `src/mocks` |
 | `tests/doubles.sql` | Doublures de `auth`, `storage` et des rôles, pour tester hors plateforme |
-| `tests/schema_test.sql` | Seize assertions sur les règles métier |
+| `tests/schema_test.sql` | Dix-neuf assertions sur les règles métier |
 
 ## Les sept tables
 

@@ -11,6 +11,10 @@ import { describe, it } from 'node:test';
 
 import {
   checkEntryDate,
+  clubDateToIso,
+  clubIsoDay,
+  entryDayOf,
+  isoToClubDate,
   coingeckoCovers,
   coingeckoDate,
   entryDateMs,
@@ -69,5 +73,31 @@ describe('sources du cours historique', () => {
     assert.equal(parseMempoolHistory({ prices: [] }), null);
     assert.equal(parseMempoolHistory({ prices: [{ time: 1, USD: -1 }] }), null);
     assert.equal(parseMempoolHistory('oops'), null);
+  });
+});
+
+describe('jour d’entrée stocké', () => {
+  it('passe de la saisie à la colonne et retour', () => {
+    assert.equal(clubDateToIso('15/03/2026'), '2026-03-15');
+    assert.equal(clubDateToIso('5/3/2026'), '2026-03-05');
+    assert.equal(isoToClubDate('2026-03-15'), '15/03/2026');
+    assert.equal(clubDateToIso('31/02/2026'), null);
+    assert.equal(isoToClubDate(null), null);
+  });
+
+  it('retombe sur le jour de publication pour les anciens calls', () => {
+    // Publié le 22 à 23 h UTC : déjà le 23 à Nouméa.
+    assert.equal(
+      entryDayOf({ enteredOn: null, createdAt: '2026-09-22T23:00:00Z' }),
+      '23/09/2026',
+    );
+    assert.equal(
+      entryDayOf({ enteredOn: '2026-03-15', createdAt: '2026-09-22T23:00:00Z' }),
+      '15/03/2026',
+    );
+  });
+
+  it('donne le jour du club d’un instant', () => {
+    assert.equal(clubIsoDay(Date.UTC(2026, 8, 22, 23, 0)), '2026-09-23');
   });
 });

@@ -11,10 +11,13 @@ import type { CallView, Vote } from '@/types/domain';
 export interface CallCardProps {
   call: CallView;
   onVote: (tickerId: string, side: Vote) => void;
+  /** Présents seulement sur mes calls : on ne corrige ni ne supprime celui d'un autre. */
+  onEdit?: (call: CallView) => void;
+  onDelete?: (call: CallView) => void;
 }
 
 /** Carte d'un call : auteur, thèse, bande de stats, votes. */
-export const CallCard = memo(function CallCard({ call, onVote }: CallCardProps) {
+export const CallCard = memo(function CallCard({ call, onVote, onEdit, onDelete }: CallCardProps) {
   const cls = assetClassStyle[call.assetClass];
 
   return (
@@ -32,6 +35,8 @@ export const CallCard = memo(function CallCard({ call, onVote }: CallCardProps) 
           </Text>
           <Text style={{ fontFamily: f.label, fontSize: 10, color: c.sepiaMuted, marginTop: 3 }}>
             {formatRelative(call.createdAt)}
+            {/* Le prix d'entrée fait le classement : une correction se voit. */}
+            {call.editedAt ? ` · modifié ${formatRelative(call.editedAt)}` : ''}
           </Text>
         </View>
         <View className="items-end">
@@ -114,9 +119,46 @@ export const CallCard = memo(function CallCard({ call, onVote }: CallCardProps) 
           </Text>
         )}
       </View>
+
+      {onEdit || onDelete ? (
+        <View
+          className="flex-row justify-end border-t border-hairline"
+          style={{ marginTop: 14, paddingTop: 12, gap: 22 }}
+        >
+          {onEdit ? <CardAction label="MODIFIER" onPress={() => onEdit(call)} /> : null}
+          {onDelete ? (
+            <CardAction label="SUPPRIMER" onPress={() => onDelete(call)} destructive />
+          ) : null}
+        </View>
+      ) : null}
     </LinearGradient>
   );
 });
+
+function CardAction({
+  label,
+  onPress,
+  destructive = false,
+}: {
+  label: string;
+  onPress: () => void;
+  destructive?: boolean;
+}) {
+  return (
+    <Pressable accessibilityRole="button" onPress={onPress} hitSlop={8}>
+      <Text
+        style={{
+          fontFamily: f.labelMed,
+          fontSize: 9,
+          letterSpacing: 1.62,
+          color: destructive ? c.oxbloodMuted : c.sepiaDim,
+        }}
+      >
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
 
 interface StatProps {
   label: string;

@@ -13,12 +13,27 @@
 /** Doit suivre la transition CSS de `#boot`. */
 const FADE_MS = 250;
 
+/**
+ * Le temps que la coquille reste affichée une fois l'app prête.
+ *
+ * Le club voulait voir le minage : prête en une fraction de seconde, l'app
+ * escamotait l'animation avant qu'on ait pu la lire. Deux secondes de plus
+ * laissent passer un cycle complet des huit blocs — et l'app, elle, se monte
+ * et charge ses données pendant ce temps, sous la coquille.
+ */
+export const BOOT_HOLD_MS = 2000;
+
+let scheduled = false;
+
 export function hideBootShell(): void {
-  if (typeof document === 'undefined') return;
+  if (typeof document === 'undefined' || scheduled) return;
 
   const boot = document.getElementById('boot');
   if (!boot || boot.classList.contains('done')) return;
 
-  boot.classList.add('done');
-  setTimeout(() => boot.remove(), FADE_MS);
+  scheduled = true;
+  setTimeout(() => {
+    boot.classList.add('done');
+    setTimeout(() => boot.remove(), FADE_MS);
+  }, BOOT_HOLD_MS);
 }

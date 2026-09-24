@@ -70,6 +70,8 @@ export default function OracleScreen() {
   const [confirmingClear, setConfirmingClear] = useState(false);
   /** Toucher la toile sur un tracé existant ouvre cette fenêtre, sans rien effacer. */
   const [askingRedraw, setAskingRedraw] = useState(false);
+  /** « Débloquer » retire un pari verrouillé : ça se confirme aussi. */
+  const [askingUnlock, setAskingUnlock] = useState(false);
 
   useEffect(() => {
     if (!confirmingClear) return;
@@ -257,6 +259,35 @@ export default function OracleScreen() {
             ) : null}
           </View>
 
+          {/* Verrouillé, mais personne d'autre n'a parié : rien ne justifie de
+              bloquer l'horizon. On peut retirer son pari et en ouvrir un neuf. */}
+          {sealed && oracle.unlockable ? (
+            <Pressable
+              accessibilityRole="button"
+              disabled={saving}
+              onPress={() => setAskingUnlock(true)}
+              style={{
+                marginTop: 14,
+                alignItems: 'center',
+                paddingVertical: 12,
+                borderRadius: radius.button,
+                borderWidth: 1,
+                borderColor: a.rsvpGoldBorder,
+              }}
+            >
+              <Text
+                style={{
+                  fontFamily: f.labelMed,
+                  fontSize: 10,
+                  letterSpacing: 1.8,
+                  color: c.gold,
+                }}
+              >
+                {saving ? 'RETRAIT…' : `DÉBLOQUER MON PARI · ${h.label}`}
+              </Text>
+            </Pressable>
+          ) : null}
+
           {/* Le tracé ne part pas tout seul : il se dépose. */}
           {drawRange && hasDraft ? (
             <Pressable
@@ -397,6 +428,22 @@ export default function OracleScreen() {
           )}
         </View>
       </View>
+
+      <ConfirmDialog
+        visible={askingUnlock}
+        title="Débloquer ce pari ?"
+        message={
+          mine && mine.bet.path.length < 2
+            ? 'Ce pari n’a pas de tracé : il sera retiré, et vous pourrez en déposer un vrai, avec un nouveau calendrier.'
+            : 'Personne d’autre n’a parié sur cet horizon. Votre pari verrouillé sera retiré, et vous pourrez en déposer un nouveau, avec un nouveau calendrier.'
+        }
+        confirmLabel="DÉBLOQUER"
+        onCancel={() => setAskingUnlock(false)}
+        onConfirm={() => {
+          setAskingUnlock(false);
+          oracle.unlock();
+        }}
+      />
 
       <ConfirmDialog
         visible={askingRedraw}

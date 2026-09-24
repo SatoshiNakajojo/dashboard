@@ -30,6 +30,7 @@ import {
   unshiftPath,
   upsertBet,
   windowFor,
+  withdrawable,
   type Bet,
   type BetRow,
   type Window,
@@ -81,6 +82,13 @@ export interface OracleState {
   revert: () => void;
   /** Efface le brouillon — ou retire le pari, s'il est encore révisable. */
   clear: () => void;
+  /**
+   * Mon pari est verrouillé mais peut être retiré : son tracé est vide, ou
+   * personne d'autre n'a parié sur cet horizon (`withdrawable`).
+   */
+  unlockable: boolean;
+  /** Retire mon pari verrouillé, pour en déposer un nouveau. */
+  unlock: () => void;
   /** Les paris clos, tous horizons confondus, du plus récent au plus ancien. */
   history: BetView[];
   summary: Record<HorizonKey, HorizonSummary>;
@@ -352,7 +360,14 @@ export function useOracle(
   /** Le jour zéro de mon tracé : l'ouverture de mon pari, ou maintenant. */
   const anchor = mineBet?.openedAt ?? now;
   const saved = mineBet?.path ?? EMPTY;
-  const pending = drafts[horizon];
+  /**
+   * Un brouillon ne compte que tant qu'on peut encore déposer.
+   *
+   * Sans cette garde, un brouillon resté en mémoire au moment du verrouillage
+   * — une toile vidée pour redessiner, par exemple — masquait le tracé
+   * enregistré : le pari figé s'affichait vide.
+   */
+  const pending = editable ? drafts[horizon] : undefined;
   const current = pending ?? saved;
 
   const draft = useMemo(
@@ -450,45 +465,66 @@ export function useOracle(
     setDrafts((all) => withoutKey(all, horizon));
   }, [horizon]);
 
+  /**
+   * Retire mon pari de cet horizon — la base décide si c'est permis
+   * (`prediction_withdrawable`), l'écran ne fait que proposer.
+   */
+  const withdraw = useCallback(
+    (bet: Bet) => {
+      const client = supabase;
+      const id = bet.id;
+      if (!client) {
+        setBets((all) => all.filter((candidate) => candidate.id !== id));
+        setDrafts((all) => withoutKey(all, horizon));
+        return;
+      }
+
+      setSaving(true);
+      void (async () => {
+        // `select` pour savoir si une ligne est partie : la base ne lève pas
+        // d'erreur sur un pari qu'elle refuse de retirer, elle n'en supprime
+        // aucun.
+        const { data, error: cause } = await client
+          .from('predictions')
+          .delete()
+          .eq('id', id)
+          .select('id');
+        setSaving(false);
+
+        if (cause) {
+          setError(describeError(cause));
+          return;
+        }
+        if (!data || data.length === 0) {
+          setError('Ce pari ne peut plus être retiré : un autre membre a parié sur cet horizon.');
+          return;
+        }
+        setError(null);
+        setBets((all) => all.filter((candidate) => candidate.id !== id));
+        setDrafts((all) => withoutKey(all, horizon));
+      })();
+    },
+    [horizon],
+  );
+
   const clear = useCallback(() => {
     if (!editable || saving) return;
     if (!mineBet) {
       setDrafts((all) => withoutKey(all, horizon));
       return;
     }
+    withdraw(mineBet);
+  }, [editable, saving, mineBet, horizon, withdraw]);
 
-    const client = supabase;
-    const id = mineBet.id;
-    if (!client) {
-      setBets((all) => all.filter((bet) => bet.id !== id));
-      setDrafts((all) => withoutKey(all, horizon));
-      return;
-    }
+  /** Mon pari verrouillé peut être retiré : tracé vide, ou seul sur l'horizon. */
+  const unlockable = Boolean(
+    mineBet && phaseOfBet(mineBet, now) === 'locked' && withdrawable(mineBet, bets, now),
+  );
 
-    setSaving(true);
-    void (async () => {
-      // `select` pour savoir si une ligne est partie : la base ne lève pas
-      // d'erreur sur un pari verrouillé entre-temps, elle n'en supprime aucun.
-      const { data, error: cause } = await client
-        .from('predictions')
-        .delete()
-        .eq('id', id)
-        .select('id');
-      setSaving(false);
-
-      if (cause) {
-        setError(describeError(cause));
-        return;
-      }
-      if (!data || data.length === 0) {
-        setError('Ce pari est verrouillé : il ne peut plus être retiré.');
-        return;
-      }
-      setError(null);
-      setBets((all) => all.filter((bet) => bet.id !== id));
-      setDrafts((all) => withoutKey(all, horizon));
-    })();
-  }, [editable, saving, mineBet, horizon]);
+  const unlock = useCallback(() => {
+    if (!unlockable || !mineBet || saving) return;
+    withdraw(mineBet);
+  }, [unlockable, mineBet, saving, withdraw]);
 
   return {
     now,
@@ -506,6 +542,8 @@ export function useOracle(
     save,
     revert,
     clear,
+    unlockable,
+    unlock,
     history,
     summary,
     loading,

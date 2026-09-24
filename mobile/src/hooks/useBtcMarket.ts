@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 
 import { fetchBlockHeight, fetchBtcSince, fetchBtcSpot } from '@/lib/coingecko';
+import { isOffline } from '@/lib/spotFreshness';
 import { MOCK_BTC_CHANGE_24H, MOCK_BTC_SPOT, MOCK_BLOCK_HEIGHT } from '@/mocks/calls';
 import { mockBtcSince } from '@/mocks/oracle';
 import type { BtcSpot, MarketPoint } from '@/types/domain';
@@ -19,47 +20,79 @@ export interface BtcSpotState {
   blockHeight: number | null;
 }
 
+/** Le TTL du cache est de 60 s : rafraîchir plus souvent ne sert à rien. */
+const REFRESH_MS = 60_000;
+
+/**
+ * Le cours BTC, **une seule fois** pour toute l'app.
+ *
+ * Chaque bandeau — un par onglet — avait son propre `useBtcSpot`, et les calls
+ * et l'Oracle aussi : six abonnements, six requêtes par minute. CoinGecko en
+ * refusait une partie, et l'onglet refusé affichait `HORS LIGNE` pendant que
+ * son voisin montrait la variation du jour. Désormais un seul relevé, une
+ * seule minuterie, et tous les écrans lisent la même valeur.
+ */
+let current: BtcSpotState = { spot: OFFLINE_SPOT, loading: true, blockHeight: MOCK_BLOCK_HEIGHT };
+const listeners = new Set<() => void>();
+let timer: ReturnType<typeof setInterval> | null = null;
+let refreshing: Promise<void> | null = null;
+
+function publish(next: BtcSpotState) {
+  current = next;
+  for (const listener of listeners) listener();
+}
+
+function refresh(): Promise<void> {
+  if (refreshing) return refreshing;
+  refreshing = (async () => {
+    let spot = current.spot;
+    try {
+      const fetched = await fetchBtcSpot();
+      spot = fetched;
+    } catch {
+      // Aucune valeur jamais mise en cache : on garde ce qu'on a.
+    }
+    // `HORS LIGNE` seulement après plusieurs minutes sans réponse : un refus
+    // ponctuel de CoinGecko n'est pas une panne (`spotFreshness.ts`).
+    spot = { ...spot, stale: isOffline(spot.fetchedAt, Date.now()) };
+
+    const height = await fetchBlockHeight().catch(() => null);
+    publish({
+      spot,
+      loading: false,
+      blockHeight: height ?? current.blockHeight,
+    });
+  })().finally(() => {
+    refreshing = null;
+  });
+  return refreshing;
+}
+
+function subscribe(listener: () => void): () => void {
+  listeners.add(listener);
+  if (listeners.size === 1) {
+    void refresh();
+    timer = setInterval(() => void refresh(), REFRESH_MS);
+  }
+  return () => {
+    listeners.delete(listener);
+    if (listeners.size === 0 && timer) {
+      clearInterval(timer);
+      timer = null;
+    }
+  };
+}
+
+const snapshot = () => current;
+
 /**
  * Cours spot pour le bandeau.
  *
- * N'expose jamais d'état d'erreur : une panne CoinGecko donne `stale: true`,
- * et le bandeau affiche `HORS LIGNE` à côté du dernier prix connu (README §6).
+ * N'expose jamais d'état d'erreur : une panne durable donne `stale: true`, et
+ * le bandeau affiche `HORS LIGNE` à côté du dernier prix connu (README §6).
  */
 export function useBtcSpot(): BtcSpotState {
-  const [spot, setSpot] = useState<BtcSpot>(OFFLINE_SPOT);
-  const [loading, setLoading] = useState(true);
-  const [blockHeight, setBlockHeight] = useState<number | null>(MOCK_BLOCK_HEIGHT);
-
-  useEffect(() => {
-    const controller = new AbortController();
-
-    async function load() {
-      try {
-        const next = await fetchBtcSpot(controller.signal);
-        if (!controller.signal.aborted) setSpot(next);
-      } catch {
-        // Aucune valeur jamais mise en cache : on garde le repli hors ligne.
-        if (!controller.signal.aborted) setSpot(OFFLINE_SPOT);
-      } finally {
-        if (!controller.signal.aborted) setLoading(false);
-      }
-
-      const height = await fetchBlockHeight(controller.signal);
-      if (!controller.signal.aborted) setBlockHeight(height);
-    }
-
-    void load();
-
-    // Le TTL du cache est de 60 s : rafraîchir plus souvent ne sert à rien.
-    const timer = setInterval(() => void load(), 60_000);
-
-    return () => {
-      controller.abort();
-      clearInterval(timer);
-    };
-  }, []);
-
-  return { spot, loading, blockHeight };
+  return useSyncExternalStore(subscribe, snapshot, snapshot);
 }
 
 export interface BtcHistoryState {

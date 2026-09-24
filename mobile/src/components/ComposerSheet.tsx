@@ -6,7 +6,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Micro } from '@/components/ui/Micro';
 import { useCoinSearch } from '@/features/bag/useCoinSearch';
 import { useSuggestedPrice } from '@/features/bag/useSuggestedPrice';
-import { checkEntryDate } from '@/lib/btcAtDate';
+import { checkEntryDate, entryDayOf } from '@/lib/btcAtDate';
 import { todayInClub } from '@/lib/clubTime';
 import { formatUsd } from '@/lib/format';
 import { normalizeTicker, type CoinMatch } from '@/lib/coinSearch';
@@ -22,6 +22,7 @@ import {
   radius,
   type AssetClass,
 } from '@/theme/tokens';
+import type { CallView } from '@/types/domain';
 
 export interface CallDraft {
   assetClass: AssetClass;
@@ -51,6 +52,15 @@ export interface ComposerSheetProps {
   onClose: () => void;
   /** Résout `true` si le call est parti ; la sheet ne se ferme qu'alors. */
   onPublish: (draft: CallDraft) => Promise<boolean> | boolean;
+  /**
+   * Le call à corriger, s'il s'agit d'une modification. Le titre et la classe
+   * sont alors figés : changer de titre, c'est un autre call.
+   *
+   * L'état de la feuille s'initialise à partir de lui : le parent la remonte
+   * avec une `key` différente pour chaque call, plutôt que de recopier ses
+   * valeurs dans un effet.
+   */
+  editing?: CallView | null;
 }
 
 /** Limite dure de la thèse — la même que la contrainte `tickers.thesis`. */
@@ -63,25 +73,28 @@ export function ComposerSheet({
   error = null,
   onClose,
   onPublish,
+  editing = null,
 }: ComposerSheetProps) {
-  const [assetClass, setAssetClass] = useState<AssetClass>('BTC');
-  const [symbol, setSymbol] = useState('$BTC');
-  const [entry, setEntry] = useState('');
+  const [assetClass, setAssetClass] = useState<AssetClass>(editing?.assetClass ?? 'BTC');
+  const [symbol, setSymbol] = useState(editing?.symbol ?? '$BTC');
+  const [entry, setEntry] = useState(() =>
+    editing ? String(editing.entryPrice).replace('.', ',') : '',
+  );
   /**
    * Le jour de l'entrée. Vide : aujourd'hui.
    *
    * Sans lui, un prix d'achat vieux de six mois se comparait au bitcoin des
    * dernières minutes, et la colonne « vs ₿ » recopiait la perf.
    */
-  const [entryDate, setEntryDate] = useState('');
-  const [thesis, setThesis] = useState('');
+  const [entryDate, setEntryDate] = useState(() => (editing ? entryDayOf(editing) : ''));
+  const [thesis, setThesis] = useState(editing?.thesis ?? '');
   const [exchange, setExchange] = useState<ExchangeKey>(DEFAULT_EXCHANGE);
   const [picked, setPicked] = useState<CoinMatch | null>(null);
 
   /** Seuls les titres ont une place de cotation ; un jeton se négocie partout. */
   const isStock = providerFor(assetClass) === 'yahoo';
   /** `$BTC` n'a pas d'homonyme — lui proposer une liste serait du bruit. */
-  const isCoin = !isStock && assetClass !== 'BTC';
+  const isCoin = !isStock && assetClass !== 'BTC' && !editing;
 
   const search = useCoinSearch(assetClass, symbol);
 
@@ -192,15 +205,27 @@ export function ComposerSheet({
             gap: 18,
           }}
         >
-          <View style={{ width: 34, height: 2, backgroundColor: c.borderSheet, alignSelf: 'center' }} />
+          <View
+            style={{
+              width: 34,
+              height: 2,
+              backgroundColor: c.borderSheet,
+              alignSelf: 'center',
+            }}
+          />
 
           <View className="flex-row items-baseline justify-between">
             <Text style={{ fontFamily: f.serif, fontSize: 22, color: c.ivory }}>
-              Poster un call
+              {editing ? 'Modifier le call' : 'Poster un call'}
             </Text>
             <Pressable accessibilityRole="button" onPress={onClose}>
               <Text
-                style={{ fontFamily: f.labelMed, fontSize: 9, letterSpacing: 1.62, color: c.sepiaMuted }}
+                style={{
+                  fontFamily: f.labelMed,
+                  fontSize: 9,
+                  letterSpacing: 1.62,
+                  color: c.sepiaMuted,
+                }}
               >
                 FERMER
               </Text>
@@ -217,7 +242,8 @@ export function ComposerSheet({
                   <Pressable
                     key={key}
                     accessibilityRole="button"
-                    accessibilityState={{ selected: on }}
+                    accessibilityState={{ selected: on, disabled: Boolean(editing) }}
+                    disabled={Boolean(editing)}
                     onPress={() => {
                       setAssetClass(key);
                       // Une place retenue d'un call précédent n'a aucun sens
@@ -233,6 +259,8 @@ export function ComposerSheet({
                       borderWidth: 1,
                       borderColor: style.border,
                       backgroundColor: style.bg,
+                      // En modification, seule la classe du call reste lisible.
+                      opacity: editing && !on ? 0.35 : 1,
                     }}
                   >
                     <Text
@@ -261,6 +289,7 @@ export function ComposerSheet({
               </Micro>
               <TextInput
                 value={symbol}
+                editable={!editing}
                 onChangeText={(text) => setSymbol(text.toUpperCase())}
                 autoCapitalize="characters"
                 autoCorrect={false}
@@ -277,7 +306,13 @@ export function ComposerSheet({
               />
             </View>
             <View
-              style={{ flex: 1, paddingVertical: 13, paddingLeft: 16, borderLeftWidth: 1, borderLeftColor: c.hairline }}
+              style={{
+                flex: 1,
+                paddingVertical: 13,
+                paddingLeft: 16,
+                borderLeftWidth: 1,
+                borderLeftColor: c.hairline,
+              }}
             >
               <Micro size={8.5} tracking={1.7} style={{ color: c.sepiaMuted }}>
                 {suggested.source === 'yahoo' ? 'PRIX D’ENTRÉE · YAHOO' : 'PRIX D’ENTRÉE'}
@@ -339,7 +374,7 @@ export function ComposerSheet({
             ) : null}
           </View>
 
-          {isStock && (
+          {isStock && !editing && (
             <View>
               <Micro style={{ marginBottom: 10 }}>PLACE DE COTATION</Micro>
               <ScrollView
@@ -509,7 +544,13 @@ export function ComposerSheet({
                   color: c.onGold,
                 }}
               >
-                {publishing ? 'PUBLICATION…' : 'PUBLIER AU CLUB'}
+                {publishing
+                  ? editing
+                    ? 'ENREGISTREMENT…'
+                    : 'PUBLICATION…'
+                  : editing
+                    ? 'ENREGISTRER'
+                    : 'PUBLIER AU CLUB'}
               </Text>
             </LinearGradient>
           </Pressable>
@@ -525,7 +566,9 @@ export function ComposerSheet({
           >
             {(!publishing && error) ||
               blockedReason ||
-              'Perf calculée en dollars et vs ₿ depuis ce prix et cette date. Non modifiable après publication.'}
+              (editing
+                ? 'La carte indiquera « modifié », avec la date.'
+                : 'Perf calculée en dollars et vs ₿ depuis ce prix et cette date.')}
           </Text>
         </View>
       </View>

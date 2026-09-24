@@ -51,12 +51,33 @@ export interface CachedResult<T> {
   storedAt: number;
 }
 
+/** Chargements en vol, par clé : deux demandes simultanées n'en font qu'une. */
+const inflight = new Map<string, Promise<unknown>>();
+
 /**
  * Sert la valeur fraîche du cache, sinon appelle `load`, sinon retombe sur la
  * valeur périmée. Ne lève que si le réseau échoue **et** qu'aucune valeur
  * n'a jamais été mise en cache.
+ *
+ * Deux appels simultanés pour la même clé partagent le même chargement. Sans
+ * ça, trois écrans qui se rafraîchissent ensemble font trois requêtes — et
+ * CoinGecko, qui limite l'API publique à quelques appels par minute, refuse
+ * les suivantes.
  */
 export async function withCache<T>(
+  key: string,
+  ttlMs: number,
+  load: () => Promise<T>,
+): Promise<CachedResult<T>> {
+  const pending = inflight.get(key) as Promise<CachedResult<T>> | undefined;
+  if (pending) return pending;
+
+  const task = resolveCached(key, ttlMs, load).finally(() => inflight.delete(key));
+  inflight.set(key, task);
+  return task;
+}
+
+async function resolveCached<T>(
   key: string,
   ttlMs: number,
   load: () => Promise<T>,

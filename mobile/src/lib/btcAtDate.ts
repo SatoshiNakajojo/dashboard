@@ -19,7 +19,7 @@
  * Module pur : les formats de réponse et les dates, sans réseau.
  */
 
-import { parseClubDateTime, todayInClub } from './clubTime';
+import { CLUB_OFFSET_MINUTES, parseClubDateTime, todayInClub } from './clubTime';
 
 const DAY_MS = 86_400_000;
 
@@ -83,4 +83,34 @@ export function parseMempoolHistory(payload: unknown): number | null {
   const prices = (payload as { prices?: unknown } | null)?.prices;
   if (!Array.isArray(prices) || prices.length === 0) return null;
   return positive((prices[0] as { USD?: unknown } | null)?.USD);
+}
+
+/** `15/03/2026` → `2026-03-15`, la forme de la colonne `entered_on`. `null` si illisible. */
+export function clubDateToIso(input: string): string | null {
+  const m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(input.trim());
+  if (!m || entryDateMs(input) === null) return null;
+  return `${m[3]}-${m[2]!.padStart(2, '0')}-${m[1]!.padStart(2, '0')}`;
+}
+
+/** `2026-03-15` → `15/03/2026`. `null` si illisible. */
+export function isoToClubDate(iso: string | null | undefined): string | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso ?? '');
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : null;
+}
+
+/**
+ * Le jour d'entrée d'un call, `JJ/MM/AAAA` : la colonne `entered_on` si elle
+ * est remplie, sinon le jour de sa publication à Nouméa — les calls d'avant
+ * cette colonne ont été saisis le jour même.
+ */
+export function entryDayOf(call: { enteredOn: string | null; createdAt: string }): string {
+  const stored = isoToClubDate(call.enteredOn);
+  if (stored) return stored;
+  const created = Date.parse(call.createdAt);
+  return todayInClub(Number.isFinite(created) ? created : Date.now());
+}
+
+/** Le jour du club correspondant à un instant, `AAAA-MM-JJ`. */
+export function clubIsoDay(ms: number): string {
+  return new Date(ms + CLUB_OFFSET_MINUTES * 60_000).toISOString().slice(0, 10);
 }

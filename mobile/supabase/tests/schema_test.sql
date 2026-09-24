@@ -90,6 +90,7 @@ do $$
 declare
   perf   numeric;
   failed boolean;
+  edited timestamptz;
 begin
   insert into public.tickers (id, user_id, symbol, asset_class, entry_price, current_price, thesis)
   values ('dddddddd-0000-4000-8000-000000000001', 'aaaaaaaa-0000-4000-8000-000000000001',
@@ -100,17 +101,31 @@ begin
   assert perf = 12.4000, format('perf générée attendue 12.4000, obtenue %s', perf);
   raise notice 'ok · tickers : performance_percentage générée (+12,4 %%)';
 
+  -- Ce sur quoi on parie reste figé.
   failed := false;
   begin
-    update public.tickers set thesis = 'autre' where id = 'dddddddd-0000-4000-8000-000000000001';
+    update public.tickers set symbol = '$COIN' where id = 'dddddddd-0000-4000-8000-000000000001';
   exception when check_violation then failed := true;
   end;
-  assert failed, 'un call publié ne doit plus être modifiable';
-  raise notice 'ok · tickers : un call publié est figé';
+  assert failed, 'le titre d’un call ne doit pas changer';
+  raise notice 'ok · tickers : le titre d’un call publié est figé';
 
+  -- Le cours qui bouge n'est pas une modification.
   update public.tickers set current_price = 470
    where id = 'dddddddd-0000-4000-8000-000000000001';
-  raise notice 'ok · tickers : seul current_price évolue';
+  select edited_at into edited from public.tickers
+   where id = 'dddddddd-0000-4000-8000-000000000001';
+  assert edited is null, 'un nouveau cours ne marque pas le call comme modifié';
+  raise notice 'ok · tickers : un nouveau cours ne marque pas le call comme modifié';
+
+  -- La thèse et le prix se corrigent, et la correction est datée.
+  update public.tickers set thesis = 'Levier propre sur BTC.', entry_price = 400,
+         edited_at = '2000-01-01'
+   where id = 'dddddddd-0000-4000-8000-000000000001';
+  select edited_at into edited from public.tickers
+   where id = 'dddddddd-0000-4000-8000-000000000001';
+  assert edited = now(), 'la base date la modification, pas le client';
+  raise notice 'ok · tickers : un call se corrige, et la correction est datée';
 end $$;
 
 -- --- Oracle : des paris, pas une saison ---------------------------------------
@@ -122,6 +137,8 @@ do $$
 declare
   semaine  uuid;
   dix_ans  uuid;
+  autre    uuid;
+  vide     uuid;
   opened   timestamptz;
   locks    timestamptz;
   resolves timestamptz;
@@ -200,16 +217,47 @@ begin
   assert failed, 'un tracé verrouillé ne doit plus changer';
   raise notice 'ok · predictions : le tracé est scellé après verrouillage';
 
-  -- 7. On retire son pari tant qu'il est révisable, jamais après.
+  -- 7. Retrait : toujours tant que le pari est révisable ; verrouillé,
+  --    seulement s'il ne lèse personne (`prediction_withdrawable`).
+  insert into public.predictions (user_id, horizon, path_data)
+  values ('aaaaaaaa-0000-4000-8000-000000000002', '1w', '[[0,110000],[7,90000]]'::jsonb)
+  returning id into autre;
+
   set local role authenticated;
-  delete from public.predictions where id = semaine;
-  get diagnostics affected = row_count;
-  assert affected = 0, 'un pari verrouillé ne se retire pas';
   delete from public.predictions where id = dix_ans;
   get diagnostics affected = row_count;
   assert affected = 1, 'un pari encore révisable se retire';
+
+  delete from public.predictions where id = semaine;
+  get diagnostics affected = row_count;
+  assert affected = 0, 'verrouillé, avec un autre pari en cours sur l’horizon : il reste';
   reset role;
-  raise notice 'ok · predictions : un pari se retire avant verrouillage, pas après';
+  raise notice 'ok · predictions : un pari verrouillé reste si un autre membre a parié';
+
+  -- Le pari d'Alex part : John est seul sur l'horizon, il peut débloquer.
+  delete from public.predictions where id = autre;
+  set local role authenticated;
+  delete from public.predictions where id = semaine;
+  get diagnostics affected = row_count;
+  assert affected = 1, 'verrouillé mais seul sur l’horizon : il se débloque';
+  reset role;
+  raise notice 'ok · predictions : seul sur l’horizon, un pari verrouillé se débloque';
+
+  -- Un pari verrouillé sans tracé se retire, même face à d'autres paris.
+  insert into public.predictions (user_id, horizon, path_data)
+  values ('aaaaaaaa-0000-4000-8000-000000000001', '6m', '[]'::jsonb)
+  returning id into vide;
+  insert into public.predictions (user_id, horizon, path_data)
+  values ('aaaaaaaa-0000-4000-8000-000000000002', '6m', '[[0,110000],[182,150000]]'::jsonb);
+  alter table public.predictions disable trigger predictions_guard_trigger;
+  update public.predictions set locked_at = now() - interval '1 minute' where id = vide;
+  alter table public.predictions enable trigger predictions_guard_trigger;
+  set local role authenticated;
+  delete from public.predictions where id = vide;
+  get diagnostics affected = row_count;
+  assert affected = 1, 'un pari sans tracé ne bloque rien';
+  reset role;
+  raise notice 'ok · predictions : un pari verrouillé sans tracé se retire';
 end $$;
 
 -- ============================================================================

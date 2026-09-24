@@ -118,9 +118,10 @@ qu'on n'a pas déposé le nouveau tracé.
   réécrit jamais un prix inchangé.
 - **Schéma** : toutes les migrations appliquées dans l'ordre à un PostgreSQL 16
   neuf (doublures `supabase/tests/doubles.sql`), réexécutées pour l'idempotence,
-  puis `supabase/tests/schema_test.sql` — 16 assertions passent, dont les sept
+  puis `supabase/tests/schema_test.sql` — 19 assertions passent, dont celles
   des paris de l'Oracle (calendrier fixé par la base, un pari en cours par
-  horizon, scellement, retrait avant verrou seulement), et celle qui
+  horizon, scellement, déblocage seulement quand personne d'autre n'a parié),
+  celles des calls (titre figé, corrections datées par la base), et celle qui
   manquait : un membre lit les couleurs déjà prises **avant**
   d'être membre, là où la RLS lui refuse toute ligne.
   Le seed reproduit exactement les pourcentages du design (`+14,9 %`, `+12,4 %`,
@@ -309,9 +310,22 @@ Quatre décisions portent l'ensemble :
   bitcoin à 1 M$ même si le cours n'a encore rien montré.
 
 Un pari encore révisable se **retire** (`RETIRER MON PARI`, confirmé en deux
-temps) ; après le verrou, il appartient à l'historique du club. Sans ça, un
-tracé déposé par erreur bloquerait l'horizon jusqu'à sa résolution — dix ans
-pour le plus long.
+temps). Sans ça, un tracé déposé par erreur bloquerait l'horizon jusqu'à sa
+résolution — dix ans pour le plus long.
+
+Un pari **verrouillé** se **débloque** (`DÉBLOQUER MON PARI`, confirmé) dans
+deux cas seulement : son tracé est vide — un reste de l'ancienne saison, qui
+bloquait l'horizon à trois mois sans rien parier — ou **personne d'autre** n'a
+de pari en cours sur cet horizon. Le verrou protège la sincérité d'un pari
+face aux autres ; seul sur l'horizon, il n'y a personne à protéger. Dès qu'un
+autre membre a parié, le verrou tient. La base applique la même règle
+(`prediction_withdrawable`, migration `20260924090000_unlock_predictions`) ; un
+pari résolu ne se retire jamais.
+
+Un brouillon resté en mémoire au moment du verrouillage — une toile vidée pour
+redessiner, par exemple — masquait le tracé enregistré : le pari figé
+s'affichait vide. Une fois verrouillé, c'est toujours le tracé déposé qui
+s'affiche.
 
 **Limite connue :** l'API publique de CoinGecko ne rend pas plus d'un an
 d'historique. Un pari à cinq ans ouvert il y a deux ans se juge donc sur sa
@@ -481,6 +495,36 @@ année, mempool.space au-delà (`src/lib/btcAtDate.ts`). Sans ce cours, la
 publication est refusée avec un message plutôt que de figer un référentiel
 faux, puisqu'il ne se corrige pas après coup. Même règle pour le cours de repli
 du bandeau (`HORS LIGNE`) : il se lit, il ne sert plus de référentiel.
+
+---
+
+## Corriger ou supprimer un call
+
+Un call publié était figé. L'auteur peut maintenant le **modifier** (prix
+d'entrée, date d'entrée, thèse) ou le **supprimer** (confirmé ; ses votes
+partent avec lui). Les boutons n'apparaissent que sur ses propres calls, et la
+base le vérifie aussi (RLS).
+
+Reste figé ce sur quoi on parie : le titre, la classe, l'auteur, la date de
+publication — changer de titre, c'est un autre call. Et comme le prix d'entrée
+fait le classement, toute correction est **datée par la base** (`edited_at`,
+migration `20260924100000_editable_calls`) : la carte affiche « modifié il y a
+2 h », et personne ne retouche son prix en silence. Le référentiel BTC n'est
+recalculé que si le jour d'entrée change.
+
+---
+
+## `HORS LIGNE` sur un onglet, la variation sur l'autre
+
+Chaque bandeau — un par onglet — interrogeait CoinGecko de son côté, comme les
+calls et l'Oracle : six relevés par minute. L'API publique en refusait une
+partie, et l'onglet refusé affichait `HORS LIGNE` pendant que son voisin,
+servi une seconde plus tôt, montrait la variation du jour.
+
+Le cours BTC est maintenant **un seul relevé partagé** par tous les écrans
+(`useBtcSpot`), deux demandes simultanées n'en font qu'une (`withCache`), et
+`HORS LIGNE` n'apparaît qu'après trois minutes **sans aucune** réponse
+(`spotFreshness.ts`) : un refus ponctuel n'est pas une panne.
 
 ---
 
@@ -665,6 +709,11 @@ une chaîne de huit blocs qui se minent en boucle. Elle est là **dès le premie
 octet** — aucune police à charger, aucun JavaScript, et pour seule image
 l'icône que la PWA a déjà en cache. Si le bundle n'arrive jamais, elle reste :
 c'est encore mieux qu'une page blanche.
+
+Une fois l'app prête, la coquille reste encore **deux secondes**
+(`BOOT_HOLD_MS`) : prête en une fraction de seconde, l'app escamotait
+l'animation avant qu'on ait pu la voir. L'app se monte et charge ses données
+dessous pendant ce temps.
 
 Pas de pourcentage. On ignore le débit du réseau, et une barre bloquée à 80 %
 ressemble à une panne ; des blocs qui se minent ne promettent que « ça
