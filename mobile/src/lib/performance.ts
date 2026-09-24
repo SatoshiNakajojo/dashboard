@@ -24,7 +24,7 @@
  * qu'exige le README §7.3 : texte et logique ne peuvent pas diverger.
  */
 
-import type { CallView } from '@/types/domain';
+import type { CallView, Ticker } from '@/types/domain';
 import { toRoman } from './format';
 
 export type LeaderboardReference = 'usd' | 'vsBtc';
@@ -78,6 +78,45 @@ export function vsBitcoinPercent(
   const ratio = (1 + asset / 100) / (1 + btc / 100);
   if (!Number.isFinite(ratio)) return null;
   return (ratio - 1) * 100;
+}
+
+/**
+ * Les deux perfs d'un call, en cours ou clos.
+ *
+ * Une position close se mesure à sa sortie : prix de sortie, et bitcoin **du
+ * jour de la sortie**. La comparer au bitcoin d'aujourd'hui ferait encore
+ * bouger une perf réalisée — exactement ce que la clôture doit arrêter.
+ *
+ * `liveBtc` n'est lu que pour un call en cours.
+ */
+export function callPerformance(
+  ticker: Pick<
+    Ticker,
+    | 'assetClass'
+    | 'entryPrice'
+    | 'currentPrice'
+    | 'entryBtcPrice'
+    | 'exitPrice'
+    | 'exitBtcPrice'
+  >,
+  liveBtc: number | null | undefined,
+): { performancePercent: number | null; vsBtcPercent: number | null; closed: boolean } {
+  const closed = ticker.exitPrice !== null;
+  const price = closed ? ticker.exitPrice : ticker.currentPrice;
+  return {
+    performancePercent: performancePercent(ticker.entryPrice, price),
+    // Un call BTC est le référentiel : il n'a pas de perf vs ₿.
+    vsBtcPercent:
+      ticker.assetClass === 'BTC'
+        ? null
+        : vsBitcoinPercent(
+            ticker.entryPrice,
+            price,
+            ticker.entryBtcPrice,
+            closed ? ticker.exitBtcPrice : liveBtc,
+          ),
+    closed,
+  };
 }
 
 /**

@@ -48,6 +48,15 @@ export interface CallPatch {
   thesis: string;
 }
 
+/** La sortie d'une position : ce qui la clôture. */
+export interface CallExit {
+  exitPrice: number;
+  /** Cours du BTC le jour de la sortie. `null` s'il est introuvable. */
+  exitBtcPrice: number | null;
+  /** `AAAA-MM-JJ`. */
+  closedOn: string;
+}
+
 export interface VoteRow {
   tickerId: string;
   userId: string;
@@ -65,12 +74,17 @@ export interface CallsSource {
   update(tickerId: string, patch: CallPatch): Promise<Ticker>;
   /** Supprime un call — ses votes partent avec lui. */
   remove(tickerId: string): Promise<void>;
+  /**
+   * Clôture un call, ou corrige sa sortie. `null` le rouvre. Le ticker renvoyé
+   * porte `closedAt` et `editedAt`, posés par la base.
+   */
+  setExit(tickerId: string, exit: CallExit | null): Promise<Ticker>;
 }
 
 // ---------------------------------------------------------------------------
 
 const COLUMNS =
-  'id, user_id, symbol, asset_class, entry_price, current_price, entry_btc_price, size_usd, thesis, coingecko_id, yahoo_symbol, price_updated_at, created_at, entered_on, edited_at';
+  'id, user_id, symbol, asset_class, entry_price, current_price, entry_btc_price, size_usd, thesis, coingecko_id, yahoo_symbol, price_updated_at, created_at, entered_on, edited_at, exit_price, exit_btc_price, closed_on, closed_at';
 
 interface Row {
   id: string;
@@ -88,6 +102,10 @@ interface Row {
   created_at: string;
   entered_on: string | null;
   edited_at: string | null;
+  exit_price: number | string | null;
+  exit_btc_price: number | string | null;
+  closed_on: string | null;
+  closed_at: string | null;
 }
 
 /** `numeric` revient en chaîne depuis PostgREST : on ne suppose jamais un nombre. */
@@ -114,6 +132,10 @@ function fromRow(row: Row): Ticker {
     createdAt: row.created_at,
     enteredOn: row.entered_on,
     editedAt: row.edited_at,
+    exitPrice: num(row.exit_price),
+    exitBtcPrice: num(row.exit_btc_price),
+    closedOn: row.closed_on,
+    closedAt: row.closed_at,
   };
 }
 
@@ -199,6 +221,22 @@ function createSupabaseSource(client: NonNullable<typeof supabase>): CallsSource
       if (!data || data.length === 0) throw new Error('Ce call ne peut pas être supprimé.');
     },
 
+    async setExit(tickerId, exit) {
+      const { data, error } = await client
+        .from('tickers')
+        .update({
+          exit_price: exit?.exitPrice ?? null,
+          exit_btc_price: exit?.exitBtcPrice ?? null,
+          closed_on: exit?.closedOn ?? null,
+        })
+        .eq('id', tickerId)
+        .select(COLUMNS)
+        .single();
+
+      if (error) throw error;
+      return fromRow(data as unknown as Row);
+    },
+
     async setVote(tickerId, userId, side) {
       const { error } = side
         ? await client
@@ -276,6 +314,10 @@ function createMockSource(): CallsSource {
         createdAt: new Date().toISOString(),
         enteredOn: draft.enteredOn,
         editedAt: null,
+        exitPrice: null,
+        exitBtcPrice: null,
+        closedOn: null,
+        closedAt: null,
       };
       tickers.unshift(ticker);
       return { ...ticker };
@@ -301,6 +343,35 @@ function createMockSource(): CallsSource {
       for (let i = votes.length - 1; i >= 0; i--) {
         if (votes[i]!.tickerId === tickerId) votes.splice(i, 1);
       }
+    },
+
+    async setExit(tickerId, exit) {
+      await delay(MOCK_LATENCY_MS);
+      const index = tickers.findIndex((t) => t.id === tickerId);
+      if (index === -1) throw new Error('Call introuvable');
+      const before = tickers[index]!;
+      const now = new Date().toISOString();
+      // Les mêmes règles que `tickers_freeze_call` : clôturer n'est pas
+      // corriger ; corriger une sortie ou rouvrir, si.
+      const next: Ticker = exit
+        ? {
+            ...before,
+            ...exit,
+            exitBtcPrice: before.assetClass === 'BTC' ? exit.exitPrice : exit.exitBtcPrice,
+            currentPrice: exit.exitPrice,
+            closedAt: before.closedAt ?? now,
+            editedAt: before.closedOn ? now : before.editedAt,
+          }
+        : {
+            ...before,
+            exitPrice: null,
+            exitBtcPrice: null,
+            closedOn: null,
+            closedAt: null,
+            editedAt: before.closedOn ? now : before.editedAt,
+          };
+      tickers[index] = next;
+      return { ...next };
     },
 
     async setVote(tickerId, userId, side) {

@@ -67,6 +67,12 @@ export type TickerRow = {
   entered_on: string | null;
   /** Posée par le déclencheur `tickers_freeze`, jamais par le client. */
   edited_at: string | null;
+  /** La sortie : les trois ensemble, ou aucune (`tickers_exit_complete`). */
+  exit_price: number | null;
+  exit_btc_price: number | null;
+  closed_on: string | null;
+  /** Posée par le déclencheur `tickers_freeze`, jamais par le client. */
+  closed_at: string | null;
   /** Colonne générée : jamais écrite par le client. */
   performance_percentage: number | null;
 };

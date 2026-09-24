@@ -11,13 +11,7 @@ import { describe, it } from 'node:test';
 
 import { MOCK_BTC_SPOT, MOCK_CURRENT_TICKERS, MOCK_TICKERS } from '@/mocks/calls';
 import { MEMBERS } from '@/mocks/members';
-import {
-  performancePercent,
-  rektFace,
-  romanRank,
-  splitLeaderboards,
-  vsBitcoinPercent,
-} from '@/lib/performance';
+import { callPerformance, rektFace, romanRank, splitLeaderboards } from '@/lib/performance';
 import type { CallView } from '@/types/domain';
 
 /** Même projection que `useCalls`, sans React. */
@@ -25,16 +19,7 @@ function toViews(tickers = MOCK_TICKERS): CallView[] {
   return tickers.map((ticker) => ({
     ...ticker,
     author: Object.values(MEMBERS).find((m) => m.id === ticker.userId)!,
-    performancePercent: performancePercent(ticker.entryPrice, ticker.currentPrice),
-    vsBtcPercent:
-      ticker.assetClass === 'BTC'
-        ? null
-        : vsBitcoinPercent(
-            ticker.entryPrice,
-            ticker.currentPrice,
-            ticker.entryBtcPrice,
-            MOCK_BTC_SPOT,
-          ),
+    ...callPerformance(ticker, MOCK_BTC_SPOT),
     bull: 0,
     bear: 0,
     myVote: null,

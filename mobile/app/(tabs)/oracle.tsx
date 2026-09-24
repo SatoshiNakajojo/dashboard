@@ -9,6 +9,8 @@ import { TimeLockCard } from '@/components/TimeLockCard';
 import { MemberAvatar } from '@/components/MemberAvatar';
 import { Micro } from '@/components/ui/Micro';
 import { SectionTitle } from '@/components/ui/SectionTitle';
+import { OracleStandings } from '@/components/OracleStandings';
+import { clubYear, standings } from '@/features/oracle/standings';
 import { DAY_MS } from '@/features/oracle/betting';
 import { useOracle, type BetView } from '@/features/oracle/useOracle';
 import { useBtcSpot } from '@/hooks/useBtcMarket';
@@ -60,6 +62,13 @@ export default function OracleScreen() {
 
   const [showOthers, setShowOthers] = useState(true);
   const [showAllHistory, setShowAllHistory] = useState(false);
+  /** L'année du classement ; `null` : depuis toujours. */
+  const currentYear = clubYear(now);
+  const [rankingYear, setRankingYear] = useState<number | null>(currentYear);
+  const ranking = useMemo(
+    () => standings(oracle.history, rankingYear),
+    [oracle.history, rankingYear],
+  );
   /**
    * L'effacement demande confirmation, en deux temps sur le même bouton.
    *
@@ -387,6 +396,14 @@ export default function OracleScreen() {
             ))
           )}
         </View>
+
+        <OracleStandings
+          rows={ranking}
+          year={rankingYear}
+          currentYear={currentYear}
+          onYearChange={setRankingYear}
+          loading={oracle.loading}
+        />
 
         <View>
           <SectionTitle label="HISTORIQUE DES PARIS" hint={`${oracle.history.length} CLOS`} />

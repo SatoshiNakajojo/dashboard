@@ -35,6 +35,10 @@ const call = (id: string, assetClass: AssetClass, extra: Partial<Ticker> = {}): 
   yahooSymbol: null,
   enteredOn: null,
   editedAt: null,
+  exitPrice: null,
+  exitBtcPrice: null,
+  closedOn: null,
+  closedAt: null,
   priceUpdatedAt: null,
   createdAt: '2026-01-01T00:00:00Z',
   ...extra,
@@ -173,5 +177,25 @@ describe('spot BTC utilisable', () => {
 
   it('garde un cours reçu, même ancien', () => {
     assert.equal(liveBtc({ usd: 112_000, fetchedAt: 1_758_600_000_000 }), 112_000);
+  });
+});
+
+describe('une position close', () => {
+  const close = { exitPrice: 150, exitBtcPrice: 66_000, closedOn: '2026-09-01' };
+
+  it('ne réclame plus de cours', () => {
+    const cibles = quoteTargets([
+      call('a', 'ALT', { coingeckoId: 'ethereum', ...close }),
+      call('b', 'ACTION', { yahooSymbol: 'SMR', ...close }),
+    ]);
+    assert.deepEqual(cibles, { coingeckoIds: [], yahooSymbols: [] });
+  });
+
+  it('garde son prix de sortie même si un cours arrive', () => {
+    const closed = call('a', 'ALT', { coingeckoId: 'ethereum', currentPrice: 150, ...close });
+    const quotes = { coingecko: { ethereum: 4_000 }, yahoo: {} };
+    assert.equal(freshPrice(closed, quotes), null);
+    const tickers = [closed];
+    assert.equal(mergeQuotes(tickers, quotes), tickers);
   });
 });

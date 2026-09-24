@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 
 import { CallCard } from '@/components/CallCard';
+import { CloseCallSheet } from '@/components/CloseCallSheet';
 import { ComposerSheet, type CallDraft } from '@/components/ComposerSheet';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { Fab } from '@/components/Fab';
@@ -23,16 +24,14 @@ import { seasonAt } from '@/lib/season';
 import { a, c, f, radius } from '@/theme/tokens';
 import type { CallView } from '@/types/domain';
 
-type BagView = 'bag' | 'rekt';
+type BagView = 'bag' | 'closed' | 'rekt';
 
 /** Onglet Calls — fil des calls et classements de la saison. */
 export default function BagScreen() {
   const { userId } = useSession();
   const { byId } = useMembers();
-  const { calls, loading, error, vote, publish, edit, remove, publishing } = useCalls(
-    userId,
-    byId,
-  );
+  const { calls, loading, error, vote, publish, edit, remove, close, reopen, publishing } =
+    useCalls(userId, byId);
 
   const [view, setView] = useState<BagView>('bag');
   const [composerOpen, setComposerOpen] = useState(false);
@@ -40,11 +39,16 @@ export default function BagScreen() {
   const [editing, setEditing] = useState<CallView | null>(null);
   /** Le call dont on demande la suppression. */
   const [deleting, setDeleting] = useState<CallView | null>(null);
+  /** Le call qu'on clôture, ou dont on corrige la sortie. */
+  const [closing, setClosing] = useState<CallView | null>(null);
+  /** Le call dont on demande la réouverture. */
+  const [reopening, setReopening] = useState<CallView | null>(null);
 
   // Stables : `CallCard` est mémoïsée, et une fonction neuve à chaque rendu
   // redessinerait toutes les cartes.
   const startEdit = useCallback((call: CallView) => setEditing(call), []);
   const askDelete = useCallback((call: CallView) => setDeleting(call), []);
+  const startClose = useCallback((call: CallView) => setClosing(call), []);
 
   const closeSheet = () => {
     setComposerOpen(false);
@@ -53,6 +57,10 @@ export default function BagScreen() {
 
   const me = userId ? (byId.get(userId) ?? null) : null;
   const isBag = view === 'bag';
+  const isRekt = view === 'rekt';
+  // Le fil se partage entre ce qui court encore et ce qui est réalisé ; les
+  // classements, eux, prennent tout.
+  const shown = calls.filter((call) => call.closed === (view === 'closed'));
 
   const handlePublish = async (draft: CallDraft) => {
     const sent = editing
@@ -74,17 +82,24 @@ export default function BagScreen() {
         overline={
           isBag
             ? 'Calls en cours · perf vs ₿'
-            : `Classement vs bitcoin · saison ${seasonAt().roman}`
+            : isRekt
+              ? `Classement vs bitcoin · saison ${seasonAt().roman}`
+              : 'Positions closes · perf réalisée'
         }
-        title={isBag ? 'Les Calls' : 'Rekt Board'}
+        title={isBag ? 'Les Calls' : isRekt ? 'Rekt Board' : 'Clôturés'}
         me={me}
       >
         <View className="flex-row border-b border-border" style={{ gap: 26, marginBottom: 20 }}>
           <ViewTab label="En cours" active={isBag} onPress={() => setView('bag')} />
-          <ViewTab label="Rekt Board" active={!isBag} onPress={() => setView('rekt')} />
+          <ViewTab
+            label="Clôturés"
+            active={view === 'closed'}
+            onPress={() => setView('closed')}
+          />
+          <ViewTab label="Rekt Board" active={isRekt} onPress={() => setView('rekt')} />
         </View>
 
-        {isBag ? (
+        {!isRekt ? (
           <View style={{ gap: 16 }}>
             {loading ? <CallSkeleton /> : null}
             {!loading && error ? (
@@ -92,10 +107,12 @@ export default function BagScreen() {
                 {error}
               </Text>
             ) : null}
-            {!loading && !error && calls.length === 0 ? (
-              <Empty message="Aucun call ce mois-ci" />
+            {!loading && !error && shown.length === 0 ? (
+              <Empty
+                message={isBag ? 'Aucun call en cours' : 'Aucune position close pour l’instant'}
+              />
             ) : (
-              calls.map((call) => {
+              shown.map((call) => {
                 // On ne corrige ni ne supprime que ses propres calls ; la base
                 // le vérifie aussi (RLS).
                 const mine = call.userId === userId;
@@ -106,6 +123,7 @@ export default function BagScreen() {
                     onVote={vote}
                     onEdit={mine ? startEdit : undefined}
                     onDelete={mine ? askDelete : undefined}
+                    onCloseCall={mine ? startClose : undefined}
                   />
                 );
               })
@@ -117,7 +135,7 @@ export default function BagScreen() {
       </ScreenShell>
 
       {/* Le FAB n'apparaît que sur la vue Bag, et disparaît sheet ouverte. */}
-      {isBag && !composerOpen && !editing ? (
+      {isBag && !composerOpen && !editing && !closing ? (
         <Fab label="Poster un call" onPress={() => setComposerOpen(true)} />
       ) : null}
 
@@ -131,6 +149,42 @@ export default function BagScreen() {
         error={error}
         onClose={closeSheet}
         onPublish={handlePublish}
+      />
+
+      <CloseCallSheet
+        key={closing?.id ?? 'aucun'}
+        call={closing}
+        busy={publishing}
+        error={error}
+        onClose={() => setClosing(null)}
+        onSubmit={async (input) => {
+          const target = closing;
+          if (!target) return false;
+          const done = await close(target.id, input);
+          if (done) setClosing(null);
+          return done;
+        }}
+        onReopen={
+          closing?.closed
+            ? () => {
+                setReopening(closing);
+                setClosing(null);
+              }
+            : undefined
+        }
+      />
+
+      <ConfirmDialog
+        visible={reopening !== null}
+        title="Rouvrir ce call ?"
+        message={`La sortie de ${reopening?.symbol ?? ''} est effacée : la perf repart avec le cours du moment, et la carte indiquera « modifié ».`}
+        confirmLabel="ROUVRIR"
+        onCancel={() => setReopening(null)}
+        onConfirm={() => {
+          const target = reopening;
+          setReopening(null);
+          if (target) void reopen(target.id);
+        }}
       />
 
       <ConfirmDialog

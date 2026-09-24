@@ -128,6 +128,104 @@ begin
   raise notice 'ok · tickers : un call se corrige, et la correction est datée';
 end $$;
 
+-- --- Calls : clôturer une position ------------------------------------------
+
+do $$
+declare
+  t      public.tickers%rowtype;
+  failed boolean;
+begin
+  set local role authenticated;
+
+  insert into public.tickers (id, user_id, symbol, asset_class, entry_price, current_price,
+                              entry_btc_price, thesis, entered_on)
+  values ('dddddddd-0000-4000-8000-000000000002', 'aaaaaaaa-0000-4000-8000-000000000001',
+          '$SMR', 'ACTION', 10, 11, 60000, 'Petits réacteurs.', current_date - 30);
+
+  -- Clôturer : la perf devient réalisée, l'instant est posé par la base, et ce
+  -- n'est pas une « modification ».
+  update public.tickers
+     set exit_price = 15, exit_btc_price = 66000, closed_on = current_date - 1,
+         closed_at = '2000-01-01', current_price = 99
+   where id = 'dddddddd-0000-4000-8000-000000000002';
+  select * into t from public.tickers where id = 'dddddddd-0000-4000-8000-000000000002';
+  assert t.closed_at = now(), 'la base date la clôture';
+  assert t.current_price = 15 and t.performance_percentage = 50.0000,
+    format('perf réalisée attendue +50 %%, obtenue %s', t.performance_percentage);
+  assert t.edited_at is null, 'clôturer n’est pas corriger';
+  raise notice 'ok · tickers : une clôture fige la perf réalisée (+50 %%)';
+
+  -- Un nouveau cours (refresh-prices) ne fait plus bouger une position close.
+  reset role;
+  update public.tickers set current_price = 20 where id = 'dddddddd-0000-4000-8000-000000000002';
+  select * into t from public.tickers where id = 'dddddddd-0000-4000-8000-000000000002';
+  assert t.current_price = 15, 'le cours d’une position close ne bouge plus';
+  set local role authenticated;
+
+  -- Corriger la sortie est daté, sans changer l'instant de clôture.
+  update public.tickers set exit_price = 14 where id = 'dddddddd-0000-4000-8000-000000000002';
+  select * into t from public.tickers where id = 'dddddddd-0000-4000-8000-000000000002';
+  assert t.edited_at = now() and t.closed_at = now() and t.current_price = 14,
+    'une sortie corrigée est datée';
+  raise notice 'ok · tickers : une sortie corrigée est datée, le cours reste figé';
+
+  -- Une sortie avant l'entrée, ou dans le futur : refusées.
+  failed := false;
+  begin
+    update public.tickers set closed_on = current_date - 31
+     where id = 'dddddddd-0000-4000-8000-000000000002';
+  exception when check_violation then failed := true;
+  end;
+  assert failed, 'une sortie ne précède pas l’entrée';
+  failed := false;
+  begin
+    update public.tickers set closed_on = current_date + 2
+     where id = 'dddddddd-0000-4000-8000-000000000002';
+  exception when check_violation then failed := true;
+  end;
+  assert failed, 'une sortie n’est pas dans le futur';
+
+  -- Un prix sans jour n'est pas une clôture.
+  failed := false;
+  begin
+    update public.tickers set closed_on = null
+     where id = 'dddddddd-0000-4000-8000-000000000002';
+  exception when check_violation then failed := true;
+  end;
+  assert failed, 'un prix de sortie sans jour est refusé';
+  raise notice 'ok · tickers : une sortie incohérente est refusée';
+
+  -- Rouvrir efface la sortie et se voit.
+  update public.tickers set exit_price = null, exit_btc_price = null, closed_on = null
+   where id = 'dddddddd-0000-4000-8000-000000000002';
+  select * into t from public.tickers where id = 'dddddddd-0000-4000-8000-000000000002';
+  assert t.closed_at is null and t.exit_price is null, 'rouvert';
+  raise notice 'ok · tickers : un call se rouvre';
+
+  -- Un call se publie ouvert.
+  failed := false;
+  begin
+    insert into public.tickers (user_id, symbol, asset_class, entry_price, thesis,
+                                exit_price, closed_on)
+    values ('aaaaaaaa-0000-4000-8000-000000000001', '$OKLO', 'ACTION', 10, 'x', 12, current_date);
+  exception when check_violation then failed := true;
+  end;
+  assert failed, 'un call ne se publie pas déjà clos';
+
+  -- Le call d'un autre ne se clôture pas (RLS : 0 ligne).
+  reset role;
+  insert into public.tickers (id, user_id, symbol, asset_class, entry_price, thesis)
+  values ('dddddddd-0000-4000-8000-000000000003', 'aaaaaaaa-0000-4000-8000-000000000002',
+          '$NVDA', 'ACTION', 100, 'IA.');
+  set local role authenticated;
+  update public.tickers set exit_price = 150, closed_on = current_date
+   where id = 'dddddddd-0000-4000-8000-000000000003';
+  reset role;
+  select * into t from public.tickers where id = 'dddddddd-0000-4000-8000-000000000003';
+  assert t.closed_on is null, 'on ne clôture pas le call d’un autre';
+  raise notice 'ok · tickers : on ne clôture que ses propres calls';
+end $$;
+
 -- --- Oracle : des paris, pas une saison ---------------------------------------
 --
 -- Le calendrier d'un pari est une frontière de sécurité : c'est la base qui le

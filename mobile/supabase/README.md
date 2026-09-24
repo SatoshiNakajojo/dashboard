@@ -5,7 +5,7 @@
 | `migrations/20260905120000_init.sql` | Tables, contraintes, déclencheurs, RLS, Realtime |
 | `seed.sql` | Jeu de `DONNEES_FICTIVES.md`, UUID identiques à `src/mocks` |
 | `tests/doubles.sql` | Doublures de `auth`, `storage` et des rôles, pour tester hors plateforme |
-| `tests/schema_test.sql` | Vingt assertions sur les règles métier |
+| `tests/schema_test.sql` | Vingt-cinq assertions sur les règles métier |
 
 ## Les sept tables
 
@@ -56,7 +56,8 @@ rapide », et qui déclenche son rollback. Le client n'arbitre rien.
 
 | Déclencheur | Règle |
 |---|---|
-| `tickers_freeze` | « Non modifiable après publication » : seul `current_price` évolue |
+| `tickers_freeze` | Titre, classe et auteur figés ; corrections et sorties datées ; une position close garde son prix de sortie |
+| `tickers_open_on_insert` | Un call se publie en cours ; la clôture vient ensuite |
 | `predictions_guard` | La base fixe le calendrier d'un pari à l'insertion (`opened_at`, `locked_at`, `resolves_at` selon l'horizon) et refuse qu'on le change ; un seul pari en cours par membre et par horizon ; après `locked_at`, le tracé ne bouge plus ; l'empreinte `HASH 8F2A` suit le tracé |
 | `*_touch` | `updated_at` |
 

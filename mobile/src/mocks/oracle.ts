@@ -102,7 +102,9 @@ function mockBet(userId: string, horizon: HorizonKey, openedAt: number, drift: n
  *   • un an — le mien, ouvert il y a cinq jours, encore **révisable** ;
  *   • cinq ans — le mien, verrouillé, et **seul** sur l'horizon : c'est le cas
  *     où l'on peut le débloquer ;
- *   • six mois et dix ans — vides, comme au premier jour.
+ *   • six mois et dix ans — vides, comme au premier jour ;
+ *   • des paris résolus sur plusieurs mois, et deux de l'an dernier, pour que
+ *     le classement des oracles ait de quoi départager.
  */
 export const MOCK_BETS: Bet[] = [
   mockBet(MEMBERS.me!.id, '3m', ANCHOR - 2 * DAY, 0.3),
@@ -116,4 +118,15 @@ export const MOCK_BETS: Bet[] = [
   mockBet(MEMBERS.marco!.id, '1w', TODAY - 11 * DAY, -0.04),
   mockBet(MEMBERS.me!.id, '12m', TODAY - 5 * DAY, 0.9),
   mockBet(MEMBERS.me!.id, '5y', TODAY - 20 * DAY, 2.4),
+  // Des paris résolus, pour le classement : des semaines, un trimestre, et
+  // deux de l'an dernier que seul « depuis toujours » compte.
+  mockBet(MEMBERS.john!.id, '1w', TODAY - 30 * DAY, 0.05),
+  mockBet(MEMBERS.lea!.id, '1w', TODAY - 30 * DAY, 0.02),
+  mockBet(MEMBERS.sofia!.id, '1w', TODAY - 45 * DAY, -0.06),
+  mockBet(MEMBERS.me!.id, '1w', TODAY - 45 * DAY, 0.03),
+  mockBet(MEMBERS.rayan!.id, '3m', TODAY - 150 * DAY, 0.35),
+  mockBet(MEMBERS.john!.id, '3m', TODAY - 140 * DAY, 0.2),
+  mockBet(MEMBERS.lea!.id, '3m', TODAY - 130 * DAY, 0.1),
+  mockBet(MEMBERS.marco!.id, '1w', TODAY - 320 * DAY, 0.1),
+  mockBet(MEMBERS.alex!.id, '1w', TODAY - 330 * DAY, 0.01),
 ];

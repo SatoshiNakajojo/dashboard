@@ -38,17 +38,58 @@ export interface EventsState {
   dismissNotice: (id: string) => void;
 }
 
+/**
+ * L'agenda et ses présences, lus une fois.
+ *
+ * Lève sur l'échec de l'agenda ; une liste de présences illisible donne des
+ * soirées sans présents plutôt que pas de soirée du tout.
+ */
+export async function loadNights(
+  client: NonNullable<typeof supabase>,
+  signal: AbortSignal,
+): Promise<EventWithAttendance[]> {
+  const [eventsResult, attendeesResult] = await Promise.all([
+    client
+      .from('events')
+      .select('id, starts_at, title, location, themes')
+      .order('starts_at', { ascending: true })
+      .abortSignal(signal),
+    client.from('event_attendees').select('event_id, user_id').abortSignal(signal),
+  ]);
+
+  if (eventsResult.error) throw eventsResult.error;
+
+  const byEvent = new Map<string, string[]>();
+  for (const row of attendeesResult.data ?? []) {
+    const list = byEvent.get(row.event_id) ?? [];
+    list.push(row.user_id);
+    byEvent.set(row.event_id, list);
+  }
+
+  return (eventsResult.data ?? []).map((row) => ({
+    id: row.id,
+    startsAt: row.starts_at,
+    title: row.title,
+    location: row.location,
+    themes: row.themes ?? [],
+    attendeeIds: byEvent.get(row.id) ?? [],
+  }));
+}
+
+/** Les soirées du mode démo, avec leurs présences. */
+export function mockNights(): EventWithAttendance[] {
+  return MOCK_EVENTS.map((event) => ({
+    ...event,
+    attendeeIds: MOCK_ATTENDANCE[event.id] ?? [],
+  }));
+}
+
 /** Agenda des Crypto Nights + présences. */
 export function useEvents(currentUserId: string | null): EventsState {
   // Sans backend, les mocks sont l'état initial : les poser depuis un effet
   // provoquerait un rendu vide inutile avant le premier contenu.
   const [events, setEvents] = useState<EventWithAttendance[]>(() =>
-    supabase
-      ? []
-      : MOCK_EVENTS.map((event) => ({
-          ...event,
-          attendeeIds: MOCK_ATTENDANCE[event.id] ?? [],
-        })),
+    supabase ? [] : mockNights(),
   );
   const [loading, setLoading] = useState(Boolean(supabase));
   const [creating, setCreating] = useState(false);
@@ -73,43 +114,14 @@ export function useEvents(currentUserId: string | null): EventsState {
     const controller = new AbortController();
 
     (async () => {
-      const [eventsResult, attendeesResult] = await Promise.all([
-        client
-          .from('events')
-          .select('id, starts_at, title, location, themes')
-          .order('starts_at', { ascending: true })
-          .abortSignal(controller.signal),
-        client
-          .from('event_attendees')
-          .select('event_id, user_id')
-          .abortSignal(controller.signal),
-      ]);
-
-      if (controller.signal.aborted) return;
-
-      if (eventsResult.error) {
-        setError(describeError(eventsResult.error));
-        setLoading(false);
-        return;
+      try {
+        const loaded = await loadNights(client, controller.signal);
+        if (controller.signal.aborted) return;
+        setEvents(loaded);
+      } catch (cause) {
+        if (controller.signal.aborted) return;
+        setError(describeError(cause));
       }
-
-      const byEvent = new Map<string, string[]>();
-      for (const row of attendeesResult.data ?? []) {
-        const list = byEvent.get(row.event_id) ?? [];
-        list.push(row.user_id);
-        byEvent.set(row.event_id, list);
-      }
-
-      setEvents(
-        (eventsResult.data ?? []).map((row) => ({
-          id: row.id,
-          startsAt: row.starts_at,
-          title: row.title,
-          location: row.location,
-          themes: row.themes ?? [],
-          attendeeIds: byEvent.get(row.id) ?? [],
-        })),
-      );
       setLoading(false);
     })();
 

@@ -49,6 +49,8 @@ export function quoteTargets(tickers: readonly Ticker[]): QuoteTargets {
   const yahoo = new Set<string>();
 
   for (const ticker of tickers) {
+    // Une position close a un prix de sortie, pas un cours.
+    if (ticker.closedOn !== null) continue;
     if (providerFor(ticker.assetClass) === 'yahoo') {
       if (ticker.yahooSymbol) yahoo.add(ticker.yahooSymbol);
     } else if (ticker.coingeckoId) {
@@ -67,6 +69,7 @@ export function quoteTargets(tickers: readonly Ticker[]): QuoteTargets {
  * déjà stocké.
  */
 export function freshPrice(ticker: Ticker, quotes: QuoteMap): number | null {
+  if (ticker.closedOn !== null) return null;
   const key =
     providerFor(ticker.assetClass) === 'yahoo' ? ticker.yahooSymbol : ticker.coingeckoId;
   if (!key) return null;

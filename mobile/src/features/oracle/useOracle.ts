@@ -3,7 +3,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useBtcSince, type BtcHistoryState } from '@/hooks/useBtcMarket';
 import { accuracyPercent } from '@/lib/accuracy';
 import { frameFor, samePath, type Frame, type PricePoint } from '@/lib/chart';
-import { MAX_HISTORY_DAYS } from '@/lib/coingecko';
 import {
   HORIZONS,
   bandFor,
@@ -35,6 +34,7 @@ import {
   type BetRow,
   type Window,
 } from './betting';
+import { useJudgedHistory } from './useJudgedHistory';
 
 /** Un pari, prêt à afficher. */
 export interface BetView {
@@ -257,21 +257,11 @@ export function useOracle(
   const range = useMemo(() => windowFor(open, horizon, now), [open, horizon, now]);
   const closed = useMemo(() => resolvedBets(bets, now), [bets, now]);
 
-  // Deux séries au plus : celle du repère, fine ; et, si l'historique remonte
-  // plus loin, une seconde pour juger les paris clos. Une seule série assez
-  // longue pour tout couvrir passerait en points journaliers, et un pari d'une
-  // semaine n'aurait plus que huit points de cours.
-  const historyOrigin = useMemo(() => {
-    if (closed.length === 0) return null;
-    const oldest = Math.max(
-      Math.min(...closed.map((bet) => bet.openedAt)),
-      now - MAX_HISTORY_DAYS * DAY_MS,
-    );
-    return oldest < range.origin ? oldest : null;
-  }, [closed, now, range.origin]);
-
+  // La série du repère, fine, sert au tracé et aux paris en cours. Les paris
+  // clos sont jugés à part, sur des séries qui ne dépendent pas de l'horizon
+  // affiché (`useJudgedHistory`) : sinon leurs points changeraient d'un onglet
+  // à l'autre.
   const market = useBtcSince(range.origin);
-  const past = useBtcSince(historyOrigin);
 
   /**
    * Avec un backend, la série de démonstration n'est jamais le cours : juger
@@ -280,13 +270,13 @@ export function useOracle(
    */
   const sources = useMemo(() => {
     const out: { origin: number; points: BtcHistoryState['points'] }[] = [];
-    for (const source of [market, past]) {
+    for (const source of [market]) {
       if (source.origin === null) continue;
       if (source.simulated && supabase) continue;
       out.push({ origin: source.origin, points: source.points });
     }
     return out;
-  }, [market, past]);
+  }, [market]);
 
   const btc = useMemo(() => {
     const source = sources.find((candidate) => candidate.origin === market.origin);
@@ -334,7 +324,7 @@ export function useOracle(
     () => open.filter((bet) => bet.userId !== userId).map(view),
     [open, userId, view],
   );
-  const history = useMemo(() => closed.map(view), [closed, view]);
+  const history = useJudgedHistory(closed, membersById, now);
 
   const summary = useMemo(() => {
     const out = {} as Record<HorizonKey, HorizonSummary>;
@@ -496,7 +486,9 @@ export function useOracle(
           return;
         }
         if (!data || data.length === 0) {
-          setError('Ce pari ne peut plus être retiré : un autre membre a parié sur cet horizon.');
+          setError(
+            'Ce pari ne peut plus être retiré : un autre membre a parié sur cet horizon.',
+          );
           return;
         }
         setError(null);

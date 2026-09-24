@@ -4,6 +4,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 
 import { MemberAvatar } from '@/components/MemberAvatar';
 import { Micro } from '@/components/ui/Micro';
+import { isoToClubDate } from '@/lib/btcAtDate';
 import { formatPercent, formatPrice, formatRelative, formatSize } from '@/lib/format';
 import { assetClassStyle, c, cardGradient, f, perfColor, radius } from '@/theme/tokens';
 import type { CallView, Vote } from '@/types/domain';
@@ -14,10 +15,18 @@ export interface CallCardProps {
   /** Présents seulement sur mes calls : on ne corrige ni ne supprime celui d'un autre. */
   onEdit?: (call: CallView) => void;
   onDelete?: (call: CallView) => void;
+  /** Clôturer — ou, sur un call clos, corriger sa sortie. Mes calls seulement. */
+  onCloseCall?: (call: CallView) => void;
 }
 
 /** Carte d'un call : auteur, thèse, bande de stats, votes. */
-export const CallCard = memo(function CallCard({ call, onVote, onEdit, onDelete }: CallCardProps) {
+export const CallCard = memo(function CallCard({
+  call,
+  onVote,
+  onEdit,
+  onDelete,
+  onCloseCall,
+}: CallCardProps) {
   const cls = assetClassStyle[call.assetClass];
 
   return (
@@ -70,6 +79,29 @@ export const CallCard = memo(function CallCard({ call, onVote, onEdit, onDelete 
         {`« ${call.thesis} »`}
       </Text>
 
+      {call.closed ? (
+        // La perf de la bande est réalisée : le bandeau dit depuis quand, et
+        // à quel prix.
+        <View
+          className="flex-row items-center justify-between"
+          style={{
+            marginBottom: 12,
+            paddingHorizontal: 10,
+            paddingVertical: 7,
+            borderRadius: radius.button,
+            borderWidth: 1,
+            borderColor: c.borderLift,
+          }}
+        >
+          <Micro size={8.5} tracking={1.7} style={{ color: c.goldMuted }}>
+            {`CLÔTURÉ LE ${isoToClubDate(call.closedOn) ?? '—'}`}
+          </Micro>
+          <Text style={{ fontFamily: f.labelMed, fontSize: 11, color: c.bone }}>
+            {`SORTIE ${call.exitPrice === null ? '—' : formatPrice(call.exitPrice)}`}
+          </Text>
+        </View>
+      ) : null}
+
       <View
         className="flex-row"
         style={{ borderTopWidth: 1, borderBottomWidth: 1, borderColor: c.hairline }}
@@ -100,16 +132,19 @@ export const CallCard = memo(function CallCard({ call, onVote, onEdit, onDelete 
       </View>
 
       <View className="flex-row items-center" style={{ paddingTop: 14, gap: 22 }}>
+        {/* Une position close ne se vote plus : les voix restent, figées. */}
         <VoteButton
           side="bull"
           count={call.bull}
           active={call.myVote === 'bull'}
+          disabled={call.closed}
           onPress={() => onVote(call.id, 'bull')}
         />
         <VoteButton
           side="bear"
           count={call.bear}
           active={call.myVote === 'bear'}
+          disabled={call.closed}
           onPress={() => onVote(call.id, 'bear')}
         />
         <View className="flex-1" />
@@ -120,11 +155,18 @@ export const CallCard = memo(function CallCard({ call, onVote, onEdit, onDelete 
         )}
       </View>
 
-      {onEdit || onDelete ? (
+      {onEdit || onDelete || onCloseCall ? (
         <View
           className="flex-row justify-end border-t border-hairline"
           style={{ marginTop: 14, paddingTop: 12, gap: 22 }}
         >
+          {onCloseCall ? (
+            <CardAction
+              label={call.closed ? 'SORTIE' : 'CLÔTURER'}
+              onPress={() => onCloseCall(call)}
+              accent={!call.closed}
+            />
+          ) : null}
           {onEdit ? <CardAction label="MODIFIER" onPress={() => onEdit(call)} /> : null}
           {onDelete ? (
             <CardAction label="SUPPRIMER" onPress={() => onDelete(call)} destructive />
@@ -139,10 +181,13 @@ function CardAction({
   label,
   onPress,
   destructive = false,
+  accent = false,
 }: {
   label: string;
   onPress: () => void;
   destructive?: boolean;
+  /** Le geste attendu sur un call en cours : en or. */
+  accent?: boolean;
 }) {
   return (
     <Pressable accessibilityRole="button" onPress={onPress} hitSlop={8}>
@@ -151,7 +196,7 @@ function CardAction({
           fontFamily: f.labelMed,
           fontSize: 9,
           letterSpacing: 1.62,
-          color: destructive ? c.oxbloodMuted : c.sepiaDim,
+          color: destructive ? c.oxbloodMuted : accent ? c.goldMuted : c.sepiaDim,
         }}
       >
         {label}
@@ -193,17 +238,19 @@ interface VoteButtonProps {
   side: Vote;
   count: number;
   active: boolean;
+  disabled?: boolean;
   onPress: () => void;
 }
 
-function VoteButton({ side, count, active, onPress }: VoteButtonProps) {
+function VoteButton({ side, count, active, disabled = false, onPress }: VoteButtonProps) {
   const color = active ? (side === 'bull' ? c.sage : c.oxblood) : c.sepiaFaint;
 
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityState={{ selected: active }}
+      accessibilityState={{ selected: active, disabled }}
       accessibilityLabel={`${side === 'bull' ? 'Bull' : 'Bear'}, ${count} voix`}
+      disabled={disabled}
       onPress={onPress}
       className="flex-row items-center"
       style={{ gap: 8 }}

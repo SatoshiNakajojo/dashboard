@@ -76,6 +76,15 @@ export interface Ticker {
   enteredOn: string | null;
   /** Dernière modification par l'auteur — posée par la base, affichée sur la carte. */
   editedAt: string | null;
+  /**
+   * La sortie, si la position est close : prix, cours du BTC ce jour-là, et
+   * jour (`AAAA-MM-JJ` à Nouméa). Les trois à `null` : le call est en cours.
+   */
+  exitPrice: number | null;
+  exitBtcPrice: number | null;
+  closedOn: string | null;
+  /** Instant de la clôture — posé par la base. */
+  closedAt: string | null;
 }
 
 /** Call prêt à l'affichage : perfs calculées, votes agrégés. */
@@ -85,6 +94,8 @@ export interface CallView extends Ticker {
   performancePercent: number | null;
   /** Perf relative à Bitcoin, en %. `null` pour un call BTC (le référentiel). */
   vsBtcPercent: number | null;
+  /** Position close : les deux perfs sont réalisées, elles ne bougent plus. */
+  closed: boolean;
   bull: number;
   bear: number;
   myVote: Vote | null;

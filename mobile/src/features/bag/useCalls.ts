@@ -4,7 +4,7 @@ import { useBtcSpot } from '@/hooks/useBtcMarket';
 import { checkEntryDate, clubDateToIso, clubIsoDay, entryDayOf } from '@/lib/btcAtDate';
 import { fetchBtcOn, resolveCoingeckoId } from '@/lib/coingecko';
 import { providerFor, toYahooSymbol } from '@/lib/quotes';
-import { performancePercent, vsBitcoinPercent } from '@/lib/performance';
+import { callPerformance } from '@/lib/performance';
 import { entryBtcFor, liveBtc, mergeQuotes } from './quoteRefresh';
 import { useLiveQuotes } from './useLiveQuotes';
 import { describeError, supabase } from '@/lib/supabase';
@@ -29,6 +29,13 @@ export interface PublishInput {
   entryDate?: string;
 }
 
+/** La sortie d'une position, telle que saisie. */
+export interface CloseInput {
+  exitPrice: number;
+  /** `JJ/MM/AAAA`. Vide : aujourd'hui. */
+  exitDate: string;
+}
+
 /** Ce qu'un auteur corrige sur son call. */
 export interface EditInput {
   entryPrice: number;
@@ -49,6 +56,10 @@ export interface CallsState {
   edit: (tickerId: string, input: EditInput) => Promise<boolean>;
   /** Supprime un de mes calls. */
   remove: (tickerId: string) => Promise<boolean>;
+  /** Clôture un de mes calls, ou corrige sa sortie. */
+  close: (tickerId: string, input: CloseInput) => Promise<boolean>;
+  /** Rouvre un de mes calls clos. */
+  reopen: (tickerId: string) => Promise<boolean>;
   /** Publication en cours — le bouton du composer s'en sert. */
   publishing: boolean;
 }
@@ -179,12 +190,14 @@ export function useCalls(
       assetClass: PublishInput['assetClass'],
       entryPrice: number,
       entryDate: string,
+      /** Le même calcul sert à la sortie : seul le mot change. */
+      word: 'entrée' | 'sortie' = 'entrée',
     ): Promise<{ enteredOn: string; btcAtEntry: number | null } | { problem: string }> => {
       const when = checkEntryDate(entryDate);
       if (when.kind === 'invalid')
-        return { problem: 'Date d’entrée illisible — format JJ/MM/AAAA.' };
+        return { problem: `Date de ${word} illisible — format JJ/MM/AAAA.` };
       if (when.kind === 'future') {
-        return { problem: 'La date d’entrée ne peut pas être dans le futur.' };
+        return { problem: `La date de ${word} ne peut pas être dans le futur.` };
       }
       const enteredOn =
         when.kind === 'today' ? clubIsoDay(Date.now()) : clubDateToIso(entryDate)!;
@@ -342,6 +355,76 @@ export function useCalls(
     [tickers, currentUserId, source],
   );
 
+  /**
+   * Clôture un de mes calls — ou corrige la sortie d'un call déjà clos.
+   *
+   * Le référentiel vs ₿ s'arrête le jour de la sortie : on va chercher le cours
+   * du bitcoin ce jour-là, comme pour l'entrée. Sans lui, la perf vs ₿ d'une
+   * position close continuerait de bouger avec le bitcoin d'aujourd'hui.
+   */
+  const close = useCallback(
+    async (tickerId: string, input: CloseInput): Promise<boolean> => {
+      const ticker = tickers.find((row) => row.id === tickerId);
+      if (!ticker || ticker.userId !== currentUserId || publishing) return false;
+      if (!(Number.isFinite(input.exitPrice) && input.exitPrice > 0)) {
+        setError('Indiquez le prix de sortie.');
+        return false;
+      }
+      setPublishing(true);
+
+      try {
+        const exit = await resolveEntry(
+          ticker.assetClass,
+          input.exitPrice,
+          input.exitDate,
+          'sortie',
+        );
+        if ('problem' in exit) {
+          setError(exit.problem);
+          return false;
+        }
+        const entryIso = ticker.enteredOn ?? clubDateToIso(entryDayOf(ticker))!;
+        if (exit.enteredOn < entryIso) {
+          setError(`La sortie ne peut pas précéder l’entrée (${entryDayOf(ticker)}).`);
+          return false;
+        }
+
+        const next = await source.setExit(tickerId, {
+          exitPrice: input.exitPrice,
+          exitBtcPrice: exit.btcAtEntry,
+          closedOn: exit.enteredOn,
+        });
+        setTickers((rows) => rows.map((row) => (row.id === tickerId ? next : row)));
+        setError(null);
+        return true;
+      } catch (cause) {
+        setError(describeError(cause));
+        return false;
+      } finally {
+        setPublishing(false);
+      }
+    },
+    [tickers, currentUserId, publishing, source, resolveEntry],
+  );
+
+  /** Rouvre un de mes calls clos : il reprend son cours, et la carte le dit. */
+  const reopen = useCallback(
+    async (tickerId: string): Promise<boolean> => {
+      const ticker = tickers.find((row) => row.id === tickerId);
+      if (!ticker || ticker.userId !== currentUserId || ticker.closedOn === null) return false;
+      try {
+        const next = await source.setExit(tickerId, null);
+        setTickers((rows) => rows.map((row) => (row.id === tickerId ? next : row)));
+        setError(null);
+        return true;
+      } catch (cause) {
+        setError(describeError(cause));
+        return false;
+      }
+    },
+    [tickers, currentUserId, source],
+  );
+
   // --- Projection d'affichage ----------------------------------------------
 
   const tallies = useMemo(() => {
@@ -384,20 +467,10 @@ export function useCalls(
         return {
           ...ticker,
           author: membersById.get(ticker.userId) ?? { id: ticker.userId, ...UNKNOWN_MEMBER },
-          performancePercent: performancePercent(ticker.entryPrice, ticker.currentPrice),
-          // Un call BTC est le référentiel : il n'a pas de perf vs ₿.
-          vsBtcPercent:
-            ticker.assetClass === 'BTC'
-              ? null
-              : vsBitcoinPercent(
-                  ticker.entryPrice,
-                  ticker.currentPrice,
-                  ticker.entryBtcPrice,
-                  // Le cours de repli n'est pas un cours : « — » plutôt qu'un
-                  // bitcoin figé qui ferait recopier la perf. En mode démo,
-                  // il est le seul cours du monde fictif.
-                  supabase ? liveBtc(spot) : spot.usd,
-                ),
+          // Le cours de repli n'est pas un cours : « — » plutôt qu'un bitcoin
+          // figé qui ferait recopier la perf. En mode démo, il est le seul
+          // cours du monde fictif.
+          ...callPerformance(ticker, supabase ? liveBtc(spot) : spot.usd),
           bull: displayed.bull,
           bear: displayed.bear,
           myVote: mine,
@@ -406,5 +479,16 @@ export function useCalls(
     [priced, tallies, votes, pendingVote, currentUserId, membersById, spot],
   );
 
-  return { calls, loading: !loaded, error, vote, publish, edit, remove, publishing };
+  return {
+    calls,
+    loading: !loaded,
+    error,
+    vote,
+    publish,
+    edit,
+    remove,
+    close,
+    reopen,
+    publishing,
+  };
 }

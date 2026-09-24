@@ -25,6 +25,8 @@ const DAY = 24 * HOUR;
  * comme dans le design, quel que soit le jour où on ouvre l'app.
  */
 const ago = (ms: number) => new Date(Date.now() - ms).toISOString();
+/** Le jour du club, `AAAA-MM-JJ` — Nouméa a onze heures d'avance sur UTC. */
+const clubDay = (ms: number) => new Date(ms + 11 * HOUR).toISOString().slice(0, 10);
 
 /** Calls en cours — DONNEES_FICTIVES §Calls. Les cinq cartes du fil. */
 export const MOCK_CURRENT_TICKERS: Ticker[] = [
@@ -44,6 +46,10 @@ export const MOCK_CURRENT_TICKERS: Ticker[] = [
     priceUpdatedAt: ago(0),
     enteredOn: null,
     editedAt: null,
+    exitPrice: null,
+    exitBtcPrice: null,
+    closedOn: null,
+    closedAt: null,
     createdAt: ago(2 * HOUR),
   },
   {
@@ -61,6 +67,10 @@ export const MOCK_CURRENT_TICKERS: Ticker[] = [
     priceUpdatedAt: ago(0),
     enteredOn: null,
     editedAt: null,
+    exitPrice: null,
+    exitBtcPrice: null,
+    closedOn: null,
+    closedAt: null,
     createdAt: ago(DAY),
   },
   {
@@ -78,6 +88,10 @@ export const MOCK_CURRENT_TICKERS: Ticker[] = [
     priceUpdatedAt: ago(0),
     enteredOn: null,
     editedAt: null,
+    exitPrice: null,
+    exitBtcPrice: null,
+    closedOn: null,
+    closedAt: null,
     createdAt: ago(2 * DAY),
   },
   {
@@ -95,6 +109,10 @@ export const MOCK_CURRENT_TICKERS: Ticker[] = [
     priceUpdatedAt: ago(0),
     enteredOn: null,
     editedAt: null,
+    exitPrice: null,
+    exitBtcPrice: null,
+    closedOn: null,
+    closedAt: null,
     createdAt: ago(3 * DAY),
   },
   {
@@ -112,6 +130,10 @@ export const MOCK_CURRENT_TICKERS: Ticker[] = [
     priceUpdatedAt: ago(0),
     enteredOn: null,
     editedAt: null,
+    exitPrice: null,
+    exitBtcPrice: null,
+    closedOn: null,
+    closedAt: null,
     createdAt: ago(5 * DAY),
   },
 ];
@@ -232,8 +254,14 @@ const HISTORY_TICKERS: Ticker[] = HISTORY.map((entry, index) => ({
   coingeckoId: null,
   yahooSymbol: null,
   priceUpdatedAt: ago(0),
-    enteredOn: null,
-    editedAt: null,
+  enteredOn: null,
+  editedAt: null,
+  // Sorties au cours du design, et au bitcoin du prototype : les perfs vs ₿
+  // retombent ainsi sur celles de DONNEES_FICTIVES.
+  exitPrice: priceFromPerf(entry.entry, entry.perf),
+  exitBtcPrice: entry.vs === null ? priceFromPerf(entry.entry, entry.perf) : MOCK_BTC_SPOT,
+  closedOn: clubDay(Date.now() - Math.round(entry.ageDays / 3) * DAY),
+  closedAt: ago(Math.round(entry.ageDays / 3) * DAY),
   createdAt: ago(entry.ageDays * DAY),
 }));
 

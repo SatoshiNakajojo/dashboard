@@ -29,6 +29,7 @@ export const TABLES = [
  */
 export const COLUMNS = [
   { table: 'tickers', column: 'yahoo_symbol', migration: '20260914120000_yahoo_symbol.sql' },
+  { table: 'tickers', column: 'closed_on', migration: '20260926090000_closed_calls.sql' },
 ];
 
 const ok = (label, detail) => ({ level: 'ok', label, detail });

@@ -105,7 +105,7 @@ qu'on n'a pas déposé le nouveau tracé.
 
 ## Ce qui a été vérifié
 
-- `npm run typecheck`, `npm run lint`, `npm test` — propres (374 tests).
+- `npm run typecheck`, `npm run lint`, `npm test` — propres (443 tests).
 - **Règles pures** : bornes et inversibilité du repère, monotonie du tracé,
   écart à la courbe réelle, espaces insécables du formatage français, perf vs ₿
   comme ratio et non soustraction, seuils et tri des deux classements.
@@ -118,10 +118,11 @@ qu'on n'a pas déposé le nouveau tracé.
   réécrit jamais un prix inchangé.
 - **Schéma** : toutes les migrations appliquées dans l'ordre à un PostgreSQL 16
   neuf (doublures `supabase/tests/doubles.sql`), réexécutées pour l'idempotence,
-  puis `supabase/tests/schema_test.sql` — 20 assertions passent, dont celles
+  puis `supabase/tests/schema_test.sql` — 25 assertions passent, dont celles
   des paris de l'Oracle (calendrier fixé par la base, un pari en cours par
   horizon, scellement, déblocage seulement quand personne d'autre n'a parié),
-  celles des calls (titre figé, corrections datées par la base), et celle qui
+  celles des calls (titre figé, corrections datées par la base, clôture qui
+  fige la perf, sortie jamais avant l'entrée ni dans le futur), et celle qui
   manquait : un membre lit les couleurs déjà prises **avant**
   d'être membre, là où la RLS lui refuse toute ligne.
   Le seed reproduit exactement les pourcentages du design (`+14,9 %`, `+12,4 %`,
@@ -676,6 +677,63 @@ bouton mène à la page d'édition.
 
 Au passage, ces avatars portent désormais la **photo** du membre : l'app
 n'affichait que ses initiales partout ailleurs que dans l'en-tête.
+
+Sous ses liens, son **parcours** (`src/features/profile/record.ts`) :
+
+- **ses calls** — en cours et clos, perf moyenne en dollars et vs ₿, son
+  meilleur call au critère du Hall of Fame ;
+- **son Oracle** — son rang et ses points de l'année, sa justesse moyenne, son
+  total depuis toujours, les horizons où il a un pari en cours ;
+- **ses soirées** — présences sur les soirées passées, et la prochaine où il
+  est inscrit.
+
+Les chiffres sont ceux des onglets, calculés par les mêmes fonctions : une perf
+lue ici est celle de la carte, un score celui du classement. La page lit les
+paris et l'agenda **une fois**, sans temps réel : `supabase.channel()` rend le
+même canal à un second abonné, et le rebrancher depuis le profil casserait
+celui de l'onglet ouvert derrière.
+
+---
+
+## Clôturer un call
+
+Une position vendue restait « en cours » : son cours continuait de bouger, ou
+il fallait supprimer le call — qui disparaissait des classements. L'auteur peut
+maintenant le **clôturer** : un prix et un jour de sortie. La perf devient
+**réalisée** et ne bouge plus ; la perf vs ₿ s'arrête le même jour, sur le
+cours du bitcoin de ce jour-là, cherché comme celui de l'entrée.
+
+L'onglet Calls se partage en **En cours** et **Clôturés** ; les classements
+prennent les deux, puisqu'une perf réalisée compte autant qu'une perf latente.
+Une sortie se corrige (« SORTIE » sur la carte), ou s'annule (« ROUVRIR LE
+CALL ») : dans les deux cas, la carte affiche « modifié ».
+
+La base garde la main (migration `20260926090000_closed_calls`) : elle date la
+clôture (`closed_at`), refuse une sortie avant l'entrée ou dans le futur, fige
+`current_price` au prix de sortie — `refresh-prices` n'y touche plus, et la
+colonne générée `performance_percentage` donne la perf réalisée sans changer de
+définition — et un call se publie toujours ouvert.
+
+---
+
+## Le classement des oracles
+
+Chaque pari résolu rapporte des **points** : sa justesse (0 à 100), multipliée
+par le poids de son horizon — 1 pour une semaine, 2 pour trois mois, 3, 4, 6,
+et 8 pour dix ans (`HORIZONS[].weight`). Les points se **cumulent** : parier
+souvent paie, parier loin aussi. Une simple moyenne aurait donné la première
+place à qui parie le moins ; elle reste affichée à côté, c'est elle qui dit qui
+vise juste.
+
+Le classement vit dans l'onglet Oracle, sur l'année en cours ou depuis
+toujours ; le premier de l'année porte le titre d'**Oracle 2026**
+(`src/features/oracle/standings.ts`).
+
+Un même pari devait rapporter les mêmes points partout. Or sa justesse
+dépendait du grain de la série qui le jugeait, et ce grain changeait avec
+l'horizon affiché à l'écran. Les paris résolus sont donc jugés sur deux séries
+**canoniques** (`judging.ts`) : horaire sur les 88 derniers jours, journalière
+au-delà — la règle dépend de la date, jamais de l'écran.
 
 ---
 

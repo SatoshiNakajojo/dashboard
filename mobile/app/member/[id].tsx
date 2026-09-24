@@ -1,3 +1,4 @@
+import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -6,17 +7,31 @@ import { SharedLinks } from '@/components/SharedLinks';
 import { Avatar } from '@/components/ui/Avatar';
 import { Micro } from '@/components/ui/Micro';
 import { SectionTitle } from '@/components/ui/SectionTitle';
+import { useCalls } from '@/features/bag/useCalls';
+import { useClubNights } from '@/features/nights/useClubNights';
+import { useClubBets } from '@/features/oracle/useClubBets';
+import { clubYear } from '@/features/oracle/standings';
+import {
+  callsRecord,
+  nightsRecord,
+  oracleRecord,
+  type CallsRecord,
+  type NightsRecord,
+  type OracleRecord,
+} from '@/features/profile/record';
 import { useMembers } from '@/hooks/useMembers';
 import { useSession } from '@/hooks/useSession';
-import { c, f, radius } from '@/theme/tokens';
+import { formatClubDate, formatInteger, formatPercent, toRoman } from '@/lib/format';
+import { horizonOf } from '@/lib/horizons';
+import { assetClassStyle, c, f, perfColor, radius } from '@/theme/tokens';
 
 /**
  * Le profil d'un membre, en lecture.
  *
  * On y arrive en touchant son avatar, n'importe où dans l'app. On y lit ce
- * qu'il a choisi de montrer au club : sa photo, et ses liens — un GitHub qui
- * s'ouvre, une adresse BTC qui se copie. Rien ne s'y modifie ; pour son propre
- * profil, un bouton mène à la page d'édition.
+ * qu'il a choisi de montrer au club — sa photo, ses liens — et son parcours :
+ * ses calls, son rang à l'Oracle, ses soirées. Rien ne s'y modifie ; pour son
+ * propre profil, un bouton mène à la page d'édition.
  */
 export default function MemberScreen() {
   const router = useRouter();
@@ -27,6 +42,24 @@ export default function MemberScreen() {
 
   const member = id ? byId.get(id) : undefined;
   const isMe = Boolean(member && member.id === userId);
+
+  // Les mêmes sources que les onglets : une perf ou un score lus ici sont ceux
+  // qu'affichent les cartes et le classement.
+  const calls = useCalls(userId, byId);
+  const club = useClubBets(byId);
+  const nights = useClubNights();
+
+  const record = useMemo(
+    () =>
+      member
+        ? {
+            calls: callsRecord(calls.calls, member.id),
+            oracle: oracleRecord(club.history, club.bets, member.id, club.now),
+            nights: nightsRecord(nights.events, member.id, club.now),
+          }
+        : null,
+    [member, calls.calls, club.history, club.bets, club.now, nights.events],
+  );
 
   return (
     <View className="flex-1 bg-ink" style={{ paddingTop: insets.top }}>
@@ -101,6 +134,24 @@ export default function MemberScreen() {
               )}
             </View>
 
+            {record ? (
+              <>
+                <CallsSection
+                  record={record.calls}
+                  name={member.displayName}
+                  isMe={isMe}
+                  loading={calls.loading}
+                />
+                <OracleSection
+                  record={record.oracle}
+                  year={clubYear(club.now)}
+                  isMe={isMe}
+                  loading={club.loading}
+                />
+                <NightsSection record={record.nights} isMe={isMe} loading={nights.loading} />
+              </>
+            ) : null}
+
             {isMe ? (
               <Pressable
                 accessibilityRole="button"
@@ -129,5 +180,302 @@ export default function MemberScreen() {
         )}
       </ScrollView>
     </View>
+  );
+}
+
+// ---------------------------------------------------------------------------
+
+/** Calls affichés avant « voir tout » : un membre actif en publie des dizaines. */
+const CALLS_PREVIEW = 5;
+
+function CallsSection({
+  record,
+  name,
+  isMe,
+  loading,
+}: {
+  record: CallsRecord;
+  name: string;
+  isMe: boolean;
+  loading: boolean;
+}) {
+  const [showAll, setShowAll] = useState(false);
+  const shown = showAll ? record.calls : record.calls.slice(0, CALLS_PREVIEW);
+
+  return (
+    <View>
+      <SectionTitle
+        label="CALLS"
+        hint={
+          record.calls.length > 0
+            ? `${record.open} EN COURS · ${record.closed} CLOS`
+            : undefined
+        }
+      />
+      {record.calls.length === 0 ? (
+        <Empty>
+          {loading
+            ? 'Chargement…'
+            : isMe
+              ? 'Vous n’avez encore publié aucun call.'
+              : `${name} n’a encore publié aucun call.`}
+        </Empty>
+      ) : (
+        <>
+          <StatBand
+            stats={[
+              { label: 'PERF MOY.', percent: record.averagePerf },
+              { label: 'VS ₿ MOY.', percent: record.averageVsBtc, gold: true },
+              {
+                label: 'MEILLEUR',
+                value: record.best ? record.best.symbol : '—',
+                percent: record.best?.performancePercent ?? null,
+              },
+            ]}
+          />
+          {shown.map((call) => {
+            const cls = assetClassStyle[call.assetClass];
+            return (
+              <View
+                key={call.id}
+                className="flex-row items-center border-b border-hairline"
+                style={{ gap: 12, paddingVertical: 11, paddingHorizontal: 2 }}
+              >
+                <View className="flex-1" style={{ gap: 3 }}>
+                  <Text style={{ fontFamily: f.serif, fontSize: 16, color: c.ivory }}>
+                    {call.symbol}
+                  </Text>
+                  <Micro size={8} tracking={1.2} style={{ color: cls.fg }}>
+                    {call.closed ? `${call.assetClass} · CLÔTURÉ` : call.assetClass}
+                  </Micro>
+                </View>
+                <View className="items-end" style={{ gap: 3 }}>
+                  <Text
+                    style={{
+                      fontFamily: f.labelMed,
+                      fontSize: 12,
+                      color:
+                        call.performancePercent === null
+                          ? c.sepiaFaint
+                          : perfColor(call.performancePercent),
+                    }}
+                  >
+                    {call.performancePercent === null
+                      ? '—'
+                      : formatPercent(call.performancePercent)}
+                  </Text>
+                  <Text style={{ fontFamily: f.label, fontSize: 10, color: c.sepiaMuted }}>
+                    {call.vsBtcPercent === null
+                      ? call.assetClass === 'BTC'
+                        ? 'référentiel'
+                        : '— vs ₿'
+                      : `${formatPercent(call.vsBtcPercent, 0)} vs ₿`}
+                  </Text>
+                </View>
+              </View>
+            );
+          })}
+          {record.calls.length > CALLS_PREVIEW ? (
+            <MoreToggle
+              open={showAll}
+              hidden={record.calls.length - CALLS_PREVIEW}
+              onPress={() => setShowAll((all) => !all)}
+            />
+          ) : null}
+        </>
+      )}
+    </View>
+  );
+}
+
+function OracleSection({
+  record,
+  year,
+  isMe,
+  loading,
+}: {
+  record: OracleRecord;
+  year: number;
+  isMe: boolean;
+  loading: boolean;
+}) {
+  const row = record.year;
+  return (
+    <View>
+      <SectionTitle
+        label="ORACLE"
+        hint={
+          row ? `RANG ${toRoman(row.rank)} / ${record.rankedThisYear} · ${year}` : undefined
+        }
+      />
+      {row ? (
+        <StatBand
+          stats={[
+            { label: `POINTS ${year}`, value: formatInteger(row.points) },
+            { label: 'PARIS JUGÉS', value: String(row.bets) },
+            { label: 'JUSTESSE MOY.', value: `${Math.round(row.average)} %` },
+          ]}
+        />
+      ) : (
+        <Empty>
+          {loading ? 'Chargement…' : `Aucun pari résolu en ${year}${isMe ? ' pour vous' : ''}.`}
+        </Empty>
+      )}
+      <Text
+        style={{
+          fontFamily: f.sans,
+          fontSize: 11,
+          lineHeight: 18,
+          color: c.sepia,
+          marginTop: 10,
+        }}
+      >
+        {[
+          record.allTime
+            ? `Depuis toujours : ${formatInteger(record.allTime.points)} points, meilleure justesse ${Math.round(record.allTime.best)} %.`
+            : null,
+          record.running.length > 0
+            ? `Paris en cours : ${record.running.map((key) => horizonOf(key).long.toLowerCase()).join(', ')}.`
+            : 'Aucun pari en cours.',
+        ]
+          .filter(Boolean)
+          .join(' ')}
+      </Text>
+    </View>
+  );
+}
+
+function NightsSection({
+  record,
+  isMe,
+  loading,
+}: {
+  record: NightsRecord;
+  isMe: boolean;
+  loading: boolean;
+}) {
+  const presence =
+    record.past === 0
+      ? 'Aucune soirée passée pour l’instant.'
+      : `${isMe ? 'Vous avez participé' : 'A participé'} à ${record.attended} soirée${record.attended > 1 ? 's' : ''} sur ${record.past}.`;
+  const next = record.next
+    ? `Prochaine : ${record.next.title} · ${formatClubDate(Date.parse(record.next.startsAt))}.`
+    : 'Aucune inscription à une soirée à venir.';
+
+  return (
+    <View>
+      <SectionTitle
+        label="SOIRÉES"
+        hint={record.past > 0 ? `${record.attended} / ${record.past}` : undefined}
+      />
+      {loading ? (
+        <Empty>Chargement…</Empty>
+      ) : (
+        <Text
+          style={{
+            fontFamily: f.sans,
+            fontSize: 12,
+            lineHeight: 19,
+            color: c.parchment,
+            paddingVertical: 12,
+          }}
+        >
+          {`${presence} ${next}`}
+        </Text>
+      )}
+    </View>
+  );
+}
+
+interface StatSpec {
+  label: string;
+  /** Texte affiché ; à défaut, le pourcentage. */
+  value?: string;
+  percent?: number | null;
+  /** L'étiquette en or : la colonne vs ₿, comme sur les cartes. */
+  gold?: boolean;
+}
+
+/** La bande de trois chiffres des cartes de call, pour un résumé. */
+function StatBand({ stats }: { stats: StatSpec[] }) {
+  return (
+    <View
+      className="flex-row"
+      style={{ borderTopWidth: 1, borderBottomWidth: 1, borderColor: c.hairline, marginTop: 8 }}
+    >
+      {stats.map((stat, index) => {
+        const percent = stat.percent ?? null;
+        return (
+          <View
+            key={stat.label}
+            style={{
+              flex: 1,
+              paddingVertical: 11,
+              ...(index > 0
+                ? { borderLeftWidth: 1, borderLeftColor: c.hairline, paddingLeft: 12 }
+                : null),
+            }}
+          >
+            <Micro
+              size={8}
+              tracking={1.4}
+              style={{ color: stat.gold ? c.goldMuted : c.sepiaMuted }}
+            >
+              {stat.label}
+            </Micro>
+            <Text
+              numberOfLines={1}
+              style={{
+                fontFamily: f.labelMed,
+                fontSize: 12,
+                marginTop: 5,
+                color:
+                  stat.value !== undefined && percent === null
+                    ? c.bone
+                    : percent === null
+                      ? c.sepiaFaint
+                      : perfColor(percent),
+              }}
+            >
+              {stat.value !== undefined
+                ? percent === null
+                  ? stat.value
+                  : `${stat.value} ${formatPercent(percent, 0)}`
+                : percent === null
+                  ? '—'
+                  : formatPercent(percent)}
+            </Text>
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
+function MoreToggle({
+  open,
+  hidden,
+  onPress,
+}: {
+  open: boolean;
+  hidden: number;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable accessibilityRole="button" onPress={onPress} style={{ paddingVertical: 12 }}>
+      <Text style={{ fontFamily: f.labelMed, fontSize: 9, letterSpacing: 1.62, color: c.gold }}>
+        {open ? 'RÉDUIRE' : `VOIR LES ${hidden} AUTRES`}
+      </Text>
+    </Pressable>
+  );
+}
+
+function Empty({ children }: { children: string }) {
+  return (
+    <Text
+      style={{ fontFamily: f.serifItalic, fontSize: 15, color: c.sepia, paddingVertical: 14 }}
+    >
+      {children}
+    </Text>
   );
 }

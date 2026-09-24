@@ -29,6 +29,15 @@ export interface Horizon {
   days: number;
   /** Temps laissé pour redessiner avant verrouillage, en heures. */
   editingHours: number;
+  /**
+   * Le multiplicateur des points au classement (`standings.ts`).
+   *
+   * Viser juste à une semaine est facile — le bitcoin bouge de quelques pour
+   * cent — et à un an beaucoup moins. Sans poids, le classement irait à qui
+   * parie chaque semaine et fuit les longs horizons. Le poids croît moins vite
+   * que la durée : un pari à dix ans ne doit pas écraser dix ans de semaines.
+   */
+  weight: number;
 }
 
 const DAY_MS = 86_400_000;
@@ -41,12 +50,26 @@ const DAY_MS = 86_400_000;
  * simplicité vaut mieux qu'une exactitude que le club ne vérifiera pas.
  */
 export const HORIZONS: readonly Horizon[] = [
-  { key: '1w', label: '1 SEM', long: 'Une semaine', days: 7, editingHours: 24 },
-  { key: '3m', label: '3 MOIS', long: 'Trois mois', days: 90, editingHours: 72 },
-  { key: '6m', label: '6 MOIS', long: 'Six mois', days: 182, editingHours: 120 },
-  { key: '12m', label: '1 AN', long: 'Un an', days: 365, editingHours: 168 },
-  { key: '5y', label: '5 ANS', long: 'Cinq ans', days: 5 * 365, editingHours: 336 },
-  { key: '10y', label: '10 ANS', long: 'Dix ans', days: 10 * 365, editingHours: 336 },
+  { key: '1w', label: '1 SEM', long: 'Une semaine', days: 7, editingHours: 24, weight: 1 },
+  { key: '3m', label: '3 MOIS', long: 'Trois mois', days: 90, editingHours: 72, weight: 2 },
+  { key: '6m', label: '6 MOIS', long: 'Six mois', days: 182, editingHours: 120, weight: 3 },
+  { key: '12m', label: '1 AN', long: 'Un an', days: 365, editingHours: 168, weight: 4 },
+  {
+    key: '5y',
+    label: '5 ANS',
+    long: 'Cinq ans',
+    days: 5 * 365,
+    editingHours: 336,
+    weight: 6,
+  },
+  {
+    key: '10y',
+    label: '10 ANS',
+    long: 'Dix ans',
+    days: 10 * 365,
+    editingHours: 336,
+    weight: 8,
+  },
 ] as const;
 
 /** Vrai si la clé désigne un horizon connu de cette version de l'app. */

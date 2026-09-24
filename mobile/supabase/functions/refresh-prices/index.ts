@@ -167,7 +167,10 @@ Deno.serve(async (request) => {
   const { data, error } = await client
     .from('tickers')
     .select('id, coingecko_id, yahoo_symbol, current_price')
-    .or('coingecko_id.not.is.null,yahoo_symbol.not.is.null');
+    .or('coingecko_id.not.is.null,yahoo_symbol.not.is.null')
+    // Une position close a un prix de sortie, pas un cours (la base le
+    // garantit aussi : `tickers_freeze_call`).
+    .is('closed_on', null);
 
   if (error) return Response.json({ error: error.message }, { status: 500 });
 

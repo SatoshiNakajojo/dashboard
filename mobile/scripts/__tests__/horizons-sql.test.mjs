@@ -36,11 +36,11 @@ function sqlTable(functionName, unit) {
   return out;
 }
 
-/** `{ key: '1w', …, days: 7, editingHours: 24 }` → { '1w': { days, editingHours } }. */
+/** `{ key: '1w', …, days: 7, editingHours: 24, … }` → { '1w': { days, editingHours } }. */
 function tsTable() {
   const out = {};
   for (const m of TS.matchAll(
-    /\{\s*key:\s*'(\w+)'[^}]*?days:\s*([\d\s*]+?),\s*editingHours:\s*(\d+)\s*\}/g,
+    /\{\s*key:\s*'(\w+)'[^}]*?days:\s*([\d\s*]+?),\s*editingHours:\s*(\d+)[,\s][^}]*\}/g,
   )) {
     // `5 * 365` : on évalue le produit, rien d'autre.
     const days = m[2].split('*').reduce((acc, part) => acc * Number(part.trim()), 1);
