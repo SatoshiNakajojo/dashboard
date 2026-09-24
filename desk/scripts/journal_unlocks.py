@@ -92,6 +92,13 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
+# IPv4 D'ABORD. La route IPv6 du VPS est cassee : elle etablit le TCP puis
+# meurt sur la poignee de main TLS, et TOUTES les sources se mettent a
+# repondre « SSL: UNEXPECTED_EOF_WHILE_READING » en meme temps. La raison,
+# la mesure et le choix de reordonner plutot que de filtrer sont dans
+# `trading_desk/reseau.py`.
+from trading_desk.reseau import appliquer as _ipv4_d_abord  # noqa: E402
+
 from trading_desk import pronostic
 from trading_desk.backtest.data import fetch_hyperliquid
 from trading_desk.deblocages import (
@@ -519,6 +526,11 @@ def main() -> int:
                    help="retirer les entrées d'une version dont AUCUNE "
                         "fenêtre n'est close ; refusé sinon")
     args = p.parse_args()
+
+    # La preference reseau s'installe ICI, pas a l'import : un
+    # module qu'on importe pour l'inspecter ne doit pas changer la
+    # resolution DNS de tout le processus.
+    _ipv4_d_abord()
 
     journal = Path(args.journal)
     if args.resoudre:

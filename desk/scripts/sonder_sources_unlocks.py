@@ -59,7 +59,10 @@ def sonder(url: str, timeout: int = 25) -> tuple[str, str]:
         return f"{exc.code} {exc.reason}", (exc.read()[:180].decode("utf-8", "replace")
                                             if exc.fp else "")
     except (urllib.error.URLError, TimeoutError) as exc:
-        return "injoignable", str(exc)[:180]
+        # « injoignable » ne suffit pas : un refus delibere et un transport
+        # qui casse appellent des remedes opposes, et le verdict plus bas
+        # depend de la distinction.
+        return "transport", str(exc)[:180]
 
 
 def main() -> int:
@@ -77,20 +80,46 @@ def main() -> int:
 
     par_libelle = dict(resultats)
     temoin = par_libelle.get("témoin gratuit", "")
+    marche = [nom for nom, etat in resultats
+              if etat.startswith("2") and nom != "témoin gratuit"]
+    # UN REFUS ET UNE COUPURE NE SE CONFONDENT PAS, et cette sonde les a
+    # confondus une fois. Le 24 septembre 2026 elle a rendu « elles sont
+    # passées payantes » devant six coupures TLS, alors que la cause était
+    # une route IPv6 cassée sur le VPS. Le remède qu'elle désignait —
+    # réécrire un collecteur pour une autre source — n'avait aucun rapport
+    # avec la panne.
+    #
+    # Un endpoint devenu payant répond 402 AVEC un corps. Un transport qui
+    # casse ne répond rien du tout. C'est visible, donc c'est dicible.
+    transport = [nom for nom, etat in resultats if etat == "transport"]
+    refus = [nom for nom, etat in resultats
+             if etat[:1].isdigit() and not etat.startswith("2")]
     print("  " + "=" * 66)
-    if temoin.startswith("2"):
-        marche = [nom for nom, etat in resultats
-                  if etat.startswith("2") and nom != "témoin gratuit"]
-        print("  Le témoin gratuit répond : le réseau et l'IP vont bien.")
-        if marche:
-            print(f"  Sources exploitables : {', '.join(marche)}")
-        else:
-            print("  Mais AUCUNE source de déblocages ne répond : elles sont")
-            print("  passées payantes. Il faut changer de source.")
-    else:
+    if not temoin.startswith("2"):
         print("  Le témoin gratuit lui-même échoue : le problème n'est PAS")
         print("  l'endpoint. C'est l'IP de cette machine ou son réseau.")
         print("  Relancez cette sonde depuis votre Mac pour confirmer.")
+    elif marche:
+        print("  Le témoin gratuit répond : le réseau et l'IP vont bien.")
+        print(f"  Sources exploitables : {', '.join(marche)}")
+    elif transport:
+        print(f"  {len(transport)} source(s) coupées AU TRANSPORT, pas refusées :")
+        print(f"    {', '.join(transport)}")
+        print("  Ce n'est PAS un endpoint devenu payant — celui-là répondrait")
+        print("  402 avec un corps. Une poignée de main TLS qui meurt sur")
+        print("  plusieurs hôtes à la fois désigne le chemin réseau, et le")
+        print("  suspect habituel est une route IPv6 défaillante :")
+        print()
+        print("    curl -4 -sS -o /dev/null -w '%{http_code}\\n' <une des url>")
+        print("    curl -6 -sS -o /dev/null -w '%{http_code}\\n' <la même>")
+        print()
+        print("  v4 qui passe et v6 qui casse : `trading_desk.reseau` corrige,")
+        print("  et il est déjà appliqué par les collecteurs.")
+    elif refus:
+        print(f"  {len(refus)} source(s) REFUSENT explicitement : {', '.join(refus)}")
+        print("  Un code HTTP veut dire que le serveur a répondu. S'il s'agit")
+        print("  de 402 ou 401, l'endpoint est passé payant et il faut")
+        print("  changer de source.")
     print("  " + "=" * 66)
     print("\n  Collez cette sortie entière : elle dit quoi faire ensuite.\n")
     return 0

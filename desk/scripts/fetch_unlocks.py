@@ -55,6 +55,15 @@ DATASETS = "https://defillama-datasets.llama.fi"
 HYPERLIQUID = "https://api.hyperliquid.xyz/info"
 COINGECKO = "https://api.coingecko.com/api/v3"
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+
+# IPv4 D'ABORD. La route IPv6 du VPS est cassee : elle etablit le TCP puis
+# meurt sur la poignee de main TLS, et TOUTES les sources se mettent a
+# repondre « SSL: UNEXPECTED_EOF_WHILE_READING » en meme temps. La raison,
+# la mesure et le choix de reordonner plutot que de filtrer sont dans
+# `trading_desk/reseau.py`.
+from trading_desk.reseau import appliquer as _ipv4_d_abord  # noqa: E402
+
 ENTETES = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)",
            "Accept": "application/json"}
 
@@ -193,6 +202,11 @@ def main() -> int:
     p.add_argument("--jours-bougies", type=int, default=1500)
     p.add_argument("--sans-bougies", action="store_true")
     args = p.parse_args()
+
+    # La preference reseau s'installe ICI, pas a l'import : un
+    # module qu'on importe pour l'inspecter ne doit pas changer la
+    # resolution DNS de tout le processus.
+    _ipv4_d_abord()
 
     print("\n  1/4  Perpétuels Hyperliquid…")
     perps = perps_hyperliquid()
