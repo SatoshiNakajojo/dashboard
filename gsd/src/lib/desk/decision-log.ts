@@ -187,7 +187,7 @@ export function summarizeLegacyCommittee(rows: Record<string, unknown>[]): Legac
 }
 
 /** Les réponses qui se répètent à chaque cycle sans rien changer. */
-const ROUTINE = new Set(["oui", "non", "tenir", "en position", "à plat", "en place"]);
+const ROUTINE = new Set(["oui", "non", "tenir", "en position", "à plat", "en place", "surveillé"]);
 
 export type CompactRow = DecisionRow & { count: number; tFirst: number };
 

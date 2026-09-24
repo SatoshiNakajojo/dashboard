@@ -37,11 +37,16 @@ pendant ses tendances : elle ne gagne que si le BTC monte.
   d'Hyperliquid et dit quels ordres le compte doit porter. Module pur, testé ;
   `research/grok-btc/parite.ts` vérifie qu'il retrouve les 37 trades de la
   recherche un à un.
-- `src/lib/desk/btc-rule.server.ts` aligne le compte à chaque passage : un
-  stop d'achat posé chez l'exchange au plus haut des 25 jours quand la règle
-  est à plat, un stop de sortie reduce-only au plus bas des 10 jours quand
-  elle est en position, remplacés chaque jour. Si la règle est en position et
-  le compte non (au démarrage, ou après un stop refusé), il entre au marché.
+- `src/lib/desk/btc-rule.server.ts` aligne le compte à chaque passage, **au
+  comptant** : la paire UBTC/USDC d'Hyperliquid, sans funding. Joué sur les
+  perps, le funding a coûté 19 % du capital en 2,7 ans — à peu près toute
+  l'avance de la règle (`research/grok-btc/attentes.py`).
+- Pas d'ordre stop au repos au comptant : le pilote vérifie les deux niveaux
+  chaque minute et relance un passage dès que le BTC en franchit un ; le
+  passage relit les bougies et achète ou vend au marché. Au comptant, il n'y a
+  pas de liquidation : si le bot tombait, la sortie serait retardée, pas pire.
+- Une position BTC en perp — l'exécution d'avant — est refermée au premier
+  passage, ses ordres annulés, puis rachetée au comptant.
 - Le filet et la gestion de l'ancienne stratégie ne touchent pas au BTC :
   calibrés sur 1 % de risque par trade, ils couperaient la position dès −1,5 %.
 - Aucun LLM n'intervient : la règle décide tout. En mode règle BTC, Jev n'est

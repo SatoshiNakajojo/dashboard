@@ -97,53 +97,37 @@ export function replay(
   };
 }
 
-export type OpenOrder = {
-  oid: number;
-  isBuy: boolean;
-  reduceOnly: boolean;
-  isTrigger: boolean;
-  triggerPx: number | null;
-  size: number;
-};
-
-export type Account = {
-  /** Taille BTC signée ; 0 = à plat. */
-  position: number;
-  orders: OpenOrder[];
-  equity: number;
+/** Ce que le compte porte, lu au comptant — plus ce qui reste en perp, à migrer. */
+export type SpotAccount = {
+  /** UBTC disponible. */
+  base: number;
+  /** USDC disponible. */
+  quote: number;
+  /** Prix de la paire UBTC/USDC. */
   markPx: number;
+  /** Position BTC en perp, signée : l'ancienne exécution, à refermer. */
+  perpPosition: number;
+  /** Ordres perp BTC encore au repos. */
+  perpOrders: number[];
 };
 
-export type Action =
-  | { kind: "cancel"; oid: number; why: string }
-  | { kind: "keep"; oid: number; why: string }
-  | {
-      kind: "market";
-      buy: boolean;
-      size: number;
-      purpose: "entrée" | "sortie" | "couverture";
-      why: string;
-    }
-  | {
-      kind: "stop";
-      buy: boolean;
-      triggerPx: number;
-      size: number;
-      reduceOnly: boolean;
-      why: string;
-    }
+export type SpotAction =
+  | { kind: "cancelPerp"; oids: number[]; why: string }
+  | { kind: "closePerp"; size: number; why: string }
+  | { kind: "buy"; size: number; limitPx: number; why: string }
+  | { kind: "sell"; size: number; limitPx: number; why: string }
+  | { kind: "hold"; why: string }
   | { kind: "none"; why: string };
 
-export type PlanOptions = {
-  /** Pas de taille de l'actif (10^-szDecimals). */
+export type SpotOptions = {
+  /** Pas de taille de l'UBTC (10^-szDecimals). */
   step: number;
-  /** Notionnel minimal accepté par l'exchange. */
+  /** Valeur minimale d'un ordre chez l'exchange. */
   minNotional: number;
-  /** Écart de prix toléré avant de remplacer un ordre stop (fraction). */
-  pxTol?: number;
-  /** Écart de taille toléré avant de remplacer un stop d'entrée (fraction). */
-  sizeTol?: number;
-  notionalMult?: number;
+  /** Écart de prix maximal accepté par un ordre au marché (fraction). */
+  slippage?: number;
+  /** Part des USDC laissée de côté pour les frais. */
+  feeBuffer?: number;
 };
 
 export function floorTo(x: number, step: number) {
@@ -152,133 +136,58 @@ export function floorTo(x: number, step: number) {
   return Number((k * step).toFixed(12));
 }
 
-const near = (a: number, b: number, tol: number) => Math.abs(a - b) <= Math.abs(b) * tol;
-
 /**
- * Ce que le compte doit faire pour porter exactement l'état de la règle.
+ * Ce que le compte doit faire pour porter l'état de la règle, au comptant.
  *
- * `levels` sont ceux de la barre en cours. Les actions au marché passent
- * avant les stops : le serveur exécute, relit le compte, puis replanifie.
+ * Il n'y a pas d'ordre stop au repos : le bot relit la règle à chaque passage
+ * et chaque minute, et achète ou vend au marché dès qu'elle change d'état.
+ * Ce qui reste en perp — l'exécution d'avant — est refermé d'abord ; le
+ * serveur relit alors le compte et replanifie.
  */
-export function plan(
-  state: { long: boolean; exitedToday: boolean; levels: Levels },
-  acc: Account,
-  o: PlanOptions,
-): Action[] {
-  const pxTol = o.pxTol ?? 0.0005;
-  const sizeTol = o.sizeTol ?? 0.03;
-  const mult = o.notionalMult ?? BTC_RULE.notionalMult;
-  const out: Action[] = [];
-  const half = o.step / 2;
-  const cancelAll = (why: string, except?: number) => {
-    for (const x of acc.orders) if (x.oid !== except) out.push({ kind: "cancel", oid: x.oid, why });
-  };
-
-  if (acc.position < -half) {
-    cancelAll("la règle est long seul");
+export function planSpot(state: { long: boolean }, acc: SpotAccount, o: SpotOptions): SpotAction[] {
+  const out: SpotAction[] = [];
+  const slip = o.slippage ?? 0.005;
+  if (acc.perpOrders.length) {
     out.push({
-      kind: "market",
-      buy: true,
-      size: Math.abs(acc.position),
-      purpose: "couverture",
-      why: "position courte inattendue : on la referme",
+      kind: "cancelPerp",
+      oids: acc.perpOrders,
+      why: "la règle se joue au comptant : ordres perp annulés",
+    });
+  }
+  if (Math.abs(acc.perpPosition) > o.step / 2) {
+    out.push({
+      kind: "closePerp",
+      size: Math.abs(acc.perpPosition),
+      why: "la règle se joue au comptant : position perp refermée",
     });
     return out;
   }
-  const long = acc.position > half;
-
-  if (state.long && !long) {
-    const size = floorTo((acc.equity * mult) / acc.markPx, o.step);
-    cancelAll("la règle est en position, l'entrée se fait au marché");
+  const holding = acc.base * acc.markPx >= o.minNotional;
+  if (state.long && !holding) {
+    const limitPx = acc.markPx * (1 + slip);
+    const size = floorTo((acc.quote * (1 - (o.feeBuffer ?? 0.002))) / limitPx, o.step);
     if (size * acc.markPx < o.minNotional) {
       out.push({
         kind: "none",
-        why: `compte trop petit : ${(acc.equity * mult).toFixed(2)} $ pour un minimum de ${o.minNotional} $`,
+        why: `compte trop petit : ${acc.quote.toFixed(2)} $ disponibles pour un minimum de ${o.minNotional} $`,
       });
       return out;
     }
+    out.push({ kind: "buy", size, limitPx, why: "la règle est en position : achat au comptant" });
+    return out;
+  }
+  if (!state.long && holding) {
     out.push({
-      kind: "market",
-      buy: true,
-      size,
-      purpose: "entrée",
-      why: "la règle est en position, le compte non : entrée au marché",
+      kind: "sell",
+      size: floorTo(acc.base, o.step),
+      limitPx: acc.markPx * (1 - slip),
+      why: "la règle est sortie : vente au comptant",
     });
     return out;
   }
-
-  if (!state.long && long) {
-    cancelAll("la règle est sortie");
-    out.push({
-      kind: "market",
-      buy: false,
-      size: acc.position,
-      purpose: "sortie",
-      why: "la règle est sortie, le compte non : sortie au marché",
-    });
-    return out;
-  }
-
-  if (long) {
-    const px = state.levels.exit;
-    const ok = acc.orders.find(
-      (x) =>
-        x.isTrigger &&
-        !x.isBuy &&
-        x.reduceOnly &&
-        x.triggerPx != null &&
-        near(x.triggerPx, px, pxTol) &&
-        Math.abs(x.size - acc.position) <= half,
-    );
-    cancelAll("remplacé par le stop du jour", ok?.oid);
-    if (ok) out.push({ kind: "keep", oid: ok.oid, why: "stop de sortie en place" });
-    else
-      out.push({
-        kind: "stop",
-        buy: false,
-        triggerPx: px,
-        size: acc.position,
-        reduceOnly: true,
-        why: "stop de sortie au plus bas des 10 jours",
-      });
-    return out;
-  }
-
-  // À plat, et la règle aussi.
-  if (state.exitedToday) {
-    cancelAll("pas de ré-entrée le jour d'une sortie");
-    out.push({ kind: "none", why: "sortie aujourd'hui : l'entrée se réarme demain" });
-    return out;
-  }
-  const px = state.levels.entry;
-  const size = floorTo((acc.equity * mult) / px, o.step);
-  if (size * px < o.minNotional) {
-    cancelAll("compte trop petit pour un ordre");
-    out.push({
-      kind: "none",
-      why: `compte trop petit : ${(acc.equity * mult).toFixed(2)} $ pour un minimum de ${o.minNotional} $`,
-    });
-    return out;
-  }
-  const ok = acc.orders.find(
-    (x) =>
-      x.isTrigger &&
-      x.isBuy &&
-      !x.reduceOnly &&
-      x.triggerPx != null &&
-      near(x.triggerPx, px, pxTol) &&
-      near(x.size, size, sizeTol),
-  );
-  cancelAll("remplacé par le stop d'entrée du jour", ok?.oid);
-  if (ok) out.push({ kind: "keep", oid: ok.oid, why: "stop d'entrée en place" });
-  else
-    out.push({
-      kind: "stop",
-      buy: true,
-      triggerPx: px,
-      size,
-      reduceOnly: false,
-      why: "stop d'entrée au plus haut des 25 jours",
-    });
+  out.push({
+    kind: "hold",
+    why: state.long ? "en position, rien à faire" : "à plat, rien à faire",
+  });
   return out;
 }

@@ -718,7 +718,7 @@ async function tickBtc(s: PilotFile, session: HlSession | null) {
   s.lastError = out.snapshot.error;
   s.lastStage = out.snapshot.long ? "ORDRE" : "PAS_DE_SETUP";
   s.lastReason = [out.summary, ...out.notes, ...notes].join(" · ");
-  const fill = out.notes.find((n) => /^BTC (entrée|sortie) rempli/.test(n));
+  const fill = out.notes.find((n) => /^BTC (entrée|sortie|migration) rempli/.test(n));
   if (fill) {
     s.lastOrder = fill;
     void import("./alerts.server").then((a) => a.notify("Règle BTC", fill));
@@ -796,6 +796,30 @@ async function snapshotNavOnly() {
     }
   } catch {
     /* coupe beat */
+  }
+  // La règle BTC se joue au comptant, sans ordre stop au repos : le bot vérifie
+  // ses deux niveaux chaque minute et relance un passage dès qu'un niveau est
+  // franchi. Le passage relit alors les bougies et décide, comme toujours.
+  try {
+    const sB = readPilot();
+    const lv = sB.btc?.levels;
+    if (sB.strategy !== "legacy" && sB.autonome && !sB.kill && lv && !g.__gsdBusy) {
+      const res = await fetch("https://api.hyperliquid.xyz/info", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: "allMids" }),
+      });
+      const px = Number(((await res.json()) as Record<string, string>).BTC);
+      const franchi = sB.btc?.long ? px <= lv.exit : px >= lv.entry;
+      if (Number.isFinite(px) && franchi) {
+        console.log(
+          `[gsd] règle BTC : ${px} franchit ${sB.btc?.long ? `la sortie ${lv.exit}` : `l'entrée ${lv.entry}`} — passage immédiat`,
+        );
+        void tickPilot(true);
+      }
+    }
+  } catch {
+    /* surveillance */
   }
   try {
     const w = await liveWallet();

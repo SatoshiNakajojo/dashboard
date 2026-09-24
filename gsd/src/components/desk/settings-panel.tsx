@@ -14,7 +14,7 @@ const STRATEGIES = [
     id: "btc_25_10",
     titre: "Règle BTC 25/10",
     texte:
-      "BTC seul, en journalier : achat au plus haut des 25 jours, sortie au plus bas des 10 jours, tout le compte, sans levier. Son timing bat le hasard hors échantillon ; elle ne gagne que si le BTC monte.",
+      "BTC seul, en journalier, au comptant (UBTC) : achat au plus haut des 25 jours, sortie au plus bas des 10 jours, tout le compte, sans levier ni funding. Son timing bat le hasard hors échantillon ; elle ne gagne que si le BTC monte.",
   },
   {
     id: "legacy",

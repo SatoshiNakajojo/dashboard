@@ -21,7 +21,7 @@ const ENTRER: Station[] = [
 
 const REGLE_BTC: Station[] = [
   { stage: "CANAL", label: "Canal", role: "la règle est-elle en position ?", who: "règle" },
-  { stage: "STOP", label: "Stop", role: "l'ordre stop est-il en place ?", who: "exchange" },
+  { stage: "STOP", label: "Surveillance", role: "les niveaux sont-ils surveillés ?", who: "règle" },
   { stage: "ORDRE", label: "Rattrapage", role: "le compte suit-il la règle ?", who: "exchange" },
 ];
 
@@ -48,6 +48,7 @@ const BON = new Set([
   "posé",
   "remplacé",
   "en place",
+  "surveillé",
 ]);
 const MAUVAIS = new Set(["non", "bloque", "refusé", "couper", "CUT", "échec", "erreur"]);
 const PRUDENT = new Set(["écarté", "passer", "réduire", "TRIM", "aucun", "annulé"]);
@@ -219,16 +220,16 @@ function RegleBtc({ screen }: { screen: Screen }) {
       </p>
     );
   }
-  const stop = b.stops.find((x) => !x.buy);
-  const entree = b.stops.find((x) => x.buy);
-  const distance = stop && b.markPx ? (stop.triggerPx / b.markPx - 1) * 100 : null;
   const valeur = b.markPx ? b.position * b.markPx : null;
+  const enBtc = valeur != null && valeur >= 10;
+  const pct = (niveau: number) =>
+    b.markPx ? `${((niveau / b.markPx - 1) * 100).toFixed(1).replace(".", ",")} %` : null;
   const dernier = b.lastTrade ? (b.lastTrade.exitPx / b.lastTrade.entryPx - 1) * 100 : null;
   return (
     <article className="mt-3 rounded-[var(--radius-md)] border border-border bg-elevated p-3">
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <p className="text-[11px] uppercase tracking-wider text-muted-foreground">
-          Règle BTC 25/10 · maintenant
+          Règle BTC 25/10 · au comptant{b.pair ? ` (UBTC/USDC, ${b.pair})` : ""} · maintenant
         </p>
         <p className="text-[11px] text-muted-foreground">relue {quand(b.at, screen.now)}</p>
       </div>
@@ -248,19 +249,19 @@ function RegleBtc({ screen }: { screen: Screen }) {
         <div>
           <dt className="text-muted-foreground">le compte</dt>
           <dd className="tabular mt-0.5 text-sm font-medium">
-            {b.position > 0 ? `${b.position} BTC` : "à plat"}
+            {enBtc ? `${b.position} UBTC` : "en USDC"}
           </dd>
-          {valeur != null && b.position > 0 && (
-            <dd className="tabular text-[11px] text-muted-foreground">{usd(valeur)}</dd>
-          )}
+          <dd className="tabular text-[11px] text-muted-foreground">
+            {enBtc && valeur != null ? usd(valeur) : b.quote != null ? usd(b.quote) : ""}
+          </dd>
         </div>
         <div>
-          <dt className="text-muted-foreground">entrée si le BTC passe</dt>
+          <dt className="text-muted-foreground">entrée si le BTC dépasse</dt>
           <dd className="tabular mt-0.5 text-sm font-medium">
             {b.levels ? dollars(b.levels.entry) : "—"}
           </dd>
           <dd className="text-[11px] text-muted-foreground">
-            plus haut des 25 jours{entree ? " · stop posé" : ""}
+            plus haut des 25 jours{!b.long && b.levels ? ` · à ${pct(b.levels.entry)}` : ""}
           </dd>
         </div>
         <div>
@@ -269,10 +270,7 @@ function RegleBtc({ screen }: { screen: Screen }) {
             {b.levels ? dollars(b.levels.exit) : "—"}
           </dd>
           <dd className="text-[11px] text-muted-foreground">
-            plus bas des 10 jours
-            {stop
-              ? ` · stop posé${distance != null ? `, à ${distance.toFixed(1).replace(".", ",")} %` : ""}`
-              : ""}
+            plus bas des 10 jours{b.long && b.levels ? ` · à ${pct(b.levels.exit)}` : ""}
           </dd>
         </div>
       </dl>
@@ -281,7 +279,9 @@ function RegleBtc({ screen }: { screen: Screen }) {
         {b.lastTrade && dernier != null
           ? ` · dernier : ${jourDe(b.lastTrade.entryT)} → ${jourDe(b.lastTrade.exitT)}, ${dernier >= 0 ? "+" : ""}${dernier.toFixed(1).replace(".", ",")} %`
           : ""}
-        . La règle ne gagne que si le BTC monte ; elle perd lentement sinon.
+        . Pas de funding au comptant. Le bot vérifie ces deux niveaux chaque minute et achète ou
+        vend dès que l'un est franchi. La règle ne gagne que si le BTC monte ; elle perd lentement
+        sinon.
       </p>
     </article>
   );
@@ -375,7 +375,7 @@ export function DecisionsPanel() {
           <Tuile
             k="passages de la règle"
             v={String(st.CANAL.total)}
-            n={`${(st.STOP.answers["posé"] ?? 0) + (st.STOP.answers["remplacé"] ?? 0)} stops posés ou remplacés`}
+            n="une relecture du canal par passage"
           />
         ) : (
           <Tuile
@@ -392,10 +392,10 @@ export function DecisionsPanel() {
         />
         {btc ? (
           <Tuile
-            k="stops refusés"
-            v={String(st.STOP.answers["refusé"] ?? 0)}
-            n="rattrapés au marché au passage suivant"
-            tone={(st.STOP.answers["refusé"] ?? 0) > 0 ? "text-warn" : undefined}
+            k="ordres refusés"
+            v={String(ordres["refusé"] ?? 0)}
+            n="retentés au passage suivant"
+            tone={(ordres["refusé"] ?? 0) > 0 ? "text-warn" : undefined}
           />
         ) : (
           <Tuile

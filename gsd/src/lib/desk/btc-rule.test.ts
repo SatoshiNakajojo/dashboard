@@ -1,6 +1,6 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
-import { floorTo, plan, replay, type Account, type DayBar } from "./btc-rule.ts";
+import { floorTo, planSpot, replay, type DayBar, type SpotAccount } from "./btc-rule.ts";
 
 const DAY = 86_400_000;
 const R = { entryDays: 3, exitDays: 2 };
@@ -73,184 +73,76 @@ describe("replay — la variante A de la recherche, à l'identique", () => {
   });
 });
 
-const ACC: Account = { position: 0, orders: [], equity: 47, markPx: 84_000 };
+const ACC: SpotAccount = { base: 0, quote: 47, markPx: 84_000, perpPosition: 0, perpOrders: [] };
 const OPT = { step: 0.00001, minNotional: 10 };
 
-describe("plan — ce que le compte doit porter", () => {
-  it("à plat : pose un stop d'achat au plus haut, pour tout le compte", () => {
-    const a = plan(
-      { long: false, exitedToday: false, levels: { entry: 85_000, exit: 79_000 } },
-      ACC,
-      OPT,
-    );
-    assert.deepEqual(a, [
-      {
-        kind: "stop",
-        buy: true,
-        triggerPx: 85_000,
-        size: floorTo(47 / 85_000, 0.00001),
-        reduceOnly: false,
-        why: "stop d'entrée au plus haut des 25 jours",
-      },
-    ]);
+describe("planSpot — ce que le compte doit porter, au comptant", () => {
+  it("la règle en position, le compte à plat : achat de tout le compte, frais réservés", () => {
+    const a = planSpot({ long: true }, ACC, OPT);
+    assert.equal(a.length, 1);
+    assert.equal(a[0].kind, "buy");
+    const { size, limitPx } = a[0] as { size: number; limitPx: number };
+    assert.equal(limitPx, 84_000 * 1.005);
+    assert.equal(size, floorTo((47 * 0.998) / (84_000 * 1.005), 0.00001));
+    assert.ok(size * limitPx <= 47);
   });
 
-  it("garde un stop d'entrée déjà bon, et annule le reste", () => {
-    const size = floorTo(47 / 85_000, 0.00001);
-    const a = plan(
-      { long: false, exitedToday: false, levels: { entry: 85_000, exit: 79_000 } },
-      {
-        ...ACC,
-        orders: [
-          { oid: 1, isBuy: true, reduceOnly: false, isTrigger: true, triggerPx: 85_010, size },
-          {
-            oid: 2,
-            isBuy: false,
-            reduceOnly: true,
-            isTrigger: true,
-            triggerPx: 70_000,
-            size: 0.001,
-          },
-        ],
-      },
-      OPT,
-    );
-    assert.deepEqual(
-      a.map((x) => [x.kind, "oid" in x ? x.oid : null]),
-      [
-        ["cancel", 2],
-        ["keep", 1],
-      ],
-    );
-  });
-
-  it("remplace le stop d'entrée quand le niveau du jour a changé", () => {
-    const a = plan(
-      { long: false, exitedToday: false, levels: { entry: 86_000, exit: 79_000 } },
-      {
-        ...ACC,
-        orders: [
-          {
-            oid: 1,
-            isBuy: true,
-            reduceOnly: false,
-            isTrigger: true,
-            triggerPx: 85_000,
-            size: 0.00055,
-          },
-        ],
-      },
-      OPT,
-    );
+  it("la règle sortie, le compte en BTC : vente de tout l'UBTC", () => {
+    const a = planSpot({ long: false }, { ...ACC, base: 0.000559, quote: 0.3 }, OPT);
     assert.deepEqual(
       a.map((x) => x.kind),
-      ["cancel", "stop"],
+      ["sell"],
+    );
+    assert.equal((a[0] as { size: number }).size, 0.00055);
+    assert.equal((a[0] as { limitPx: number }).limitPx, 84_000 * 0.995);
+  });
+
+  it("rien à faire quand le compte suit déjà la règle", () => {
+    assert.deepEqual(
+      planSpot({ long: true }, { ...ACC, base: 0.00055, quote: 0.2 }, OPT).map((x) => x.kind),
+      ["hold"],
+    );
+    assert.deepEqual(
+      planSpot({ long: false }, ACC, OPT).map((x) => x.kind),
+      ["hold"],
     );
   });
 
-  it("en position : un stop de sortie reduce-only au plus bas, sur toute la position", () => {
-    const a = plan(
-      { long: true, exitedToday: false, levels: { entry: 86_000, exit: 79_500 } },
-      {
-        ...ACC,
-        position: 0.00056,
-        orders: [
-          {
-            oid: 7,
-            isBuy: true,
-            reduceOnly: false,
-            isTrigger: true,
-            triggerPx: 85_000,
-            size: 0.00055,
-          },
-        ],
-      },
-      OPT,
-    );
-    assert.deepEqual(a, [
-      { kind: "cancel", oid: 7, why: "remplacé par le stop du jour" },
-      {
-        kind: "stop",
-        buy: false,
-        triggerPx: 79_500,
-        size: 0.00056,
-        reduceOnly: true,
-        why: "stop de sortie au plus bas des 10 jours",
-      },
-    ]);
-  });
-
-  it("la règle est en position, le compte non : entrée au marché", () => {
-    const a = plan(
-      { long: true, exitedToday: false, levels: { entry: 86_000, exit: 79_500 } },
-      ACC,
-      OPT,
-    );
+  it("une miette d'UBTC sous le minimum de l'exchange ne compte pas comme une position", () => {
+    const a = planSpot({ long: true }, { ...ACC, base: 0.00005 }, OPT);
     assert.deepEqual(
       a.map((x) => x.kind),
-      ["market"],
-    );
-    assert.deepEqual(
-      [(a[0] as { buy: boolean }).buy, (a[0] as { purpose: string }).purpose],
-      [true, "entrée"],
+      ["buy"],
     );
   });
 
-  it("la règle est sortie, le compte non : sortie au marché de toute la position", () => {
-    const a = plan(
-      { long: false, exitedToday: true, levels: { entry: 86_000, exit: 79_500 } },
-      { ...ACC, position: 0.00056 },
-      OPT,
-    );
+  it("refuse un achat sous le minimum de l'exchange", () => {
     assert.deepEqual(
-      a.map((x) => x.kind),
-      ["market"],
-    );
-    assert.deepEqual(
-      [
-        (a[0] as { buy: boolean }).buy,
-        (a[0] as { size: number }).size,
-        (a[0] as { purpose: string }).purpose,
-      ],
-      [false, 0.00056, "sortie"],
-    );
-  });
-
-  it("pas de stop d'entrée le jour d'une sortie", () => {
-    const a = plan(
-      { long: false, exitedToday: true, levels: { entry: 86_000, exit: 79_500 } },
-      ACC,
-      OPT,
-    );
-    assert.deepEqual(
-      a.map((x) => x.kind),
+      planSpot({ long: true }, { ...ACC, quote: 8 }, OPT).map((x) => x.kind),
       ["none"],
     );
   });
 
-  it("refuse un ordre sous le minimum de l'exchange", () => {
-    const a = plan(
-      { long: false, exitedToday: false, levels: { entry: 86_000, exit: 79_500 } },
-      { ...ACC, equity: 8 },
+  it("referme d'abord la position perp et ses ordres, avant tout achat au comptant", () => {
+    const a = planSpot(
+      { long: true },
+      { ...ACC, quote: 23, perpPosition: 0.00055, perpOrders: [555012993231] },
       OPT,
     );
     assert.deepEqual(
       a.map((x) => x.kind),
-      ["none"],
+      ["cancelPerp", "closePerp"],
     );
+    assert.deepEqual((a[0] as { oids: number[] }).oids, [555012993231]);
+    assert.equal((a[1] as { size: number }).size, 0.00055);
   });
 
-  it("referme une position courte inattendue : la règle est long seul", () => {
-    const a = plan(
-      { long: false, exitedToday: false, levels: { entry: 86_000, exit: 79_500 } },
-      { ...ACC, position: -0.001 },
-      OPT,
-    );
+  it("annule les ordres perp orphelins même sans position", () => {
+    const a = planSpot({ long: false }, { ...ACC, perpOrders: [7] }, OPT);
     assert.deepEqual(
       a.map((x) => x.kind),
-      ["market"],
+      ["cancelPerp", "hold"],
     );
-    assert.equal((a[0] as { buy: boolean }).buy, true);
   });
 });
 
