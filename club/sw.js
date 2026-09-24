@@ -106,3 +106,59 @@ self.addEventListener('fetch', function (event) {
 self.addEventListener('message', function (event) {
   if (event.data === 'SKIP_WAITING') self.skipWaiting();
 });
+
+/*
+ * Une notification du club arrive, déjà déchiffrée par le navigateur : titre,
+ * texte, lien et étiquette (voir `supabase/functions/_shared/notifyMessages.ts`).
+ *
+ * Elle s'affiche **toujours** : l'abonnement promet `userVisibleOnly`, et un
+ * push reçu sans notification visible fait révoquer l'abonnement par Safari.
+ */
+self.addEventListener('push', function (event) {
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch (_error) {
+    // Un message qui n'est pas du JSON s'affiche tel quel, plutôt que rien.
+    data = { body: event.data ? event.data.text() : '' };
+  }
+  event.waitUntil(
+    self.registration.showNotification(data.title || 'Satoshi Social Club', {
+      body: data.body || '',
+      icon: 'icon-192.png',
+      // Deux notifications de même étiquette se remplacent : le rappel d'une
+      // soirée prend la place de son annonce.
+      tag: data.tag || undefined,
+      data: { url: data.url || './' },
+    }),
+  );
+});
+
+/** Toucher la notification ouvre l'onglet dont elle parle — dans l'app si elle est ouverte. */
+self.addEventListener('notificationclick', function (event) {
+  event.notification.close();
+  const url = (event.notification.data && event.notification.data.url) || './';
+  const target = new URL(url, self.registration.scope).href;
+
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function (list) {
+      const open = list.find(function (client) {
+        return client.url.indexOf(self.registration.scope) === 0;
+      });
+      if (!open) return self.clients.openWindow(target);
+      // Le focus peut être refusé (pas d'activation) : on navigue quand même.
+      return open
+        .focus()
+        .catch(function () {
+          return open;
+        })
+        .then(function (client) {
+          return client && 'navigate' in client
+            ? client.navigate(target).catch(function () {
+                return client;
+              })
+            : client;
+        });
+    }),
+  );
+});
