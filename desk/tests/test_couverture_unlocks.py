@@ -138,3 +138,74 @@ def test_le_diagnostic_n_invente_aucun_rapprochement():
     assert 'detail.get("gecko_id") or ""' in source
     assert "order=market_cap_desc" in source, (
         "l'homonyme se tranche par capitalisation, pas par ordre d'arrivée")
+
+
+# --------------------------------------------------------------------------
+#  La regle doit rester atteignable sans dependance
+# --------------------------------------------------------------------------
+
+def test_la_regle_s_importe_sans_aucune_dependance_tierce():
+    """Le diagnostic doit tourner avec le Python du système, sur le VPS.
+
+    Il ne l'a pas toujours pu. La règle vivait dans `sentinelle.triggers`,
+    qui importe `Bar`, donc pydantic, donc tout le paquet `features`. Le
+    script mourait alors sur « No module named 'pydantic' », puis sur
+    « Permission denied » en essayant d'emprunter le venv réservé à
+    l'utilisateur `desk`. Aucune des deux traces ne nommait la vraie cause :
+    une constante et une fonction pure tiraient un validateur de schémas
+    derrière elles.
+
+    Ce test le rend impossible à refaire. Il bloque TOUS les paquets tiers —
+    pas seulement pydantic — puis importe la règle. Si quelqu'un ajoute une
+    dépendance à `trading_desk.deblocages`, ce test tombe ici plutôt que sur
+    une machine de production, six mois plus tard.
+    """
+    import subprocess
+    import sys
+
+    code = (
+        "import sys\n"
+        "autorises = set(sys.stdlib_module_names) | {'trading_desk'}\n"
+        "class Refus:\n"
+        "    def find_module(self, nom, chemin=None):\n"
+        "        return self.find_spec(nom, chemin)\n"
+        "    def find_spec(self, nom, chemin=None, cible=None):\n"
+        "        racine = nom.split('.')[0]\n"
+        "        if racine not in autorises:\n"
+        "            raise ModuleNotFoundError(\n"
+        "                f'dependance tierce interdite : {racine}', name=racine)\n"
+        "        return None\n"
+        "sys.meta_path.insert(0, Refus())\n"
+        "from trading_desk.deblocages import (\n"
+        "    DEBLOCAGE_AVANCE_J, DEBLOCAGE_DUREE_J,\n"
+        "    DEBLOCAGE_PART_MAX, DEBLOCAGE_PART_MIN, deblocages_retenus)\n"
+        "assert DEBLOCAGE_PART_MIN == 0.02 and DEBLOCAGE_PART_MAX == 0.25\n"
+        "assert DEBLOCAGE_AVANCE_J == 7 and DEBLOCAGE_DUREE_J == 6\n"
+        "assert deblocages_retenus([]) == []\n"
+        "print('ok')\n"
+    )
+    r = subprocess.run([sys.executable, "-c", code],
+                       cwd=str(_racine), capture_output=True, text=True,
+                       env={"PYTHONPATH": str(_racine / "src"), "PATH": "/usr/bin"})
+    assert r.returncode == 0 and "ok" in r.stdout, (
+        "`trading_desk.deblocages` a acquis une dépendance tierce :\n"
+        + (r.stderr or r.stdout))
+
+
+def test_triggers_reexporte_la_regle_sans_la_recopier():
+    """Une copie dérive un jour, et la dérive ne se voit pas dans les chiffres.
+
+    Tout ce qui importait la règle depuis `sentinelle.triggers` doit continuer
+    à marcher, et sur le MÊME objet — pas sur un jumeau qui divergera.
+    """
+    from trading_desk import deblocages
+    from trading_desk.sentinelle import triggers
+
+    assert triggers.deblocages_retenus is deblocages.deblocages_retenus
+    for nom in ("DEBLOCAGE_PART_MIN", "DEBLOCAGE_PART_MAX",
+                "DEBLOCAGE_AVANCE_J", "DEBLOCAGE_DUREE_J"):
+        assert getattr(triggers, nom) == getattr(deblocages, nom)
+
+    source = (_racine / "src" / "trading_desk" / "sentinelle" / "triggers.py").read_text()
+    assert "def deblocages_retenus(" not in source, (
+        "la règle a été recopiée dans triggers.py — il doit la réexporter")

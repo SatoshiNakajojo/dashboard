@@ -94,7 +94,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from trading_desk import pronostic
 from trading_desk.backtest.data import fetch_hyperliquid
-from trading_desk.sentinelle.triggers import (
+from trading_desk.deblocages import (
     DEBLOCAGE_AVANCE_J,
     DEBLOCAGE_DUREE_J,
     DEBLOCAGE_PART_MAX,

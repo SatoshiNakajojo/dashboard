@@ -17,6 +17,7 @@ erreurs commises en construisant ces panneaux le 9 septembre 2026 :
 from __future__ import annotations
 
 import json
+import time
 import re
 
 import pytest
@@ -170,7 +171,13 @@ def test_le_journal_absent_pointe_vers_la_machine_qui_le_tient(tmp_path):
 def test_le_journal_classe_les_positions_par_etat(tmp_path):
     j = tmp_path / "journal.jsonl"
     jour = 86_400_000
-    maintenant = 1_788_000_000_000
+    # L'HORLOGE REELLE, PAS UNE DATE FIGEE. Ce test portait
+    # `maintenant = 1_788_000_000_000`, soit le 29 aout 2026 : sa position
+    # « a venir » entrait le 21 septembre, et le 24 septembre elle est passee
+    # « en cours » sans que rien n'ait change dans le code. Un test dont le
+    # verdict depend du jour ou on le lance finit par accuser la derniere
+    # modification d'un defaut qui n'est qu'une date atteinte.
+    maintenant = int(time.time() * 1000)
     lignes = [
         # close : la fenetre de sortie est passee
         {"version": 2, "symbole": "AAA", "deblocage_ms": maintenant - 30 * jour,

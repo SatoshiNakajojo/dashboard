@@ -90,7 +90,7 @@ import math
 import random
 from collections.abc import Sequence
 
-from .sentinelle.triggers import (
+from .deblocages import (
     DEBLOCAGE_AVANCE_J,
     DEBLOCAGE_DUREE_J,
     DEBLOCAGE_PART_MAX,
