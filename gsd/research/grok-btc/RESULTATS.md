@@ -126,3 +126,33 @@ flatté par le choix du réglage ; il faut en attendre moins.
 
 C'est la première règle de tout ce qu'on a testé — GSD, agents Grok, desk —
 dont le timing passe un test hors échantillon pré-enregistré.
+
+## 24/09 — Que peut-on attendre face au BTC détenu ?
+
+`attentes.py`. Toutes les fenêtres qui commencent un 1er du mois, de 2013 à
+2026, règle à plat au départ comme pour un nouvel utilisateur (CoinMetrics,
+clôtures, sans funding) :
+
+| horizon | règle devant le BTC détenu | écart médian | 1 fois sur 10, pire que | 1 fois sur 10, mieux que |
+|---|---:|---:|---:|---:|
+| 1 an (149 départs) | 45 % | −5 % | −32 % | +99 % |
+| 3 ans (125 départs) | 62 % | +24 % | −42 % | +83 % |
+
+Sur un an, selon ce qu'a fait le BTC :
+
+| le BTC sur l'année | cas | écart médian de la règle | règle devant |
+|---|---:|---:|---:|
+| plus de +30 % | 96 | −19 % | 20 % |
+| entre −20 % et +30 % | 20 | +18 % | 75 % |
+| moins de −20 % | 33 | +94 % | 100 % |
+
+**C'est une assurance, pas un surplus régulier** : elle coûte dans les
+années de hausse et paie dans les années de baisse.
+
+**Le funding change tout.** Jouée sur les perps, comme le GSD le fait, la
+règle paie le funding quand elle est en position. Sur Hyperliquid, depuis
+2024 : BTC détenu +27 %/an, règle sans funding +28 %/an, règle funding payé
+**+18 %/an** — 19 % du capital en 2,7 ans. C'est à peu près l'avance
+médiane sur trois ans (+24 %). Sur les perps, il faut en attendre à peu près
+le rendement du BTC, avec des replis deux fois moins profonds ; jouée au
+comptant, l'avance historique serait préservée.
