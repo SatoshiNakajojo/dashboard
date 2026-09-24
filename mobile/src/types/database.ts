@@ -73,6 +73,8 @@ export type TickerRow = {
   closed_on: string | null;
   /** Posée par le déclencheur `tickers_freeze`, jamais par le client. */
   closed_at: string | null;
+  /** Fin de la fenêtre de vote (publication + 72 h). Posée par la base. */
+  votes_close_at: string;
   /** Colonne générée : jamais écrite par le client. */
   performance_percentage: number | null;
 };
@@ -81,6 +83,9 @@ export type TickerVoteRow = {
   ticker_id: string;
   user_id: string;
   side: VoteSide;
+  /** Pourquoi ce vote. `null` pour les votes d'avant la règle. */
+  reason: string | null;
+  /** Heure du choix de camp — posée par la base. */
   created_at: string;
 };
 

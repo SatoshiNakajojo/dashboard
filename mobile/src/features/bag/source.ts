@@ -7,8 +7,7 @@
  */
 
 import { supabase } from '@/lib/supabase';
-import { MOCK_MY_VOTES, MOCK_TICKERS, MOCK_VOTES } from '@/mocks/calls';
-import { MOCK_CURRENT_USER_ID } from '@/mocks/members';
+import { MOCK_TICKERS, MOCK_VOTE_ROWS } from '@/mocks/calls';
 import type { AssetClass } from '@/theme/tokens';
 import type { Ticker, Vote } from '@/types/domain';
 
@@ -61,6 +60,9 @@ export interface VoteRow {
   tickerId: string;
   userId: string;
   side: Vote;
+  /** La phrase du vote. `null` pour les votes d'avant la règle. */
+  reason: string | null;
+  createdAt: string;
 }
 
 export interface CallsSource {
@@ -68,8 +70,15 @@ export interface CallsSource {
   listVotes(signal?: AbortSignal): Promise<VoteRow[]>;
   /** Publie un call. Le ticker renvoyé porte l'identifiant définitif. */
   publish(draft: CallDraftInput, userId: string): Promise<Ticker>;
-  /** `null` retire le vote. */
-  setVote(tickerId: string, userId: string, side: Vote | null): Promise<void>;
+  /**
+   * Pose ou change un vote, avec sa phrase ; `null` le retire. Renvoie la
+   * ligne telle que la base l'a écrite (heure comprise), ou `null` si retiré.
+   */
+  setVote(
+    tickerId: string,
+    userId: string,
+    vote: { side: Vote; reason: string } | null,
+  ): Promise<VoteRow | null>;
   /** Corrige un call. Le ticker renvoyé porte `editedAt`, posé par la base. */
   update(tickerId: string, patch: CallPatch): Promise<Ticker>;
   /** Supprime un call — ses votes partent avec lui. */
@@ -84,7 +93,7 @@ export interface CallsSource {
 // ---------------------------------------------------------------------------
 
 const COLUMNS =
-  'id, user_id, symbol, asset_class, entry_price, current_price, entry_btc_price, size_usd, thesis, coingecko_id, yahoo_symbol, price_updated_at, created_at, entered_on, edited_at, exit_price, exit_btc_price, closed_on, closed_at';
+  'id, user_id, symbol, asset_class, entry_price, current_price, entry_btc_price, size_usd, thesis, coingecko_id, yahoo_symbol, price_updated_at, created_at, entered_on, edited_at, exit_price, exit_btc_price, closed_on, closed_at, votes_close_at';
 
 interface Row {
   id: string;
@@ -106,6 +115,7 @@ interface Row {
   exit_btc_price: number | string | null;
   closed_on: string | null;
   closed_at: string | null;
+  votes_close_at: string | null;
 }
 
 /** `numeric` revient en chaîne depuis PostgREST : on ne suppose jamais un nombre. */
@@ -136,6 +146,35 @@ function fromRow(row: Row): Ticker {
     exitBtcPrice: num(row.exit_btc_price),
     closedOn: row.closed_on,
     closedAt: row.closed_at,
+    // Avant la migration des votes argumentés, la colonne n'existe pas : la
+    // fenêtre se déduit alors de la publication, comme le ferait la base.
+    votesCloseAt: row.votes_close_at ?? votesCloseFor(row.created_at),
+  };
+}
+
+/** La fenêtre de vote d'un call publié à `createdAt` — la règle de la base. */
+export const VOTE_WINDOW_MS = 72 * 3_600_000;
+
+export function votesCloseFor(createdAt: string): string {
+  const published = Date.parse(createdAt);
+  return new Date(
+    (Number.isFinite(published) ? published : Date.now()) + VOTE_WINDOW_MS,
+  ).toISOString();
+}
+
+function voteFromRow(row: {
+  ticker_id: string;
+  user_id: string;
+  side: Vote;
+  reason: string | null;
+  created_at: string;
+}): VoteRow {
+  return {
+    tickerId: row.ticker_id,
+    userId: row.user_id,
+    side: row.side,
+    reason: row.reason,
+    createdAt: row.created_at,
   };
 }
 
@@ -154,16 +193,15 @@ function createSupabaseSource(client: NonNullable<typeof supabase>): CallsSource
     },
 
     async listVotes(signal) {
-      let query = client.from('ticker_votes').select('ticker_id, user_id, side');
+      let query = client
+        .from('ticker_votes')
+        .select('ticker_id, user_id, side, reason, created_at')
+        .order('created_at');
       if (signal) query = query.abortSignal(signal);
 
       const { data, error } = await query;
       if (error) throw error;
-      return (data ?? []).map((row) => ({
-        tickerId: row.ticker_id,
-        userId: row.user_id,
-        side: row.side,
-      }));
+      return (data ?? []).map(voteFromRow);
     },
 
     async publish(draft, userId) {
@@ -237,21 +275,27 @@ function createSupabaseSource(client: NonNullable<typeof supabase>): CallsSource
       return fromRow(data as unknown as Row);
     },
 
-    async setVote(tickerId, userId, side) {
-      const { error } = side
-        ? await client
-            .from('ticker_votes')
-            .upsert(
-              { ticker_id: tickerId, user_id: userId, side },
-              { onConflict: 'ticker_id,user_id' },
-            )
-        : await client
-            .from('ticker_votes')
-            .delete()
-            .eq('ticker_id', tickerId)
-            .eq('user_id', userId);
-
+    async setVote(tickerId, userId, vote) {
+      if (!vote) {
+        const { error } = await client
+          .from('ticker_votes')
+          .delete()
+          .eq('ticker_id', tickerId)
+          .eq('user_id', userId);
+        if (error) throw error;
+        return null;
+      }
+      // La base vérifie la fenêtre, l'auteur et la phrase (`ticker_votes_guard`).
+      const { data, error } = await client
+        .from('ticker_votes')
+        .upsert(
+          { ticker_id: tickerId, user_id: userId, side: vote.side, reason: vote.reason },
+          { onConflict: 'ticker_id,user_id' },
+        )
+        .select('ticker_id, user_id, side, reason, created_at')
+        .single();
       if (error) throw error;
+      return voteFromRow(data);
     },
   };
 }
@@ -266,24 +310,7 @@ const delay = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve,
 function createMockSource(): CallsSource {
   const tickers: Ticker[] = MOCK_TICKERS.map((t) => ({ ...t }));
 
-  // Les fixtures donnent des totaux ; on les redéploie en lignes de vote pour
-  // que le mock et le serveur exposent exactement la même forme.
-  const votes: VoteRow[] = [];
-  for (const [tickerId, tally] of Object.entries(MOCK_VOTES)) {
-    const mine = MOCK_MY_VOTES[tickerId];
-    for (let i = 0; i < tally.bull; i++) {
-      votes.push({ tickerId, userId: `mock-bull-${tickerId}-${i}`, side: 'bull' });
-    }
-    for (let i = 0; i < tally.bear; i++) {
-      votes.push({ tickerId, userId: `mock-bear-${tickerId}-${i}`, side: 'bear' });
-    }
-    // La dernière voix du bon côté devient la mienne : le total ne bouge pas,
-    // et le bouton s'affiche déjà sélectionné comme dans le prototype.
-    if (mine) {
-      const last = votes.filter((v) => v.tickerId === tickerId && v.side === mine).pop();
-      if (last) last.userId = MOCK_CURRENT_USER_ID;
-    }
-  }
+  const votes: VoteRow[] = MOCK_VOTE_ROWS.map((v) => ({ ...v }));
 
   return {
     async list() {
@@ -318,6 +345,7 @@ function createMockSource(): CallsSource {
         exitBtcPrice: null,
         closedOn: null,
         closedAt: null,
+        votesCloseAt: votesCloseFor(new Date().toISOString()),
       };
       tickers.unshift(ticker);
       return { ...ticker };
@@ -374,11 +402,36 @@ function createMockSource(): CallsSource {
       return { ...next };
     },
 
-    async setVote(tickerId, userId, side) {
+    async setVote(tickerId, userId, vote) {
       await delay(MOCK_LATENCY_MS);
+      // Les règles de `ticker_votes_guard`, pour que la démo se comporte
+      // comme le serveur.
+      const call = tickers.find((t) => t.id === tickerId);
+      if (!call) throw new Error('Call introuvable');
+      if (call.closedOn) throw new Error('Ce call est clôturé : les votes sont figés');
+      if (Date.now() > Date.parse(call.votesCloseAt)) {
+        throw new Error('Les votes sur ce call sont clos (72 h après sa publication)');
+      }
       const index = votes.findIndex((v) => v.tickerId === tickerId && v.userId === userId);
+      const previous = index >= 0 ? votes[index]! : null;
       if (index >= 0) votes.splice(index, 1);
-      if (side) votes.push({ tickerId, userId, side });
+      if (!vote) return null;
+      if (call.userId === userId) throw new Error('On ne vote pas sur son propre call');
+      const reason = vote.reason.trim();
+      if (reason.length < 3)
+        throw new Error('Un vote s’accompagne d’une phrase qui l’explique');
+      const row: VoteRow = {
+        tickerId,
+        userId,
+        side: vote.side,
+        reason,
+        createdAt:
+          previous && previous.side === vote.side
+            ? previous.createdAt
+            : new Date().toISOString(),
+      };
+      votes.push(row);
+      return { ...row };
     },
   };
 }

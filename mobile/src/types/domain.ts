@@ -85,6 +85,18 @@ export interface Ticker {
   closedOn: string | null;
   /** Instant de la clôture — posé par la base. */
   closedAt: string | null;
+  /** Fin de la fenêtre de vote : publication + 72 h, posée par la base. */
+  votesCloseAt: string;
+}
+
+/** Un vote sur un call, avec sa raison. */
+export interface VoteView {
+  userId: Uuid;
+  side: Vote;
+  /** La phrase qui l'explique. `null` pour les votes d'avant la règle. */
+  reason: string | null;
+  /** Heure du choix de camp. */
+  createdAt: string;
 }
 
 /** Call prêt à l'affichage : perfs calculées, votes agrégés. */
@@ -99,6 +111,12 @@ export interface CallView extends Ticker {
   bull: number;
   bear: number;
   myVote: Vote | null;
+  /** Tous les votes, du plus ancien au plus récent. */
+  voters: VoteView[];
+  /** On peut encore voter : fenêtre ouverte et call en cours. */
+  votesOpen: boolean;
+  /** Temps restant avant la fin des votes, en ms (≤ 0 : clos). Relu à la minute. */
+  votesLeftMs: number;
 }
 
 export type Vote = 'bull' | 'bear';

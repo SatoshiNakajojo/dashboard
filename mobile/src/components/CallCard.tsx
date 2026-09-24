@@ -1,17 +1,30 @@
-import { memo } from 'react';
+import { memo, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 
 import { MemberAvatar } from '@/components/MemberAvatar';
 import { Micro } from '@/components/ui/Micro';
 import { isoToClubDate } from '@/lib/btcAtDate';
-import { formatPercent, formatPrice, formatRelative, formatSize } from '@/lib/format';
+import { callStakes } from '@/features/bag/callPoints';
+import {
+  formatLeft,
+  formatPercent,
+  formatPrice,
+  formatRelative,
+  formatSize,
+} from '@/lib/format';
 import { assetClassStyle, c, cardGradient, f, perfColor, radius } from '@/theme/tokens';
-import type { CallView, Vote } from '@/types/domain';
+import type { CallView, Member, Vote } from '@/types/domain';
 
 export interface CallCardProps {
   call: CallView;
-  onVote: (tickerId: string, side: Vote) => void;
+  /**
+   * Toucher BULL ou BEAR ouvre la feuille de vote. Absent : on ne peut pas
+   * voter — son propre call, fenêtre fermée, call clos.
+   */
+  onVote?: (call: CallView, side: Vote) => void;
+  /** Pour nommer les votants sous la carte. */
+  membersById: Map<string, Member>;
   /** Présents seulement sur mes calls : on ne corrige ni ne supprime celui d'un autre. */
   onEdit?: (call: CallView) => void;
   onDelete?: (call: CallView) => void;
@@ -23,11 +36,14 @@ export interface CallCardProps {
 export const CallCard = memo(function CallCard({
   call,
   onVote,
+  membersById,
   onEdit,
   onDelete,
   onCloseCall,
 }: CallCardProps) {
   const cls = assetClassStyle[call.assetClass];
+  const [showReasons, setShowReasons] = useState(false);
+  const stakes = callStakes(call);
 
   return (
     <LinearGradient
@@ -42,7 +58,9 @@ export const CallCard = memo(function CallCard({
           <Text style={{ fontFamily: f.sansSemi, fontSize: 12, color: c.bone }}>
             {call.author.displayName}
           </Text>
-          <Text style={{ fontFamily: f.label, fontSize: 10, color: c.sepiaMuted, marginTop: 3 }}>
+          <Text
+            style={{ fontFamily: f.label, fontSize: 10, color: c.sepiaMuted, marginTop: 3 }}
+          >
             {formatRelative(call.createdAt)}
             {/* Le prix d'entrée fait le classement : une correction se voit. */}
             {call.editedAt ? ` · modifié ${formatRelative(call.editedAt)}` : ''}
@@ -109,7 +127,9 @@ export const CallCard = memo(function CallCard({
         <Stat label="ENTRÉE" value={formatPrice(call.entryPrice)} />
         <Stat
           label="PERF"
-          value={call.performancePercent === null ? '—' : formatPercent(call.performancePercent)}
+          value={
+            call.performancePercent === null ? '—' : formatPercent(call.performancePercent)
+          }
           valueColor={
             call.performancePercent === null ? c.sepiaFaint : perfColor(call.performancePercent)
           }
@@ -131,21 +151,24 @@ export const CallCard = memo(function CallCard({
         />
       </View>
 
-      <View className="flex-row items-center" style={{ paddingTop: 14, gap: 22 }}>
-        {/* Une position close ne se vote plus : les voix restent, figées. */}
+      <StakesLine stakes={stakes} settled={call.closed} />
+
+      <View className="flex-row items-center" style={{ paddingTop: 12, gap: 22 }}>
+        {/* Hors fenêtre, sur son propre call ou sur un call clos, les voix
+            restent affichées, figées. */}
         <VoteButton
           side="bull"
           count={call.bull}
           active={call.myVote === 'bull'}
-          disabled={call.closed}
-          onPress={() => onVote(call.id, 'bull')}
+          disabled={!onVote}
+          onPress={() => onVote?.(call, 'bull')}
         />
         <VoteButton
           side="bear"
           count={call.bear}
           active={call.myVote === 'bear'}
-          disabled={call.closed}
-          onPress={() => onVote(call.id, 'bear')}
+          disabled={!onVote}
+          onPress={() => onVote?.(call, 'bear')}
         />
         <View className="flex-1" />
         {call.sizeUsd === null ? null : (
@@ -153,6 +176,68 @@ export const CallCard = memo(function CallCard({
             {formatSize(call.sizeUsd)}
           </Text>
         )}
+      </View>
+
+      <View style={{ marginTop: 10 }}>
+        <View className="flex-row items-center justify-between">
+          {call.voters.length > 0 ? (
+            <Pressable
+              accessibilityRole="button"
+              aria-expanded={showReasons}
+              onPress={() => setShowReasons((open) => !open)}
+              hitSlop={6}
+            >
+              <Micro size={8.5} tracking={1.5} style={{ color: c.goldMuted }}>
+                {showReasons
+                  ? 'MASQUER LES AVIS'
+                  : `LIRE ${call.voters.length > 1 ? `LES ${call.voters.length} AVIS` : 'L’AVIS'}`}
+              </Micro>
+            </Pressable>
+          ) : (
+            <View />
+          )}
+          {/* La fenêtre de vote : 72 h après la publication (`votes_close_at`). */}
+          <Micro size={8} tracking={1.3} style={{ color: c.sepiaFaint }}>
+            {call.votesOpen ? `VOTE ENCORE ${formatLeft(call.votesLeftMs)}` : 'VOTES CLOS'}
+          </Micro>
+        </View>
+        {call.voters.length > 0 && showReasons ? (
+          <View style={{ marginTop: 8, gap: 10 }}>
+            {call.voters.map((voter) => {
+              const member = membersById.get(voter.userId);
+              return (
+                <View key={voter.userId} className="flex-row" style={{ gap: 10 }}>
+                  <MemberAvatar member={member} size={20} />
+                  <View className="flex-1" style={{ gap: 2 }}>
+                    <Text style={{ fontFamily: f.sansSemi, fontSize: 11, color: c.bone }}>
+                      {`${member?.displayName ?? 'Membre'} · `}
+                      <Text
+                        style={{
+                          fontFamily: f.labelMed,
+                          fontSize: 9,
+                          letterSpacing: 1.2,
+                          color: voter.side === 'bull' ? c.sage : c.oxblood,
+                        }}
+                      >
+                        {voter.side.toUpperCase()}
+                      </Text>
+                    </Text>
+                    <Text
+                      style={{
+                        fontFamily: f.serifItalic,
+                        fontSize: 13,
+                        lineHeight: 18,
+                        color: voter.reason ? c.parchment : c.sepiaFaint,
+                      }}
+                    >
+                      {voter.reason ?? 'Vote sans explication.'}
+                    </Text>
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+        ) : null}
       </View>
 
       {onEdit || onDelete || onCloseCall ? (
@@ -213,7 +298,13 @@ interface StatProps {
   divided?: boolean;
 }
 
-function Stat({ label, value, labelColor = c.sepiaMuted, valueColor = c.bone, divided }: StatProps) {
+function Stat({
+  label,
+  value,
+  labelColor = c.sepiaMuted,
+  valueColor = c.bone,
+  divided,
+}: StatProps) {
   return (
     <View
       style={{
@@ -230,6 +321,50 @@ function Stat({ label, value, labelColor = c.sepiaMuted, valueColor = c.bone, di
       <Text style={{ fontFamily: f.labelMed, fontSize: 12, color: valueColor, marginTop: 5 }}>
         {value}
       </Text>
+    </View>
+  );
+}
+
+/**
+ * Ce que rapporte le call, rôle par rôle, à son cours du moment — ou à sa
+ * sortie. Latent tant qu'il court : ça se lit sur la carte.
+ */
+function StakesLine({
+  stakes,
+  settled,
+}: {
+  stakes: { author: number; bull: number; bear: number };
+  settled: boolean;
+}) {
+  const sign = (value: number) => (value > 0 ? `+${value}` : value < 0 ? `−${-value}` : '0');
+  const tone = (value: number) =>
+    value > 0 ? c.sage : value < 0 ? c.oxbloodMuted : c.sepiaFaint;
+  const nothing = stakes.author === 0;
+  return (
+    <View className="flex-row flex-wrap items-baseline" style={{ marginTop: 10, gap: 10 }}>
+      <Micro size={8} tracking={1.4} style={{ color: c.sepiaMuted }}>
+        {settled ? 'POINTS ACQUIS' : 'POINTS EN JEU'}
+      </Micro>
+      {nothing ? (
+        <Text style={{ fontFamily: f.label, fontSize: 10, color: c.sepiaFaint }}>
+          aucun, entre −20 % et +30 %
+        </Text>
+      ) : (
+        (
+          [
+            ['AUTEUR', stakes.author],
+            ['BULLS', stakes.bull],
+            ['BEARS', stakes.bear],
+          ] as const
+        ).map(([label, value]) => (
+          <Text
+            key={label}
+            style={{ fontFamily: f.labelMed, fontSize: 10, color: tone(value) }}
+          >
+            {`${label} ${sign(value)}`}
+          </Text>
+        ))
+      )}
     </View>
   );
 }

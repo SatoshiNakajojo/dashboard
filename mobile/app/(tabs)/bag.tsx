@@ -1,8 +1,14 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 
 import { CallCard } from '@/components/CallCard';
 import { CloseCallSheet } from '@/components/CloseCallSheet';
+import { ClubStandings } from '@/components/ClubStandings';
+import { VoteSheet } from '@/components/VoteSheet';
+import { pointLines } from '@/features/bag/callPoints';
+import { clubStandings } from '@/features/club/clubStandings';
+import { clubYear } from '@/features/oracle/standings';
+import { useClubBets } from '@/features/oracle/useClubBets';
 import { ComposerSheet, type CallDraft } from '@/components/ComposerSheet';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { Fab } from '@/components/Fab';
@@ -22,16 +28,27 @@ import {
 import { formatPercent } from '@/lib/format';
 import { seasonAt } from '@/lib/season';
 import { a, c, f, radius } from '@/theme/tokens';
-import type { CallView } from '@/types/domain';
+import type { CallView, Member, Vote } from '@/types/domain';
 
 type BagView = 'bag' | 'closed' | 'rekt';
 
 /** Onglet Calls — fil des calls et classements de la saison. */
 export default function BagScreen() {
   const { userId } = useSession();
-  const { byId } = useMembers();
-  const { calls, loading, error, vote, publish, edit, remove, close, reopen, publishing } =
-    useCalls(userId, byId);
+  const { members, byId } = useMembers();
+  const {
+    calls,
+    loading,
+    error,
+    vote,
+    voting,
+    publish,
+    edit,
+    remove,
+    close,
+    reopen,
+    publishing,
+  } = useCalls(userId, byId);
 
   const [view, setView] = useState<BagView>('bag');
   const [composerOpen, setComposerOpen] = useState(false);
@@ -49,6 +66,13 @@ export default function BagScreen() {
   const startEdit = useCallback((call: CallView) => setEditing(call), []);
   const askDelete = useCallback((call: CallView) => setDeleting(call), []);
   const startClose = useCallback((call: CallView) => setClosing(call), []);
+  /** Le vote en cours de rédaction : le call, et le camp touché sur la carte. */
+  const [voteTarget, setVoteTarget] = useState<{ call: CallView; side: Vote } | null>(null);
+  const startVote = useCallback(
+    (call: CallView, side: Vote) => setVoteTarget({ call, side }),
+    [],
+  );
+  const myVoteOn = voteTarget?.call.voters.find((v) => v.userId === userId) ?? null;
 
   const closeSheet = () => {
     setComposerOpen(false);
@@ -83,10 +107,10 @@ export default function BagScreen() {
           isBag
             ? 'Calls en cours · perf vs ₿'
             : isRekt
-              ? `Classement vs bitcoin · saison ${seasonAt().roman}`
+              ? `Calls et Oracle · saison ${seasonAt().roman}`
               : 'Positions closes · perf réalisée'
         }
-        title={isBag ? 'Les Calls' : isRekt ? 'Rekt Board' : 'Clôturés'}
+        title={isBag ? 'Les Calls' : isRekt ? 'Classement' : 'Clôturés'}
         me={me}
       >
         <View className="flex-row border-b border-border" style={{ gap: 26, marginBottom: 20 }}>
@@ -96,7 +120,7 @@ export default function BagScreen() {
             active={view === 'closed'}
             onPress={() => setView('closed')}
           />
-          <ViewTab label="Rekt Board" active={isRekt} onPress={() => setView('rekt')} />
+          <ViewTab label="Classement" active={isRekt} onPress={() => setView('rekt')} />
         </View>
 
         {!isRekt ? (
@@ -120,7 +144,10 @@ export default function BagScreen() {
                   <CallCard
                     key={call.id}
                     call={call}
-                    onVote={vote}
+                    membersById={byId}
+                    // On vote sur le call d'un autre, dans sa fenêtre ; la
+                    // base le vérifie aussi (`ticker_votes_guard`).
+                    onVote={!mine && userId && call.votesOpen ? startVote : undefined}
                     onEdit={mine ? startEdit : undefined}
                     onDelete={mine ? askDelete : undefined}
                     onCloseCall={mine ? startClose : undefined}
@@ -130,7 +157,7 @@ export default function BagScreen() {
             )}
           </View>
         ) : (
-          <Leaderboards calls={calls} loading={loading} />
+          <Leaderboards calls={calls} loading={loading} members={members} byId={byId} />
         )}
       </ScreenShell>
 
@@ -172,6 +199,30 @@ export default function BagScreen() {
               }
             : undefined
         }
+      />
+
+      <VoteSheet
+        // Une feuille neuve par call : elle s'initialise sur mon vote existant.
+        key={voteTarget ? `${voteTarget.call.id}-${voteTarget.side}` : 'aucun'}
+        target={voteTarget}
+        current={myVoteOn ? { side: myVoteOn.side, reason: myVoteOn.reason } : null}
+        busy={voting}
+        error={error}
+        onClose={() => setVoteTarget(null)}
+        onSubmit={async (next) => {
+          const target = voteTarget;
+          if (!target) return false;
+          const done = await vote(target.call.id, next);
+          if (done) setVoteTarget(null);
+          return done;
+        }}
+        onRemove={async () => {
+          const target = voteTarget;
+          if (!target) return false;
+          const done = await vote(target.call.id, null);
+          if (done) setVoteTarget(null);
+          return done;
+        }}
       />
 
       <ConfirmDialog
@@ -233,13 +284,42 @@ function ViewTab({
   );
 }
 
-function Leaderboards({ calls, loading }: { calls: CallView[]; loading: boolean }) {
+function Leaderboards({
+  calls,
+  loading,
+  members,
+  byId,
+}: {
+  calls: CallView[];
+  loading: boolean;
+  members: Member[];
+  byId: Map<string, Member>;
+}) {
   // Les deux tableaux sortent du même jeu de calls : ce sont les seuils qui les
   // séparent, pas deux sources de données (`src/lib/performance.ts`).
   const { fame, rekt } = splitLeaderboards(calls);
 
+  // Le classement du club : les points des calls, et ceux de l'Oracle, jugés
+  // comme dans son onglet (`useJudgedHistory`).
+  const club = useClubBets(byId);
+  const currentYear = clubYear(club.now);
+  const [year, setYear] = useState<number | null>(currentYear);
+  const lines = useMemo(() => pointLines(calls, club.now), [calls, club.now]);
+  const rows = useMemo(
+    () => clubStandings(members, lines, club.history, year),
+    [members, lines, club.history, year],
+  );
+
   return (
     <View style={{ gap: 26 }}>
+      <ClubStandings
+        rows={rows}
+        year={year}
+        currentYear={currentYear}
+        onYearChange={setYear}
+        loading={loading || club.loading}
+      />
+
       <View>
         <SectionTitle
           label="HALL OF FAME"

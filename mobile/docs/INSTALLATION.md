@@ -188,17 +188,39 @@ sans carte bancaire :
 
 `onboarding@resend.dev` est l'expéditeur de test de Resend. Il fonctionne sans
 nom de domaine, mais **Resend ne le laisse écrire qu'à l'adresse du titulaire
-du compte**. Vous recevrez vos codes ; les six autres membres n'en recevront
-aucun, sans erreur visible de votre côté.
+du compte**. Vous recevrez vos codes ; les six autres membres non.
 
-Pour ouvrir le club à tout le monde, il faut un domaine vérifié dans Resend
-(**Domains** → *Add domain*, puis trois enregistrements DNS) et un expéditeur
-du type `club@votredomaine.fr`.
+Le symptôme, côté membre : au moment de demander le code, l'app affiche « Le
+code n'a pas pu partir : le serveur d'envoi du club refuse d'écrire à cette
+adresse » (auparavant, la phrase brute de Supabase : *Error sending magic link
+email*). Leur adresse n'y est pour rien.
 
-Sans domaine sous la main, n'importe quel SMTP qui écrit à tout le monde fera
-l'affaire — un compte Gmail avec un *mot de passe d'application*
-(`smtp.gmail.com`, port 465, votre adresse en nom d'utilisateur) suffit
-largement pour sept membres.
+Pour ouvrir le club à tout le monde, deux voies :
+
+**Sans nom de domaine — Gmail, cinq minutes.** Un compte Gmail avec un *mot de
+passe d'application* écrit à n'importe quelle adresse, jusqu'à 500 courriels par
+jour : largement assez pour sept membres.
+
+1. Compte Google → **Sécurité** → activer la **validation en deux étapes**
+   (obligatoire pour la suite).
+2. <https://myaccount.google.com/apppasswords> → nom `Satoshi Club` → **Créer**.
+   Google affiche un mot de passe de 16 lettres : copiez-le (sans les espaces).
+3. Supabase → **Authentication** → **Emails** → **SMTP Settings** :
+
+   | Champ | Valeur |
+   |---|---|
+   | Host | `smtp.gmail.com` |
+   | Port | `465` |
+   | Username | votre adresse Gmail |
+   | Password | le mot de passe d'application |
+   | Sender email | **la même** adresse Gmail — Gmail refuse un autre expéditeur |
+   | Sender name | `Satoshi Social Club` |
+
+4. **Save**. Le gabarit de §1.6 reste tel quel : il ne dépend pas du serveur.
+
+**Avec un nom de domaine — Resend.** **Domains** → *Add domain*, puis les trois
+enregistrements DNS qu'il indique ; une fois le domaine vérifié, remplacez
+l'expéditeur par une adresse de ce domaine, du type `club@votredomaine.fr`.
 
 Le blocage saute dès l'enregistrement — pas besoin d'attendre la fin de l'heure.
 
@@ -436,7 +458,7 @@ La version *maskable* est volontairement plus petite : Android rogne jusqu'à
 | Ce que vous voyez | Ce qui se passe |
 |---|---|
 | Le courriel contient un **lien**, pas un code | Le gabarit Magic Link est resté celui par défaut → §1.6. Et s'il refuse de se modifier, c'est le SMTP qui manque → §1.5 |
-| Vous recevez vos codes, pas les autres membres | L'expéditeur `onboarding@resend.dev` n'écrit qu'au titulaire du compte Resend. Vérifiez un domaine → §1.5 |
+| Vous recevez vos codes, pas les autres membres — chez eux, « Le code n'a pas pu partir » (ou *Error sending magic link email*) | L'expéditeur `onboarding@resend.dev` n'écrit qu'au titulaire du compte Resend. Passez à Gmail avec un mot de passe d'application, ou vérifiez un domaine → §1.5 |
 | « Ce code est expiré ou incorrect » devant un code tout frais | Vérifiez la longueur du code reçu. L'app accepte de six à dix chiffres depuis la correction ; une version antérieure tronquait à six et envoyait un code amputé. Au besoin, **Sign In / Providers → Email → Email OTP Length** |
 | Le lien du courriel ne mène nulle part | *Site URL* est resté sur `http://localhost:3000` → §1.7. `npm run check:supabase` le lit et le signale |
 | Le courriel arrive **vide** | Le gabarit a été réécrit par le client de messagerie. Prenez `magic-link-minimal.html`, et ne collez jamais le commentaire d'en-tête |

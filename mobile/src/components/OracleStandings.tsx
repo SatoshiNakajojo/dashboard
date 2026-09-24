@@ -93,13 +93,16 @@ export function OracleStandings({
           marginTop: 10,
         }}
       >
-        Un pari résolu rapporte sa justesse, multipliée par 1 (une semaine) à 8 (dix ans).
+        Un pari résolu rapporte sa justesse, multipliée par 1 (une semaine) à 8 (dix ans). Ces
+        points comptent aussi au classement du club, avec ceux des calls (onglet Calls →
+        Classement).
       </Text>
     </View>
   );
 }
 
-function PeriodTab({
+/** « 2026 » ou « DEPUIS TOUJOURS » : le choix de période des classements. */
+export function PeriodTab({
   label,
   active,
   onPress,

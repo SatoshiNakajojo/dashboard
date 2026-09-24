@@ -23,6 +23,9 @@ function toViews(tickers = MOCK_TICKERS): CallView[] {
     bull: 0,
     bear: 0,
     myVote: null,
+    voters: [],
+    votesOpen: false,
+    votesLeftMs: 0,
   }));
 }
 

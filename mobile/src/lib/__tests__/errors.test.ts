@@ -26,6 +26,19 @@ describe('erreurs d’authentification', () => {
     }
   });
 
+  it('dit qu’un code n’est pas parti à cause du serveur d’envoi, pas de l’adresse', () => {
+    // Le cas vécu : Resend et son expéditeur de test n'écrivent qu'au
+    // titulaire du compte, les autres membres lisaient cette phrase anglaise.
+    for (const message of [
+      'Error sending magic link email',
+      'Error sending confirmation email',
+      'Email address "alex@mail.nc" cannot be used as it is not authorized',
+      'email_address_not_authorized',
+    ]) {
+      assert.match(describeError({ message }), /serveur d’envoi du club/, message);
+    }
+  });
+
   it('ne fait pas passer un défaut de configuration pour un mauvais code', () => {
     // GoTrue dit « invalid token » dans les deux cas. Les confondre envoie
     // chercher l'erreur dans la boîte de réception du membre, alors qu'elle

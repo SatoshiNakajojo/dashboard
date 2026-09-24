@@ -19,6 +19,19 @@ const TRANSLATIONS: [pattern: RegExp, message: string][] = [
     /signups? not allowed|user not found|email not confirmed/i,
     'Cette adresse n’est pas sur la liste du club.',
   ],
+  /**
+   * Le serveur d'envoi a refusé le courriel — pas l'adresse du membre.
+   *
+   * GoTrue le dit « Error sending magic link email » : le SMTP du club refuse
+   * d'écrire à cette adresse. Cas typique : l'expéditeur de test de Resend
+   * (`onboarding@resend.dev`) n'écrit qu'au titulaire du compte, et les autres
+   * membres voyaient passer cette phrase anglaise. `email_address_not_authorized`
+   * est l'équivalent du serveur partagé de Supabase, réservé à l'équipe.
+   */
+  [
+    /error sending (magic link|confirmation|recovery|invite)?\s*e?-?mail|email_address_not_authorized|cannot be used as it is not authorized/i,
+    'Le code n’a pas pu partir : le serveur d’envoi du club refuse d’écrire à cette adresse. Votre adresse n’est pas en cause — prévenez l’administrateur du club.',
+  ],
   [
     /email rate limit|over_email_send_rate_limit/i,
     'Trop de codes demandés. Réessayez dans une heure.',

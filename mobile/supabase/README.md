@@ -5,7 +5,7 @@
 | `migrations/20260905120000_init.sql` | Tables, contraintes, déclencheurs, RLS, Realtime |
 | `seed.sql` | Jeu de `DONNEES_FICTIVES.md`, UUID identiques à `src/mocks` |
 | `tests/doubles.sql` | Doublures de `auth`, `storage` et des rôles, pour tester hors plateforme |
-| `tests/schema_test.sql` | Trente-quatre assertions sur les règles métier |
+| `tests/schema_test.sql` | Trente-neuf assertions sur les règles métier |
 
 ## Les sept tables
 
@@ -58,6 +58,8 @@ rapide », et qui déclenche son rollback. Le client n'arbitre rien.
 |---|---|
 | `tickers_freeze` | Titre, classe et auteur figés ; corrections et sorties datées ; une position close garde son prix de sortie |
 | `tickers_open_on_insert` | Un call se publie en cours ; la clôture vient ensuite |
+| `tickers_votes_window` | La fenêtre de vote (publication + 72 h) est posée par la base, et ne bouge plus |
+| `ticker_votes_guard` | Un vote porte une phrase ; jamais sur son propre call, ni hors fenêtre, ni sur un call clos — et ne se retire pas après coup |
 | `events_notify`, `tickers_notify` | Une soirée à venir, un call publié ou clôturé : le fait entre dans `notification_outbox`, dans la même transaction |
 | `predictions_guard` | La base fixe le calendrier d'un pari à l'insertion (`opened_at`, `locked_at`, `resolves_at` selon l'horizon) et refuse qu'on le change ; un seul pari en cours par membre et par horizon ; après `locked_at`, le tracé ne bouge plus ; l'empreinte `HASH 8F2A` suit le tracé |
 | `*_touch` | `updated_at` |

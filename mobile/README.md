@@ -105,7 +105,7 @@ qu'on n'a pas déposé le nouveau tracé.
 
 ## Ce qui a été vérifié
 
-- `npm run typecheck`, `npm run lint`, `npm test` — propres (481 tests).
+- `npm run typecheck`, `npm run lint`, `npm test` — propres (493 tests).
 - **Règles pures** : bornes et inversibilité du repère, monotonie du tracé,
   écart à la courbe réelle, espaces insécables du formatage français, perf vs ₿
   comme ratio et non soustraction, seuils et tri des deux classements.
@@ -118,11 +118,12 @@ qu'on n'a pas déposé le nouveau tracé.
   réécrit jamais un prix inchangé.
 - **Schéma** : toutes les migrations appliquées dans l'ordre à un PostgreSQL 16
   neuf (doublures `supabase/tests/doubles.sql`), réexécutées pour l'idempotence,
-  puis `supabase/tests/schema_test.sql` — 34 assertions passent, dont celles
+  puis `supabase/tests/schema_test.sql` — 39 assertions passent, dont celles
   des paris de l'Oracle (calendrier fixé par la base, un pari en cours par
   horizon, scellement, déblocage seulement quand personne d'autre n'a parié),
   celles des calls (titre figé, corrections datées par la base, clôture qui
-  fige la perf, sortie jamais avant l'entrée ni dans le futur), celles des
+  fige la perf, sortie jamais avant l'entrée ni dans le futur, votes argumentés
+  dans une fenêtre de 72 h, jamais sur son propre call), celles des
   notifications (file fermée aux membres, rappel du jour J une seule fois,
   battement qui lit son secret dans le coffre-fort), et celle qui
   manquait : un membre lit les couleurs déjà prises **avant**
@@ -715,6 +716,46 @@ clôture (`closed_at`), refuse une sortie avant l'entrée ou dans le futur, fige
 `current_price` au prix de sortie — `refresh-prices` n'y touche plus, et la
 colonne générée `performance_percentage` donne la perf réalisée sans changer de
 définition — et un call se publie toujours ouvert.
+
+---
+
+## Des votes argumentés, et des points
+
+**Voter**, c'est choisir un camp et dire pourquoi : toucher BULL ou BEAR sur la
+carte d'un autre ouvre une feuille où l'on écrit sa raison (3 à 140 signes).
+Les avis se lisent sous la carte (« LIRE LES 4 AVIS »).
+
+Trois règles, tenues par la base (`ticker_votes_guard`, migration
+`20260928090000_argued_votes`) :
+
+- **une fenêtre de 72 h** après la publication — sans elle, on voterait bull
+  sur un call déjà à +50 % pour ramasser des points sans avoir rien prédit.
+  Hors fenêtre, un vote ne se change ni ne se retire ;
+- **pas de vote sur son propre call** ;
+- **un call clôturé ne se vote plus**.
+
+**Les points des calls** (`src/features/bag/callPoints.ts`) :
+
+| Perf du call | Auteur | Bull | Bear |
+|---|---|---|---|
+| ≥ +100 % | +300 | +150 | −150 |
+| ≥ +50 % | +200 | +100 | −100 |
+| ≥ +30 % | +100 | +50 | −50 |
+| entre −20 % et +30 % | 0 | 0 | 0 |
+| ≤ −20 % | −100 | −50 | +50 |
+| ≤ −50 % | −200 | −100 | +100 |
+
+Un vote juste rapporte la moitié de ce que gagne l'auteur ; un vote faux coûte
+autant. Sans cette perte, voter bull sur tout serait un billet de loterie
+gratuit. Un call en cours est noté sur son cours du moment — ses points sont
+**en jeu** et bougent avec le marché ; clôturé, ils sont **acquis**. Sinon, il
+suffirait de ne jamais clôturer un call perdant.
+
+**Le classement du club** — Calls → **Classement** — additionne ces points et
+ceux de l'Oracle, sur l'année ou depuis toujours. Le premier **détient la
+vérité**, le dernier est **à côté de la plaque** (s'ils sont seuls à leur
+place, et qu'un écart les sépare). La page d'un membre affiche son rang et ses
+points (`src/features/club/clubStandings.ts`).
 
 ---
 

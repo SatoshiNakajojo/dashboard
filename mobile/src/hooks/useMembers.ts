@@ -1,4 +1,4 @@
-import { useEffect, useState, useSyncExternalStore } from 'react';
+import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 
 import { profileRevision, subscribeToProfileChange } from '@/features/auth/useAuth';
 import { parseLinks } from '@/lib/profileLinks';
@@ -73,5 +73,8 @@ export function useMembers(): MembersState {
     return () => controller.abort();
   }, [revision]);
 
-  return { members, byId: index(members), loading };
+  // Mémoïsé : une Map neuve à chaque rendu relançait tous les calculs qui en
+  // dépendent — les perfs des calls, les classements — et redessinait les cartes.
+  const byId = useMemo(() => index(members), [members]);
+  return { members, byId, loading };
 }

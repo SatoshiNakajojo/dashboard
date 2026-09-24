@@ -39,6 +39,7 @@ const call = (id: string, assetClass: AssetClass, extra: Partial<Ticker> = {}): 
   exitBtcPrice: null,
   closedOn: null,
   closedAt: null,
+  votesCloseAt: '2026-01-04T00:00:00Z',
   priceUpdatedAt: null,
   createdAt: '2026-01-01T00:00:00Z',
   ...extra,

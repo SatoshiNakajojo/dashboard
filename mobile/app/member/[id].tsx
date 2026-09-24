@@ -7,7 +7,9 @@ import { SharedLinks } from '@/components/SharedLinks';
 import { Avatar } from '@/components/ui/Avatar';
 import { Micro } from '@/components/ui/Micro';
 import { SectionTitle } from '@/components/ui/SectionTitle';
+import { memberCallPoints, pointLines, type MemberCallPoints } from '@/features/bag/callPoints';
 import { useCalls } from '@/features/bag/useCalls';
+import { clubStandings, titlesOf } from '@/features/club/clubStandings';
 import { useClubNights } from '@/features/nights/useClubNights';
 import { useClubBets } from '@/features/oracle/useClubBets';
 import { clubYear } from '@/features/oracle/standings';
@@ -37,7 +39,7 @@ export default function MemberScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { byId, loading } = useMembers();
+  const { members, byId, loading } = useMembers();
   const { userId } = useSession();
 
   const member = id ? byId.get(id) : undefined;
@@ -60,6 +62,29 @@ export default function MemberScreen() {
         : null,
     [member, calls.calls, club.history, club.bets, club.now, nights.events],
   );
+
+  // Sa place au classement du club, sur l'année en cours — le même calcul que
+  // l'onglet Calls → Classement.
+  const year = clubYear(club.now);
+  const lines = useMemo(() => pointLines(calls.calls, club.now), [calls.calls, club.now]);
+  const standing = useMemo(() => {
+    if (!member) return null;
+    const rows = clubStandings(members, lines, club.history, year);
+    const row = rows.find((candidate) => candidate.member.id === member.id);
+    if (!row) return null;
+    const titles = titlesOf(rows);
+    return {
+      row,
+      of: rows.length,
+      title:
+        titles.truth === member.id
+          ? 'DÉTIENT LA VÉRITÉ'
+          : titles.offMark === member.id
+            ? 'À CÔTÉ DE LA PLAQUE'
+            : null,
+      calls: memberCallPoints(lines, member.id, year),
+    };
+  }, [member, members, lines, club.history, year]);
 
   return (
     <View className="flex-1 bg-ink" style={{ paddingTop: insets.top }}>
@@ -109,6 +134,17 @@ export default function MemberScreen() {
               {/* Sa couleur : celle de ses courbes dans l'Oracle et de ses
                   marques partout ailleurs — c'est comme ça qu'on le reconnaît. */}
               <View style={{ width: 28, height: 2, backgroundColor: member.color }} />
+              {standing && !(calls.loading || club.loading) ? (
+                <Micro tracking={1.6} style={{ color: standing.title ? c.gold : c.sepiaMuted }}>
+                  {[
+                    `${toRoman(standing.row.rank)} / ${standing.of} AU CLASSEMENT ${year}`,
+                    `${signedPoints(standing.row.total)} PTS`,
+                    standing.title,
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')}
+                </Micro>
+              ) : null}
             </View>
 
             <View>
@@ -138,6 +174,8 @@ export default function MemberScreen() {
               <>
                 <CallsSection
                   record={record.calls}
+                  points={standing?.calls ?? null}
+                  year={year}
                   name={member.displayName}
                   isMe={isMe}
                   loading={calls.loading}
@@ -188,13 +226,24 @@ export default function MemberScreen() {
 /** Calls affichés avant « voir tout » : un membre actif en publie des dizaines. */
 const CALLS_PREVIEW = 5;
 
+/** `+150`, `−200`, `0`. */
+function signedPoints(value: number): string {
+  if (value > 0) return `+${formatInteger(value)}`;
+  if (value < 0) return `−${formatInteger(-value)}`;
+  return '0';
+}
+
 function CallsSection({
   record,
+  points,
+  year,
   name,
   isMe,
   loading,
 }: {
   record: CallsRecord;
+  points: MemberCallPoints | null;
+  year: number;
   name: string;
   isMe: boolean;
   loading: boolean;
@@ -233,6 +282,21 @@ function CallsSection({
               },
             ]}
           />
+          {points ? (
+            <Text
+              style={{
+                fontFamily: f.sans,
+                fontSize: 11,
+                lineHeight: 18,
+                color: c.sepia,
+                marginTop: 10,
+              }}
+            >
+              {`Points des calls en ${year} : ${signedPoints(points.total)}${
+                points.latent !== 0 ? `, dont ${signedPoints(points.latent)} encore en jeu` : ''
+              } — comme auteur ${signedPoints(points.asAuthor)}, comme votant ${signedPoints(points.asVoter)}.`}
+            </Text>
+          ) : null}
           {shown.map((call) => {
             const cls = assetClassStyle[call.assetClass];
             return (

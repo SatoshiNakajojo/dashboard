@@ -38,9 +38,12 @@ insert into public.potluck_items (id, event_id, item_name, assigned_user_id) val
   ('cccccccc-0000-4000-8000-000000000002', 'bbbbbbbb-0000-4000-8000-000000000001', 'Prise',
    'aaaaaaaa-0000-4000-8000-000000000002');
 
--- `auth.uid()` = John pour toute la suite.
-create or replace function auth.uid() returns uuid language sql stable
-  as $$ select 'aaaaaaaa-0000-4000-8000-000000000001'::uuid $$;
+-- `auth.uid()` = John pour toute la suite, sauf quand un test se met dans la
+-- peau d'un autre membre avec `set_config('test.uid', …, true)`.
+create or replace function auth.uid() returns uuid language sql stable as $$
+  select coalesce(nullif(current_setting('test.uid', true), ''),
+                  'aaaaaaaa-0000-4000-8000-000000000001')::uuid
+$$;
 
 \set QUIET off
 
@@ -226,6 +229,92 @@ begin
   raise notice 'ok · tickers : on ne clôture que ses propres calls';
 end $$;
 
+-- --- Calls : des votes argumentés, dans une fenêtre -----------------------------
+
+do $$
+declare
+  john   constant uuid := 'aaaaaaaa-0000-4000-8000-000000000001';
+  alex   constant uuid := 'aaaaaaaa-0000-4000-8000-000000000002';
+  call   uuid;
+  closes timestamptz;
+  v      public.ticker_votes%rowtype;
+  failed boolean;
+  n      integer;
+begin
+  -- Un call d'Alex, publié par la base : la fenêtre est la sienne, pas celle du client.
+  insert into public.tickers (user_id, symbol, asset_class, entry_price, thesis, votes_close_at)
+  values (alex, '$RKLB', 'ACTION', 20, 'Fusées.', now() + interval '10 years')
+  returning id, votes_close_at into call, closes;
+  assert closes = now() + interval '72 hours', format('fenêtre attendue à 72 h, obtenue %s', closes);
+  update public.tickers set votes_close_at = now() + interval '10 years' where id = call;
+  select votes_close_at into closes from public.tickers where id = call;
+  assert closes = now() + interval '72 hours', 'la fenêtre ne se déplace pas';
+  raise notice 'ok · votes : la fenêtre de 72 h est posée par la base, et ne bouge pas';
+
+  set local role authenticated;
+
+  -- Sans phrase : refusé. Avec : accepté, et l'heure vient de la base.
+  failed := false;
+  begin
+    insert into public.ticker_votes (ticker_id, user_id, side) values (call, john, 'bull');
+  exception when check_violation then failed := true;
+  end;
+  assert failed, 'un vote sans phrase est refusé';
+  insert into public.ticker_votes (ticker_id, user_id, side, reason, created_at)
+  values (call, john, 'bull', '  Le carnet de commandes double.  ', '2000-01-01');
+  select * into v from public.ticker_votes where ticker_id = call and user_id = john;
+  assert v.reason = 'Le carnet de commandes double.' and v.created_at = now(), 'vote argumenté';
+
+  -- Changer de camp, dans la fenêtre : permis, avec une nouvelle phrase.
+  update public.ticker_votes set side = 'bear', reason = 'Valorisation délirante.'
+   where ticker_id = call and user_id = john;
+  select * into v from public.ticker_votes where ticker_id = call and user_id = john;
+  assert v.side = 'bear', 'on change d’avis dans la fenêtre';
+  raise notice 'ok · votes : une phrase obligatoire, un avis qui peut changer dans la fenêtre';
+
+  -- Voter sur son propre call : refusé.
+  reset role;
+  perform set_config('test.uid', alex::text, true);
+  set local role authenticated;
+  failed := false;
+  begin
+    insert into public.ticker_votes (ticker_id, user_id, side, reason)
+    values (call, alex, 'bull', 'Mon propre call.');
+  exception when check_violation then failed := true;
+  end;
+  assert failed, 'pas de vote sur son propre call';
+  reset role;
+  perform set_config('test.uid', john::text, true);
+  raise notice 'ok · votes : pas de vote sur son propre call';
+
+  -- La fenêtre fermée : ni vote, ni retrait.
+  alter table public.tickers disable trigger tickers_votes_window;
+  update public.tickers set votes_close_at = now() - interval '1 minute' where id = call;
+  alter table public.tickers enable trigger tickers_votes_window;
+  set local role authenticated;
+  failed := false;
+  begin
+    delete from public.ticker_votes where ticker_id = call and user_id = john;
+  exception when check_violation then failed := true;
+  end;
+  assert failed, 'on ne retire pas un vote après la fenêtre';
+  failed := false;
+  begin
+    update public.ticker_votes set side = 'bull', reason = 'Finalement si.'
+     where ticker_id = call and user_id = john;
+  exception when check_violation then failed := true;
+  end;
+  assert failed, 'on ne change pas de camp après la fenêtre';
+  reset role;
+  raise notice 'ok · votes : fenêtre fermée, votes figés';
+
+  -- Un call supprimé emporte ses votes, fenêtre fermée ou non.
+  delete from public.tickers where id = call;
+  select count(*) into n from public.ticker_votes where ticker_id = call;
+  assert n = 0, 'la suppression en cascade passe';
+  raise notice 'ok · votes : un call supprimé emporte ses votes';
+end $$;
+
 -- --- Oracle : des paris, pas une saison ---------------------------------------
 --
 -- Le calendrier d'un pari est une frontière de sécurité : c'est la base qui le
@@ -391,12 +480,6 @@ end $$;
 --
 -- Un fait entre dans la file dans la transaction qui le cause, par un
 -- déclencheur `security definer` : le membre n'a, lui, aucun droit sur la file.
-
--- `auth.uid()` réglable, le temps de cette section : John par défaut.
-create or replace function auth.uid() returns uuid language sql stable as $$
-  select coalesce(nullif(current_setting('test.uid', true), ''),
-                  'aaaaaaaa-0000-4000-8000-000000000001')::uuid
-$$;
 
 do $$
 declare

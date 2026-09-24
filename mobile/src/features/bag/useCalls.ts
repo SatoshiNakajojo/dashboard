@@ -8,7 +8,7 @@ import { callPerformance } from '@/lib/performance';
 import { entryBtcFor, liveBtc, mergeQuotes } from './quoteRefresh';
 import { useLiveQuotes } from './useLiveQuotes';
 import { describeError, supabase } from '@/lib/supabase';
-import type { CallView, Member, Ticker, Vote } from '@/types/domain';
+import type { CallView, Member, Ticker, Vote, VoteView } from '@/types/domain';
 import { getCallsSource, type CallDraftInput, type VoteRow } from './source';
 
 export interface PublishInput {
@@ -48,8 +48,14 @@ export interface CallsState {
   calls: CallView[];
   loading: boolean;
   error: string | null;
-  /** Un seul vote par membre et par call ; re-tap = annulation. */
-  vote: (tickerId: string, side: Vote) => void;
+  /**
+   * Vote bull ou bear sur le call d'un autre, avec la phrase qui l'explique ;
+   * `null` retire mon vote. `false` et un message en cas de refus — fenêtre
+   * fermée, call clos, phrase manquante.
+   */
+  vote: (tickerId: string, vote: { side: Vote; reason: string } | null) => Promise<boolean>;
+  /** Un vote en cours d'écriture. */
+  voting: boolean;
   /** Publie un call. Résout l'erreur en `false` plutôt que de lever. */
   publish: (input: PublishInput) => Promise<boolean>;
   /** Corrige un de mes calls. `false` et un message en cas d'échec. */
@@ -62,11 +68,6 @@ export interface CallsState {
   reopen: (tickerId: string) => Promise<boolean>;
   /** Publication en cours — le bouton du composer s'en sert. */
   publishing: boolean;
-}
-
-interface VoteTally {
-  bull: number;
-  bear: number;
 }
 
 const UNKNOWN_MEMBER: Omit<Member, 'id'> = {
@@ -96,8 +97,7 @@ export function useCalls(
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [publishing, setPublishing] = useState(false);
-  /** Mon vote à l'écran, éventuellement en avance sur le serveur. */
-  const [pendingVote, setPendingVote] = useState<Record<string, Vote | null>>({});
+  const [voting, setVoting] = useState(false);
 
   // --- Chargement ----------------------------------------------------------
 
@@ -127,50 +127,33 @@ export function useCalls(
 
   // --- Votes ---------------------------------------------------------------
 
-  const serverVote = useCallback(
-    (tickerId: string): Vote | null =>
-      votes.find((v) => v.tickerId === tickerId && v.userId === currentUserId)?.side ?? null,
-    [votes, currentUserId],
-  );
-
+  /**
+   * Pas d'écriture optimiste ici : un vote porte une phrase et des points, et
+   * la base peut le refuser (fenêtre fermée, call clos). Mieux vaut une demi-
+   * seconde d'attente qu'un vote affiché puis retiré.
+   */
   const vote = useCallback(
-    (tickerId: string, side: Vote) => {
-      if (!currentUserId) return;
-
-      const current = tickerId in pendingVote ? pendingVote[tickerId]! : serverVote(tickerId);
-      const next = current === side ? null : side;
-
-      setPendingVote((state) => ({ ...state, [tickerId]: next }));
-
-      source
-        .setVote(tickerId, currentUserId, next)
-        .then(() => {
-          // On aligne la vérité serveur, puis on retire la surcouche : sans cet
-          // ordre, le compteur clignote le temps d'un rendu.
-          setVotes((rows) => {
-            const without = rows.filter(
-              (v) => !(v.tickerId === tickerId && v.userId === currentUserId),
-            );
-            return next
-              ? [...without, { tickerId, userId: currentUserId, side: next }]
-              : without;
-          });
-          setPendingVote((state) => {
-            const copy = { ...state };
-            delete copy[tickerId];
-            return copy;
-          });
-        })
-        .catch((cause: unknown) => {
-          setPendingVote((state) => {
-            const copy = { ...state };
-            delete copy[tickerId];
-            return copy;
-          });
-          setError(describeError(cause));
+    async (tickerId: string, next: { side: Vote; reason: string } | null): Promise<boolean> => {
+      if (!currentUserId || voting) return false;
+      setVoting(true);
+      try {
+        const row = await source.setVote(tickerId, currentUserId, next);
+        setVotes((rows) => {
+          const without = rows.filter(
+            (v) => !(v.tickerId === tickerId && v.userId === currentUserId),
+          );
+          return row ? [...without, row] : without;
         });
+        setError(null);
+        return true;
+      } catch (cause) {
+        setError(describeError(cause));
+        return false;
+      } finally {
+        setVoting(false);
+      }
     },
-    [currentUserId, pendingVote, serverVote, source],
+    [currentUserId, voting, source],
   );
 
   // --- Publication ---------------------------------------------------------
@@ -427,15 +410,31 @@ export function useCalls(
 
   // --- Projection d'affichage ----------------------------------------------
 
-  const tallies = useMemo(() => {
-    const out: Record<string, VoteTally> = {};
-    for (const row of votes) {
-      const tally = out[row.tickerId] ?? { bull: 0, bear: 0 };
-      tally[row.side] += 1;
-      out[row.tickerId] = tally;
+  /** Les votes de chaque call, du plus ancien au plus récent. */
+  const votesByCall = useMemo(() => {
+    const out = new Map<string, VoteView[]>();
+    const sorted = [...votes].sort((a, b) => Date.parse(a.createdAt) - Date.parse(b.createdAt));
+    for (const row of sorted) {
+      const list = out.get(row.tickerId) ?? [];
+      list.push({
+        userId: row.userId,
+        side: row.side,
+        reason: row.reason,
+        createdAt: row.createdAt,
+      });
+      out.set(row.tickerId, list);
     }
     return out;
   }, [votes]);
+
+  // L'heure, pour savoir si une fenêtre de vote est encore ouverte. Relue à
+  // chaque changement des votes ou des cours : assez souvent pour une fenêtre
+  // de trois jours.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 60_000);
+    return () => clearInterval(timer);
+  }, []);
 
   /**
    * Les cours frais, recollés avant tout calcul.
@@ -449,20 +448,8 @@ export function useCalls(
   const calls = useMemo<CallView[]>(
     () =>
       priced.map((ticker) => {
-        const tally = tallies[ticker.id] ?? { bull: 0, bear: 0 };
-        const confirmed =
-          votes.find((v) => v.tickerId === ticker.id && v.userId === currentUserId)?.side ??
-          null;
-        const mine = ticker.id in pendingVote ? pendingVote[ticker.id]! : confirmed;
-
-        // Le total serveur inclut déjà ma voix. Tant que l'écriture est en vol,
-        // on corrige l'écart entre ce que le serveur sait et ce que je viens de
-        // taper — sans jamais compter ma voix deux fois.
-        const displayed = { bull: tally.bull, bear: tally.bear };
-        if (confirmed !== mine) {
-          if (confirmed) displayed[confirmed] = Math.max(0, displayed[confirmed] - 1);
-          if (mine) displayed[mine] += 1;
-        }
+        const voters = votesByCall.get(ticker.id) ?? [];
+        const mine = voters.find((v) => v.userId === currentUserId)?.side ?? null;
 
         return {
           ...ticker,
@@ -471,12 +458,15 @@ export function useCalls(
           // figé qui ferait recopier la perf. En mode démo, il est le seul
           // cours du monde fictif.
           ...callPerformance(ticker, supabase ? liveBtc(spot) : spot.usd),
-          bull: displayed.bull,
-          bear: displayed.bear,
+          bull: voters.filter((v) => v.side === 'bull').length,
+          bear: voters.filter((v) => v.side === 'bear').length,
           myVote: mine,
+          voters,
+          votesOpen: ticker.closedOn === null && now <= Date.parse(ticker.votesCloseAt),
+          votesLeftMs: Date.parse(ticker.votesCloseAt) - now,
         };
       }),
-    [priced, tallies, votes, pendingVote, currentUserId, membersById, spot],
+    [priced, votesByCall, currentUserId, membersById, spot, now],
   );
 
   return {
@@ -484,6 +474,7 @@ export function useCalls(
     loading: !loaded,
     error,
     vote,
+    voting,
     publish,
     edit,
     remove,
