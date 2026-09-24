@@ -260,6 +260,35 @@ begin
   raise notice 'ok · predictions : un pari verrouillé sans tracé se retire';
 end $$;
 
+-- --- Choisir sa couleur, pas celle d'un autre ---------------------------------
+
+do $$
+declare
+  failed boolean;
+  mine   text;
+begin
+  set local role authenticated;
+
+  -- John prend une couleur libre : accepté.
+  update public.profiles set color = '#C7788F' where id = 'aaaaaaaa-0000-4000-8000-000000000001';
+  select color into mine from public.profiles where id = 'aaaaaaaa-0000-4000-8000-000000000001';
+  assert mine = '#C7788F', 'une couleur libre se choisit';
+
+  -- Puis celle d'Alex, écrite dans une autre casse : refusé.
+  failed := false;
+  begin
+    update public.profiles set color = '#6e9a78' where id = 'aaaaaaaa-0000-4000-8000-000000000001';
+  exception when unique_violation then failed := true;
+  end;
+  assert failed, 'la couleur d’un autre membre ne se prend pas';
+
+  -- Changer de prénom sans toucher à la couleur reste possible.
+  update public.profiles set display_name = 'Johnny' where id = 'aaaaaaaa-0000-4000-8000-000000000001';
+
+  reset role;
+  raise notice 'ok · profiles : on choisit sa couleur, pas celle d’un autre';
+end $$;
+
 -- ============================================================================
 -- Couleurs de membres — le cas qui avait échappé aux tests
 --

@@ -6,16 +6,43 @@
  * soient testables directement.
  */
 
-/** Palette du club, dans l'ordre d'attribution (README §4.3). */
-export const PALETTE = [
-  '#E8903D',
-  '#6E9A78',
-  '#8C7BA8',
-  '#B3574F',
-  '#5B8A9A',
-  '#C9A227',
-  '#F2EBDD',
+/**
+ * La palette du club : quatorze couleurs, chacune avec son nom.
+ *
+ * Les sept premières sont celles du design, dans leur ordre d'attribution
+ * (README §4.3) : un nouveau membre reçoit la première libre. Les sept
+ * suivantes n'existent que pour qu'on puisse **choisir** — avec sept couleurs
+ * pour sept membres, il n'y aurait rien à choisir.
+ *
+ * Choisies pour rester distinctes deux à deux (même les plus proches, Canard
+ * et Ciel, se séparent nettement sur une courbe de l'Oracle), lisibles sous
+ * les initiales sombres d'un avatar, et visibles sur le fond encre. Les tests
+ * vérifient ces trois propriétés : une couleur ajoutée qui les casse échoue.
+ */
+export const COLORS = [
+  { hex: '#E8903D', name: 'Or' },
+  { hex: '#6E9A78', name: 'Sauge' },
+  { hex: '#8C7BA8', name: 'Violette' },
+  { hex: '#B3574F', name: 'Brique' },
+  { hex: '#5B8A9A', name: 'Canard' },
+  { hex: '#C9A227', name: 'Moutarde' },
+  { hex: '#F2EBDD', name: 'Ivoire' },
+  { hex: '#C7788F', name: 'Rose' },
+  { hex: '#9AA35C', name: 'Olive' },
+  { hex: '#D4B483', name: 'Sable' },
+  { hex: '#E07A5F', name: 'Corail' },
+  { hex: '#9CCFB0', name: 'Menthe' },
+  { hex: '#B9774A', name: 'Cuivre' },
+  { hex: '#7FA6C9', name: 'Ciel' },
 ] as const;
+
+/** Les couleurs seules, dans l'ordre d'attribution. */
+export const PALETTE = COLORS.map((color) => color.hex);
+
+/** Le nom d'une couleur de la palette, ou `null` pour une couleur d'ailleurs. */
+export function colorName(hex: string): string | null {
+  return COLORS.find((color) => color.hex.toLowerCase() === hex.toLowerCase())?.name ?? null;
+}
 
 /**
  * `Jean-Marc Dupont` → `JD`.
@@ -46,12 +73,12 @@ export function initialsFrom(name: string): string {
  *
  * La couleur d'un membre l'identifie partout — avatar, courbe de l'Oracle,
  * pastille de potluck : deux membres de la même couleur rendraient l'Oracle
- * illisible. Au-delà de sept membres la palette est épuisée et on recycle,
- * ce qui est le signal qu'il faut l'étendre plutôt qu'un plantage.
+ * illisible. Au-delà de quatorze membres la palette est épuisée et on
+ * recycle, ce qui est le signal qu'il faut l'étendre plutôt qu'un plantage.
  */
 export function pickColor(taken: readonly string[]): string {
   const used = new Set(taken.map((color) => color.toLowerCase()));
-  return PALETTE.find((color) => !used.has(color.toLowerCase())) ?? PALETTE[0];
+  return PALETTE.find((color) => !used.has(color.toLowerCase())) ?? PALETTE[0]!;
 }
 
 /**

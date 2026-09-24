@@ -118,7 +118,7 @@ qu'on n'a pas déposé le nouveau tracé.
   réécrit jamais un prix inchangé.
 - **Schéma** : toutes les migrations appliquées dans l'ordre à un PostgreSQL 16
   neuf (doublures `supabase/tests/doubles.sql`), réexécutées pour l'idempotence,
-  puis `supabase/tests/schema_test.sql` — 19 assertions passent, dont celles
+  puis `supabase/tests/schema_test.sql` — 20 assertions passent, dont celles
   des paris de l'Oracle (calendrier fixé par la base, un pari en cours par
   horizon, scellement, déblocage seulement quand personne d'autre n'a parié),
   celles des calls (titre figé, corrections datées par la base), et celle qui
@@ -643,6 +643,25 @@ anciennes initiales dans l'en-tête, sur ses cartes et sur sa courbe de l'Oracle
 jusqu'au prochain démarrage — il avait donc l'impression que l'enregistrement
 n'avait rien fait. `useMembers` s'abonne désormais au même signal que la garde
 de route.
+
+---
+
+## Chacun sa couleur
+
+La couleur d'un membre lui était attribuée à l'inscription — la première
+libre — et ne changeait plus. Elle se choisit maintenant dans **Mon profil**,
+parmi **quatorze** : les sept du design, et sept de plus pour qu'il y ait
+vraiment de quoi choisir (`COLORS`, `src/features/auth/profile.ts`).
+
+Elle identifie le membre partout — avatar, courbes de l'Oracle, potluck —, donc
+une couleur déjà portée par un autre ne se choisit pas : la pastille est
+voilée et marquée de ses initiales. La base le refuse aussi
+(`profiles_color_guard`, migration `20260925090000_member_colors`), y compris
+quand deux membres choisissent la même à la même seconde.
+
+Les tests mesurent la palette plutôt que de s'en remettre à l'œil : chaque
+paire de couleurs reste distincte (écart perçu ΔE ≥ 15), et chacune garde un
+contraste d'au moins 3:1 sous les initiales et sur le fond.
 
 ---
 

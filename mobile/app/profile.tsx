@@ -6,7 +6,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Avatar } from '@/components/ui/Avatar';
 import { Micro } from '@/components/ui/Micro';
 import { SectionTitle } from '@/components/ui/SectionTitle';
+import { colorChoices, type ColorChoice } from '@/features/profile/colors';
 import { useProfile, type ProfileState } from '@/features/profile/useProfile';
+import { colorName } from '@/features/auth/profile';
+import { useMembers } from '@/hooks/useMembers';
 import { useSession } from '@/hooks/useSession';
 import {
   MAX_LABEL,
@@ -92,6 +95,9 @@ function ProfileForm({ state, profile }: { state: ProfileState; profile: Member 
   const { saving, uploading, error, save, pickPhoto, removePhoto } = state;
 
   const [name, setName] = useState(profile.displayName);
+  const [color, setColor] = useState(profile.color);
+  const { members } = useMembers();
+  const choices = useMemo(() => colorChoices(members, profile.id), [members, profile.id]);
   const [links, setLinks] = useState<ProfileLink[]>(() =>
     profile.links.length > 0 ? [...profile.links, { ...EMPTY }] : [{ ...EMPTY }],
   );
@@ -115,13 +121,14 @@ function ProfileForm({ state, profile }: { state: ProfileState; profile: Member 
 
   const dirty = useMemo(() => {
     if (name.trim() !== profile.displayName) return true;
+    if (color.toLowerCase() !== profile.color.toLowerCase()) return true;
     if (filled.length !== profile.links.length) return true;
     return filled.some(
       (link, i) =>
         link.url.trim() !== profile.links[i]!.url ||
         (link.label.trim() || 'Lien') !== profile.links[i]!.label,
     );
-  }, [name, filled, profile]);
+  }, [name, color, filled, profile]);
 
   const updateLink = (index: number, patch: Partial<ProfileLink>) => {
     setLinks((current) => {
@@ -160,9 +167,10 @@ function ProfileForm({ state, profile }: { state: ProfileState; profile: Member 
   return (
     <>
       <View className="items-center" style={{ gap: 14, paddingTop: 8 }}>
+        {/* La couleur choisie s'y voit tout de suite, avant d'enregistrer. */}
         <Avatar
           initials={profile.initials}
-          color={profile.color}
+          color={color}
           photo={profile.avatarUrl}
           size={96}
         />
@@ -208,6 +216,15 @@ function ProfileForm({ state, profile }: { state: ProfileState; profile: Member 
             borderBottomColor: c.borderLift,
           }}
         />
+      </View>
+
+      <View style={{ gap: 12 }}>
+        <SectionTitle label="MA COULEUR" hint={(colorName(color) ?? '').toUpperCase()} />
+        <ColorPicker choices={choices} value={color} onChange={setColor} />
+        <Text style={{ fontFamily: f.serifItalic, fontSize: 14, lineHeight: 19, color: c.sepia }}>
+          Celle de votre avatar et de vos courbes dans l’Oracle. Une couleur déjà
+          portée par un membre ne se choisit pas.
+        </Text>
       </View>
 
       <View style={{ gap: 4 }}>
@@ -336,7 +353,7 @@ function ProfileForm({ state, profile }: { state: ProfileState; profile: Member 
         accessibilityState={{ disabled: !dirty || saving }}
         disabled={!dirty || saving}
         onPress={async () => {
-          const ok = await save({ displayName: name, links: filled });
+          const ok = await save({ displayName: name, links: filled, color });
           if (ok) setSaved(true);
         }}
         style={{
@@ -360,5 +377,77 @@ function ProfileForm({ state, profile }: { state: ProfileState; profile: Member 
         </Text>
       </Pressable>
     </>
+  );
+}
+
+/**
+ * Les quatorze couleurs du club, en pastilles.
+ *
+ * Celle qu'on porte est cerclée d'or. Celles des autres membres sont voilées,
+ * marquées de leurs initiales, et ne se touchent pas : deux membres de la même
+ * couleur rendraient l'Oracle illisible.
+ */
+function ColorPicker({
+  choices,
+  value,
+  onChange,
+}: {
+  choices: readonly ColorChoice[];
+  value: string;
+  onChange: (hex: string) => void;
+}) {
+  return (
+    // Deux rangées de sept dès 330 points de large.
+    <View className="flex-row" style={{ flexWrap: 'wrap', gap: 8 }}>
+      {choices.map((choice) => {
+        const selected = choice.hex.toLowerCase() === value.toLowerCase();
+        const taken = choice.takenBy !== null;
+        return (
+          <Pressable
+            key={choice.hex}
+            accessibilityRole="radio"
+            accessibilityState={{ selected, disabled: taken }}
+            accessibilityLabel={
+              taken ? `${choice.name}, portée par ${choice.takenBy!.displayName}` : choice.name
+            }
+            disabled={taken}
+            onPress={() => onChange(choice.hex)}
+            style={{
+              width: 38,
+              height: 38,
+              borderRadius: 19,
+              borderWidth: 2,
+              borderColor: selected ? c.gold : 'transparent',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <View
+              style={{
+                width: 28,
+                height: 28,
+                borderRadius: 14,
+                backgroundColor: choice.hex,
+                opacity: taken ? 0.28 : 1,
+              }}
+            />
+            {/* Hors de la pastille voilée : sinon les initiales en hériteraient
+                l'opacité et s'effaceraient avec elle. */}
+            {taken ? (
+              <Text
+                style={{
+                  position: 'absolute',
+                  fontFamily: f.labelMed,
+                  fontSize: 9,
+                  color: c.ivory,
+                }}
+              >
+                {choice.takenBy!.initials}
+              </Text>
+            ) : null}
+          </Pressable>
+        );
+      })}
+    </View>
   );
 }

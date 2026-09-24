@@ -13,6 +13,8 @@ import type { Member } from '@/types/domain';
 export interface ProfileDraft {
   displayName: string;
   links: ProfileLink[];
+  /** Couleur choisie dans la palette. La base refuse celle d'un autre membre. */
+  color: string;
 }
 
 export interface ProfileState {
@@ -120,21 +122,23 @@ export function useProfile(userId: string | null): ProfileState {
       // « JD » à quelqu'un qui s'appelle désormais Marco.
       const links = normalizeLinks(draft.links);
       const initials = initialsFrom(displayName);
+      const color = draft.color;
 
       setSaving(true);
       const client = supabase;
 
       if (!client) {
         setProfile((current) =>
-          current ? { ...current, displayName, initials, links } : current,
+          current ? { ...current, displayName, initials, links, color } : current,
         );
         setSaving(false);
+        announceProfileChange();
         return true;
       }
 
       const { error: cause } = await client
         .from('profiles')
-        .update({ display_name: displayName, initials, links })
+        .update({ display_name: displayName, initials, links, color })
         .eq('id', userId);
       setSaving(false);
 
@@ -145,7 +149,7 @@ export function useProfile(userId: string | null): ProfileState {
 
       setError(null);
       setProfile((current) =>
-        current ? { ...current, displayName, initials, links } : current,
+        current ? { ...current, displayName, initials, links, color } : current,
       );
       // L'annuaire et l'en-tête lisent ailleurs : sans ce signal, l'avatar
       // garderait l'ancien nom jusqu'au prochain démarrage.
