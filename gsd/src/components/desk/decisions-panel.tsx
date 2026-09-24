@@ -19,6 +19,12 @@ const ENTRER: Station[] = [
   { stage: "ORDRE", label: "Ordre", role: "exécuté et protégé ?", who: "exchange" },
 ];
 
+const REGLE_BTC: Station[] = [
+  { stage: "CANAL", label: "Canal", role: "la règle est-elle en position ?", who: "règle" },
+  { stage: "STOP", label: "Stop", role: "l'ordre stop est-il en place ?", who: "exchange" },
+  { stage: "ORDRE", label: "Rattrapage", role: "le compte suit-il la règle ?", who: "exchange" },
+];
+
 const SORTIR: Station[] = [
   { stage: "GESTION", label: "Gestion", role: "tenir, réduire, couper", who: "règle" },
   { stage: "REVUE", label: "Revue Jev", role: "garder, réduire, couper ?", who: "jev" },
@@ -26,12 +32,25 @@ const SORTIR: Station[] = [
 ];
 
 const LABEL: Record<Stage, string> = Object.fromEntries(
-  [...ENTRER, ...SORTIR].map((s) => [s.stage, s.label]),
+  [...REGLE_BTC, ...ENTRER, ...SORTIR].map((s) => [s.stage, s.label]),
 ) as Record<Stage, string>;
 
-const BON = new Set(["oui", "passe", "prendre", "rempli", "tenir", "HOLD", "prendre 50 %", "renforcer"]);
+const BON = new Set([
+  "oui",
+  "passe",
+  "prendre",
+  "rempli",
+  "tenir",
+  "HOLD",
+  "prendre 50 %",
+  "renforcer",
+  "en position",
+  "posé",
+  "remplacé",
+  "en place",
+]);
 const MAUVAIS = new Set(["non", "bloque", "refusé", "couper", "CUT", "échec", "erreur"]);
-const PRUDENT = new Set(["écarté", "passer", "réduire", "TRIM"]);
+const PRUDENT = new Set(["écarté", "passer", "réduire", "TRIM", "aucun", "annulé"]);
 
 function ton(answer: string) {
   if (answer === "LONG") return "text-long";
@@ -88,8 +107,18 @@ function Tuile({ k, v, n, tone }: { k: string; v: string; n?: string; tone?: str
   );
 }
 
-function StationCard({ st, i, screen }: { st: Station; i: number; screen: Screen }) {
-  const s = screen.summary.stages[st.stage];
+function StationCard({
+  st,
+  i,
+  screen,
+  btc,
+}: {
+  st: Station;
+  i: number;
+  screen: Screen;
+  btc?: boolean;
+}) {
+  const s = (btc ? screen.btcSummary : screen.summary).stages[st.stage];
   const top = Object.entries(s.answers)
     .sort((a, b) => b[1] - a[1])
     .slice(0, 3);
@@ -114,29 +143,149 @@ function StationCard({ st, i, screen }: { st: Station; i: number; screen: Screen
         ))}
       </ul>
       {last && (
-        <p className="mt-2 truncate border-t border-border pt-2 text-[11px] text-muted-foreground" title={last.detail}>
+        <p
+          className="mt-2 truncate border-t border-border pt-2 text-[11px] text-muted-foreground"
+          title={last.detail}
+        >
           dernière : <span className={ton(last.answer)}>{last.answer}</span>
-          {last.asset ? ` · ${last.asset}${last.tf ? ` ${last.tf}` : ""}` : ""} · {quand(last.t, screen.now)}
+          {last.asset ? ` · ${last.asset}${last.tf ? ` ${last.tf}` : ""}` : ""} ·{" "}
+          {quand(last.t, screen.now)}
         </p>
       )}
     </article>
   );
 }
 
-function Voie({ titre, stations, depart, screen }: { titre: string; stations: Station[]; depart: number; screen: Screen }) {
+function Voie({
+  titre,
+  stations,
+  depart,
+  screen,
+  btc,
+}: {
+  titre: string;
+  stations: Station[];
+  depart: number;
+  screen: Screen;
+  btc?: boolean;
+}) {
   return (
     <div className="mt-3">
       <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">{titre}</p>
-      <div className={cn("mt-2 grid gap-2", stations.length > 3 ? "sm:grid-cols-3 xl:grid-cols-6" : "sm:grid-cols-3")}>
+      <div
+        className={cn(
+          "mt-2 grid gap-2",
+          stations.length > 3 ? "sm:grid-cols-3 xl:grid-cols-6" : "sm:grid-cols-3",
+        )}
+      >
         {stations.map((st, i) => (
-          <StationCard key={st.stage} st={st} i={depart + i} screen={screen} />
+          <StationCard key={st.stage} st={st} i={depart + i} screen={screen} btc={btc} />
         ))}
       </div>
     </div>
   );
 }
 
-const FILTRES: (Stage | "TOUT")[] = ["TOUT", "J0", "SIGNAL", "FILTRE", "J1", "J2", "ORDRE", "GESTION", "REVUE", "COUPE"];
+const FILTRES_BTC: (Stage | "TOUT")[] = ["TOUT", "CANAL", "STOP", "ORDRE", "COUPE"];
+const FILTRES_ANCIENS: (Stage | "TOUT")[] = [
+  "TOUT",
+  "J0",
+  "SIGNAL",
+  "FILTRE",
+  "J1",
+  "J2",
+  "ORDRE",
+  "GESTION",
+  "REVUE",
+  "COUPE",
+];
+
+function dollars(x: number) {
+  return `${Math.round(x).toLocaleString("fr-FR")} $`;
+}
+
+function jourDe(t: number) {
+  const d = new Date(t);
+  return `${String(d.getUTCDate()).padStart(2, "0")}/${String(d.getUTCMonth() + 1).padStart(2, "0")}/${d.getUTCFullYear()}`;
+}
+
+function RegleBtc({ screen }: { screen: Screen }) {
+  const b = screen.pilot.btc;
+  if (!b) {
+    return (
+      <p className="mt-3 rounded-[var(--radius-sm)] border border-border bg-elevated px-3 py-2 text-xs leading-snug text-muted-foreground">
+        La règle BTC n'a pas encore tourné. Elle tourne à chaque passage du pilote en mode autonome,
+        ou d'un clic sur « Lancer ».
+      </p>
+    );
+  }
+  const stop = b.stops.find((x) => !x.buy);
+  const entree = b.stops.find((x) => x.buy);
+  const distance = stop && b.markPx ? (stop.triggerPx / b.markPx - 1) * 100 : null;
+  const valeur = b.markPx ? b.position * b.markPx : null;
+  const dernier = b.lastTrade ? (b.lastTrade.exitPx / b.lastTrade.entryPx - 1) * 100 : null;
+  return (
+    <article className="mt-3 rounded-[var(--radius-md)] border border-border bg-elevated p-3">
+      <div className="flex flex-wrap items-baseline justify-between gap-2">
+        <p className="text-[11px] uppercase tracking-wider text-muted-foreground">
+          Règle BTC 25/10 · maintenant
+        </p>
+        <p className="text-[11px] text-muted-foreground">relue {quand(b.at, screen.now)}</p>
+      </div>
+      {b.error && <p className="mt-2 text-xs text-danger">{b.error}</p>}
+      <dl className="mt-2 grid grid-cols-2 gap-x-4 gap-y-2 text-xs sm:grid-cols-4">
+        <div>
+          <dt className="text-muted-foreground">la règle</dt>
+          <dd className={cn("mt-0.5 text-sm font-medium", b.long ? "text-ok" : "text-foreground")}>
+            {b.long ? "en position" : "à plat"}
+          </dd>
+          {b.long && b.entryT && b.entryPx && (
+            <dd className="text-[11px] text-muted-foreground">
+              depuis le {jourDe(b.entryT)} à {dollars(b.entryPx)}
+            </dd>
+          )}
+        </div>
+        <div>
+          <dt className="text-muted-foreground">le compte</dt>
+          <dd className="tabular mt-0.5 text-sm font-medium">
+            {b.position > 0 ? `${b.position} BTC` : "à plat"}
+          </dd>
+          {valeur != null && b.position > 0 && (
+            <dd className="tabular text-[11px] text-muted-foreground">{usd(valeur)}</dd>
+          )}
+        </div>
+        <div>
+          <dt className="text-muted-foreground">entrée si le BTC passe</dt>
+          <dd className="tabular mt-0.5 text-sm font-medium">
+            {b.levels ? dollars(b.levels.entry) : "—"}
+          </dd>
+          <dd className="text-[11px] text-muted-foreground">
+            plus haut des 25 jours{entree ? " · stop posé" : ""}
+          </dd>
+        </div>
+        <div>
+          <dt className="text-muted-foreground">sortie si le BTC passe sous</dt>
+          <dd className="tabular mt-0.5 text-sm font-medium">
+            {b.levels ? dollars(b.levels.exit) : "—"}
+          </dd>
+          <dd className="text-[11px] text-muted-foreground">
+            plus bas des 10 jours
+            {stop
+              ? ` · stop posé${distance != null ? `, à ${distance.toFixed(1).replace(".", ",")} %` : ""}`
+              : ""}
+          </dd>
+        </div>
+      </dl>
+      <p className="mt-2 text-[11px] leading-snug text-muted-foreground">
+        BTC {b.markPx ? dollars(b.markPx) : "—"} · {b.trades} trades clos depuis 2020
+        {b.lastTrade && dernier != null
+          ? ` · dernier : ${jourDe(b.lastTrade.entryT)} → ${jourDe(b.lastTrade.exitT)}, ${dernier >= 0 ? "+" : ""}${dernier.toFixed(1).replace(".", ",")} %`
+          : ""}
+        . La règle ne gagne que si le BTC monte ; elle perd lentement sinon.
+      </p>
+    </article>
+  );
+}
 
 export function DecisionsPanel() {
   const q = useQuery({
@@ -147,7 +296,10 @@ export function DecisionsPanel() {
   const [filtre, setFiltre] = useState<Stage | "TOUT">("TOUT");
   const screen = q.data;
   const rows = useMemo(
-    () => (screen ? compact(screen.rows.filter((r) => filtre === "TOUT" || r.stage === filtre)).slice(0, 80) : []),
+    () =>
+      screen
+        ? compact(screen.rows.filter((r) => filtre === "TOUT" || r.stage === filtre)).slice(0, 80)
+        : [],
     [screen, filtre],
   );
 
@@ -167,84 +319,161 @@ export function DecisionsPanel() {
   }
 
   const st = screen.summary.stages;
-  const ordres = st.ORDRE.answers;
+  const ordres = (screen.pilot.strategy === "btc_25_10" ? screen.btcSummary : screen.summary).stages
+    .ORDRE.answers;
   const avis = st.J2;
   const coutTotal = screen.spend.reduce((a, m) => a + m.usd, 0);
   const appels = screen.spend.reduce((a, m) => a + m.calls, 0);
   const acc = screen.account && !("error" in screen.account) ? screen.account : null;
   const mode = screen.pilot.kill ? "kill" : screen.pilot.autonome ? "autonome" : "manuel";
+  const btc = screen.pilot.strategy === "btc_25_10";
+  const filtres = btc ? FILTRES_BTC : FILTRES_ANCIENS;
 
   return (
     <section className="gsd-panel min-w-0 rounded-[var(--radius-lg)] p-4 lg:col-span-12">
       <div className="flex flex-wrap items-end justify-between gap-2">
         <div>
-          <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">Chaque décision, telle qu'elle a été prise</p>
+          <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground">
+            Chaque décision, telle qu'elle a été prise
+          </p>
           <h2 className="text-lg font-medium">Décisions</h2>
         </div>
         <p className="text-[11px] text-muted-foreground">
-          <span className={cn(mode === "autonome" ? "text-ok" : mode === "kill" ? "text-danger" : "text-warn")}>{mode}</span>
+          <span
+            className={cn(
+              mode === "autonome" ? "text-ok" : mode === "kill" ? "text-danger" : "text-warn",
+            )}
+          >
+            {mode}
+          </span>
+          {" · "}
+          <span className="text-foreground">{btc ? "règle BTC 25/10" : "ancienne stratégie"}</span>
           {" · "}
           {screen.pilot.cycles} cycles
           {screen.pilot.lastAt ? ` · dernier ${quand(screen.pilot.lastAt, screen.now)}` : ""}
           {" · "}
-          <span className={screen.keys.jev ? "text-ok" : "text-warn"}>{screen.keys.jev ? "clé Jev présente" : "clé Jev absente"}</span>
+          <span className={screen.keys.jev ? "text-ok" : "text-warn"}>
+            {screen.keys.jev ? "clé Jev présente" : "clé Jev absente"}
+          </span>
         </p>
       </div>
       <p className="mt-2 text-xs leading-snug text-muted-foreground">
-        Lu dans les journaux du bot et sur le compte Hyperliquid. Aucun chiffre n'est projeté : les coûts sont les sommes
-        facturées, appel par appel. « Ombre » veut dire inscrit mais jamais appliqué au compte.
+        Lu dans les journaux du bot et sur le compte Hyperliquid. Aucun chiffre n'est projeté : les
+        coûts sont les sommes facturées, appel par appel. « Ombre » veut dire inscrit mais jamais
+        appliqué au compte.
       </p>
 
       <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">
         <Tuile
           k="décisions inscrites"
           v={String(screen.summary.total)}
-          n={screen.summary.since ? `depuis le ${horodatage(screen.summary.since)}` : "journal vide"}
+          n={
+            screen.summary.since ? `depuis le ${horodatage(screen.summary.since)}` : "journal vide"
+          }
         />
-        <Tuile k="signaux" v={String(st.SIGNAL.total)} n={`${st.FILTRE.total} écartés avant J1`} />
+        {btc ? (
+          <Tuile
+            k="passages de la règle"
+            v={String(st.CANAL.total)}
+            n={`${(st.STOP.answers["posé"] ?? 0) + (st.STOP.answers["remplacé"] ?? 0)} stops posés ou remplacés`}
+          />
+        ) : (
+          <Tuile
+            k="signaux"
+            v={String(st.SIGNAL.total)}
+            n={`${st.FILTRE.total} écartés avant J1`}
+          />
+        )}
         <Tuile
           k="ordres"
-          v={`${ordres["rempli"] ?? 0} / ${st.ORDRE.total}`}
+          v={`${ordres["rempli"] ?? 0} / ${Object.values(ordres).reduce((a, n) => a + n, 0)}`}
           n={`remplis · ${ordres["refusé"] ?? 0} refusés`}
           tone={(ordres["refusé"] ?? 0) > (ordres["rempli"] ?? 0) ? "text-danger" : undefined}
         />
+        {btc ? (
+          <Tuile
+            k="stops refusés"
+            v={String(st.STOP.answers["refusé"] ?? 0)}
+            n="rattrapés au marché au passage suivant"
+            tone={(st.STOP.answers["refusé"] ?? 0) > 0 ? "text-warn" : undefined}
+          />
+        ) : (
+          <Tuile
+            k="avis Jev"
+            v={String(avis.deciders["jev"] ?? 0)}
+            n={`${avis.answers["prendre"] ?? 0} « prendre » · ${avis.deciders["local"] ?? 0} replis locaux`}
+          />
+        )}
         <Tuile
-          k="avis Jev"
-          v={String(avis.deciders["jev"] ?? 0)}
-          n={`${avis.answers["prendre"] ?? 0} « prendre » · ${avis.deciders["local"] ?? 0} replis locaux`}
+          k="coût réel de l'IA"
+          v={usd(coutTotal)}
+          n={`${appels} appels facturés, tous modèles`}
         />
-        <Tuile k="coût réel de l'IA" v={usd(coutTotal)} n={`${appels} appels facturés, tous modèles`} />
         <Tuile
           k="résultat du compte"
           v={acc ? usd(acc.net, true) : "—"}
-          n={acc ? `net de frais et financement depuis le ${horodatage(acc.since)}` : "clé Hyperliquid absente"}
+          n={
+            acc
+              ? `net de frais et financement depuis le ${horodatage(acc.since)}`
+              : "clé Hyperliquid absente"
+          }
           tone={acc ? (acc.net >= 0 ? "text-ok" : "text-danger") : undefined}
         />
       </div>
 
-      <Voie titre="Entrer — de la règle à l'exchange" stations={ENTRER} depart={1} screen={screen} />
-      <Voie titre="Tenir ou sortir — à chaque cycle, pour chaque position" stations={SORTIR} depart={7} screen={screen} />
+      {btc ? (
+        <>
+          <RegleBtc screen={screen} />
+          <Voie
+            titre="Règle BTC 25/10 — du canal à l'exchange"
+            stations={REGLE_BTC}
+            depart={1}
+            screen={screen}
+            btc
+          />
+        </>
+      ) : (
+        <>
+          <Voie
+            titre="Entrer — de la règle à l'exchange"
+            stations={ENTRER}
+            depart={1}
+            screen={screen}
+          />
+          <Voie
+            titre="Tenir ou sortir — à chaque cycle, pour chaque position"
+            stations={SORTIR}
+            depart={7}
+            screen={screen}
+          />
+        </>
+      )}
 
       {screen.summary.total === 0 && (
         <p className="mt-3 rounded-[var(--radius-sm)] border border-border bg-elevated px-3 py-2 text-xs leading-snug text-muted-foreground">
-          Aucune décision inscrite. Le journal commence avec cette version et se remplit à chaque cycle du pilote. En mode
-          manuel, le pilote ne tourne pas : rien ne s'inscrit, et c'est normal.
+          Aucune décision inscrite. Le journal commence avec cette version et se remplit à chaque
+          cycle du pilote. En mode manuel, le pilote ne tourne pas : rien ne s'inscrit, et c'est
+          normal.
         </p>
       )}
 
       <div className="mt-4 grid gap-3 lg:grid-cols-12">
         <article className="min-w-0 rounded-[var(--radius-md)] border border-border bg-elevated p-3 lg:col-span-8">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Journal des décisions</p>
+            <p className="text-[11px] uppercase tracking-wider text-muted-foreground">
+              Journal des décisions
+            </p>
             <div className="flex flex-wrap gap-1">
-              {FILTRES.map((f) => (
+              {filtres.map((f) => (
                 <button
                   key={f}
                   type="button"
                   onClick={() => setFiltre(f)}
                   className={cn(
                     "rounded-full px-2 py-0.5 text-[10px] uppercase tracking-wider",
-                    filtre === f ? "bg-accent text-accent-foreground" : "text-muted-foreground hover:bg-background",
+                    filtre === f
+                      ? "bg-accent text-accent-foreground"
+                      : "text-muted-foreground hover:bg-background",
                   )}
                 >
                   {f === "TOUT" ? "tout" : LABEL[f]}
@@ -253,7 +482,9 @@ export function DecisionsPanel() {
             </div>
           </div>
           <ul className="mt-2 max-h-[28rem] divide-y divide-border overflow-y-auto text-xs">
-            {rows.length === 0 && <li className="py-2 text-muted-foreground">Rien pour ce filtre.</li>}
+            {rows.length === 0 && (
+              <li className="py-2 text-muted-foreground">Rien pour ce filtre.</li>
+            )}
             {rows.map((r, i) => (
               <li key={`${r.t}-${i}`} className="py-2">
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
@@ -271,7 +502,9 @@ export function DecisionsPanel() {
                     </span>
                   )}
                   <span className={cn("font-medium", ton(r.answer))}>{r.answer}</span>
-                  {r.p != null && <span className="tabular text-muted-foreground">p {r.p.toFixed(2)}</span>}
+                  {r.p != null && (
+                    <span className="tabular text-muted-foreground">p {r.p.toFixed(2)}</span>
+                  )}
                   <Qui who={r.decider} ombre={!r.applied} />
                   {r.usd != null && r.usd > 0 && (
                     <span className="tabular text-muted-foreground">
@@ -280,7 +513,9 @@ export function DecisionsPanel() {
                     </span>
                   )}
                 </div>
-                {r.detail && <p className="mt-0.5 break-words text-[11px] text-muted-foreground">{r.detail}</p>}
+                {r.detail && (
+                  <p className="mt-0.5 break-words text-[11px] text-muted-foreground">{r.detail}</p>
+                )}
               </li>
             ))}
           </ul>
@@ -288,7 +523,9 @@ export function DecisionsPanel() {
 
         <div className="flex min-w-0 flex-col gap-3 lg:col-span-4">
           <article className="rounded-[var(--radius-md)] border border-border bg-elevated p-3">
-            <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Ce que coûtent les décisions</p>
+            <p className="text-[11px] uppercase tracking-wider text-muted-foreground">
+              Ce que coûtent les décisions
+            </p>
             {screen.spend.length === 0 ? (
               <p className="mt-2 text-xs text-muted-foreground">Aucun appel facturé inscrit.</p>
             ) : (
@@ -316,28 +553,52 @@ export function DecisionsPanel() {
               </table>
             )}
             <p className="mt-2 text-[11px] leading-snug text-muted-foreground">
-              Sommes facturées, inscrites à chaque appel. Les lignes Grok sont l'historique d'avant : le GSD ne l'appelle
-              plus.
-              {screen.summary.jev.msMedian != null ? ` Jev répond en ${Math.round(screen.summary.jev.msMedian)} ms (médiane).` : ""}
+              Sommes facturées, inscrites à chaque appel. Les lignes Grok sont l'historique d'avant
+              : le GSD ne l'appelle plus.
+              {screen.summary.jev.msMedian != null
+                ? ` Jev répond en ${Math.round(screen.summary.jev.msMedian)} ms (médiane).`
+                : ""}
             </p>
           </article>
 
           <article className="rounded-[var(--radius-md)] border border-border bg-elevated p-3">
-            <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Ce que le compte a fait</p>
-            {!screen.account && <p className="mt-2 text-xs text-muted-foreground">Clé Hyperliquid absente.</p>}
+            <p className="text-[11px] uppercase tracking-wider text-muted-foreground">
+              Ce que le compte a fait
+            </p>
+            {!screen.account && (
+              <p className="mt-2 text-xs text-muted-foreground">Clé Hyperliquid absente.</p>
+            )}
             {screen.account && "error" in screen.account && (
               <p className="mt-2 text-xs text-danger">Hyperliquid : {screen.account.error}</p>
             )}
             {acc && (
               <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
                 <dt className="text-muted-foreground">réalisé</dt>
-                <dd className={cn("tabular text-right", acc.realized >= 0 ? "text-ok" : "text-danger")}>{usd(acc.realized, true)}</dd>
+                <dd
+                  className={cn(
+                    "tabular text-right",
+                    acc.realized >= 0 ? "text-ok" : "text-danger",
+                  )}
+                >
+                  {usd(acc.realized, true)}
+                </dd>
                 <dt className="text-muted-foreground">frais</dt>
                 <dd className="tabular text-right text-danger">{usd(-acc.fees)}</dd>
                 <dt className="text-muted-foreground">financement</dt>
-                <dd className={cn("tabular text-right", acc.funding >= 0 ? "text-ok" : "text-danger")}>{usd(acc.funding, true)}</dd>
+                <dd
+                  className={cn("tabular text-right", acc.funding >= 0 ? "text-ok" : "text-danger")}
+                >
+                  {usd(acc.funding, true)}
+                </dd>
                 <dt className="font-medium">net</dt>
-                <dd className={cn("tabular text-right font-medium", acc.net >= 0 ? "text-ok" : "text-danger")}>{usd(acc.net, true)}</dd>
+                <dd
+                  className={cn(
+                    "tabular text-right font-medium",
+                    acc.net >= 0 ? "text-ok" : "text-danger",
+                  )}
+                >
+                  {usd(acc.net, true)}
+                </dd>
                 <dt className="text-muted-foreground">exécutions</dt>
                 <dd className="tabular text-right">{acc.fills}</dd>
                 <dt className="text-muted-foreground">clôtures gagnantes</dt>
@@ -349,12 +610,15 @@ export function DecisionsPanel() {
               </dl>
             )}
             <p className="mt-2 text-[11px] leading-snug text-muted-foreground">
-              Toutes les exécutions du compte depuis le début du journal, y compris celles faites à la main.
+              Toutes les exécutions du compte depuis le début du journal, y compris celles faites à
+              la main.
             </p>
           </article>
 
           <article className="rounded-[var(--radius-md)] border border-border bg-elevated p-3">
-            <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Avant ce journal</p>
+            <p className="text-[11px] uppercase tracking-wider text-muted-foreground">
+              Avant ce journal
+            </p>
             <p className="mt-2 text-xs">
               J1 : <span className="tabular">{screen.legacy.gate.total}</span> décisions ·{" "}
               <span className="text-ok">{screen.legacy.gate.pass} passe</span> ·{" "}

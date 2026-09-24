@@ -8,6 +8,7 @@ import { ASSETS, INTERVALS } from "./types";
 import type { SetupProposal } from "./types";
 import type { Managed } from "./manage.server";
 import { logDecision } from "./decisions.server";
+import type { BtcSnapshot } from "./btc-rule.server";
 
 type ScanCell = { stage: Stage; side: string | null };
 type Queued = {
@@ -22,7 +23,16 @@ type Queued = {
   tries: number;
   error: string;
 };
+/**
+ * `btc_25_10` : la règle BTC testée dans research/grok-btc, seule.
+ * `legacy` : Donchian 20 + Supertrend 10×3 sur 10 paires × 4 TF — sans edge
+ * mesuré (étape 9), gardée pour pouvoir revenir en arrière.
+ */
+export type Strategy = "btc_25_10" | "legacy";
+
 type PilotFile = {
+  strategy: Strategy;
+  btc: BtcSnapshot | null;
   autonome: boolean;
   kill: boolean;
   asset: string;
@@ -63,6 +73,8 @@ function path() {
 
 function defaults(): PilotFile {
   return {
+    strategy: "btc_25_10",
+    btc: null,
     autonome: true,
     kill: false,
     asset: "BTCUSDT",
@@ -148,9 +160,12 @@ const TF_COOL_MS: Record<string, number> = {
   "12h": 12 * 60 * 60 * 1000,
 };
 
-export function patchPilot(p: Partial<Pick<PilotFile, "autonome" | "kill" | "asset" | "interval" | "grokCallsPerHour" | "scanEveryMin" | "grokUsdPerDay">>) {
+export function patchPilot(
+  p: Partial<Pick<PilotFile, "autonome" | "kill" | "asset" | "interval" | "grokCallsPerHour" | "scanEveryMin" | "grokUsdPerDay" | "strategy">>,
+) {
   const s = readPilot();
   const wasKill = s.kill;
+  if (p.strategy === "btc_25_10" || p.strategy === "legacy") s.strategy = p.strategy;
   if (p.autonome != null) s.autonome = p.autonome;
   if (p.kill != null) s.kill = p.kill;
   if (p.asset && ASSETS.includes(p.asset as (typeof ASSETS)[number])) s.asset = p.asset;
@@ -196,23 +211,15 @@ export async function tickPilot(force?: boolean) {
     const session0 = hlSession();
     s.managed = s.managed || {};
     s.queue = s.queue || [];
+    if (s.strategy !== "legacy") {
+      await tickBtc(s, session0);
+      return;
+    }
     if (session0) {
       try {
         const { flattenLosers } = await import("./hl");
         const cuts = await flattenLosers(session0);
-        for (const c of cuts) {
-          if (!/^COUPE/.test(c)) continue;
-          const echec = /^COUPE FAIL/.test(c);
-          logDecision({
-            stage: "COUPE",
-            decider: "règle",
-            asset: c.match(/^COUPE(?: FAIL)? (\S+)/)?.[1],
-            question: "la perte dépasse-t-elle le filet ?",
-            answer: echec ? "échec" : "couper",
-            applied: !echec,
-            detail: c,
-          });
-        }
+        logCuts(cuts);
         if (cuts.length) {
           notes.unshift(...cuts);
           s.lastReason = cuts.join(" · ");
@@ -615,35 +622,7 @@ export async function tickPilot(force?: boolean) {
     } catch {
       /* ignore */
     }
-    try {
-      const [w, opensNow, fills] = await Promise.all([
-        liveWallet(),
-        liveOpens(),
-        hlSession() ? readHlClosingFills(hlSession()!.master) : Promise.resolve([]),
-      ]);
-      const nav = w && "trading" in w ? Number(w.trading) : NaN;
-      const book = await import("./book.server");
-      if (Number.isFinite(nav)) {
-        book.snapshot(nav, opensNow, s.lastSetups, fills);
-        s.navPeak = Math.max(s.navPeak || 0, nav);
-        if (s.navPeak > 0 && (s.navPeak - nav) / s.navPeak >= 0.05) {
-          void import("./alerts.server").then((a) =>
-            a.notify("Drawdown", `NAV ${nav.toFixed(2)} · pic ${s.navPeak.toFixed(2)} · ${(((s.navPeak - nav) / s.navPeak) * 100).toFixed(1)} %`),
-          );
-        }
-      }
-    } catch {
-      /* book */
-    }
-    if (!s.lastBackupAt || Date.now() - s.lastBackupAt > 6 * 3600_000) {
-      try {
-        const b = await import("./backup.server");
-        await b.pushBackupOffsite();
-        s.lastBackupAt = Date.now();
-      } catch {
-        /* backup */
-      }
-    }
+    await bookAndBackup(s);
     writePilot(s);
   } catch (e) {
     s.lastError = e instanceof Error ? e.message : "pilot";
@@ -652,6 +631,102 @@ export async function tickPilot(force?: boolean) {
     g.__gsdBusy = false;
     journalCycle(s);
   }
+}
+
+/** Les coupes du filet, inscrites au journal des décisions. */
+function logCuts(cuts: string[]) {
+  for (const c of cuts) {
+    if (!/^COUPE/.test(c)) continue;
+    const echec = /^COUPE FAIL/.test(c);
+    logDecision({
+      stage: "COUPE",
+      decider: "règle",
+      asset: c.match(/^COUPE(?: FAIL)? (\S+)/)?.[1],
+      question: "la perte dépasse-t-elle le filet ?",
+      answer: echec ? "échec" : "couper",
+      applied: !echec,
+      detail: c,
+    });
+  }
+}
+
+/** Fin de passage, dans les deux modes : NAV, alerte de repli, sauvegarde. */
+async function bookAndBackup(s: PilotFile) {
+  try {
+    const [w, opensNow, fills] = await Promise.all([
+      liveWallet(),
+      liveOpens(),
+      hlSession() ? readHlClosingFills(hlSession()!.master) : Promise.resolve([]),
+    ]);
+    const nav = w && "trading" in w ? Number(w.trading) : NaN;
+    const book = await import("./book.server");
+    if (Number.isFinite(nav)) {
+      book.snapshot(nav, opensNow, s.lastSetups, fills);
+      s.navPeak = Math.max(s.navPeak || 0, nav);
+      if (s.navPeak > 0 && (s.navPeak - nav) / s.navPeak >= 0.05) {
+        void import("./alerts.server").then((a) =>
+          a.notify("Drawdown", `NAV ${nav.toFixed(2)} · pic ${s.navPeak.toFixed(2)} · ${(((s.navPeak - nav) / s.navPeak) * 100).toFixed(1)} %`),
+        );
+      }
+    }
+  } catch {
+    /* book */
+  }
+  if (!s.lastBackupAt || Date.now() - s.lastBackupAt > 6 * 3600_000) {
+    try {
+      const b = await import("./backup.server");
+      await b.pushBackupOffsite();
+      s.lastBackupAt = Date.now();
+    } catch {
+      /* backup */
+    }
+  }
+}
+
+/**
+ * Un passage en mode règle BTC 25/10. Les anciennes stratégies ne scannent
+ * plus rien. Leur filet et leur gestion ne s'appliquent qu'aux positions
+ * autres que BTC, s'il en reste : calibrés sur 1 % de risque par trade, ils
+ * couperaient la position BTC dès −1,5 %, bien avant son stop à 10 jours.
+ */
+async function tickBtc(s: PilotFile, session: HlSession | null) {
+  const notes: string[] = [];
+  s.lastError = null;
+  if (!session) {
+    s.lastError = "Autonome VPS : ajoute HL_AGENT_KEY et HL_MASTER dans .env";
+    s.lastAt = Date.now();
+    s.cycles += 1;
+    writePilot(s);
+    return;
+  }
+  try {
+    const autres = (await readHlPositions(session.master)).filter((p) => p.coin !== "BTC");
+    if (autres.length) {
+      const { flattenLosers } = await import("./hl");
+      logCuts(await flattenLosers(session, ["BTC"]));
+      const mg = await import("./manage.server");
+      const out = await mg.manageOpens(session, s.managed, s.lastSetups, ["BTC"]);
+      s.managed = out.managed;
+      notes.push(...out.notes);
+    }
+  } catch (e) {
+    notes.push("anciennes positions : " + (e instanceof Error ? e.message : String(e)));
+  }
+  const { runBtcRule } = await import("./btc-rule.server");
+  const out = await runBtcRule(session);
+  s.btc = out.snapshot;
+  s.lastError = out.snapshot.error;
+  s.lastStage = out.snapshot.long ? "ORDRE" : "PAS_DE_SETUP";
+  s.lastReason = [out.summary, ...out.notes, ...notes].join(" · ");
+  const fill = out.notes.find((n) => /^BTC (entrée|sortie) rempli/.test(n));
+  if (fill) {
+    s.lastOrder = fill;
+    void import("./alerts.server").then((a) => a.notify("Règle BTC", fill));
+  }
+  s.lastAt = Date.now();
+  s.cycles += 1;
+  await bookAndBackup(s);
+  writePilot(s);
 }
 
 /**
@@ -706,7 +781,9 @@ async function snapshotNavOnly() {
       const session = hlSession();
       if (session) {
         const { flattenLosers } = await import("./hl");
-        const cuts = await flattenLosers(session);
+        // La règle BTC a son propre stop : le filet ne la touche pas.
+        const cuts = await flattenLosers(session, sCut.strategy === "legacy" ? [] : ["BTC"]);
+        logCuts(cuts);
         if (cuts.some((c) => c.startsWith("COUPE"))) {
           sCut.lastReason = cuts.join(" · ");
           sCut.lastAt = Date.now();

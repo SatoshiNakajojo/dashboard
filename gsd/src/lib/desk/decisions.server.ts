@@ -1,4 +1,13 @@
-import { appendFileSync, closeSync, mkdirSync, openSync, readFileSync, readSync, statSync, writeFileSync } from "node:fs";
+import {
+  appendFileSync,
+  closeSync,
+  mkdirSync,
+  openSync,
+  readFileSync,
+  readSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { join } from "node:path";
 import {
   parseDecisionLines,
@@ -9,6 +18,7 @@ import {
   type DecisionRow,
   type SpendEvent,
 } from "./decision-log";
+import type { BtcSnapshot } from "./btc-rule.server";
 
 const FILE = "decisions.jsonl";
 /** L'écran lit la fin du journal : quelques semaines de décisions. */
@@ -130,8 +140,17 @@ async function accountResults(since: number): Promise<AccountResults | { error: 
   let value: AccountResults | { error: string };
   try {
     const [fills, funding] = await Promise.all([
-      info<{ closedPnl?: string; fee?: string }[]>({ type: "userFillsByTime", user, startTime: bucket }),
-      info<{ delta?: { usdc?: string } }[]>({ type: "userFunding", user, startTime: bucket, endTime: Date.now() }),
+      info<{ closedPnl?: string; fee?: string }[]>({
+        type: "userFillsByTime",
+        user,
+        startTime: bucket,
+      }),
+      info<{ delta?: { usdc?: string } }[]>({
+        type: "userFunding",
+        user,
+        startTime: bucket,
+        endTime: Date.now(),
+      }),
     ]);
     let equity: number | null = null;
     try {
@@ -151,7 +170,10 @@ async function accountResults(since: number): Promise<AccountResults | { error: 
       if (pnl !== 0) closing += 1;
       if (pnl > 0) wins += 1;
     }
-    const fund = (Array.isArray(funding) ? funding : []).reduce((a, x) => a + (Number(x.delta?.usdc) || 0), 0);
+    const fund = (Array.isArray(funding) ? funding : []).reduce(
+      (a, x) => a + (Number(x.delta?.usdc) || 0),
+      0,
+    );
     value = {
       since: bucket,
       equity: Number.isFinite(equity) ? equity : null,
@@ -180,12 +202,16 @@ export async function readDecisionScreen() {
     now: Date.now(),
     rows: rows.slice(-300).reverse(),
     summary,
+    /** Les seules décisions de la règle BTC : actif BTC, unité de temps 1d. */
+    btcSummary: summarize(rows.filter((r) => r.asset === "BTC" && r.tf === "1d")),
     spend: spendByModel(Array.isArray(spendRaw?.events) ? spendRaw.events : []),
     legacy: {
       gate: summarizeLegacyGate(tailObjects("signal_gate.jsonl")),
       committee: summarizeLegacyCommittee(tailObjects("committee.jsonl")),
     },
     pilot: {
+      strategy: pilot.strategy === "legacy" ? ("legacy" as const) : ("btc_25_10" as const),
+      btc: (pilot.btc as BtcSnapshot | null | undefined) ?? null,
       autonome: Boolean(pilot.autonome),
       kill: Boolean(pilot.kill),
       cycles: Number(pilot.cycles || 0),

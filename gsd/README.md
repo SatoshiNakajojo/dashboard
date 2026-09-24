@@ -10,7 +10,7 @@ Copier `.env.example` → `deploy/vps/.env` **uniquement sur le VPS**.
 
 | Variable | Rôle |
 |---|---|
-| `TYPESAFE_AI_API_KEY` | Avis de Jev, en ombre (facultatif) |
+| `TYPESAFE_AI_API_KEY` | Avis de Jev en ombre, ancienne stratégie seulement (facultatif) |
 | `HL_AGENT_KEY` | Clé API agent Hyperliquid (64 hex) |
 | `HL_MASTER` | Adresse du wallet du département |
 | `GSD_ACCESS_PIN` | PIN d’accès web |
@@ -23,6 +23,32 @@ Jamais ces valeurs dans le repo.
 cd gsd
 sudo docker compose -f deploy/vps/compose.yml up -d --build
 ```
+
+## Stratégie active : la règle BTC 25/10
+
+BTC seul, en journalier. Achat au plus haut des 25 derniers jours, sortie au
+plus bas des 10 derniers jours, tout le compte, sans levier, à plat le reste
+du temps. Proposée par Grok, testée dans `research/grok-btc` : son timing bat
+le hasard hors échantillon (2013–2020, p = 0,0004), mais 25/10 est le meilleur
+réglage de la période où il a été choisi. C'est une façon de détenir du BTC
+pendant ses tendances : elle ne gagne que si le BTC monte.
+
+- `src/lib/desk/btc-rule.ts` rejoue la règle sur tout l'historique journalier
+  d'Hyperliquid et dit quels ordres le compte doit porter. Module pur, testé ;
+  `research/grok-btc/parite.ts` vérifie qu'il retrouve les 37 trades de la
+  recherche un à un.
+- `src/lib/desk/btc-rule.server.ts` aligne le compte à chaque passage : un
+  stop d'achat posé chez l'exchange au plus haut des 25 jours quand la règle
+  est à plat, un stop de sortie reduce-only au plus bas des 10 jours quand
+  elle est en position, remplacés chaque jour. Si la règle est en position et
+  le compte non (au démarrage, ou après un stop refusé), il entre au marché.
+- Le filet et la gestion de l'ancienne stratégie ne touchent pas au BTC :
+  calibrés sur 1 % de risque par trade, ils couperaient la position dès −1,5 %.
+- Aucun LLM n'intervient : la règle décide tout. En mode règle BTC, Jev n'est
+  pas appelé.
+
+L'ancienne stratégie reste disponible dans **Réglages → Stratégie**.
+**La règle n'agit qu'en mode autonome, ou d'un clic sur « Lancer ».**
 
 ## Décisions, Jev et Grok
 

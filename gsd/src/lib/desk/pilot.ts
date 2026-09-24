@@ -21,7 +21,9 @@ export const getPilot = createServerFn({ method: "POST" })
       try {
         const rawMaster = process.env.HL_MASTER;
         if (rawMaster) {
-          const master = (rawMaster.startsWith("0x") ? rawMaster : `0x${rawMaster}`) as `0x${string}`;
+          const master = (
+            rawMaster.startsWith("0x") ? rawMaster : `0x${rawMaster}`
+          ) as `0x${string}`;
           fills = await readHlClosingFills(master);
         }
       } catch {
@@ -58,6 +60,10 @@ export const setPilot = createServerFn({ method: "POST" })
     grokUsdPerDay:
       input.grokUsdPerDay != null && Number.isFinite(Number(input.grokUsdPerDay))
         ? Number(input.grokUsdPerDay)
+        : undefined,
+    strategy:
+      input.strategy === "btc_25_10" || input.strategy === "legacy"
+        ? (input.strategy as "btc_25_10" | "legacy")
         : undefined,
   }))
   .handler(async ({ data }) => {

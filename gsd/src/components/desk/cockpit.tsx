@@ -623,7 +623,9 @@ export function Cockpit() {
                     </Button>
                   </div>
                   <p className="mt-2 text-sm text-muted-foreground">
-                    Scan 10 paires × 4 TF maintenant. 30–90 s. Résultat sous le bouton.
+                    {(pilot.data as { strategy?: string } | undefined)?.strategy === "legacy"
+                      ? "Scan 10 paires × 4 TF maintenant. 30–90 s. Résultat sous le bouton."
+                      : "Règle BTC 25/10 : relit le canal et aligne le compte et ses ordres stop, même en mode manuel. Quelques secondes."}
                   </p>
                   {pilot.data?.lastReason && (
                     <p className="mt-2 text-xs leading-snug text-muted-foreground">{pilot.data.lastReason}</p>
@@ -654,6 +656,7 @@ export function Cockpit() {
             decisions: <DecisionsPanel />,
             reglages: (
               <SettingsPanel
+                strategy={String((pilot.data as { strategy?: string } | undefined)?.strategy ?? "btc_25_10")}
                 grokCallsPerHour={Number((pilot.data as { grokCallsPerHour?: number } | undefined)?.grokCallsPerHour ?? 6)}
                 scanEveryMin={Number((pilot.data as { scanEveryMin?: number } | undefined)?.scanEveryMin ?? 15)}
                 grokUsdPerDay={Number((pilot.data as { grokUsdPerDay?: number } | undefined)?.grokUsdPerDay ?? 1)}

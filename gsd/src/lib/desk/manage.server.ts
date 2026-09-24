@@ -44,8 +44,9 @@ export async function manageOpens(
   session: HlSession,
   managed: Record<string, Managed>,
   lastSetups?: Record<string, { horizon_hours?: number; stop_price?: number | null; rationale?: string }>,
+  skip: string[] = [],
 ): Promise<{ managed: Record<string, Managed>; notes: string[] }> {
-  const opens = await readHlPositions(session.master);
+  const opens = (await readHlPositions(session.master)).filter((p) => !skip.includes(p.coin));
   const notes: string[] = [];
   const next: Record<string, Managed> = {};
   const bal = await readHlBalances(session.master);

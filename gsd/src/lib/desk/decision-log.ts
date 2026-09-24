@@ -6,7 +6,19 @@
  * Module pur, testé sans disque ni réseau.
  */
 
-export const STAGES = ["J0", "SIGNAL", "FILTRE", "J1", "J2", "ORDRE", "GESTION", "REVUE", "COUPE"] as const;
+export const STAGES = [
+  "CANAL",
+  "STOP",
+  "J0",
+  "SIGNAL",
+  "FILTRE",
+  "J1",
+  "J2",
+  "ORDRE",
+  "GESTION",
+  "REVUE",
+  "COUPE",
+] as const;
 export type Stage = (typeof STAGES)[number];
 
 export type Decider = "règle" | "jev" | "local" | "exchange";
@@ -66,7 +78,10 @@ function median(xs: number[]) {
 
 export function summarize(rows: DecisionRow[]): DecisionSummary {
   const stages = Object.fromEntries(
-    STAGES.map((s) => [s, { stage: s, total: 0, answers: {}, deciders: {}, applied: 0, last: null } as StageSummary]),
+    STAGES.map((s) => [
+      s,
+      { stage: s, total: 0, answers: {}, deciders: {}, applied: 0, last: null } as StageSummary,
+    ]),
   ) as Record<Stage, StageSummary>;
   let since: number | null = null;
   const jevMs: number[] = [];
@@ -86,12 +101,24 @@ export function summarize(rows: DecisionRow[]): DecisionSummary {
       if (Number.isFinite(r.ms)) jevMs.push(Number(r.ms));
     }
   }
-  return { since, total: rows.length, stages, jev: { calls: jevCalls, usd: jevUsd, msMedian: median(jevMs) } };
+  return {
+    since,
+    total: rows.length,
+    stages,
+    jev: { calls: jevCalls, usd: jevUsd, msMedian: median(jevMs) },
+  };
 }
 
 export type SpendEvent = { t: number; usd: number; model: string };
 
-export type ModelSpend = { model: string; calls: number; usd: number; usdPerCall: number; first: number; last: number };
+export type ModelSpend = {
+  model: string;
+  calls: number;
+  usd: number;
+  usdPerCall: number;
+  first: number;
+  last: number;
+};
 
 /** Ce que chaque modèle a réellement coûté, appel par appel, lu dans spend.json. */
 export function spendByModel(events: SpendEvent[]): ModelSpend[] {
@@ -99,7 +126,14 @@ export function spendByModel(events: SpendEvent[]): ModelSpend[] {
   for (const e of events) {
     if (!Number.isFinite(e.usd) || e.usd < 0) continue;
     const key = e.model || "?";
-    const cur = m.get(key) ?? { model: key, calls: 0, usd: 0, usdPerCall: 0, first: e.t, last: e.t };
+    const cur = m.get(key) ?? {
+      model: key,
+      calls: 0,
+      usd: 0,
+      usdPerCall: 0,
+      first: e.t,
+      last: e.t,
+    };
     cur.calls += 1;
     cur.usd += e.usd;
     cur.first = Math.min(cur.first, e.t);
@@ -111,8 +145,18 @@ export function spendByModel(events: SpendEvent[]): ModelSpend[] {
     .sort((a, b) => b.usd - a.usd);
 }
 
-export type LegacyGate = { total: number; pass: number; block: number; reasons: Record<string, number>; since: number | null };
-export type LegacyCommittee = { total: number; bySource: Record<string, number>; recommendAllow: number };
+export type LegacyGate = {
+  total: number;
+  pass: number;
+  block: number;
+  reasons: Record<string, number>;
+  since: number | null;
+};
+export type LegacyCommittee = {
+  total: number;
+  bySource: Record<string, number>;
+  recommendAllow: number;
+};
 
 /** `signal_gate.jsonl` — le J1 d'avant le journal unifié. */
 export function summarizeLegacyGate(rows: Record<string, unknown>[]): LegacyGate {
@@ -121,7 +165,8 @@ export function summarizeLegacyGate(rows: Record<string, unknown>[]): LegacyGate
     out.total += 1;
     if (r.allow) out.pass += 1;
     else out.block += 1;
-    for (const x of Array.isArray(r.reasons) ? r.reasons : []) out.reasons[String(x)] = (out.reasons[String(x)] ?? 0) + 1;
+    for (const x of Array.isArray(r.reasons) ? r.reasons : [])
+      out.reasons[String(x)] = (out.reasons[String(x)] ?? 0) + 1;
     const t = Number(r.t);
     if (Number.isFinite(t) && (out.since == null || t < out.since)) out.since = t;
   }
@@ -135,13 +180,14 @@ export function summarizeLegacyCommittee(rows: Record<string, unknown>[]): Legac
     out.total += 1;
     const src = String(r.source || "?");
     out.bySource[src] = (out.bySource[src] ?? 0) + 1;
-    if ((r.pm as { recommend_allow?: boolean } | undefined)?.recommend_allow) out.recommendAllow += 1;
+    if ((r.pm as { recommend_allow?: boolean } | undefined)?.recommend_allow)
+      out.recommendAllow += 1;
   }
   return out;
 }
 
 /** Les réponses qui se répètent à chaque cycle sans rien changer. */
-const ROUTINE = new Set(["oui", "non", "tenir"]);
+const ROUTINE = new Set(["oui", "non", "tenir", "en position", "à plat", "en place"]);
 
 export type CompactRow = DecisionRow & { count: number; tFirst: number };
 

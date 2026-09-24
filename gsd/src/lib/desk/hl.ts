@@ -275,7 +275,7 @@ function lotSize(notional: number, px: number, szDecimals: number) {
   return s;
 }
 
-function fmtPx(px: number, szDecimals: number) {
+export function fmtPx(px: number, szDecimals: number) {
   const decIn = Number.isInteger(szDecimals) && szDecimals >= 0 && szDecimals <= 8 ? szDecimals : 2;
   const maxDec = Math.max(6 - decIn, 0);
   if (!Number.isFinite(px) || px <= 0) return null;
@@ -599,8 +599,10 @@ export async function reduceDeptPosition(
  * fois le risque prévu. L'ancienne règle coupait à −1 % de ROE sur un ROE
  * lu avec un facteur 100 d'erreur — elle liquidait du bruit de marché.
  */
-export async function flattenLosers(session: HlSession): Promise<string[]> {
-  const opens = await readHlPositions(session.master);
+export async function flattenLosers(session: HlSession, skip: string[] = []): Promise<string[]> {
+  // Un actif géré par sa propre règle (la règle BTC et son stop à 10 jours)
+  // ne passe pas par ce filet, calibré sur 1 % de risque par trade.
+  const opens = (await readHlPositions(session.master)).filter((p) => !skip.includes(p.coin));
   const notes: string[] = [];
   if (!opens.length) return notes;
 
