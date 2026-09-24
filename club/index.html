@@ -22,8 +22,8 @@
         flex: 1;
       }
     </style>
-  <link rel="icon" href="/dashboard/club/favicon.ico"/><link rel="preload" href="/dashboard/club/_expo/static/css/web-59690b47b3fa1f5464d8f307a0db2db2.css" as="style">
-<link rel="stylesheet" href="/dashboard/club/_expo/static/css/web-59690b47b3fa1f5464d8f307a0db2db2.css">
+  <link rel="icon" href="/dashboard/club/favicon.ico"/><link rel="preload" href="/dashboard/club/_expo/static/css/web-22ba9265deb5b096356f6b0c12b0e631.css" as="style">
+<link rel="stylesheet" href="/dashboard/club/_expo/static/css/web-22ba9265deb5b096356f6b0c12b0e631.css">
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -55,10 +55,10 @@
     </noscript>
     <!-- The root element for your Expo app. -->
     <div id="root"></div>
-  <script src="/dashboard/club/_expo/static/js/web/entry-6a76a1eae63853bd0ba50704ad109f92.js" defer></script>
+  <script src="/dashboard/club/_expo/static/js/web/entry-818d476e8b96f7f0f9fafc7aac3d123e.js" defer></script>
 
     <div id="boot" aria-label="Chargement" role="progressbar">
-      <img id="boot-logo" src="icon-192.png" alt="" width="132" height="132" />
+      <img id="boot-logo" src="icon-512.png" alt="" width="240" height="240" />
       <div id="boot-chain">
         <div class="boot-row"><i class="boot-b"><b></b><b></b></i><u class="boot-b"></u><i class="boot-b"><b></b><b></b></i><u class="boot-b"></u><i class="boot-b"><b></b><b></b></i><u class="boot-b"></u><i class="boot-b"><b></b><b></b></i><u class="boot-b"></u><i class="boot-b"><b></b><b></b></i><u class="boot-b"></u><i class="boot-b"><b></b><b></b></i><u class="boot-b"></u><i class="boot-b"><b></b><b></b></i><u class="boot-b"></u><i class="boot-b"><b></b><b></b></i></div>
         <div id="boot-fill"><div class="boot-row"><i class="boot-b on"><b></b><b></b></i><u class="boot-b on"></u><i class="boot-b on"><b></b><b></b></i><u class="boot-b on"></u><i class="boot-b on"><b></b><b></b></i><u class="boot-b on"></u><i class="boot-b on"><b></b><b></b></i><u class="boot-b on"></u><i class="boot-b on"><b></b><b></b></i><u class="boot-b on"></u><i class="boot-b on"><b></b><b></b></i><u class="boot-b on"></u><i class="boot-b on"><b></b><b></b></i><u class="boot-b on"></u><i class="boot-b on"><b></b><b></b></i></div></div>
@@ -73,7 +73,9 @@
         transition: opacity .25s ease-out;
       }
       #boot.done { opacity: 0; pointer-events: none; }
-      #boot-logo { width: 132px; height: 132px; }
+      /* Le sceau d'abord : 60 % de la largeur, 240 px au plus. L'image de
+         512 px reste nette sur un écran Retina à cette taille. */
+      #boot-logo { width: min(60vw, 240px); height: auto; aspect-ratio: 1; }
       #boot-chain { position: relative; }
       /* « width: max-content » et « flex: none » ensemble : sans eux, les
          blocs du calque doré se compriment dans la largeur animée au lieu
@@ -119,7 +121,9 @@
       }
       #boot-label {
         margin: 0; color: #6D6455;
-        font: 500 9px/1 ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace;
+        /* La police système : Inter n'est pas encore chargée à ce stade, et ses
+           capitales espacées ressemblent à celles d'Inter. */
+        font: 500 9px/1 -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
         letter-spacing: 2.2px;
       }
       @media (prefers-reduced-motion: reduce) {
