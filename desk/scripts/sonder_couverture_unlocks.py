@@ -304,19 +304,39 @@ def main() -> int:
     rapport: dict[str, dict] = {ticker: {"classe": DEJA, "a_venir": 0, "slug": None}
                                 for ticker in sorted(perps) if ticker in deja}
     vus: dict[str, str] = {}
-    tires = refuses = 0
+    tires = refuses = sans_gecko = 0
+    etrangers: list[str] = []
     for i, slug in enumerate(slugs, 1):
         if tires >= args.max_telechargements:
             break
+        # LE COMPTEUR EN PREMIER. Place en fin de boucle, il etait derriere
+        # deux `continue` : il ne s'affichait que si le protocole courant
+        # correspondait a un perpetuel, donc a i=50 et pas a i=100. La
+        # boucle allait jusqu'au bout, mais l'ecran laissait croire qu'elle
+        # s'arretait — et un compteur qui ment sur l'avancement fait douter
+        # du resultat pour une mauvaise raison.
+        if i % 50 == 0:
+            print(f"       … {i}/{len(slugs)}", flush=True)
         detail = _get(f"{DATASETS}/emissions/{slug}", cache / f"{slug}.json",
                       essais=1)
         tires += 1
-        time.sleep(args.pause)
+        if not cache.joinpath(f"{slug}.json").exists():
+            time.sleep(args.pause)
         if not isinstance(detail, dict):
             refuses += 1
             continue
         gecko = detail.get("gecko_id") or ""
+        # DEUX FACONS DE NE PAS SE RAPPROCHER, ET ELLES NE DISENT PAS LA
+        # MEME CHOSE. Un protocole sans `gecko_id` est illisible pour nous ;
+        # un protocole dont le `gecko_id` n'est dans aucun perpetuel cote
+        # n'est simplement pas notre affaire. Les confondre laisserait
+        # croire a une fuite la ou il n'y a qu'un univers different.
+        if not gecko:
+            sans_gecko += 1
+            continue
         ticker = table.get(gecko)
+        if ticker is None:
+            etrangers.append(slug)
         # Pas de gecko_id reconnu : ce protocole n'est pas un perpétuel coté,
         # ou son identifiant n'est pas celui que CoinGecko publie. On
         # n'invente pas de rapprochement — associer deux homonymes daterait
@@ -333,13 +353,13 @@ def main() -> int:
         if n:
             print(f"       {ticker:<8} {slug:<26} {n:>3} déblocages à venir",
                   flush=True)
-        if i % 50 == 0:
-            print(f"       … {i}/{len(slugs)}", flush=True)
 
     for ticker in sorted(perps):
         rapport.setdefault(ticker, {"classe": INCONNU, "a_venir": 0, "slug": None})
     if refuses:
         print(f"       {refuses} fichiers refusés par le miroir", file=sys.stderr)
+    print(f"       {tires} protocoles lus · {len(vus)} rapprochés · "
+          f"{sans_gecko} sans gecko_id · {len(etrangers)} hors univers coté")
 
     Path(args.rapport).parent.mkdir(parents=True, exist_ok=True)
     Path(args.rapport).write_text(json.dumps(rapport, indent=1, sort_keys=True))
@@ -370,6 +390,11 @@ def main() -> int:
     if compte.get(INCONNU):
         print(f"  {compte[INCONNU]} perpétuels restent hors de DefiLlama. C'est eux,")
         print("  et eux seuls, qui justifieraient une seconde source.")
+        if sans_gecko:
+            print(f"  ATTENTION : {sans_gecko} protocoles n'ont aucun gecko_id.")
+            print("  Ceux-là ne sont pas « absents », ils sont ILLISIBLES pour")
+            print("  notre rapprochement, et ils pourraient cacher des jetons")
+            print("  cotés. À regarder avant de conclure.")
     print(f"\n  Rapport écrit dans {args.rapport}\n")
     return 0
 
