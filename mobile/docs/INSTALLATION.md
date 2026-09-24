@@ -58,10 +58,31 @@ Le club est **fermé** : `signInWithOtp` est appelé avec `shouldCreateUser: fal
 donc seules les adresses déjà inscrites reçoivent un code. Personne ne peut
 s'auto-inviter.
 
-Dans le tableau de bord Supabase → **Authentication** → **Users** →
-**Add user** → *Create new user*, pour chacun des sept membres. Cochez
-**Auto Confirm User** : sans cela, le membre devra confirmer son adresse avant
-de pouvoir se connecter.
+**En une commande**, depuis `mobile/` :
+
+```bash
+npm run members:add -- alex@mail.com lea@mail.nc sofia@mail.fr
+```
+
+Elle crée les comptes (confirmés d'office), signale ceux qui existent déjà
+— la relancer avec la même liste est sans danger — puis affiche le tableau des
+membres : qui a déjà créé son profil, qui ne s'est pas encore connecté. Sans
+adresse, `npm run members:add` n'affiche que ce tableau.
+
+Elle a besoin de la clé **secrète** du projet, dans `mobile/.env` :
+
+```bash
+SUPABASE_SERVICE_ROLE_KEY=…   # Project Settings → API Keys → service_role (ou secret)
+```
+
+**Sans** le préfixe `EXPO_PUBLIC_` : cette clé contourne toute la sécurité de la
+base, elle ne doit jamais entrer dans l'app. `.env` n'est pas versionné, et la
+commande n'affiche jamais la clé.
+
+À la main, c'est aussi possible : tableau de bord Supabase → **Authentication**
+→ **Users** → **Add user** → *Create new user*, une adresse à la fois, en
+cochant **Auto Confirm User** — sans cela, le membre devra confirmer son adresse
+avant de pouvoir se connecter.
 
 Leur ligne `profiles` — initiales, couleur — est créée par l'app à leur première
 connexion, quand ils saisissent leur prénom. Rien à faire à la main.
