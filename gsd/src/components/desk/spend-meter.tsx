@@ -28,7 +28,7 @@ export function SpendMeter() {
     : [];
   return (
     <div className="mt-4 rounded-[var(--radius-md)] border border-border bg-elevated p-3">
-      <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Clé API xAI · ce département</p>
+      <p className="text-[11px] uppercase tracking-wider text-muted-foreground">Dépense IA · ce département</p>
       <dl className="mt-2 grid grid-cols-5 gap-2 text-center">
         {rows.map((r) => (
           <div key={r.k}>
@@ -38,8 +38,8 @@ export function SpendMeter() {
         ))}
       </dl>
       <p className="mt-2 text-[11px] leading-snug text-muted-foreground">
-        {s ? `${s.calls} appels 200 OK` : "en attente"} · somme facturée par xAI (ticks), pas un tarif projeté.
-        0 $ sur 60 s = aucun appel dans la minute. Erreurs HTTP non comptées. Console xAI = référence.
+        {s ? `${s.calls} appels 200 OK` : "en attente"} · somme facturée, appel par appel, pas un tarif projeté : xAI
+        pour l'historique Grok, jetons d'entrée × 0,042 $ / M pour Jev. Erreurs HTTP non comptées.
       </p>
     </div>
   );

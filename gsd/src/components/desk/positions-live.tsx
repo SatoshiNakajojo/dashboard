@@ -107,7 +107,7 @@ export function PositionsLive({
                       type="button"
                       className="text-xs text-accent underline"
                       onClick={() => {
-                        const why = setups?.[p.coin]?.rationale || "Pas de brief Grok pour ce ticker.";
+                        const why = setups?.[p.coin]?.rationale || "Pas de signal inscrit pour ce ticker.";
                         void navigator.clipboard.writeText(why);
                       }}
                     >

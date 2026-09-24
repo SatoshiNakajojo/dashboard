@@ -1,39 +1,11 @@
-import { GSD_NOTIONAL_USD, GROK_STRATEGY_BOT_ID, GROK_STRATEGY_BOT_LABEL } from "./bot";
+import { GSD_NOTIONAL_USD, GSD_TIME_STOP_H } from "./bot";
 import { buildMarketContext } from "./context";
-import { completeJson, LlmUnavailableError, parseJsonObject, str } from "./llm.server";
 import { fetchBars } from "./market";
-import { STRATEGY_SYSTEM } from "./prompts";
 import { readEngines } from "./strats";
 import type { CycleResult, Mandate, RegimeRead, SetupProposal, Stage } from "./types";
 
-const stamps: number[] = [];
-
 function nid() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2);
-}
-
-async function grokCap() {
-  try {
-    const p = await import("./pilot.server");
-    const n = Number(p.readPilot().grokCallsPerHour);
-    return Number.isFinite(n) ? Math.max(0, Math.min(48, Math.floor(n))) : 6;
-  } catch {
-    return 6;
-  }
-}
-
-function quotaOk(max: number) {
-  if (max <= 0) return false;
-  const now = Date.now();
-  while (stamps.length && now - stamps[0] > 60 * 60 * 1000) stamps.shift();
-  return stamps.length < max;
-}
-
-async function ask(system: string, user: string) {
-  const { text, latency_ms, model_id } = await completeJson(system, user);
-  stamps.push(Date.now());
-  const obj = parseJsonObject(text);
-  return { obj, latency_ms, model_id, raw: text };
 }
 
 function flatMandate(reason: string): Mandate {
@@ -99,20 +71,6 @@ export async function executeCycle(data: {
       ...extra,
     });
 
-    const briefing = JSON.stringify(
-      {
-        departement: "Grok Strategy Department",
-        moteurs: engines.snaps,
-        nouveau_signal: engines.signal,
-        consigne:
-          "Signaux only Donchian 20 + Supertrend 10×3. Rien de nouveau = abstention. Nouveau signal = brief, le département exécute.",
-        bot: { id: GROK_STRATEGY_BOT_ID, name: GROK_STRATEGY_BOT_LABEL },
-        marche: context,
-      },
-      null,
-      2,
-    );
-
     if (!engines.signal) {
       const setup: SetupProposal = {
         agent: "strategie",
@@ -137,56 +95,15 @@ export async function executeCycle(data: {
     }
 
     const sig = engines.signal;
-    const cap = await grokCap();
-    let grokUsdLeft = true;
-    try {
-      const spend = await import("./spend.server");
-      const p = await import("./pilot.server");
-      const capUsd = Number(p.readPilot().grokUsdPerDay);
-      const used = spend.spendTodayUtc();
-      const limit = Number.isFinite(capUsd) ? capUsd : 1;
-      grokUsdLeft = used < limit;
-    } catch {
-      grokUsdLeft = true;
-    }
-    let rationale = sig.reason;
-    let latency_ms = 0;
-    let model_id = "engines";
-    let cost_calls = 0;
-    let horizon_hours = 24;
-    if (cap > 0 && quotaOk(cap) && grokUsdLeft && process.env.XAI_API_KEY) {
-      try {
-        const sR = await ask(STRATEGY_SYSTEM, briefing);
-        rationale = str(sR.obj.rationale, sig.reason) || sig.reason;
-        latency_ms = sR.latency_ms;
-        model_id = sR.model_id;
-        cost_calls = 1;
-        const h = Number((sR.obj as { horizon_hours?: number }).horizon_hours);
-        if (Number.isFinite(h)) horizon_hours = Math.max(4, Math.min(72, Math.floor(h)));
-        try {
-          const talk = await import("./talk.server");
-          talk.recordTalk({
-            t: Date.now(),
-            asset: data.asset,
-            interval: data.interval,
-            stage: "ORDRE",
-            bot: rationale,
-            signal: `${sig.source} ${sig.side} @ ${sig.entry}`,
-            raw: String(sR.raw ?? "").slice(0, 1200),
-          });
-        } catch {
-          /* journal */
-        }
-      } catch {
-        rationale = `${sig.reason} (Grok sauté)`;
-      }
-    } else {
-      rationale = !grokUsdLeft
-        ? `${sig.reason} · quota $ / jour atteint`
-        : cap <= 0
-          ? `${sig.reason} · Grok off (0 $/h)`
-          : `${sig.reason} · plafond Grok atteint`;
-    }
+    // Grok écrivait ici une justification et un horizon de détention. Aucune
+    // règle de sortie ne lisait cet horizon : l'appel se payait à chaque
+    // signal sans rien décider. L'horizon affiché est désormais celui qui
+    // s'applique vraiment, le time-stop.
+    const rationale = sig.reason;
+    const latency_ms = 0;
+    const model_id = "engines";
+    const cost_calls = 0;
+    const horizon_hours = GSD_TIME_STOP_H;
     const setup: SetupProposal = {
       agent: "strategie",
       abstained: false,
@@ -226,9 +143,6 @@ export async function executeCycle(data: {
       latency_ms,
     };
   } catch (e) {
-    if (e instanceof LlmUnavailableError) {
-      return { ok: false, error: "Le bot Grok n'est pas joignable ici." };
-    }
     return { ok: false, error: e instanceof Error ? e.message : "cycle interrompu" };
   }
 }

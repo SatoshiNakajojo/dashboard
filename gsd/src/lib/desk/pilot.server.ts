@@ -7,6 +7,7 @@ import type { Stage } from "./types";
 import { ASSETS, INTERVALS } from "./types";
 import type { SetupProposal } from "./types";
 import type { Managed } from "./manage.server";
+import { logDecision } from "./decisions.server";
 
 type ScanCell = { stage: Stage; side: string | null };
 type Queued = {
@@ -199,6 +200,19 @@ export async function tickPilot(force?: boolean) {
       try {
         const { flattenLosers } = await import("./hl");
         const cuts = await flattenLosers(session0);
+        for (const c of cuts) {
+          if (!/^COUPE/.test(c)) continue;
+          const echec = /^COUPE FAIL/.test(c);
+          logDecision({
+            stage: "COUPE",
+            decider: "règle",
+            asset: c.match(/^COUPE(?: FAIL)? (\S+)/)?.[1],
+            question: "la perte dépasse-t-elle le filet ?",
+            answer: echec ? "échec" : "couper",
+            applied: !echec,
+            detail: c,
+          });
+        }
         if (cuts.length) {
           notes.unshift(...cuts);
           s.lastReason = cuts.join(" · ");
@@ -258,9 +272,25 @@ export async function tickPilot(force?: boolean) {
         btc1h,
       });
       gateOk = snap.can_open_new_trade;
+      logDecision({
+        stage: "J0",
+        decider: "règle",
+        question: "ouvrir de nouvelles positions ?",
+        answer: gateOk ? "oui" : "non",
+        applied: true,
+        detail: gateOk ? `${snap.regime}/${snap.bias}` : snap.kill_reasons.join("+"),
+      });
       if (!gateOk) notes.unshift("GATE halt " + snap.kill_reasons.join("+") + " · pas de nouvel ordre");
     } catch (e) {
       notes.unshift("GATE fail " + (e instanceof Error ? e.message : String(e)));
+      logDecision({
+        stage: "J0",
+        decider: "règle",
+        question: "ouvrir de nouvelles positions ?",
+        answer: "erreur",
+        applied: true,
+        detail: e instanceof Error ? e.message : String(e),
+      });
     }
 
     if (session0 && gateOk) {
@@ -273,6 +303,18 @@ export async function tickPilot(force?: boolean) {
           entry: q.entry,
           stop: q.stop,
           target: q.target,
+        });
+        logDecision({
+          stage: "ORDRE",
+          decider: "exchange",
+          asset: q.asset.replace(/USDT$/i, ""),
+          tf: q.interval,
+          question: "l'ordre en attente passe-t-il ?",
+          answer: order.ok ? "rempli" : "refusé",
+          applied: order.ok,
+          detail: order.ok
+            ? `file d'attente · ${order.size} exécuté · ${order.plan.notional.toFixed(2)} $ visés`
+            : `file d'attente · ${order.error}`,
         });
         if (order.ok) {
           s.lastOrder = `queue ${q.side} ${q.asset} · ${order.oid}`;
@@ -319,6 +361,38 @@ export async function tickPilot(force?: boolean) {
         if (res.stage === "PAS_DE_SETUP") nPas += 1;
         else notes.push(`${tag} ${res.stage}`);
         const setup = res.setup;
+        if (res.stage === "ORDRE" && setup?.side) {
+          const coinS = setup.asset.replace(/USDT$/i, "");
+          logDecision({
+            stage: "SIGNAL",
+            decider: "règle",
+            asset: coinS,
+            tf: interval,
+            question: "nouveau signal ?",
+            answer: setup.side,
+            applied: true,
+            detail: `${setup.evaluation?.[0] ?? "moteur"} · entrée ${setup.entry_price} · stop ${setup.stop_price}`,
+          });
+          const ecarte = !gateOk
+            ? "régime fermé (J0)"
+            : placed
+              ? "un ordre déjà passé ce tour"
+              : setup.stop_price == null || setup.entry_price == null
+                ? "niveaux d'entrée ou de stop manquants"
+                : null;
+          if (ecarte) {
+            logDecision({
+              stage: "FILTRE",
+              decider: "règle",
+              asset: coinS,
+              tf: interval,
+              question: "le signal peut-il être traité ?",
+              answer: "écarté",
+              applied: true,
+              detail: ecarte,
+            });
+          }
+        }
         if (
           gateOk &&
           !placed &&
@@ -331,11 +405,31 @@ export async function tickPilot(force?: boolean) {
           const coin = setup.asset.replace(/USDT$/i, "");
           if (opensNow.length >= 1 && !opensNow.some((o) => o.coin === coin)) {
             notes.push(`${tag} skip: déjà ${opensNow.map((o) => o.coin).join(",")}`);
+            logDecision({
+              stage: "FILTRE",
+              decider: "règle",
+              asset: coin,
+              tf: interval,
+              question: "le signal peut-il être traité ?",
+              answer: "écarté",
+              applied: true,
+              detail: `une position à la fois — déjà ${opensNow.map((o) => o.coin).join(", ")}`,
+            });
             continue;
           }
           const fk = `${asset}:${interval}:${setup.side}`;
           const cool = TF_COOL_MS[interval] ?? 60 * 60 * 1000;
           if (s.fired[fk] && Date.now() - s.fired[fk] < cool) {
+            logDecision({
+              stage: "FILTRE",
+              decider: "règle",
+              asset: coin,
+              tf: interval,
+              question: "le signal peut-il être traité ?",
+              answer: "écarté",
+              applied: true,
+              detail: "même signal traité il y a moins d'une barre",
+            });
             s.board[key] = { stage: "PAS_DE_SETUP", side: null };
             nPas += 1;
             continue;
@@ -366,6 +460,16 @@ export async function tickPilot(force?: boolean) {
           } catch (e) {
             j1ok = false;
             notes.push(`${tag} J1 fail-closed`);
+            logDecision({
+              stage: "J1",
+              decider: "règle",
+              asset: coin,
+              tf: interval,
+              question: "la famille du signal convient-elle au régime ?",
+              answer: "erreur",
+              applied: true,
+              detail: `fermé par défaut — ${e instanceof Error ? e.message : String(e)}`,
+            });
           }
           if (!j1ok) continue;
           try {
@@ -395,6 +499,16 @@ export async function tickPilot(force?: boolean) {
           const session = hlSession();
           if (!session) {
             s.lastError = "Autonome VPS : ajoute HL_AGENT_KEY et HL_MASTER dans .env";
+            logDecision({
+              stage: "FILTRE",
+              decider: "règle",
+              asset: coin,
+              tf: interval,
+              question: "le signal peut-il être traité ?",
+              answer: "écarté",
+              applied: true,
+              detail: "clés Hyperliquid absentes",
+            });
           } else {
             const order = await submitDeptOrder(session, {
               asset: setup.asset,
@@ -402,6 +516,18 @@ export async function tickPilot(force?: boolean) {
               entry: setup.entry_price,
               stop: setup.stop_price,
               target: setup.target_price,
+            });
+            logDecision({
+              stage: "ORDRE",
+              decider: "exchange",
+              asset: coin,
+              tf: interval,
+              question: "l'ordre est-il exécuté et protégé ?",
+              answer: order.ok ? "rempli" : "refusé",
+              applied: order.ok,
+              detail: order.ok
+                ? `${order.size} exécuté sur ${order.requested} · ${order.plan.notional.toFixed(2)} $ visés · risque ${order.plan.risqueUsd.toFixed(2)} $${order.notes.length ? ` · ${order.notes.join(" · ")}` : ""}`
+                : order.error,
             });
             if (!order.ok) {
               s.lastError = `${tag} ${order.error}`;

@@ -10,7 +10,7 @@ Copier `.env.example` → `deploy/vps/.env` **uniquement sur le VPS**.
 
 | Variable | Rôle |
 |---|---|
-| `XAI_API_KEY` | Appels Grok |
+| `TYPESAFE_AI_API_KEY` | Avis de Jev, en ombre (facultatif) |
 | `HL_AGENT_KEY` | Clé API agent Hyperliquid (64 hex) |
 | `HL_MASTER` | Adresse du wallet du département |
 | `GSD_ACCESS_PIN` | PIN d’accès web |
@@ -23,6 +23,30 @@ Jamais ces valeurs dans le repo.
 cd gsd
 sudo docker compose -f deploy/vps/compose.yml up -d --build
 ```
+
+## Décisions, Jev et Grok
+
+L'onglet **Décisions** montre chaque décision du bot telle qu'elle a été
+prise, lue dans `decisions.jsonl` (dossier `GSD_DATA_DIR`) et sur le compte
+Hyperliquid : régime, signal, limites, famille, avis de Jev, ordre, gestion,
+revue, filet. Les coûts affichés sont les sommes facturées, appel par appel
+(`spend.json`) — jamais un tarif multiplié par un compteur.
+
+**Grok n'est plus appelé.** Il intervenait à trois endroits :
+
+| endroit | ce que Grok faisait | ce qui le remplace |
+|---|---|---|
+| cycle, à chaque signal | justification et horizon de détention — qu'aucune règle de sortie ne lisait | rien : l'horizon affiché est le time-stop réel |
+| J2, après J1 | vote d'ombre d'un « comité » de six agents | Jev : prendre ? famille ? taille ? — ombre |
+| revue du book | coupait ou réduisait des positions, appliqué | Jev : garder, réduire, couper — **ombre** |
+
+Les avis de Jev sont **inscrits, jamais appliqués** (`COMMITTEE_CFG`,
+`REVIEW_CFG.apply`). Le contrôle du risque reste le stop posé chez l'exchange
+et les règles de `manage.server.ts`. On ne leur donnera la main que si le
+journal montre qu'ils évitent des pertes. Sans `TYPESAFE_AI_API_KEY`, J2 passe
+en repli local et la revue est sautée ; le bot trade exactement pareil.
+
+Les réglages « appels / heure » et « $ / jour » du cockpit bornent Jev.
 
 ## Politique de risque
 

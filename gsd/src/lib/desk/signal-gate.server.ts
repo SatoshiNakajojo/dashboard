@@ -1,5 +1,6 @@
 import { appendFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
+import { logDecision } from "./decisions.server";
 import type { RegimeSnap } from "./regime.server";
 import type { Side } from "./types";
 
@@ -92,6 +93,16 @@ export function decide(snap: RegimeSnap | null, raw: RawSignal): GateDecision {
     reasons,
   };
   logLine(row);
+  logDecision({
+    stage: "J1",
+    decider: "règle",
+    asset: raw.asset.replace(/USDT$/i, ""),
+    tf: raw.interval,
+    question: "la famille du signal convient-elle au régime ?",
+    answer: allowLogic ? "passe" : "bloque",
+    applied: !SIGNAL_GATE_CFG.shadow,
+    detail: `${family} ${raw.side} · ${regime}/${bias}${reasons.length ? ` · ${reasons.join("+")}` : ""}`,
+  });
   try {
     void import("./talk.server").then((t) =>
       t.recordTalk({

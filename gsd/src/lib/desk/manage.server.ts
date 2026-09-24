@@ -4,6 +4,7 @@ import { GSD_BACKSTOP_R, GSD_DUST_NOTIONAL, GSD_RISK_PCT, GSD_TIME_STOP_H } from
 import { notify } from "./alerts.server";
 import { fetchBars } from "./market";
 import { readEngines } from "./strats";
+import { logDecision } from "./decisions.server";
 
 export type Managed = {
   coin: string;
@@ -102,9 +103,21 @@ export async function manageOpens(
       /* */
     }
 
+    const gestion = (answer: string, applied: boolean, detail: string) =>
+      logDecision({
+        stage: "GESTION",
+        decider: "règle",
+        asset: p.coin,
+        question: "que faire de cette position ?",
+        answer,
+        applied,
+        detail: detail.replace(/^BARRE · /, ""),
+      });
+
     const cut = async (why: string) => {
       const r = await reduceDeptPosition(session, p.coin, 1);
       const line = r.ok ? why : `BARRE · close FAIL ${p.coin}: ${r.error}`;
+      gestion("couper", r.ok, line);
       notes.push(line);
       pushLog(m, line);
       await helmNote(line);
@@ -118,6 +131,7 @@ export async function manageOpens(
       const r = await reduceDeptPosition(session, p.coin, drop);
       const why = `BARRE · trim ${p.coin} ${p.value.toFixed(0)}$`;
       notes.push(r.ok ? why : `trim fail ${r.error}`);
+      gestion("réduire", r.ok, r.ok ? `${why} · au-delà de son slot` : `trim fail ${r.error}`);
       pushLog(m, why);
       await helmNote(why);
     }
@@ -161,6 +175,7 @@ export async function manageOpens(
       const extra = Math.min(targetN - p.value, bal.free * 0.7 * 2, targetN * 0.5);
       if (extra >= 25) {
         const r = await addDeptSize(session, p.coin, extra, m.stop);
+        gestion("renforcer", r.ok, `+${extra.toFixed(0)} $ sur une position gagnante (ROE ${p.roePct.toFixed(1)} %)`);
         if (r.ok) {
           m.scaled = true;
           pushLog(m, `BARRE · +${extra.toFixed(0)}$ ${p.coin}`);
@@ -172,6 +187,7 @@ export async function manageOpens(
     const oneR = p.side === "LONG" ? mark >= m.entry + risk : mark <= m.entry - risk;
     if (!m.partial && oneR && p.value >= 30) {
       const r = await reduceDeptPosition(session, p.coin, 0.5);
+      gestion("prendre 50 %", r.ok, `+1 R atteint`);
       if (r.ok) {
         m.partial = true;
         pushLog(m, `BARRE · TP 50% ${p.coin}`);
@@ -185,6 +201,7 @@ export async function manageOpens(
     const hold = `BARRE · ON TIENT ${p.coin} ${p.side} ROE ${p.roePct.toFixed(1)}% ${p.pnl.toFixed(2)}$ ${ageH.toFixed(1)}h ST ${st1h}/${st4h}`;
     pushLog(m, hold);
     notes.push(hold);
+    gestion("tenir", true, hold);
     await helmNote(hold);
     next[p.coin] = m;
   }

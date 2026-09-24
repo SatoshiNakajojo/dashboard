@@ -1,27 +1,48 @@
 import { appendFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
-import { completeJson, parseJsonObject } from "./llm.server";
+import { logDecision } from "./decisions.server";
+import { noulP, scoreLevel, topChoice, type JevQuestion } from "./jev";
+import { askJev, jevAllowed } from "./jev.server";
 import type { RegimeSnap } from "./regime.server";
 import type { GateDecision, RawSignal } from "./signal-gate.server";
 
-export const COMMITTEE_CFG = { enforce: false, shadow: true, maxPerHour: 60 };
+/**
+ * J2 — l'avis de Jev sur chaque signal que J1 laisse passer. Vote d'ombre :
+ * inscrit, jamais appliqué, tant qu'il n'a pas été mesuré contre ce que les
+ * trades ont réellement donné.
+ *
+ * Grok jouait ici un comité de six agents et d'un PM, en prose. Jev répond à
+ * trois questions dont toutes les réponses sont définies d'avance.
+ */
+export const COMMITTEE_CFG = { enforce: false, shadow: true };
 
-const COMMITTEE_SYSTEM = `Tu es un comité de 6 agents + un PM. 1 JSON, rien d'autre.
-Tu NE PLACES PAS d'ordres. Vote d'ombre.
+const TAILLES = ["0,5×", "0,75×", "1×", "1,25×", "1,5×"];
+const MULT = [0.5, 0.75, 1, 1.25, 1.5];
 
-Agents : momentum, mean_reversion, btc_beta, flow, devil, risk.
-Chacun : {"vote":"allow"|"block","note":"≤12 mots"}.
-PM : score 0-1, recommend_allow bool, playbook S1_TREND|S2_REVERSION|MM|OTHER, sizing_mult 0.5-1.5, note.
+const QUESTIONS: Record<string, JevQuestion> = {
+  prendre: {
+    type: "noul",
+    instructions:
+      "A trading desk's rules just produced this new signal. Given the market regime, the signal's family and side, and the indicators, is this signal worth taking now?",
+  },
+  famille: {
+    type: "choice",
+    instructions: "Which playbook does this signal belong to?",
+    criteria: {
+      S1_TREND: "Trend following: a breakout in the direction of the trend",
+      S2_REVERSION: "Reversal or mean reversion: a trend flip, an overextension fading",
+      MM: "Market making or grid trading",
+      OTHER: null,
+    },
+  },
+  taille: {
+    type: "score",
+    instructions: "Relative to the desk's normal position size, how large should this position be?",
+    criteria: TAILLES,
+  },
+};
 
-{"agents":{"momentum":{"vote":"allow","note":""},"mean_reversion":{"vote":"block","note":""},"btc_beta":{"vote":"allow","note":""},"flow":{"vote":"allow","note":""},"devil":{"vote":"block","note":""},"risk":{"vote":"allow","note":""}},"pm":{"score":0.55,"recommend_allow":true,"playbook":"S1_TREND","sizing_mult":1,"note":""}}`;
-
-const stamps: number[] = [];
-
-function quotaOk() {
-  const now = Date.now();
-  while (stamps.length && now - stamps[0] > 3600_000) stamps.shift();
-  return stamps.length < COMMITTEE_CFG.maxPerHour;
-}
+const QUESTION_J2 = "prendre ce signal ?";
 
 function logRow(row: Record<string, unknown>) {
   try {
@@ -50,7 +71,7 @@ function localFallback(raw: RawSignal, gate: GateDecision, extras: Record<string
       recommend_allow,
       playbook: gate.family,
       sizing_mult: 1,
-      note: "fallback local — Grok skip",
+      note: "repli local — Jev indisponible",
     },
     enforce_block: false,
     shadow: true,
@@ -87,45 +108,70 @@ export async function review(
     bias: snap?.bias,
     extras,
   };
+  const coin = raw.asset.replace(/USDT$/i, "");
   if (!gate.allow) {
     const rec = { ...localFallback(raw, gate, extras), source: "skip_j1" };
     logRow({ ...base, ...rec, skipped: "j1_block" });
     return rec;
   }
-  if (!quotaOk() || !process.env.XAI_API_KEY) {
+  const local = (why: string) => {
     const rec = localFallback(raw, gate, extras);
-    logRow({ ...base, ...rec });
+    logRow({ ...base, ...rec, jev: why });
+    logDecision({
+      stage: "J2",
+      decider: "local",
+      asset: coin,
+      tf: raw.interval,
+      question: QUESTION_J2,
+      answer: rec.pm.recommend_allow ? "prendre" : "passer",
+      p: rec.pm.score,
+      applied: false,
+      detail: `repli local (RSI) — ${why}`,
+    });
     return rec;
-  }
+  };
+  const allowed = await jevAllowed();
+  if (!allowed.ok) return local(allowed.why);
   try {
-    const { text, model_id } = await completeJson(
-      COMMITTEE_SYSTEM,
-      JSON.stringify({
-        snap: { regime: snap?.regime, bias: snap?.bias, day_pnl_pct: snap?.day_pnl_pct },
-        signal: raw,
-        gate,
-        extras,
-      }),
+    const r = await askJev(
+      {
+        regime: { regime: snap?.regime ?? "UNKNOWN", bias: snap?.bias ?? "FLAT", day_pnl_pct: snap?.day_pnl_pct ?? null },
+        signal: { asset: coin, timeframe: raw.interval, side: raw.side, source: raw.name },
+        gate: { family: gate.family, reasons: gate.reasons },
+        indicators: extras,
+      },
+      QUESTIONS,
     );
-    stamps.push(Date.now());
-    const obj = parseJsonObject(text) as {
-      agents?: unknown;
-      pm?: { score?: number; recommend_allow?: boolean; playbook?: string; sizing_mult?: number; note?: string };
-    };
+    const p = noulP(r.answers.prendre) ?? 0;
+    const fam = topChoice(r.answers.famille);
+    const size = scoreLevel(r.answers.taille, TAILLES);
     const rec: CommitteeRec = {
-      source: model_id,
-      agents: obj.agents ?? {},
+      source: r.model,
+      agents: {},
       pm: {
-        score: Number(obj.pm?.score) || 0,
-        recommend_allow: Boolean(obj.pm?.recommend_allow),
-        playbook: String(obj.pm?.playbook || gate.family),
-        sizing_mult: Number(obj.pm?.sizing_mult) || 1,
-        note: String(obj.pm?.note || ""),
+        score: p,
+        recommend_allow: p >= 0.5,
+        playbook: fam?.choice ?? gate.family,
+        sizing_mult: size ? MULT[size.index] : 1,
+        note: `Jev · p ${p.toFixed(2)} · ${fam?.choice ?? "?"} · ${size?.level ?? "1×"}`,
       },
       enforce_block: false,
       shadow: true,
     };
-    logRow({ ...base, ...rec });
+    logRow({ ...base, ...rec, latency_ms: r.latencyMs, usd: r.usd });
+    logDecision({
+      stage: "J2",
+      decider: "jev",
+      asset: coin,
+      tf: raw.interval,
+      question: QUESTION_J2,
+      answer: rec.pm.recommend_allow ? "prendre" : "passer",
+      p,
+      applied: false,
+      ms: r.latencyMs,
+      usd: r.usd,
+      detail: `${fam?.choice ?? "?"} (p ${fam ? fam.p.toFixed(2) : "?"}) · taille ${size?.level ?? "?"} · ombre`,
+    });
     try {
       const talk = await import("./talk.server");
       talk.recordTalk({
@@ -133,15 +179,13 @@ export async function review(
         asset: raw.asset,
         interval: raw.interval,
         stage: "ORDRE",
-        bot: `J2 ombre score ${rec.pm.score.toFixed(2)} rec=${rec.pm.recommend_allow} (non appliqué)`,
+        bot: `J2 Jev p ${p.toFixed(2)} → ${rec.pm.recommend_allow ? "prendre" : "passer"} (ombre, non appliqué)`,
       });
     } catch {
       /* */
     }
     return rec;
-  } catch {
-    const rec = localFallback(raw, gate, extras);
-    logRow({ ...base, ...rec });
-    return rec;
+  } catch (e) {
+    return local(`Jev en échec : ${e instanceof Error ? e.message : String(e)}`);
   }
 }

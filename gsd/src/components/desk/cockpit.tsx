@@ -31,10 +31,12 @@ import { readEngines } from "@/lib/desk/strats";
 import { useDesk } from "@/lib/desk/store";
 import { ASSETS, INTERVALS, type CycleResult } from "@/lib/desk/types";
 import { ChainPanel } from "@/components/desk/chain-panel";
+import { DecisionsPanel } from "@/components/desk/decisions-panel";
 import { EquityPanel } from "@/components/desk/equity-panel";
 import { WalletPanel } from "@/components/desk/wallet-panel";
 import { ScanBoard } from "@/components/desk/scan-board";
 import { dirFrom, ImpulseTri } from "@/components/desk/impulse-tri";
+import { ChartLevels } from "@/components/desk/chart-levels";
 import { ChartMarks } from "@/components/desk/chart-marks";
 import { TickerTape } from "@/components/desk/ticker-tape";
 import type { HlBalances, HlOpenPos } from "@/lib/desk/hl";
@@ -649,6 +651,7 @@ export function Cockpit() {
             ),
             journal: <TalkPanel />,
             chaine: <ChainPanel />,
+            decisions: <DecisionsPanel />,
             reglages: (
               <SettingsPanel
                 grokCallsPerHour={Number((pilot.data as { grokCallsPerHour?: number } | undefined)?.grokCallsPerHour ?? 6)}

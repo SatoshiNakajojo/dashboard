@@ -18,7 +18,7 @@ export function TalkPanel() {
         <h2 className="text-lg font-medium">Ce que dit le bot</h2>
       </div>
       <p className="mt-1 text-xs text-muted-foreground">
-        Chaque fois que Grok répond à un signal — du plus récent au plus ancien.
+        Chaque étape que franchit un signal — J1, avis Jev — du plus récent au plus ancien.
       </p>
       {lines.length === 0 && (
         <p className="mt-4 text-sm text-muted-foreground">

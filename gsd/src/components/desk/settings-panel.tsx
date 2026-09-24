@@ -44,9 +44,11 @@ export function SettingsPanel({
     <section className="gsd-panel rounded-[var(--radius-lg)] p-4 lg:col-span-12">
       <div className="flex items-center gap-2">
         <Settings className="size-4 text-accent" />
-        <h2 className="text-lg font-medium">Appels Grok</h2>
+        <h2 className="text-lg font-medium">Appels Jev</h2>
       </div>
-      <p className="mt-1 text-xs text-muted-foreground">Plafond par heure · fréquence des scans. 0 $ si 0 appel.</p>
+      <p className="mt-1 text-xs text-muted-foreground">
+        Plafond des avis Jev (J2 et revue, en ombre) par heure et par jour · fréquence des scans. Grok n'est plus appelé.
+      </p>
       <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
         <label className="text-xs text-muted-foreground">
           Appels / heure
@@ -85,7 +87,7 @@ export function SettingsPanel({
           >
             {[0, 0.5, 1, 2, 5].map((n) => (
               <option key={n} value={n}>
-                {n === 0 ? "0 $ — Grok off" : `${n} $ / jour`}
+                {n === 0 ? "0 $ — Jev off" : `${n} $ / jour`}
               </option>
             ))}
           </select>
