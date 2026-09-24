@@ -234,3 +234,38 @@ def test_triggers_reexporte_la_regle_sans_la_recopier():
     source = (_racine / "src" / "trading_desk" / "sentinelle" / "triggers.py").read_text()
     assert "def deblocages_retenus(" not in source, (
         "la règle a été recopiée dans triggers.py — il doit la réexporter")
+
+
+def test_le_diagnostic_lit_tout_par_defaut():
+    """Un plafond qui tronque en silence produit un verdict sur 67 % des données.
+
+    Il était à 250 pour 372 protocoles, et le rapport imprimait quand même
+    « 0 jeton récupérable » — un chiffre qui a l'air d'un résultat et qui
+    décrit une lecture partielle. Le défaut exact que ce dépôt traque
+    partout ailleurs, dans l'outil censé le débusquer.
+    """
+    source = (_racine / "scripts" / "sonder_couverture_unlocks.py").read_text()
+    assert '"--max-telechargements", type=int, default=0' in source, (
+        "le défaut doit être « tout lire »")
+    assert "plafond = args.max_telechargements or len(slugs)" in source
+
+
+def test_une_lecture_partielle_refuse_de_conclure():
+    """Mieux vaut pas de verdict qu'un verdict sur ce qu'on n'a pas lu."""
+    source = (_racine / "scripts" / "sonder_couverture_unlocks.py").read_text()
+    assert "complet = tires >= len(slugs)" in source
+    assert "INCOMPLET, NE CONCLUT RIEN" in source
+    assert "AUCUNE CONCLUSION" in source
+    # Le compte des « inconnus » ne doit pas s'afficher comme un fait quand
+    # une partie des protocoles n'a jamais ete regardee.
+    assert "if compte.get(INCONNU) and complet:" in source
+
+
+def test_la_pause_de_politesse_ne_s_applique_qu_au_reseau():
+    """Testée après `_get`, qui venait d'écrire le cache, elle ne
+    s'appliquait jamais — l'inverse exact de l'intention."""
+    source = (_racine / "scripts" / "sonder_couverture_unlocks.py").read_text()
+    avant = source.index("depuis_cache = cache.joinpath")
+    apres = source.index("detail = _get(f\"{DATASETS}/emissions/{slug}\"")
+    assert avant < apres, "l'état du cache doit être lu AVANT le téléchargement"
+    assert "if not depuis_cache:\n            time.sleep(args.pause)" in source

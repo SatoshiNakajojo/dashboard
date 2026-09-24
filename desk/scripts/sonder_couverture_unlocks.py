@@ -251,8 +251,10 @@ def main() -> int:
     p.add_argument("--calendrier", default="data/unlocks.json")
     p.add_argument("--rapport", default="data/couverture_unlocks.json")
     p.add_argument("--cache", default=".cache/couverture")
-    p.add_argument("--max-telechargements", type=int, default=250,
-                   help="borne de politesse envers un miroir gratuit")
+    p.add_argument("--max-telechargements", type=int, default=0,
+                   help="borne de politesse envers un miroir gratuit. 0 = "
+                        "tout lire, et c'est le defaut : un diagnostic qui "
+                        "n'a pas tout lu ne conclut pas.")
     p.add_argument("--pause", type=float, default=0.4)
     args = p.parse_args()
 
@@ -304,10 +306,12 @@ def main() -> int:
     rapport: dict[str, dict] = {ticker: {"classe": DEJA, "a_venir": 0, "slug": None}
                                 for ticker in sorted(perps) if ticker in deja}
     vus: dict[str, str] = {}
-    tires = refuses = sans_gecko = 0
+    tires = refuses = 0
+    illisibles: list[str] = []
     etrangers: list[str] = []
+    plafond = args.max_telechargements or len(slugs)
     for i, slug in enumerate(slugs, 1):
-        if tires >= args.max_telechargements:
+        if tires >= plafond:
             break
         # LE COMPTEUR EN PREMIER. Place en fin de boucle, il etait derriere
         # deux `continue` : il ne s'affichait que si le protocole courant
@@ -317,10 +321,15 @@ def main() -> int:
         # du resultat pour une mauvaise raison.
         if i % 50 == 0:
             print(f"       … {i}/{len(slugs)}", flush=True)
+        depuis_cache = cache.joinpath(f"{slug}.json").exists()
         detail = _get(f"{DATASETS}/emissions/{slug}", cache / f"{slug}.json",
                       essais=1)
         tires += 1
-        if not cache.joinpath(f"{slug}.json").exists():
+        # La pause est une politesse envers le miroir, pas un rituel : elle
+        # n'a pas lieu d'etre quand rien n'est sorti sur le reseau. Testee
+        # APRES `_get`, qui vient d'ecrire le cache, elle ne s'appliquait
+        # jamais — l'inverse exact de l'intention.
+        if not depuis_cache:
             time.sleep(args.pause)
         if not isinstance(detail, dict):
             refuses += 1
@@ -332,7 +341,7 @@ def main() -> int:
         # n'est simplement pas notre affaire. Les confondre laisserait
         # croire a une fuite la ou il n'y a qu'un univers different.
         if not gecko:
-            sans_gecko += 1
+            illisibles.append(slug)
             continue
         ticker = table.get(gecko)
         if ticker is None:
@@ -359,7 +368,7 @@ def main() -> int:
     if refuses:
         print(f"       {refuses} fichiers refusés par le miroir", file=sys.stderr)
     print(f"       {tires} protocoles lus · {len(vus)} rapprochés · "
-          f"{sans_gecko} sans gecko_id · {len(etrangers)} hors univers coté")
+          f"{len(illisibles)} sans gecko_id · {len(etrangers)} hors univers coté")
 
     Path(args.rapport).parent.mkdir(parents=True, exist_ok=True)
     Path(args.rapport).write_text(json.dumps(rapport, indent=1, sort_keys=True))
@@ -370,9 +379,23 @@ def main() -> int:
     gagnes = sum(x["a_venir"] for x in rapport.values())
     jetons_gagnes = sum(1 for x in rapport.values() if x["classe"] == RATE)
 
+    complet = tires >= len(slugs)
     print("\n  " + "=" * 72)
-    print("  DIAGNOSTIC DE COUVERTURE")
+    print("  DIAGNOSTIC DE COUVERTURE"
+          + ("" if complet else "  —  INCOMPLET, NE CONCLUT RIEN"))
     print("  " + "=" * 72)
+    if not complet:
+        # UN VERDICT SUR UNE LECTURE PARTIELLE EST PIRE QUE PAS DE VERDICT.
+        # Le plafond de politesse etait a 250 pour 372 protocoles, et le
+        # rapport imprimait quand meme « 0 jeton recuperable » — un chiffre
+        # qui a l'air d'un resultat et qui decrit 67 % des donnees.
+        print(f"    {tires} protocoles lus sur {len(slugs)}. Les "
+              f"{len(slugs) - tires} restants n'ont pas ete")
+        print("    regardes : tout jeton qu'ils porteraient est compte ici "
+              "comme")
+        print("    « inconnu », a tort. Relancez sans plafond avant de "
+              "decider.")
+        print("  " + "-" * 72)
     for classe in (DEJA, RATE, EPUISE, TROP_PETIT, INCONNU):
         if classe in compte:
             print(f"    {classe:<40} {compte[classe]:>4}")
@@ -383,15 +406,20 @@ def main() -> int:
     print(f"    jetons RÉCUPÉRABLES sans nouvelle source   {jetons_gagnes:>4}")
     print(f"    déblocages à venir qu'ils apportent        {gagnes:>4}")
     print("  " + "-" * 72)
-    if jetons_gagnes:
+    if not complet:
+        print("  AUCUNE CONCLUSION : la lecture est partielle (voir ci-dessus).")
+    elif jetons_gagnes:
         print("  Le défaut est CHEZ NOUS, pas chez DefiLlama : ces jetons sont")
         print("  dans le calendrier de la source et le filtre par nom les rate.")
         print("  Correction gratuite, aucune nouvelle dépendance.")
-    if compte.get(INCONNU):
+    if compte.get(INCONNU) and complet:
         print(f"  {compte[INCONNU]} perpétuels restent hors de DefiLlama. C'est eux,")
         print("  et eux seuls, qui justifieraient une seconde source.")
-        if sans_gecko:
-            print(f"  ATTENTION : {sans_gecko} protocoles n'ont aucun gecko_id.")
+        if illisibles:
+            print(f"  ATTENTION : {len(illisibles)} protocoles n'ont aucun "
+                  "gecko_id :")
+            print(f"    {', '.join(sorted(illisibles)[:20])}"
+                  + (" …" if len(illisibles) > 20 else ""))
             print("  Ceux-là ne sont pas « absents », ils sont ILLISIBLES pour")
             print("  notre rapprochement, et ils pourraient cacher des jetons")
             print("  cotés. À regarder avant de conclure.")
