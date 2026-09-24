@@ -79,23 +79,53 @@ export function LogoViewer({ visible, onClose }: LogoViewerProps) {
   );
 }
 
-/** Le crédit, en bas de la vue : qui l'a codée, qui l'a dessinée. */
+/**
+ * Le crédit, en bas de la vue : qui l'a codée, qui l'a dessinée.
+ *
+ * Chaque rôle est un micro-label posé au-dessus du nom, comme un générique :
+ * un italique à 14 pt collé à des capitales à 9 pt sur la même ligne mêlait
+ * deux registres qui ne s'accordaient pas.
+ */
 function About() {
-  const line = { fontFamily: f.serifItalic, fontSize: 14, lineHeight: 20, color: c.sepia };
-  const name = { fontFamily: f.labelMed, fontSize: 9, letterSpacing: 1.4, color: c.goldMuted };
-
   return (
-    <View className="items-center" style={{ width: '86%', maxWidth: 420, gap: 6 }}>
-      <Micro tracking={2.2} size={8} style={{ color: c.sepiaFaint, marginBottom: 2 }}>
+    <View className="items-center" style={{ width: '86%', maxWidth: 420, gap: 12 }}>
+      <Micro tracking={2.2} size={8} style={{ color: c.sepiaFaint }}>
         À PROPOS
       </Micro>
-      <Text style={[line, { textAlign: 'center' }]}>
-        vibe-coded by <Text style={name}>SATOSHI NAKAJOJO</Text>
-      </Text>
-      <Text style={[line, { textAlign: 'center' }]}>
-        design by{' '}
-        <Text style={name}>J.C. GLOBAL INVESTMENTS SOFTWARE DEPARTMENT, NEW CALEDONIA</Text>
-      </Text>
+      <Credit role="vibe-coded by" lines={['SATOSHI NAKAJOJO']} />
+      {/* Coupé à la main : laissé au retour automatique, le nom finissait sur
+          un « CALEDONIA » orphelin. */}
+      <Credit
+        role="design by"
+        lines={['J.C. GLOBAL INVESTMENTS', 'SOFTWARE DEPARTMENT, NEW CALEDONIA']}
+      />
+    </View>
+  );
+}
+
+function Credit({ role, lines }: { role: string; lines: string[] }) {
+  return (
+    <View className="items-center" style={{ gap: 5 }}>
+      <Micro tracking={2} size={8} style={{ color: c.sepiaMuted }}>
+        {role}
+      </Micro>
+      <View className="items-center">
+        {lines.map((text) => (
+          <Text
+            key={text}
+            style={{
+              fontFamily: f.labelMed,
+              fontSize: 9,
+              lineHeight: 15,
+              letterSpacing: 1.4,
+              color: c.goldMuted,
+              textAlign: 'center',
+            }}
+          >
+            {text}
+          </Text>
+        ))}
+      </View>
     </View>
   );
 }
