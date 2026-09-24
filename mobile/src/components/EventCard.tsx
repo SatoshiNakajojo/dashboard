@@ -3,7 +3,7 @@ import { Pressable, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 
 import { PotluckList } from '@/components/PotluckList';
-import { Avatar } from '@/components/ui/Avatar';
+import { MemberAvatar } from '@/components/MemberAvatar';
 import { Micro } from '@/components/ui/Micro';
 import { formatTime, splitEventDate } from '@/lib/format';
 import { CLUB_SIZE } from '@/mocks/members';
@@ -112,12 +112,7 @@ export function EventCard({
                   key={id}
                   style={{ marginRight: -6, zIndex: MAX_STACKED_AVATARS - index }}
                 >
-                  <Avatar
-                    initials={member?.initials ?? '··'}
-                    color={member?.color ?? c.dial}
-                    size={22}
-                    ringColor={c.surfaceDeep}
-                  />
+                  <MemberAvatar member={member} size={22} ringColor={c.surfaceDeep} />
                 </View>
               );
             })}

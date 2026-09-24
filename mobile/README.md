@@ -646,6 +646,20 @@ de route.
 
 ---
 
+## Le profil des autres
+
+Toucher l'avatar d'un membre — sur un call, une soirée, une ligne du potluck,
+un classement, un pari de l'Oracle — ouvre sa page (`app/member/[id].tsx`) :
+sa photo, son nom, et les liens qu'il partage au club. Un lien web s'ouvre, une
+adresse (BTC, MetaMask) se copie, selon la même règle que sur sa propre page
+(`src/lib/profileLinks.ts`). Rien ne s'y modifie ; sur son propre profil, un
+bouton mène à la page d'édition.
+
+Au passage, ces avatars portent désormais la **photo** du membre : l'app
+n'affichait que ses initiales partout ailleurs que dans l'en-tête.
+
+---
+
 ## Un pari se dépose sciemment
 
 Le tracé de l'Oracle était enregistré **900 ms après le dernier point**. Un

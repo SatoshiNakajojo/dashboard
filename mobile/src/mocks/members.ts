@@ -19,7 +19,13 @@ export const MEMBERS: Record<string, Member> = {
     displayName: 'John',
     initials: 'JD',
     color: '#E8903D',
-    ...bare(),
+    avatarUrl: null,
+    // De quoi voir la page d'un membre en démo : un lien qui s'ouvre, une
+    // adresse qui se copie.
+    links: [
+      { label: 'GitHub', url: 'https://github.com/satoshinakajojo' },
+      { label: 'Adresse BTC', url: 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh' },
+    ],
   },
   alex: {
     id: '11111111-1111-4111-8111-000000000002',

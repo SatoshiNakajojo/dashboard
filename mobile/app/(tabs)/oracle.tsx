@@ -6,7 +6,7 @@ import type { OracleCurve } from '@/components/OracleGraph';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { ScreenShell } from '@/components/ScreenShell';
 import { TimeLockCard } from '@/components/TimeLockCard';
-import { Avatar } from '@/components/ui/Avatar';
+import { MemberAvatar } from '@/components/MemberAvatar';
 import { Micro } from '@/components/ui/Micro';
 import { SectionTitle } from '@/components/ui/SectionTitle';
 import { DAY_MS } from '@/features/oracle/betting';
@@ -577,12 +577,7 @@ function BetLine({
       style={{ gap: 12, paddingVertical: 12, paddingHorizontal: 2 }}
     >
       <View style={{ width: 14, height: 1.5, backgroundColor: author.color }} />
-      <Avatar
-        initials={author.initials}
-        color={author.color}
-        photo={author.avatarUrl}
-        size={24}
-      />
+      <MemberAvatar member={author} size={24} />
       <View className="flex-1" style={{ gap: 3 }}>
         <Text numberOfLines={1} style={{ fontFamily: f.sansSemi, fontSize: 12, color: c.bone }}>
           {author.displayName}

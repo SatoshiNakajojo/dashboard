@@ -1,6 +1,6 @@
 import { Text, View } from 'react-native';
 
-import { Avatar } from '@/components/ui/Avatar';
+import { MemberAvatar } from '@/components/MemberAvatar';
 import { formatPercent } from '@/lib/format';
 import { desaturate } from '@/lib/performance';
 import { c, f } from '@/theme/tokens';
@@ -44,8 +44,8 @@ export function LeaderboardRow({
         </Text>
       </View>
 
-      <Avatar
-        initials={member.initials}
+      <MemberAvatar
+        member={member}
         // Pas de filtre CSS en RN : la désaturation est calculée (README §8.5).
         color={isFame ? member.color : desaturate(member.color, 0.7)}
         size={28}

@@ -25,7 +25,9 @@ export interface AvatarProps {
  * La taille de police suit le diamètre, comme dans le design (22 → 8, 28 → 10).
  */
 export function Avatar({ initials, color, photo, size = 24, ringColor, dimmed }: AvatarProps) {
-  const fontSize = size <= 20 ? 8 : size <= 24 ? 9 : size <= 28 ? 10 : 11;
+  // Au-delà de 40 pt — la page d'un membre, la sienne —, les initiales suivent
+  // la taille du cercle au lieu de s'y perdre.
+  const fontSize = size <= 20 ? 8 : size <= 24 ? 9 : size <= 28 ? 10 : size <= 40 ? 11 : Math.round(size * 0.3);
 
   return (
     <View

@@ -66,6 +66,8 @@ export default function RootLayout() {
             {/* Hors des onglets : le profil se superpose et se referme, il
               n'est pas un quatrième onglet permanent. */}
             <Stack.Screen name="profile" options={{ presentation: 'modal' }} />
+            {/* Le profil d'un autre membre : même présentation, en lecture. */}
+            <Stack.Screen name="member/[id]" options={{ presentation: 'modal' }} />
           </Stack>
         </View>
       </SafeAreaProvider>

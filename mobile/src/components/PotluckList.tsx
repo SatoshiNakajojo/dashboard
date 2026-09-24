@@ -1,7 +1,7 @@
 import { memo, useCallback } from 'react';
 import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 
-import { Avatar } from '@/components/ui/Avatar';
+import { MemberAvatar } from '@/components/MemberAvatar';
 import { Micro } from '@/components/ui/Micro';
 import { SectionTitle } from '@/components/ui/SectionTitle';
 import { usePotluckItems } from '@/features/potluck/usePotluckItems';
@@ -146,12 +146,7 @@ const PotluckLine = memo(function PotluckLine({ row, interactive, onToggle }: Po
           <Text style={{ fontFamily: f.sans, fontSize: 11, color: c.sepia }}>
             {row.assignee?.displayName ?? '—'}
           </Text>
-          <Avatar
-            initials={row.assignee?.initials ?? '··'}
-            color={row.assignee?.color ?? c.dial}
-            size={20}
-            dimmed={row.isPending}
-          />
+          <MemberAvatar member={row.assignee} size={20} dimmed={row.isPending} />
         </View>
       )}
     </Pressable>

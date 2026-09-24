@@ -2,7 +2,7 @@ import { memo } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 
-import { Avatar } from '@/components/ui/Avatar';
+import { MemberAvatar } from '@/components/MemberAvatar';
 import { Micro } from '@/components/ui/Micro';
 import { formatPercent, formatPrice, formatRelative, formatSize } from '@/lib/format';
 import { assetClassStyle, c, cardGradient, f, perfColor, radius } from '@/theme/tokens';
@@ -28,7 +28,7 @@ export const CallCard = memo(function CallCard({ call, onVote, onEdit, onDelete 
       style={{ borderRadius: radius.card, borderWidth: 1, borderColor: c.border, padding: 16 }}
     >
       <View className="flex-row items-center" style={{ gap: 11 }}>
-        <Avatar initials={call.author.initials} color={call.author.color} size={28} />
+        <MemberAvatar member={call.author} size={28} />
         <View className="flex-1">
           <Text style={{ fontFamily: f.sansSemi, fontSize: 12, color: c.bone }}>
             {call.author.displayName}
