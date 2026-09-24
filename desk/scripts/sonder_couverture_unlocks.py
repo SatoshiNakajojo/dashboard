@@ -50,11 +50,13 @@ plafond de couverture du projet, sans que personne ne l'ait décidé.
 
 ## Comment celui-ci s'y prend
 
-Il inverse le sens du rapprochement. Plutôt que de filtrer la liste de
-DefiLlama par ressemblance de nom, il part des perpétuels et leur trouve un
-identifiant CoinGecko **par capitalisation** — le jeton coté sur Hyperliquid
-est, à de très rares exceptions près, le plus gros de ceux qui portent son
-ticker. Puis il cherche cet identifiant dans le calendrier de DefiLlama.
+Il **ne filtre rien avant de lire**. Il télécharge chaque protocole du
+calendrier DefiLlama et lit son `gecko_id`, qui est le seul rapprochement
+qui fasse foi. Si ce `gecko_id` correspond à un perpétuel coté, le jeton est
+récupérable — quel que soit le nom du protocole.
+
+C'est exactement l'inverse de la collecte, et c'est le point : filtrer avant
+de lire, c'est décider sans savoir.
 
 Il ne modifie RIEN. Il télécharge, classe, et écrit un rapport.
 """
@@ -89,6 +91,7 @@ from trading_desk.deblocages import (  # noqa: E402
 DATASETS = "https://defillama-datasets.llama.fi"
 HYPERLIQUID = "https://api.hyperliquid.xyz/info"
 COINGECKO = "https://api.coingecko.com/api/v3"
+REESSAYABLES = {408, 429, 500, 502, 503, 504}
 ENTETES = {"User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)",
            "Accept": "application/json"}
 JOUR_MS = 86_400_000
@@ -102,19 +105,23 @@ TROP_PETIT = "connu, mais aucun deblocage dans la bande"
 DEJA = "deja couvert"
 
 
-def _get(url: str, cache: Path | None = None, essais: int = 2) -> object | None:
-    """Lit une URL, avec cache disque. `None` si elle refuse.
+def _get(url: str, cache: Path | None = None, essais: int = 3) -> object | None:
+    """Lit une URL, avec cache disque. **Et dit pourquoi quand ça rate.**
 
-    Le cache n'est pas un confort : ce script tire potentiellement deux
-    cents fichiers de plusieurs megaoctets sur un miroir gratuit, et le
-    relancer apres une coupure ne doit pas tout retelecharger.
+    La première version renvoyait `None` sans un mot. Le script annonçait
+    alors « LISTE INDISPONIBLE — le miroir a refusé » sur une machine où le
+    rituel hebdomadaire interroge le MÊME miroir avec succès, et il n'y avait
+    aucun moyen de savoir si c'était un 429, un 403 ou une coupure réseau.
+
+    Un diagnostic qui cache la cause de sa propre panne ne diagnostique rien.
     """
     if cache and cache.exists():
         try:
             return json.loads(cache.read_text())
         except ValueError:
             cache.unlink()
-    for tentative in range(essais):
+    dernier = ""
+    for tentative in range(1, essais + 1):
         try:
             req = urllib.request.Request(url, headers=ENTETES)
             with urllib.request.urlopen(req, timeout=90) as r:
@@ -124,15 +131,16 @@ def _get(url: str, cache: Path | None = None, essais: int = 2) -> object | None:
                 cache.write_text(json.dumps(charge))
             return charge
         except urllib.error.HTTPError as exc:
-            if exc.code in (408, 429, 500, 502, 503, 504) and tentative == 0:
-                time.sleep(3)
-                continue
-            return None
-        except Exception:
-            if tentative == 0:
-                time.sleep(3)
-                continue
-            return None
+            dernier = f"HTTP {exc.code} {exc.reason}"
+            # 402, 401, 403 et 404 ne changeront pas d'avis dans deux
+            # secondes : les réessayer ne fait que retarder le message utile.
+            if exc.code not in REESSAYABLES:
+                break
+        except Exception as exc:
+            dernier = f"{type(exc).__name__}: {str(exc)[:80]}"
+        if tentative < essais:
+            time.sleep(2 ** tentative)
+    print(f"       ÉCHEC {url}\n             {dernier}", file=sys.stderr)
     return None
 
 
@@ -145,35 +153,26 @@ def perps_hyperliquid() -> set[str]:
     return {u["name"].upper() for u in meta["universe"]}
 
 
-def identifiants_par_capitalisation(perps: set[str], pages: int = 5,
-                                    dossier: Path | None = None) -> dict[str, str]:
-    """ticker -> identifiant CoinGecko du plus gros jeton qui le porte.
+def table_coingecko(perps: set[str], dossier: Path | None = None) -> dict[str, str]:
+    """gecko_id -> ticker, restreinte aux perpétuels cotés.
 
-    **C'est ici que se joue la justesse du rapprochement.** Des dizaines de
-    jetons se nomment « SUI » ou « OP » ; prendre le premier venu daterait
-    les evenements du mauvais actif, et rien ne le signalerait ensuite. La
-    capitalisation tranche : celui qu'Hyperliquid cote est, sauf exception
-    tres rare, le plus gros de ses homonymes.
+    **Le même endpoint que la collecte**, `/coins/list`, et pour une raison
+    mesurée : `/coins/markets` est lourd, sévèrement limité sur l'offre
+    gratuite, et refusé depuis une IP de datacenter — 0 identifiant sur 234
+    lors du premier essai depuis le VPS, là où le rituel hebdomadaire
+    interroge `/coins/list` avec succès sur la même machine.
 
-    On ne descend pas en dessous du millieme rang : un perpetuel cote sur
-    Hyperliquid n'est jamais une micro-capitalisation, et fouiller plus bas
-    ne ferait qu'augmenter le risque d'homonyme.
+    On garde TOUTES les correspondances d'un ticker. Des dizaines de jetons
+    se nomment « SUI » ou « OP », et ce n'est pas ici qu'on tranche : c'est
+    le `gecko_id` du fichier DefiLlama qui le fera, et lui est unique. Trier
+    par capitalisation serait un jugement de plus, pris sans source.
     """
+    liste = _get(f"{COINGECKO}/coins/list", (dossier / "cg_liste.json") if dossier else None)
     table: dict[str, str] = {}
-    for page in range(1, pages + 1):
-        url = (f"{COINGECKO}/coins/markets?vs_currency=usd&order=market_cap_desc"
-               f"&per_page=250&page={page}&sparkline=false")
-        cache = (dossier / f"cg_markets_{page}.json") if dossier else None
-        lot = _get(url, cache)
-        if not isinstance(lot, list) or not lot:
-            break
-        for piece in lot:
-            ticker = (piece.get("symbol") or "").upper()
-            # Le premier rencontre gagne : la liste est deja triee par
-            # capitalisation decroissante.
-            if ticker in perps and ticker not in table and piece.get("id"):
-                table[ticker] = piece["id"]
-        time.sleep(1.5)          # l'API gratuite plafonne a ~30 appels/minute
+    for piece in liste or []:                        # type: ignore[union-attr]
+        symbole = (piece.get("symbol") or "").upper()
+        if symbole in perps and piece.get("id"):
+            table[piece["id"]] = symbole
     return table
 
 
@@ -258,59 +257,77 @@ def main() -> int:
     deja = set(json.loads(Path(args.calendrier).read_text())) if Path(args.calendrier).exists() else set()
     print(f"       {len(perps)} perpétuels, {len(deja)} déjà au calendrier")
 
-    print("\n  2/4  Identifiants CoinGecko, par capitalisation…", flush=True)
-    table = identifiants_par_capitalisation(perps, dossier=cache)
-    print(f"       {len(table)}/{len(perps)} perpétuels identifiés")
-    sans_id = sorted(perps - set(table))
-    if sans_id:
-        print(f"       {len(sans_id)} sans identifiant : {', '.join(sans_id[:15])}"
-              + (" …" if len(sans_id) > 15 else ""))
+    print("\n  2/4  Table CoinGecko (gecko_id -> ticker)…", flush=True)
+    table = table_coingecko(perps, dossier=cache)
+    print(f"       {len(table)} identifiants correspondant à un perpétuel")
+    if not table:
+        print("       TABLE VIDE — sans elle aucun rapprochement n'est "
+              "confirmable.\n       La cause est imprimée ci-dessus.",
+              file=sys.stderr)
+        return 1
 
     print("\n  3/4  Liste des protocoles DefiLlama…", flush=True)
     slugs = _get(f"{DATASETS}/emissionsProtocolsList", cache / "liste.json")
     if isinstance(slugs, dict):
         slugs = slugs.get("protocols") or slugs.get("data") or []
-    slugs = {s for s in (slugs or []) if isinstance(s, str)}
+    slugs = sorted({s for s in (slugs or []) if isinstance(s, str)})
     if not slugs:
-        print("       LISTE INDISPONIBLE — le miroir a refusé. Rien à "
-              "diagnostiquer.", file=sys.stderr)
+        print("       LISTE INDISPONIBLE. La cause est imprimée ci-dessus ; "
+              "le rituel\n       hebdomadaire interroge le même miroir, donc "
+              "comparez avec\n       `journalctl -u rituel-deblocages`.",
+              file=sys.stderr)
         return 1
     print(f"       {len(slugs)} protocoles")
 
-    print("\n  4/4  Rapprochement par identifiant…", flush=True)
-    rapport: dict[str, dict] = {}
-    tires = 0
-    for ticker in sorted(perps):
-        if ticker in deja:
-            rapport[ticker] = {"classe": DEJA, "a_venir": 0, "slug": None}
-            continue
-        ident = table.get(ticker)
-        # Le slug DefiLlama vaut le plus souvent l'identifiant CoinGecko.
-        # Quand ce n'est pas le cas, on n'invente pas : on laisse le jeton
-        # en « inconnu » plutot que de le rapprocher d'un homonyme.
-        if not ident or ident not in slugs:
-            rapport[ticker] = {"classe": INCONNU, "a_venir": 0, "slug": None}
-            continue
+    # ON LES TÉLÉCHARGE TOUS, ET C'EST TOUT LE SUJET.
+    #
+    # `fetch_unlocks.py` ne tire que les slugs « plausibles » — ceux dont le
+    # nom ressemble à un ticker. Or les slugs sont des NOMS DE PROTOCOLE :
+    # `layerzero` pour ZRO, `ethena` pour ENA, `celestia` pour TIA. Le seul
+    # rapprochement qui fasse foi est le `gecko_id`, et il n'est lisible
+    # qu'une fois le fichier téléchargé. Filtrer avant de lire, c'est
+    # décider sans savoir — et c'est ce qui plafonne la couverture à 68.
+    print(f"\n  4/4  Rapprochement par gecko_id ({len(slugs)} fichiers)…",
+          flush=True)
+    rapport: dict[str, dict] = {ticker: {"classe": DEJA, "a_venir": 0, "slug": None}
+                                for ticker in sorted(perps) if ticker in deja}
+    vus: dict[str, str] = {}
+    tires = refuses = 0
+    for i, slug in enumerate(slugs, 1):
         if tires >= args.max_telechargements:
-            rapport[ticker] = {"classe": "non verifie (plafond atteint)",
-                               "a_venir": 0, "slug": ident}
-            continue
-        detail = _get(f"{DATASETS}/emissions/{ident}", cache / f"{ident}.json")
+            break
+        detail = _get(f"{DATASETS}/emissions/{slug}", cache / f"{slug}.json",
+                      essais=1)
         tires += 1
         time.sleep(args.pause)
         if not isinstance(detail, dict):
-            rapport[ticker] = {"classe": INCONNU, "a_venir": 0, "slug": ident}
+            refuses += 1
             continue
-        # Le gecko_id du detail fait foi : il confirme que le protocole
-        # DefiLlama est bien le jeton qu'Hyperliquid cote.
-        if (detail.get("gecko_id") or "") != ident:
-            rapport[ticker] = {"classe": INCONNU, "a_venir": 0, "slug": ident}
+        gecko = detail.get("gecko_id") or ""
+        ticker = table.get(gecko)
+        # Pas de gecko_id reconnu : ce protocole n'est pas un perpétuel coté,
+        # ou son identifiant n'est pas celui que CoinGecko publie. On
+        # n'invente pas de rapprochement — associer deux homonymes daterait
+        # les événements du mauvais actif, et rien ne le signalerait.
+        if not ticker or ticker in deja:
             continue
+        vus[ticker] = slug
         classe, n = classer(evenements_du_detail(detail), maintenant)
-        rapport[ticker] = {"classe": classe, "a_venir": n, "slug": ident}
+        # Un ticker peut apparaître sous deux protocoles. On garde le plus
+        # généreux : c'est celui qui portera les positions.
+        ancien = rapport.get(ticker)
+        if ancien is None or n > ancien["a_venir"]:
+            rapport[ticker] = {"classe": classe, "a_venir": n, "slug": slug}
         if n:
-            print(f"       {ticker:<8} {ident:<24} {n:>3} déblocages à venir",
+            print(f"       {ticker:<8} {slug:<26} {n:>3} déblocages à venir",
                   flush=True)
+        if i % 50 == 0:
+            print(f"       … {i}/{len(slugs)}", flush=True)
+
+    for ticker in sorted(perps):
+        rapport.setdefault(ticker, {"classe": INCONNU, "a_venir": 0, "slug": None})
+    if refuses:
+        print(f"       {refuses} fichiers refusés par le miroir", file=sys.stderr)
 
     Path(args.rapport).parent.mkdir(parents=True, exist_ok=True)
     Path(args.rapport).write_text(json.dumps(rapport, indent=1, sort_keys=True))

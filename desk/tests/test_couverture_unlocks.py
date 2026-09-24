@@ -131,13 +131,38 @@ def test_le_classement_applique_la_deduplication_de_la_regle():
 
 
 def test_le_diagnostic_n_invente_aucun_rapprochement():
-    """Associer deux homonymes daterait les événements du mauvais actif, et
-    rien ne le signalerait ensuite. Le script exige que le `gecko_id` du
-    fichier confirme l'identifiant cherché."""
+    """Associer deux homonymes daterait les événements du mauvais actif.
+
+    Des dizaines de jetons se nomment « SUI » ou « OP ». Le seul
+    rapprochement qui fasse foi est le `gecko_id` du fichier DefiLlama, qui
+    est unique — pas la ressemblance de nom, pas la capitalisation, qui
+    seraient l'une et l'autre un jugement pris sans source.
+    """
     source = (_racine / "scripts" / "sonder_couverture_unlocks.py").read_text()
     assert 'detail.get("gecko_id") or ""' in source
-    assert "order=market_cap_desc" in source, (
-        "l'homonyme se tranche par capitalisation, pas par ordre d'arrivée")
+    assert "ticker = table.get(gecko)" in source, (
+        "le ticker doit venir du gecko_id du fichier, jamais du nom du slug")
+
+
+def test_le_diagnostic_ne_filtre_pas_les_protocoles_par_leur_nom():
+    """C'est le filtre par nom qui plafonne la couverture à 68 jetons.
+
+    Les slugs DefiLlama sont des NOMS DE PROTOCOLE : `layerzero` pour ZRO,
+    `ethena` pour ENA, `celestia` pour TIA. `fetch_unlocks.py` ne télécharge
+    que ceux dont le nom commence par un ticker, et le `gecko_id` — le seul
+    lien qui fasse foi — n'est lisible qu'après téléchargement. Filtrer avant
+    de lire, c'est décider sans savoir.
+
+    Le diagnostic existe précisément pour mesurer ce que ce filtre coûte ;
+    s'il le reproduisait, il mesurerait sa propre cécité.
+    """
+    source = (_racine / "scripts" / "sonder_couverture_unlocks.py").read_text()
+    corps = source[source.index("def main("):]
+    assert "startswith" not in corps, (
+        "le diagnostic filtre les protocoles par ressemblance de nom — "
+        "c'est le défaut qu'il est censé mesurer")
+    assert "for i, slug in enumerate(slugs, 1):" in corps, (
+        "le diagnostic doit parcourir TOUS les protocoles")
 
 
 # --------------------------------------------------------------------------
