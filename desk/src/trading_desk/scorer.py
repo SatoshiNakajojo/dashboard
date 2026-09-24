@@ -378,7 +378,7 @@ def relief(nom: str, actif: str, intervalle: str, params: dict[str, Any], *,
     from decimal import Decimal as D
 
     from .backtest.data import load_from_file
-    from .backtest.engine import run_backtest
+    from .backtest.engine import limites_de_mesure, run_backtest
     from .backtest.strategies import BASELINES
     from .risk.limits import RiskLimits
 
@@ -387,8 +387,7 @@ def relief(nom: str, actif: str, intervalle: str, params: dict[str, Any], *,
         return 0.0, 0, 0
 
     bars = load_from_file(f"data/{actif}_{intervalle}_real.json", actif, intervalle)
-    limites = (RiskLimits() if max_stop_bps is None
-               else RiskLimits(max_stop_distance_bps=D(str(max_stop_bps))))
+    limites = limites_de_mesure(max_stop_bps)
     gagnants = 0
     testes = 0
     for p in liste:

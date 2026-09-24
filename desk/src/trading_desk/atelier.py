@@ -231,7 +231,7 @@ def _essayer(nom: str, actif: str, intervalle: str, *,
     rapporte ou le simple fait d'etre en position sur un marche qui monte.
     """
     from .backtest.data import load_from_file
-    from .backtest.engine import run_backtest
+    from .backtest.engine import limites_de_mesure, run_backtest
     from .backtest.null_model import randomization_test
     from .risk.limits import RiskLimits
 
@@ -244,8 +244,7 @@ def _essayer(nom: str, actif: str, intervalle: str, *,
 
     bars = load_from_file(str(DONNEES / f"{actif}_{intervalle}_real.json"),
                           actif, intervalle)
-    limites = (RiskLimits() if max_stop_bps is None
-               else RiskLimits(max_stop_distance_bps=Decimal(str(max_stop_bps))))
+    limites = limites_de_mesure(max_stop_bps)
     obs = run_backtest(bars, BASELINES[nom](**params), limits=limites,
                        interval=intervalle,
                        initial_equity_usd=Decimal(str(equite)))

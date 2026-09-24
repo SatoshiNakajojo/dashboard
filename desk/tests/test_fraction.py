@@ -25,7 +25,9 @@ from trading_desk.contracts.common import Bias, Side
 from trading_desk.contracts.mandate import Mandate, StopBand
 from trading_desk.contracts.orders import AccountState
 from trading_desk.risk import size_position
-from trading_desk.risk.fraction import (
+from trading_desk.risk.fraction import (  # noqa: I001
+    fraction_reelle_pct,
+    stop_minimal_sans_plafond_pct,
     FRACTION_VALIDEE_PCT, diagnostic, fraction_par_position_pct, plafonds,
     risque_pour_fraction_pct,
 )
@@ -63,7 +65,13 @@ def test_la_formule_est_celle_que_le_MOTEUR_produit(stop_pct):
                          asset="X", side=Side.SHORT, entry_price=prix,
                          stop_price=prix * (Decimal("1") + sp))
     mesuree = reel.notional_usd / compte.equity_usd * Decimal("100")
-    calculee = fraction_par_position_pct(limites.risk_per_trade_pct, sp)
+    # LA FRACTION REELLE, PLAFONDS COMPRIS. Le quotient seul — budget de
+    # risque sur distance au stop — a cesse de decrire le moteur le jour ou
+    # le risque par trade est passe a 3,75 % : sous un stop de 7,5 %, il
+    # annonce 75 % la ou le plafond de notionnel donne 50 %. Un module qui
+    # existe pour montrer la taille deployee ne peut pas afficher celle
+    # qu'on aurait prise sans plafond.
+    calculee = fraction_reelle_pct(limites, sp, compte.equity_usd)
 
     # Les deux ne peuvent pas être exactement égales : le moteur arrondit la
     # taille au quantum de 4 décimales (ici 0,3333 unité à un prix de 100,
@@ -74,8 +82,16 @@ def test_la_formule_est_celle_que_le_MOTEUR_produit(stop_pct):
     # autre chose que le moteur — un tel écart se compterait en points de
     # pourcentage, pas en dix-millièmes.
     assert float(calculee) == pytest.approx(float(mesuree), rel=1e-3)
-    assert reel.binding_constraint == "budget de risque", (
-        "si un plafond mordait, la formule ne décrirait plus la taille réelle")
+    # Et le quotient NU ne vaut que dans son domaine : au-dessus du stop
+    # a partir duquel plus aucun plafond ne mord.
+    nu = fraction_par_position_pct(limites.risk_per_trade_pct, sp)
+    seuil = stop_minimal_sans_plafond_pct(limites, compte.equity_usd)
+    if sp >= seuil:
+        assert reel.binding_constraint == "budget de risque"
+        assert nu == calculee
+    else:
+        assert nu > calculee, (
+            "sous le seuil, un plafond doit mordre et reduire la fraction")
 
 
 def test_le_deploye_vaut_bien_trois_virgule_trois():
@@ -103,17 +119,30 @@ def test_un_stop_nul_leve_plutot_que_de_diviser():
             f(Decimal("1"), Decimal("0"))
 
 
-def test_aucun_plafond_ne_mord_a_la_taille_validee():
-    """La réponse à « peut-on monter à 25 % ? » sans avoir à essayer.
+def test_la_taille_validee_est_desormais_la_taille_deployee():
+    """L'ecart est ferme, et c'est ce que ce module servait a montrer.
 
     Sur 1 000 $ : 250 $ par position contre un plafond de 500 $, un notionnel
-    brut de 1 000 $ et un levier de 3×. Rien ne mord. Ce qui bloquait était un
-    garde-fou posé ailleurs, pas une limite du desk.
+    brut de 1 000 $ et un levier de 3x. Rien ne mord. Ce qui bloquait etait un
+    garde-fou pose ailleurs, pas une limite du desk — et le 24 septembre 2026
+    le risque par trade est passe a 3,75 %, donc le facteur vaut 1.
     """
     d = diagnostic(RiskLimits(), stop_pct=Decimal("0.15"))
     assert d["plafonds_bloquants"] == []
-    assert d["facteur"] == pytest.approx(7.5)
+    assert d["facteur"] == pytest.approx(1.0)
     assert d["risque_par_trade_requis_pct"] == pytest.approx(3.75)
+    assert d["fraction_deployee_pct"] == pytest.approx(25.0)
+    assert d["plafonnee"] is False
+
+
+def test_sous_le_seuil_la_fraction_affichee_est_la_plafonnee():
+    """Afficher 75 % quand le moteur en prend 50 serait un chiffre faux avec
+    l'autorite d'une mesure — ce que ce module existe pour empecher."""
+    d = diagnostic(RiskLimits(), stop_pct=Decimal("0.05"))
+    assert d["fraction_deployee_pct"] == pytest.approx(75.0)
+    assert d["fraction_reelle_pct"] == pytest.approx(50.0)
+    assert d["plafonnee"] is True
+    assert d["stop_min_sans_plafond_pct"] == pytest.approx(7.5)
 
 
 def test_un_plafond_qui_mord_est_nomme():

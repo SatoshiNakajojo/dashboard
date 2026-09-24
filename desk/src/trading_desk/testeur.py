@@ -123,16 +123,15 @@ class Campagne:
 
 
 def _limites(max_stop_bps: float | None):
-    from .risk.limits import RiskLimits
-    return (RiskLimits() if max_stop_bps is None
-            else RiskLimits(max_stop_distance_bps=Decimal(str(max_stop_bps))))
+    from .backtest.engine import limites_de_mesure
+    return limites_de_mesure(max_stop_bps)
 
 
 def _cellule(nom: str, actif: str, intervalle: str, params: dict[str, Any],
              *, equite: float, max_stop_bps: float | None,
              depuis_ms: int | None) -> Cellule:
     from .backtest.data import DataUnavailable, load_from_file
-    from .backtest.engine import run_backtest
+    from .backtest.engine import limites_de_mesure, run_backtest
     from .backtest.strategies import BASELINES, Inverse
     from .scorer import noter
 

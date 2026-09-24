@@ -93,20 +93,32 @@ def test_un_stop_plus_large_donne_une_position_plus_petite():
         assert t.size > 0, f"stop {pct} refuse : {t.binding_constraint}"
         return t.size * entree * pct
 
-    etroit = perte_au_stop(Decimal("0.05"))
+    # DANS LE DOMAINE OU AUCUN PLAFOND NE MORD — au-dela de 7,5 % de stop
+    # depuis que le risque par trade vaut 3,75 %. Deux fois plus large, meme
+    # perte au stop, a l'arrondi de taille pres.
+    etroit = perte_au_stop(Decimal("0.08"))
     large = perte_au_stop(Decimal("0.15"))
-
-    # Trois fois plus large, meme perte au stop — a l'arrondi de taille pres.
     assert abs(etroit - large) / etroit < Decimal("0.05"), (
         f"la perte au stop depend de la distance : {etroit} contre {large}. "
         "Le dimensionnement n'est plus fonde sur le risque.")
 
+    # SOUS LE SEUIL, LE PLAFOND PREND LE RELAIS, ET IL NE FAIT QUE REDUIRE.
+    # C'est ce qui rend l'elargissement de la borne de stop sans danger : la
+    # perte au stop n'augmente jamais quand la distance diminue.
+    serre = perte_au_stop(Decimal("0.05"))
+    assert serre < large, (
+        f"un stop plus serre coute plus cher ({serre} contre {large}) : le "
+        "plafond de notionnel ne joue plus son role")
+
 
 def test_le_budget_de_risque_est_bien_celui_annonce():
-    """0,5 % de l'equite par trade, et pas davantage.
+    """3,75 % de l'equite par trade, et pas davantage.
 
-    Mesure sur le desk reel : equite 1000 $, stop a 15 %, BTC a 77 018 $ ->
-    taille 0,0004, soit 30,81 $ de notionnel et 4,62 $ de perte au stop.
+    Le budget a ete porte de 0,5 a 3,75 % le 24 septembre 2026, pour viser
+    les 25 % du capital par position que la validation de la regle des
+    deblocages suppose. Le test ne verifie pas un chiffre grave dans le
+    marbre : il lit le budget depuis les limites et exige que la perte au
+    stop ne le depasse pas — ce qui reste vrai quelle que soit la valeur.
     """
     limites = Settings().risk_limits()
     entree = Decimal("77000")

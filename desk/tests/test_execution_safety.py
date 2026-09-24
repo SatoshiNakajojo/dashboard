@@ -166,14 +166,48 @@ def _mandate(notional="500") -> Mandate:
 
 
 def test_taille_suit_le_budget_de_risque(account):
-    """0,5 % de 1000 USD = 5 USD de risque ; stop a 600 USD -> 0,0083 BTC."""
+    """Le risque ne depasse JAMAIS le budget, quel que soit ce qui borne.
+
+    A 3,75 % de risque par trade, un stop a 1 % reclamerait 375 % du capital.
+    C'est le plafond de notionnel qui borne, et il fait descendre la perte au
+    stop SOUS le budget — jamais au-dessus.
+
+    L'ancienne assertion disait « c'est le budget qui borne ». Elle n'etait
+    vraie que tant que le budget restait assez petit pour ne rencontrer aucun
+    plafond, ce qui etait le cas a 0,5 %.
+    """
+    limites = RiskLimits()
     r = size_position(
-        account=account, mandate=_mandate(), limits=RiskLimits(), asset="BTC",
+        account=account, mandate=_mandate(), limits=limites, asset="BTC",
         side=Side.LONG, entry_price=Decimal("60000"), stop_price=Decimal("59400"),
     )
     assert r.is_tradable
-    assert r.risk_usd <= Decimal("5")
-    assert r.binding_constraint == "budget de risque"
+    assert r.risk_usd <= limites.risk_budget_usd(account.equity_usd)
+    assert r.binding_constraint == "notionnel max par position"
+
+
+def test_avec_la_fourchette_par_defaut_c_est_TOUJOURS_le_notionnel_qui_borne(account):
+    """Une consequence du passage a 3,75 %, qui merite d'etre ecrite.
+
+    La fourchette de stop par defaut d'un mandat va de 30 a 500 bps. A 3,75 %
+    de risque, meme le stop le plus large de cette fourchette — 5 % —
+    reclamerait 75 % du capital, et le plafond de notionnel le ramene a 50 %.
+    Le dimensionnement fonde sur le risque est donc INACTIF pour un mandat
+    ordinaire : il ne redevient decisif qu'a partir d'un stop de 7,5 %.
+
+    Ce n'est pas dangereux — un plafond ne fait que reduire — mais c'est un
+    changement de regime qu'il vaut mieux lire ici que decouvrir dans un
+    `binding_constraint` inattendu.
+    """
+    limites, compte = RiskLimits(), account
+    for stop_pct in ("0.005", "0.01", "0.03", "0.05"):
+        t = size_position(
+            account=compte, mandate=_mandate(), limits=limites, asset="BTC",
+            side=Side.LONG, entry_price=Decimal("60000"),
+            stop_price=Decimal("60000") * (1 - Decimal(stop_pct)))
+        assert t.binding_constraint == "notionnel max par position", (
+            f"stop {stop_pct} : {t.binding_constraint}")
+        assert t.risk_usd <= limites.risk_budget_usd(compte.equity_usd)
 
 
 def test_plafond_de_notionnel_prend_le_dessus(account):

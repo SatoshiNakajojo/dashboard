@@ -149,6 +149,50 @@ class BacktestResult(Frozen):
         return sum((t.funding_usd for t in self.trades), Decimal("0"))
 
 
+# LE DIMENSIONNEMENT SOUS LEQUEL ON MESURE, distinct de celui sous lequel on
+# trade. Il y en a deux dans ce depot, et personne ne les avait separes.
+#
+# Tout le corpus enregistre — `baselines/`, le registre de l'atelier, la
+# bibliotheque, chaque `net_usd` de chaque cellule — a ete mesure a 0,5 % de
+# risque par trade. Le 24 septembre 2026, le desk deploye est passe a 3,75 %
+# pour viser la taille que la validation des deblocages suppose. Si le
+# backtest lisait le reglage deploye, ce seul changement multiplierait par
+# 7,5 tous les resultats deja enregistres, et deux mesures prises a six mois
+# d'ecart ne seraient plus comparables : on ne saurait plus si une strategie
+# s'est amelioree ou si l'on a simplement grossi les positions.
+#
+# La mesure est donc EPINGLEE ici. Un backtest rend l'edge d'une strategie,
+# qui est sans echelle en pourcentage ; c'est le pupitre qui applique la
+# taille reelle. `risk/fraction.py` affiche l'ecart entre les deux, pour que
+# personne n'ait a le deviner.
+#
+# Pour mesurer a une autre taille, on passe `limits` explicitement — ce qui
+# se voit dans le code appelant, contrairement a un defaut qui derive.
+RISQUE_DE_MESURE_PCT = Decimal("0.5")
+PERTE_JOUR_DE_MESURE_PCT = Decimal("2")
+LIMITES_DE_MESURE = RiskLimits(risk_per_trade_pct=RISQUE_DE_MESURE_PCT,
+                               max_daily_loss_pct=PERTE_JOUR_DE_MESURE_PCT)
+
+
+def limites_de_mesure(max_stop_bps: float | None = None) -> RiskLimits:
+    """Les limites de mesure, avec la seule derogation qu'on s'autorise.
+
+    Les chemins de recherche — atelier, testeur, scorer, courbe de l'ecran —
+    construisaient chacun leur `RiskLimits()`. Ils heritaient donc du reglage
+    DEPLOYE, et le passage a 3,75 % aurait multiplie par 7,5 tout ce qu'ils
+    mesurent, sans que rien ne le dise. Un point d'entree unique, valide,
+    rend la chose impossible a refaire par distraction.
+
+    La distance de stop est le seul parametre qu'une campagne ait le droit
+    d'elargir : c'est une borne de recevabilite, pas une taille.
+    """
+    if max_stop_bps is None:
+        return LIMITES_DE_MESURE
+    return RiskLimits(risk_per_trade_pct=RISQUE_DE_MESURE_PCT,
+                      max_daily_loss_pct=PERTE_JOUR_DE_MESURE_PCT,
+                      max_stop_distance_bps=Decimal(str(max_stop_bps)))
+
+
 def run_backtest(
     bars: list[Bar],
     strategy: Strategy,
@@ -168,7 +212,7 @@ def run_backtest(
     if len(bars) < warmup + 2:
         raise ValueError(f"il faut au moins {warmup + 2} barres, {len(bars)} fournies")
 
-    limits = limits or RiskLimits()
+    limits = limits or LIMITES_DE_MESURE
     costs = costs or CostModel()
     bar_hours = Decimal(INTERVAL_MS[interval]) / Decimal("3600000")
 

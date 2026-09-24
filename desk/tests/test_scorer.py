@@ -18,11 +18,15 @@ import pytest
 
 from trading_desk import scorer
 from trading_desk.backtest.data import load_from_file
-from trading_desk.backtest.engine import run_backtest
+from trading_desk.backtest.engine import limites_de_mesure, run_backtest
 from trading_desk.backtest.strategies import BASELINES
 from trading_desk.risk.limits import RiskLimits
 
-LIM = RiskLimits(max_stop_distance_bps=Decimal("1600"))
+# LES LIMITES DE MESURE, pas celles du desk deploye. Ce fichier note des
+# STRATEGIES : leurs proprietes doivent rester comparables d'une mesure a
+# l'autre, et le passage du desk a 3,75 % de risque par trade multiplierait
+# par 7,5 tout ce qui est note ici sans qu'aucune strategie n'ait change.
+LIM = limites_de_mesure(1600)
 
 
 def _noter(nom, actif, intervalle="1h", **params):

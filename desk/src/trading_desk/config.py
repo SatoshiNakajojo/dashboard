@@ -135,10 +135,16 @@ class Settings(BaseSettings):
 
     # --- garde-fous operationnels ---
     prompt_isolation_enabled: bool = True
-    max_daily_loss_pct: Decimal = Decimal("2")
+    # 8 % parce que le risque par trade est a 3,75 % : un seul stop coute
+    # 3,75 % du capital, et un plafond a 2 % arreterait le desk des la
+    # premiere perte ordinaire. Le detail est dans `risk/limits.py`.
+    max_daily_loss_pct: Decimal = Decimal("8")
     max_gross_notional_usd: Decimal = Decimal("1000")
     max_position_notional_usd: Decimal = Decimal("500")
-    risk_per_trade_pct: Decimal = Decimal("0.5")
+    # 3,75 % vise 25 % du capital par position avec un stop a 15 % —
+    # la taille que la validation de la regle des deblocages suppose.
+    # Sept fois et demie l'ancienne valeur, et le repli suit.
+    risk_per_trade_pct: Decimal = Decimal("3.75")
     max_effective_leverage: Decimal = Decimal("3")
 
     # La bande de distance de stop, en points de base. Le defaut [30, 500] a

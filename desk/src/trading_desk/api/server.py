@@ -252,7 +252,8 @@ def create_app(state: DeskState) -> FastAPI:
         from decimal import Decimal
 
         from ..backtest.data import DataUnavailable, load_from_file
-        from ..backtest.engine import benchmark_buy_and_hold, run_backtest
+        from ..backtest.engine import (benchmark_buy_and_hold, limites_de_mesure,
+                                       run_backtest)
         from ..backtest.strategies import (
             BASELINES,
             PLAFOND_STOP_CAMPAGNE_BPS,
@@ -283,8 +284,11 @@ def create_app(state: DeskState) -> FastAPI:
         # MEMES limites que la grille de robustesse. Avec le plafond de stop
         # par defaut (500 bps), `tsmom BTC 1d` fait zero trade et 2 158 rejets :
         # la courbe serait plate, et lue comme une defaite face au marche.
-        limits = RiskLimits(
-            max_stop_distance_bps=Decimal(str(PLAFOND_STOP_CAMPAGNE_BPS)))
+        # ET LES LIMITES DE MESURE, pas celles du desk deploye. Cette courbe
+        # rejoue `baselines/grille.json` ; la calculer a la taille deployee
+        # la multiplierait par 7,5 et l'ecran montrerait une variante, pas le
+        # systeme mesure.
+        limits = limites_de_mesure(PLAFOND_STOP_CAMPAGNE_BPS)
         try:
             obs = run_backtest(bars, cls(**kw), interval=intervalle,
                                limits=limits, initial_equity_usd=equity)

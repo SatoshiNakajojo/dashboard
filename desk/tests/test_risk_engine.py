@@ -80,15 +80,20 @@ def test_i02_position_protegee_passe(healthy_ctx, account, open_position):
 
 
 def test_i03_perte_du_jour_arrete_le_desk(healthy_ctx):
-    # Limite par defaut : 2 % de 1000 USD = 20 USD.
-    ctx = healthy_ctx.model_copy(update={"day_realized_pnl_usd": Decimal("-20.01")})
+    # Limite par defaut : 8 % de 1000 USD = 80 USD.
+    #
+    # Elle valait 2 %, et elle a suivi le risque par trade a 3,75 % : un seul
+    # stop coute 3,75 % du capital, donc un plafond a 2 % arretait le desk
+    # des la premiere perte ordinaire. Un coupe-circuit qui saute au premier
+    # incident normal n'est pas un coupe-circuit, c'est une panne.
+    ctx = healthy_ctx.model_copy(update={"day_realized_pnl_usd": Decimal("-80.01")})
     v = evaluate(ctx)
     assert Invariant.I03_DAILY_LOSS in v.blocking
     assert v.halt_reason is HaltReason.DAILY_LOSS_LIMIT
 
 
 def test_i03_juste_sous_la_limite_passe(healthy_ctx):
-    ctx = healthy_ctx.model_copy(update={"day_realized_pnl_usd": Decimal("-19.99")})
+    ctx = healthy_ctx.model_copy(update={"day_realized_pnl_usd": Decimal("-79.99")})
     assert evaluate(ctx).approved
 
 
