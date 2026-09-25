@@ -117,7 +117,7 @@ export const MOCK_BETS: Bet[] = [
   mockBet(MEMBERS.alex!.id, '1w', TODAY - 20 * DAY, 0.09),
   mockBet(MEMBERS.marco!.id, '1w', TODAY - 11 * DAY, -0.04),
   mockBet(MEMBERS.me!.id, '12m', TODAY - 5 * DAY, 0.9),
-  mockBet(MEMBERS.me!.id, '5y', TODAY - 20 * DAY, 2.4),
+  mockBet(MEMBERS.me!.id, '1m', TODAY - 1 * DAY, 1.06),
   // Des paris résolus, pour le classement : des semaines, un trimestre, et
   // deux de l'an dernier que seul « depuis toujours » compte.
   mockBet(MEMBERS.john!.id, '1w', TODAY - 30 * DAY, 0.05),

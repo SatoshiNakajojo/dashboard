@@ -18,8 +18,10 @@ import { describe, it } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
+// La dernière migration à redéfinir les horizons (v1.01 : 2 sem. et 1 mois
+// arrivent, 5 et 10 ans sont retirés).
 const SQL = readFileSync(
-  path.join(ROOT, 'supabase/migrations/20260923090000_prediction_horizons.sql'),
+  path.join(ROOT, 'supabase/migrations/20261001090000_oracle_short_horizons.sql'),
   'utf8',
 );
 const TS = readFileSync(path.join(ROOT, 'src/lib/horizons.ts'), 'utf8');
@@ -36,7 +38,7 @@ function sqlTable(functionName, unit) {
   return out;
 }
 
-/** `{ key: '1w', …, days: 7, editingHours: 24, … }` → { '1w': { days, editingHours } }. */
+/** `{ key: '1w', …, days: 7, editingHours: 24, … }` → { '1w': { days, editingHours, retired } }. */
 function tsTable() {
   const out = {};
   for (const m of TS.matchAll(
@@ -44,7 +46,7 @@ function tsTable() {
   )) {
     // `5 * 365` : on évalue le produit, rien d'autre.
     const days = m[2].split('*').reduce((acc, part) => acc * Number(part.trim()), 1);
-    out[m[1]] = { days, editingHours: Number(m[3]) };
+    out[m[1]] = { days, editingHours: Number(m[3]), retired: /retired:\s*true/.test(m[0]) };
   }
   return out;
 }
@@ -57,12 +59,16 @@ describe('les durées de pari, app et base', () => {
   it('connaissent les mêmes horizons', () => {
     assert.deepEqual(Object.keys(app).sort(), Object.keys(durées).sort());
     assert.deepEqual(Object.keys(app).sort(), Object.keys(fenêtres).sort());
-    assert.equal(Object.keys(app).length, 6, 'six horizons attendus');
+    assert.equal(Object.keys(app).length, 8, 'six horizons ouverts et deux retirés');
   });
 
   it('donnent la même durée à chaque pari', () => {
     for (const [key, { days }] of Object.entries(app)) {
-      assert.equal(durées[key], days, `${key} : ${days} j dans l'app, ${durées[key]} j en base`);
+      assert.equal(
+        durées[key],
+        days,
+        `${key} : ${days} j dans l'app, ${durées[key]} j en base`,
+      );
     }
   });
 
@@ -78,5 +84,19 @@ describe('les durées de pari, app et base', () => {
     const check = SQL.match(/check \(horizon in \(([^)]+)\)\)/)[1];
     const autorisés = [...check.matchAll(/'(\w+)'/g)].map((m) => m[1]).sort();
     assert.deepEqual(autorisés, Object.keys(app).sort());
+  });
+
+  it('n’ouvrent de pari que sur les mêmes horizons', () => {
+    // L'app ne propose plus 5 et 10 ans ; la base doit les refuser aussi, sans
+    // quoi un client ancien ou bricolé ouvrirait encore un pari à dix ans.
+    const body = SQL.slice(SQL.indexOf('function public.horizon_open('));
+    const list = body.match(/h in \(([^)]+)\)/)[1];
+    const ouverts = [...list.matchAll(/'(\w+)'/g)].map((m) => m[1]).sort();
+    const attendus = Object.entries(app)
+      .filter(([, { retired }]) => !retired)
+      .map(([key]) => key)
+      .sort();
+    assert.deepEqual(ouverts, attendus);
+    assert.deepEqual(attendus, ['12m', '1m', '1w', '2w', '3m', '6m']);
   });
 });

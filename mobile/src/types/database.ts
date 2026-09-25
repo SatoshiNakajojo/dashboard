@@ -105,7 +105,7 @@ export type PredictionRow = {
   user_id: string;
   /** Ancienne saison de 90 jours. `null` pour les paris ouverts depuis. */
   season: string | null;
-  /** `1w`, `3m`, `6m`, `12m`, `5y`, `10y` — voir `src/lib/horizons.ts`. */
+  /** `1w`, `2w`, `1m`, `3m`, `6m`, `12m` (et `5y`, `10y`, retirés) — voir `src/lib/horizons.ts`. */
   horizon: string;
   /** Couples `[jour depuis l'ouverture, prix en dollars]`. */
   path_data: [number, number][];

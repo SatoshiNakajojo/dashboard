@@ -45,6 +45,8 @@ const ZONE = 'Pacific/Noumea';
 /** Les horizons de l'Oracle, tels qu'on les dit dans une phrase. */
 export const HORIZON_PHRASES: Record<string, string> = {
   '1w': 'une semaine',
+  '2w': 'deux semaines',
+  '1m': 'un mois',
   '3m': 'trois mois',
   '6m': 'six mois',
   '12m': 'un an',

@@ -12,7 +12,7 @@ Trois onglets, trois mécaniques :
 |---|---|
 | **Nights** | Agenda des Crypto Nights et checklist potluck partagée en temps réel |
 | **Calls** | Fil des calls d'investissement, Hall of Fame et Rekt Board |
-| **Oracle** | Paris sur le cours du BTC, tracés au doigt — d'une semaine à dix ans, en parallèle, chacun avec son verrou et sa date de jugement |
+| **Oracle** | Paris sur le cours du BTC, tracés au doigt — d'une semaine à un an, en parallèle, chacun avec son verrou et sa date de jugement |
 
 Registre visuel : club privé, feutré. L'orange Bitcoin y est un **or**, en
 accent rare, sur fond encre chaude. Référence : `Bitcoin Club v2.dc.html`.
@@ -105,7 +105,7 @@ qu'on n'a pas déposé le nouveau tracé.
 
 ## Ce qui a été vérifié
 
-- `npm run typecheck`, `npm run lint`, `npm test` — propres (557 tests).
+- `npm run typecheck`, `npm run lint`, `npm test` — propres (559 tests).
 - **Règles pures** : bornes et inversibilité du repère, monotonie du tracé,
   écart à la courbe réelle, espaces insécables du formatage français, perf vs ₿
   comme ratio et non soustraction, seuils et tri des deux classements.
@@ -297,14 +297,22 @@ et tout se verrouillait le même jour. Le club voulait parier sur une semaine
 **et** sur dix ans, en parallèle, sans que les paris se bloquent ni se jugent
 tous ensemble.
 
-| Horizon | Révisable après le dépôt | Jugé à |
-|---|---|---|
-| 1 semaine | 24 h | J+7 |
-| 3 mois | 3 jours | J+90 |
-| 6 mois | 5 jours | J+182 |
-| 1 an | 7 jours | J+365 |
-| 5 ans | 14 jours | J+1 825 |
-| 10 ans | 14 jours | J+3 650 |
+| Horizon | Révisable après le dépôt | Jugé à | Poids |
+|---|---|---|---|
+| 1 semaine | 24 h | J+7 | ×1 |
+| 2 semaines | 36 h | J+14 | ×1,25 |
+| 1 mois | 48 h | J+30 | ×1,5 |
+| 3 mois | 3 jours | J+90 | ×2 |
+| 6 mois | 5 jours | J+182 | ×3 |
+| 1 an | 7 jours | J+365 | ×4 |
+
+**v1.01 : le club parie court.** Deux semaines et un mois sont arrivés ; cinq et
+dix ans sont **retirés** (migration `20261001090000_oracle_short_horizons`). La
+base refuse tout nouveau pari à cinq ou dix ans. Un pari déjà déposé garde son
+calendrier, sa résolution et ses points (×6 et ×8), et son onglet reste visible
+tant qu'il court. Les poids existants n'ont pas bougé : les changer aurait
+réécrit le classement de l'année. Les deux nouveaux s'intercalent entre la
+semaine et les trois mois.
 
 On choisit l'horizon en haut de l'écran ; le repère, le cadenas et la liste
 parlent alors de celui-là. Un point sur un horizon signale qu'on y a un pari
@@ -955,8 +963,9 @@ Mise en place : `npm run push:setup` (voir `docs/INSTALLATION.md`).
 ## Le classement des oracles
 
 Chaque pari résolu rapporte des **points** : sa justesse (0 à 100), multipliée
-par le poids de son horizon — 1 pour une semaine, 2 pour trois mois, 3, 4, 6,
-et 8 pour dix ans (`HORIZONS[].weight`). Les points se **cumulent** : parier
+par le poids de son horizon — 1 pour une semaine, 1,25 pour deux semaines,
+1,5 pour un mois, 2 pour trois mois, 3 pour six mois, 4 pour un an
+(`HORIZONS[].weight` ; 6 et 8 pour les anciens paris à cinq et dix ans). Les points se **cumulent** : parier
 souvent paie, parier loin aussi. Une simple moyenne aurait donné la première
 place à qui parie le moins ; elle reste affichée à côté, c'est elle qui dit qui
 vise juste.

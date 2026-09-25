@@ -503,53 +503,57 @@ function HorizonPicker({
 }) {
   return (
     <View className="flex-row" style={{ gap: 6 }} accessibilityRole="tablist">
-      {HORIZONS.map(({ key, label, long }) => {
-        const active = key === value;
-        const mine = summary[key].mine;
-        return (
-          <Pressable
-            key={key}
-            accessibilityRole="tab"
-            accessibilityState={{ selected: active }}
-            accessibilityLabel={`${long}${mine ? ', vous avez un pari en cours' : ''}`}
-            onPress={() => onChange(key)}
-            style={{
-              flex: 1,
-              alignItems: 'center',
-              paddingVertical: 9,
-              borderRadius: radius.button,
-              borderWidth: 1,
-              borderColor: active ? a.rsvpGoldBorder : c.border,
-              backgroundColor: active ? a.rsvpGoldBg : 'transparent',
-            }}
-          >
-            <Text
-              numberOfLines={1}
+      {/* Les horizons ouverts, plus un horizon retiré tant qu'un pari y court
+          encore : il reste lisible jusqu'à sa résolution. */}
+      {HORIZONS.filter(({ key, retired }) => !retired || summary[key].open > 0).map(
+        ({ key, label, long }) => {
+          const active = key === value;
+          const mine = summary[key].mine;
+          return (
+            <Pressable
+              key={key}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: active }}
+              accessibilityLabel={`${long}${mine ? ', vous avez un pari en cours' : ''}`}
+              onPress={() => onChange(key)}
               style={{
-                fontFamily: f.labelMed,
-                fontSize: 9,
-                letterSpacing: 0.9,
-                color: active ? c.gold : c.sepiaDim,
+                flex: 1,
+                alignItems: 'center',
+                paddingVertical: 9,
+                borderRadius: radius.button,
+                borderWidth: 1,
+                borderColor: active ? a.rsvpGoldBorder : c.border,
+                backgroundColor: active ? a.rsvpGoldBg : 'transparent',
               }}
             >
-              {label}
-            </Text>
-            {mine ? (
-              <View
+              <Text
+                numberOfLines={1}
                 style={{
-                  position: 'absolute',
-                  top: 4,
-                  right: 4,
-                  width: 5,
-                  height: 5,
-                  borderRadius: 2.5,
-                  backgroundColor: mine === 'locked' ? c.oxblood : c.gold,
+                  fontFamily: f.labelMed,
+                  fontSize: 9,
+                  letterSpacing: 0.9,
+                  color: active ? c.gold : c.sepiaDim,
                 }}
-              />
-            ) : null}
-          </Pressable>
-        );
-      })}
+              >
+                {label}
+              </Text>
+              {mine ? (
+                <View
+                  style={{
+                    position: 'absolute',
+                    top: 4,
+                    right: 4,
+                    width: 5,
+                    height: 5,
+                    borderRadius: 2.5,
+                    backgroundColor: mine === 'locked' ? c.oxblood : c.gold,
+                  }}
+                />
+              ) : null}
+            </Pressable>
+          );
+        },
+      )}
     </View>
   );
 }

@@ -17,7 +17,7 @@
  * seconde est le pari lui-même.
  */
 
-export type HorizonKey = '1w' | '3m' | '6m' | '12m' | '5y' | '10y';
+export type HorizonKey = '1w' | '2w' | '1m' | '3m' | '6m' | '12m' | '5y' | '10y';
 
 export interface Horizon {
   key: HorizonKey;
@@ -38,12 +38,26 @@ export interface Horizon {
    * que la durée : un pari à dix ans ne doit pas écraser dix ans de semaines.
    */
   weight: number;
+  /**
+   * Horizon retiré (v1.01) : on n'y ouvre plus de pari, mais ceux qui
+   * courent encore vont à leur terme et comptent au classement.
+   */
+  retired?: boolean;
 }
 
 const DAY_MS = 86_400_000;
 
 /**
- * Les six horizons, du plus court au plus long.
+ * Les horizons, du plus court au plus long.
+ *
+ * v1.01 : le club parie court. Deux semaines et un mois arrivent ; cinq et
+ * dix ans sont retirés. On n'y ouvre plus de pari, mais un pari déjà déposé
+ * garde son calendrier, sa résolution et ses points. Les retirer de la liste
+ * ferait lire un pari à cinq ans comme un pari à trois mois.
+ *
+ * Les poids existants ne bougent pas : les changer réécrirait le classement
+ * de l'année. Les deux nouveaux s'intercalent entre la semaine (×1) et les
+ * trois mois (×2).
  *
  * Les années comptent 365 jours et non 365,25 : un pari de dix ans qui se
  * résoudrait deux jours et demi plus tard que prévu n'intéresse personne, et la
@@ -51,6 +65,15 @@ const DAY_MS = 86_400_000;
  */
 export const HORIZONS: readonly Horizon[] = [
   { key: '1w', label: '1 SEM', long: 'Une semaine', days: 7, editingHours: 24, weight: 1 },
+  {
+    key: '2w',
+    label: '2 SEM',
+    long: 'Deux semaines',
+    days: 14,
+    editingHours: 36,
+    weight: 1.25,
+  },
+  { key: '1m', label: '1 MOIS', long: 'Un mois', days: 30, editingHours: 48, weight: 1.5 },
   { key: '3m', label: '3 MOIS', long: 'Trois mois', days: 90, editingHours: 72, weight: 2 },
   { key: '6m', label: '6 MOIS', long: 'Six mois', days: 182, editingHours: 120, weight: 3 },
   { key: '12m', label: '1 AN', long: 'Un an', days: 365, editingHours: 168, weight: 4 },
@@ -61,6 +84,7 @@ export const HORIZONS: readonly Horizon[] = [
     days: 5 * 365,
     editingHours: 336,
     weight: 6,
+    retired: true,
   },
   {
     key: '10y',
@@ -69,8 +93,17 @@ export const HORIZONS: readonly Horizon[] = [
     days: 10 * 365,
     editingHours: 336,
     weight: 8,
+    retired: true,
   },
 ] as const;
+
+/** Les horizons où l'on peut ouvrir un pari. */
+export const OPEN_HORIZONS: readonly Horizon[] = HORIZONS.filter((horizon) => !horizon.retired);
+
+/** `×1`, `×1,25` — le poids, écrit à la française. */
+export function formatWeight(weight: number): string {
+  return `×${String(weight).replace('.', ',')}`;
+}
 
 /** Vrai si la clé désigne un horizon connu de cette version de l'app. */
 export function isHorizonKey(key: unknown): key is HorizonKey {
@@ -144,6 +177,10 @@ export function bandFor(key: string): { low: number; high: number } {
   switch (horizonOf(key).key) {
     case '1w':
       return { low: 0.85, high: 1.15 };
+    case '2w':
+      return { low: 0.8, high: 1.25 };
+    case '1m':
+      return { low: 0.7, high: 1.4 };
     case '3m':
       return { low: 0.6, high: 1.6 };
     case '6m':
@@ -169,6 +206,10 @@ export function lookbackDays(key: string): number {
   switch (horizonOf(key).key) {
     case '1w':
       return 3;
+    case '2w':
+      return 5;
+    case '1m':
+      return 10;
     case '3m':
       return 30;
     case '6m':

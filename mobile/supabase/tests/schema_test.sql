@@ -498,7 +498,7 @@ begin
   assert failed, 'un second pari d’une semaine en cours doit être refusé';
 
   insert into public.predictions (user_id, horizon, path_data)
-  values ('aaaaaaaa-0000-4000-8000-000000000001', '10y', '[[0,110000],[3650,1200000]]'::jsonb)
+  values ('aaaaaaaa-0000-4000-8000-000000000001', '1m', '[[0,110000],[30,120000]]'::jsonb)
   returning id into dix_ans;
   raise notice 'ok · predictions : un pari en cours par horizon, les horizons en parallèle';
 
@@ -590,6 +590,62 @@ begin
   assert affected = 1, 'un pari sans tracé ne bloque rien';
   reset role;
   raise notice 'ok · predictions : un pari verrouillé sans tracé se retire';
+end $$;
+
+-- --- Oracle v1.01 : 2 semaines et 1 mois arrivent, 5 et 10 ans partent -------
+
+do $$
+declare
+  failed   boolean;
+  opened   timestamptz;
+  locks    timestamptz;
+  resolves timestamptz;
+  ancien   uuid;
+begin
+  delete from public.predictions;
+
+  insert into public.predictions (user_id, horizon, path_data)
+  values ('aaaaaaaa-0000-4000-8000-000000000001', '2w', '[[0,110000],[14,118000]]'::jsonb)
+  returning opened_at, locked_at, resolves_at into opened, locks, resolves;
+  assert locks = opened + interval '36 hours', 'deux semaines : 36 h pour redessiner';
+  assert resolves = opened + interval '14 days', 'deux semaines : jugé à J+14';
+
+  insert into public.predictions (user_id, horizon, path_data)
+  values ('aaaaaaaa-0000-4000-8000-000000000001', '1m', '[[0,110000],[30,125000]]'::jsonb)
+  returning opened_at, locked_at, resolves_at into opened, locks, resolves;
+  assert locks = opened + interval '48 hours', 'un mois : 48 h pour redessiner';
+  assert resolves = opened + interval '30 days', 'un mois : jugé à J+30';
+  raise notice 'ok · oracle v1.01 : deux semaines et un mois ont leur calendrier';
+
+  failed := false;
+  begin
+    insert into public.predictions (user_id, horizon, path_data)
+    values ('aaaaaaaa-0000-4000-8000-000000000002', '5y', '[[0,110000],[1825,400000]]'::jsonb);
+  exception when check_violation then failed := true;
+  end;
+  assert failed, 'on n’ouvre plus de pari à cinq ans';
+  failed := false;
+  begin
+    insert into public.predictions (user_id, horizon, path_data)
+    values ('aaaaaaaa-0000-4000-8000-000000000002', '10y', '[[0,110000],[3650,1200000]]'::jsonb);
+  exception when check_violation then failed := true;
+  end;
+  assert failed, 'on n’ouvre plus de pari à dix ans';
+  raise notice 'ok · oracle v1.01 : cinq et dix ans refusés aux nouveaux paris';
+
+  -- Un pari à dix ans déposé avant la v1.01 reste valable et se redessine
+  -- jusqu'à son verrouillage.
+  alter table public.predictions disable trigger predictions_guard_trigger;
+  insert into public.predictions (user_id, horizon, path_data, opened_at, locked_at, resolves_at)
+  values ('aaaaaaaa-0000-4000-8000-000000000002', '10y', '[[0,110000],[3650,1200000]]'::jsonb,
+          now(), now() + interval '336 hours', now() + interval '3650 days')
+  returning id into ancien;
+  alter table public.predictions enable trigger predictions_guard_trigger;
+  update public.predictions set path_data = '[[0,110000],[3650,900000]]'::jsonb where id = ancien;
+  assert (select resolves_at from public.predictions where id = ancien) > now() + interval '3600 days',
+    'le calendrier d’un ancien pari à dix ans ne bouge pas';
+  raise notice 'ok · oracle v1.01 : un pari à dix ans déjà déposé va à son terme';
+  delete from public.predictions;
 end $$;
 
 -- --- Choisir sa couleur, pas celle d'un autre ---------------------------------

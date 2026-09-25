@@ -19,6 +19,8 @@ import {
   lookbackDays,
   phaseOf,
   scheduleFor,
+  OPEN_HORIZONS,
+  formatWeight,
 } from '@/lib/horizons';
 
 const DAY = 86_400_000;
@@ -34,11 +36,31 @@ describe('le catalogue', () => {
     assert.equal(new Set(HORIZONS.map((h) => h.key)).size, HORIZONS.length);
   });
 
-  it('couvre ce que le club a demandé', () => {
+  it('couvre ce que le club a demandé (v1.01 : 2 sem. et 1 mois, plus de 5 ni 10 ans)', () => {
     assert.deepEqual(
-      HORIZONS.map((h) => h.key),
-      ['1w', '3m', '6m', '12m', '5y', '10y'],
+      OPEN_HORIZONS.map((h) => h.key),
+      ['1w', '2w', '1m', '3m', '6m', '12m'],
     );
+    // Retirés, mais toujours connus : un pari déjà déposé va à son terme.
+    assert.deepEqual(
+      HORIZONS.filter((h) => h.retired).map((h) => h.key),
+      ['5y', '10y'],
+    );
+    assert.equal(horizonOf('10y').days, 3650, 'un ancien pari à dix ans garde son calendrier');
+  });
+
+  it('pèse d’autant plus que le pari est long, sans toucher aux anciens poids', () => {
+    const poids = HORIZONS.map((h) => h.weight);
+    assert.deepEqual(
+      poids,
+      [...poids].sort((a, b) => a - b),
+    );
+    assert.deepEqual(
+      ['1w', '3m', '6m', '12m', '5y', '10y'].map((key) => horizonOf(key).weight),
+      [1, 2, 3, 4, 6, 8],
+    );
+    assert.equal(formatWeight(1.25), '×1,25');
+    assert.equal(formatWeight(2), '×2');
   });
 
   it('ne laisse jamais réviser plus longtemps que le pari ne dure', () => {
