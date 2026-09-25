@@ -1,8 +1,9 @@
-import { Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 
 import { MemberAvatar } from '@/components/MemberAvatar';
+import { TitleMedal } from '@/components/TitleMedal';
 import { Micro } from '@/components/ui/Micro';
-import { titleOf, type ClubStanding } from '@/features/club/clubStandings';
+import { titleOf, type ClubStanding, type ClubTitle } from '@/features/club/clubStandings';
 import { formatPoints, toRoman } from '@/lib/format';
 import { c, f } from '@/theme/tokens';
 
@@ -11,13 +12,15 @@ export interface ClubStandingsProps {
   loading: boolean;
   /** Mon identifiant : ma ligne se repère d'un coup d'œil. */
   meId: string | null;
+  /** Toucher un titre ouvre son affiche. */
+  onOpenTitle?: (title: ClubTitle) => void;
 }
 
 /**
  * Le classement du club, ligne à ligne : rang, membre, titre et devise, et le
  * détail de ses points — calls d'un côté, Oracle de l'autre.
  */
-export function ClubStandings({ rows, loading, meId }: ClubStandingsProps) {
+export function ClubStandings({ rows, loading, meId, onOpenTitle }: ClubStandingsProps) {
   if (rows.length === 0) {
     return (
       <Text
@@ -67,10 +70,19 @@ export function ClubStandings({ rows, loading, meId }: ClubStandingsProps) {
                 {mine ? `${row.member.displayName} · vous` : row.member.displayName}
               </Text>
               {title ? (
-                <>
-                  <Micro size={8} tracking={1.4} style={{ color: c.gold }}>
-                    {title.title}
-                  </Micro>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`Voir l’affiche : ${title.title}`}
+                  disabled={!onOpenTitle}
+                  onPress={() => onOpenTitle?.(title)}
+                  style={{ gap: 3 }}
+                >
+                  <View className="flex-row items-center" style={{ gap: 7 }}>
+                    <TitleMedal title={title} size={22} />
+                    <Micro size={8} tracking={1.4} style={{ flexShrink: 1, color: c.gold }}>
+                      {title.title}
+                    </Micro>
+                  </View>
                   <Text
                     style={{
                       fontFamily: f.serifItalic,
@@ -81,7 +93,7 @@ export function ClubStandings({ rows, loading, meId }: ClubStandingsProps) {
                   >
                     {`«\u00a0${title.motto}\u00a0»`}
                   </Text>
-                </>
+                </Pressable>
               ) : null}
               <Text
                 style={{ fontFamily: f.label, fontSize: 10, color: c.sepiaMuted, marginTop: 1 }}

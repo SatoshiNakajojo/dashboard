@@ -66,36 +66,48 @@ export function clubStandings(
   return rows;
 }
 
+/** Les affiches des titres : `assets/titles/<key>.jpg` (voir `titleArt.ts`). */
+export type ClubTitleKey = 'oracle' | 'loup' | 'chercheur' | 'analyste' | 'fournisseur';
+
 export interface ClubTitle {
   rank: number;
+  key: ClubTitleKey;
   title: string;
   motto: string;
 }
 
-/** Les titres du club, du premier au cinquième. */
+/**
+ * Les titres du club, du premier au cinquième — tels qu'écrits sur leurs
+ * affiches : le nom et la devise de l'écran ne doivent pas contredire l'image.
+ */
 export const CLUB_TITLES: readonly ClubTitle[] = [
   {
     rank: 1,
-    title: 'Oracle de Wall Street',
-    motto: 'Il ne trade pas le marché, il lui donne rendez-vous.',
+    key: 'oracle',
+    title: 'L’Oracle de Wall Street',
+    motto: 'Les marchés parlent. L’Oracle écoute.',
   },
   {
     rank: 2,
+    key: 'loup',
     title: 'Le Loup de Wall Street',
     motto: 'Il ne suit pas la tendance. La tendance le suit.',
   },
   {
     rank: 3,
+    key: 'chercheur',
     title: 'Le Chercheur en Pumpologie',
     motto: 'Chaque perte est une nouvelle donnée scientifique.',
   },
   {
     rank: 4,
-    title: 'Analyste de Boursorama',
-    motto: 'Il vient de découvrir le RSI et ne parle plus que de ça.',
+    key: 'analyste',
+    title: 'L’Analyste de Boursorama',
+    motto: 'Il peut aussi vous proposer une assurance vie.',
   },
   {
     rank: 5,
+    key: 'fournisseur',
     title: 'Fournisseur de Liquidité',
     motto: 'Il ne trade plus, il finance les autres.',
   },
@@ -115,4 +127,9 @@ export function titleOf(
   const first = rows[0];
   if (!first || rows.every((other) => other.total === first.total)) return null;
   return CLUB_TITLES.find((title) => title.rank === row.rank) ?? null;
+}
+
+/** Qui porte ce titre : personne, un membre, ou plusieurs ex æquo. */
+export function titleHolders(title: ClubTitle, rows: readonly ClubStanding[]): ClubStanding[] {
+  return rows.filter((row) => titleOf(row, rows)?.rank === title.rank);
 }

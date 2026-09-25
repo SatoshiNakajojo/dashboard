@@ -105,7 +105,7 @@ qu'on n'a pas déposé le nouveau tracé.
 
 ## Ce qui a été vérifié
 
-- `npm run typecheck`, `npm run lint`, `npm test` — propres (495 tests).
+- `npm run typecheck`, `npm run lint`, `npm test` — propres (496 tests).
 - **Règles pures** : bornes et inversibilité du repère, monotonie du tracé,
   écart à la courbe réelle, espaces insécables du formatage français, perf vs ₿
   comme ratio et non soustraction, seuils et tri des deux classements.
@@ -774,13 +774,19 @@ ou depuis toujours (`app/(tabs)/classement.tsx`) :
 
   | Rang | Titre | Devise |
   |---|---|---|
-  | I | Oracle de Wall Street | « Il ne trade pas le marché, il lui donne rendez-vous. » |
+  | I | L’Oracle de Wall Street | « Les marchés parlent. L’Oracle écoute. » |
   | II | Le Loup de Wall Street | « Il ne suit pas la tendance. La tendance le suit. » |
   | III | Le Chercheur en Pumpologie | « Chaque perte est une nouvelle donnée scientifique. » |
-  | IV | Analyste de Boursorama | « Il vient de découvrir le RSI et ne parle plus que de ça. » |
+  | IV | L’Analyste de Boursorama | « Il peut aussi vous proposer une assurance vie. » |
   | V | Fournisseur de Liquidité | « Il ne trade plus, il finance les autres. » |
 
   Deux ex æquo partagent rang et titre (`src/features/club/clubStandings.ts`) ;
+- **les affiches des titres** (`assets/titles/`) : le médaillon du personnage
+  sur les marches du podium et devant chaque titre, les cinq affiches en
+  galerie (« LES TITRES », avec qui les porte), et l'affiche en grand d'un
+  appui. La page d'un membre titré montre la sienne. Chaque affiche existe en
+  trois tailles — 1080 px, 540 px et le médaillon de 240 px — et un test
+  vérifie qu'aucune ne manque ;
 - **le barème** ci-dessus, lu dans `SCORE_TABLE` — la même table que le calcul,
   pas une copie : l'écran ne peut pas contredire les règles.
 
@@ -821,6 +827,13 @@ et 8 pour dix ans (`HORIZONS[].weight`). Les points se **cumulent** : parier
 souvent paie, parier loin aussi. Une simple moyenne aurait donné la première
 place à qui parie le moins ; elle reste affichée à côté, c'est elle qui dit qui
 vise juste.
+
+L'horizon est la **longueur de la prévision** dessinée, pas le temps qu'un call
+met à performer : viser juste à dix ans est bien plus dur qu'à une semaine, d'où
+le poids. Les paris courts, eux, paient par leur nombre — on peut en faire 52
+par an à une semaine (vers 4 900 points à 95 % de justesse), contre un seul
+pari de dix ans tous les dix ans. Inverser les poids ferait monter un parieur
+hebdomadaire vers 40 000 points par an, et les calls ne compteraient plus.
 
 Le classement vit dans l'onglet Oracle, sur l'année en cours ou depuis
 toujours ; le premier de l'année porte le titre d'**Oracle 2026**

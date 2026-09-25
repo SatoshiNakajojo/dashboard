@@ -1,20 +1,24 @@
-import { Text, View } from 'react-native';
+import { Pressable, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 
 import { MemberAvatar } from '@/components/MemberAvatar';
+import { TitleMedal } from '@/components/TitleMedal';
 import { Micro } from '@/components/ui/Micro';
-import { titleOf, type ClubStanding } from '@/features/club/clubStandings';
+import { titleOf, type ClubStanding, type ClubTitle } from '@/features/club/clubStandings';
 import { formatPoints, toRoman } from '@/lib/format';
 import { a, c, f } from '@/theme/tokens';
 
 export interface ClubPodiumProps {
   /** Le classement complet, trié : le podium en prend les trois premiers. */
   rows: ClubStanding[];
+  /** Toucher une marche ouvre l'affiche de son titre. */
+  onOpenTitle?: (title: ClubTitle) => void;
 }
 
 /** La hauteur de la marche suit le rang, pas la place : deux ex æquo sont à la même hauteur. */
-const STEP_HEIGHT: Record<number, number> = { 1: 128, 2: 104, 3: 88 };
+const STEP_HEIGHT: Record<number, number> = { 1: 172, 2: 148, 3: 134 };
 const AVATAR_SIZE: Record<number, number> = { 1: 60, 2: 46, 3: 46 };
+const MEDAL_SIZE: Record<number, number> = { 1: 54, 2: 44, 3: 44 };
 
 /**
  * Le podium du club : le deuxième à gauche, le premier au centre et plus haut,
@@ -23,7 +27,7 @@ const AVATAR_SIZE: Record<number, number> = { 1: 60, 2: 46, 3: 46 };
  * Tant que tout le monde est à égalité — en début d'année, sept membres à zéro —
  * il n'y a pas de podium : on ne monte pas sur une marche à l'ordre alphabétique.
  */
-export function ClubPodium({ rows }: ClubPodiumProps) {
+export function ClubPodium({ rows, onOpenTitle }: ClubPodiumProps) {
   const top = rows.slice(0, 3);
   const leader = top[0];
   const decided = leader !== undefined && titleOf(leader, rows) !== null;
@@ -64,7 +68,7 @@ export function ClubPodium({ rows }: ClubPodiumProps) {
     >
       {slots.map((row, index) =>
         row ? (
-          <Step key={row.member.id} row={row} rows={rows} />
+          <Step key={row.member.id} row={row} rows={rows} onOpenTitle={onOpenTitle} />
         ) : (
           <View key={`vide-${index}`} style={{ flex: 1 }} />
         ),
@@ -73,11 +77,20 @@ export function ClubPodium({ rows }: ClubPodiumProps) {
   );
 }
 
-function Step({ row, rows }: { row: ClubStanding; rows: ClubStanding[] }) {
+function Step({
+  row,
+  rows,
+  onOpenTitle,
+}: {
+  row: ClubStanding;
+  rows: ClubStanding[];
+  onOpenTitle?: (title: ClubTitle) => void;
+}) {
   const title = titleOf(row, rows);
   const first = row.rank === 1;
   const height = STEP_HEIGHT[row.rank] ?? STEP_HEIGHT[3];
   const avatar = AVATAR_SIZE[row.rank] ?? AVATAR_SIZE[3];
+  const medal = MEDAL_SIZE[row.rank] ?? 44;
 
   return (
     <View style={{ flex: 1, alignItems: 'center' }}>
@@ -108,49 +121,58 @@ function Step({ row, rows }: { row: ClubStanding; rows: ClubStanding[] }) {
         {`${formatPoints(row.total)} pts`}
       </Text>
 
-      <LinearGradient
-        colors={first ? [a.podiumTop, a.podiumBottom] : [c.surface, c.surfaceDeep]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 0, y: 1 }}
-        style={{
-          width: '100%',
-          height,
-          alignItems: 'center',
-          paddingTop: 10,
-          paddingHorizontal: 6,
-          gap: 6,
-          borderTopWidth: 1,
-          borderLeftWidth: 1,
-          borderRightWidth: 1,
-          borderColor: first ? a.podiumBorder : c.borderLift,
-          borderTopLeftRadius: 3,
-          borderTopRightRadius: 3,
-        }}
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={title ? `Voir l’affiche : ${title.title}` : undefined}
+        disabled={!title || !onOpenTitle}
+        onPress={() => title && onOpenTitle?.(title)}
+        style={{ width: '100%' }}
       >
-        <Text
+        <LinearGradient
+          colors={first ? [a.podiumTop, a.podiumBottom] : [c.surface, c.surfaceDeep]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 0, y: 1 }}
           style={{
-            fontFamily: f.display,
-            fontSize: first ? 24 : 19,
-            color: first ? c.gold : c.goldMuted,
+            width: '100%',
+            height,
+            alignItems: 'center',
+            paddingTop: 10,
+            paddingHorizontal: 6,
+            gap: 6,
+            borderTopWidth: 1,
+            borderLeftWidth: 1,
+            borderRightWidth: 1,
+            borderColor: first ? a.podiumBorder : c.borderLift,
+            borderTopLeftRadius: 3,
+            borderTopRightRadius: 3,
           }}
         >
-          {toRoman(row.rank)}
-        </Text>
-        {title ? (
           <Text
-            numberOfLines={3}
             style={{
-              fontFamily: f.serifItalic,
-              fontSize: 12.5,
-              lineHeight: 15,
-              color: first ? c.goldTint : c.parchment,
-              textAlign: 'center',
+              fontFamily: f.display,
+              fontSize: first ? 24 : 19,
+              color: first ? c.gold : c.goldMuted,
             }}
           >
-            {title.title}
+            {toRoman(row.rank)}
           </Text>
-        ) : null}
-      </LinearGradient>
+          {title ? <TitleMedal title={title} size={medal} /> : null}
+          {title ? (
+            <Text
+              numberOfLines={3}
+              style={{
+                fontFamily: f.serifItalic,
+                fontSize: 12.5,
+                lineHeight: 15,
+                color: first ? c.goldTint : c.parchment,
+                textAlign: 'center',
+              }}
+            >
+              {title.title}
+            </Text>
+          ) : null}
+        </LinearGradient>
+      </Pressable>
     </View>
   );
 }

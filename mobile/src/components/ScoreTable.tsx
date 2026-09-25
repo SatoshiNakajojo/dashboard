@@ -13,7 +13,7 @@ const COLUMN = 58;
 const tone = (value: number) =>
   value > 0 ? c.sage : value < 0 ? c.oxbloodMuted : c.sepiaFaint;
 
-const WEIGHTS = HORIZONS.map((h) => `×${h.weight} ${h.long.toLowerCase()}`).join(', ');
+const WEIGHTS = HORIZONS.map((h) => `×${h.weight} pour ${h.long.toLowerCase()}`).join(', ');
 
 /**
  * Le barème, tel que le calcule `callPoints.ts` — c'est la même table, pas une
@@ -98,7 +98,7 @@ export function ScoreTable() {
           l’explique. On ne vote pas sur son propre call.
         </Rule>
         <Rule>
-          {`Oracle : chaque pari résolu rapporte sa justesse (de 0 à 100), multipliée par son horizon — ${WEIGHTS}. Ces points s’ajoutent à ceux des calls.`}
+          {`Oracle : chaque pari résolu rapporte sa justesse (de 0 à 100), multipliée selon la longueur de la prévision dessinée — ${WEIGHTS}. Viser juste de loin est plus dur ; un pari court, lui, se rejoue chaque semaine. Ces points s’ajoutent à ceux des calls.`}
         </Rule>
       </View>
     </View>

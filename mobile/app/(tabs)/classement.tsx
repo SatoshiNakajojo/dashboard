@@ -7,10 +7,12 @@ import { ClubStandings } from '@/components/ClubStandings';
 import { PeriodTab } from '@/components/OracleStandings';
 import { ScoreTable } from '@/components/ScoreTable';
 import { ScreenShell } from '@/components/ScreenShell';
+import { TitleGallery } from '@/components/TitleGallery';
+import { TitlePoster } from '@/components/TitlePoster';
 import { SectionTitle } from '@/components/ui/SectionTitle';
 import { pointLines } from '@/features/bag/callPoints';
 import { useCalls } from '@/features/bag/useCalls';
-import { clubStandings } from '@/features/club/clubStandings';
+import { clubStandings, titleHolders, type ClubTitle } from '@/features/club/clubStandings';
 import { clubYear } from '@/features/oracle/standings';
 import { useClubBets } from '@/features/oracle/useClubBets';
 import { useMembers } from '@/hooks/useMembers';
@@ -60,56 +62,93 @@ export default function ClassementScreen() {
   const error = calls.error ?? club.error;
   const me = userId ? (byId.get(userId) ?? null) : null;
 
+  /** L'affiche ouverte en grand, s'il y en a une. */
+  const [poster, setPoster] = useState<ClubTitle | null>(null);
+  const posterHolders = useMemo(
+    () => (poster ? titleHolders(poster, rows).map((row) => row.member) : []),
+    [poster, rows],
+  );
+
   return (
-    <ScreenShell
-      overline={`Calls et Oracle · ${year === null ? 'depuis toujours' : year}`}
-      title="Classement"
-      me={me}
-    >
-      <View style={{ gap: 30 }}>
-        <View className="flex-row" style={{ gap: 18 }}>
-          <PeriodTab
-            label={String(currentYear)}
-            active={year === currentYear}
-            onPress={() => setYear(currentYear)}
-          />
-          <PeriodTab
-            label="DEPUIS TOUJOURS"
-            active={year === null}
-            onPress={() => setYear(null)}
-          />
-        </View>
+    <>
+      <ScreenShell
+        overline={`Calls et Oracle · ${year === null ? 'depuis toujours' : year}`}
+        title="Classement"
+        me={me}
+      >
+        <View style={{ gap: 30 }}>
+          <View className="flex-row" style={{ gap: 18 }}>
+            <PeriodTab
+              label={String(currentYear)}
+              active={year === currentYear}
+              onPress={() => setYear(currentYear)}
+            />
+            <PeriodTab
+              label="DEPUIS TOUJOURS"
+              active={year === null}
+              onPress={() => setYear(null)}
+            />
+          </View>
 
-        {loading ? (
-          <Text style={{ fontFamily: f.serifItalic, fontSize: 16, color: c.sepia }}>
-            Chargement du classement…
-          </Text>
-        ) : (
-          <ClubPodium rows={rows} />
-        )}
-
-        <View>
-          <SectionTitle
-            label="LE CLASSEMENT"
-            labelColor={c.goldMuted}
-            gradientFrom={a.fameRule}
-            hint={rows.length > 0 ? `${rows.length} MEMBRES` : undefined}
-          />
-          <ClubStandings rows={loading ? [] : rows} loading={loading} meId={userId} />
-          {error ? (
-            <Text
-              style={{ fontFamily: f.sans, fontSize: 11, color: c.oxbloodMuted, marginTop: 10 }}
-            >
-              {error}
+          {loading ? (
+            <Text style={{ fontFamily: f.serifItalic, fontSize: 16, color: c.sepia }}>
+              Chargement du classement…
             </Text>
-          ) : null}
-        </View>
+          ) : (
+            <ClubPodium rows={rows} onOpenTitle={setPoster} />
+          )}
 
-        <View>
-          <SectionTitle label="LE BARÈME" labelColor={c.goldMuted} gradientFrom={a.fameRule} />
-          <ScoreTable />
+          <View>
+            <SectionTitle
+              label="LE CLASSEMENT"
+              labelColor={c.goldMuted}
+              gradientFrom={a.fameRule}
+              hint={rows.length > 0 ? `${rows.length} MEMBRES` : undefined}
+            />
+            <ClubStandings
+              rows={loading ? [] : rows}
+              loading={loading}
+              meId={userId}
+              onOpenTitle={setPoster}
+            />
+            {error ? (
+              <Text
+                style={{
+                  fontFamily: f.sans,
+                  fontSize: 11,
+                  color: c.oxbloodMuted,
+                  marginTop: 10,
+                }}
+              >
+                {error}
+              </Text>
+            ) : null}
+          </View>
+
+          <View>
+            <SectionTitle
+              label="LES TITRES"
+              labelColor={c.goldMuted}
+              gradientFrom={a.fameRule}
+              hint="5 AFFICHES"
+            />
+            <View style={{ marginTop: 12 }}>
+              <TitleGallery rows={loading ? [] : rows} onOpen={setPoster} />
+            </View>
+          </View>
+
+          <View>
+            <SectionTitle
+              label="LE BARÈME"
+              labelColor={c.goldMuted}
+              gradientFrom={a.fameRule}
+            />
+            <ScoreTable />
+          </View>
         </View>
-      </View>
-    </ScreenShell>
+      </ScreenShell>
+
+      <TitlePoster title={poster} holders={posterHolders} onClose={() => setPoster(null)} />
+    </>
   );
 }

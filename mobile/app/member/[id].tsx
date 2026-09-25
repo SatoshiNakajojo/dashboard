@@ -1,15 +1,17 @@
 import { useMemo, useState } from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { Image, Pressable, ScrollView, Text, View, useWindowDimensions } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { SharedLinks } from '@/components/SharedLinks';
+import { TitlePoster } from '@/components/TitlePoster';
 import { Avatar } from '@/components/ui/Avatar';
 import { Micro } from '@/components/ui/Micro';
 import { SectionTitle } from '@/components/ui/SectionTitle';
 import { memberCallPoints, pointLines, type MemberCallPoints } from '@/features/bag/callPoints';
 import { useCalls } from '@/features/bag/useCalls';
-import { clubStandings, titleOf } from '@/features/club/clubStandings';
+import { clubStandings, titleHolders, titleOf } from '@/features/club/clubStandings';
+import { TITLE_ART } from '@/features/club/titleArt';
 import { useClubNights } from '@/features/nights/useClubNights';
 import { useClubBets } from '@/features/oracle/useClubBets';
 import { clubYear } from '@/features/oracle/standings';
@@ -44,6 +46,7 @@ import { assetClassStyle, c, f, perfColor, radius } from '@/theme/tokens';
 export default function MemberScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { members, byId, loading } = useMembers();
   const { userId } = useSession();
@@ -78,13 +81,17 @@ export default function MemberScreen() {
     const rows = clubStandings(members, lines, club.history, year);
     const row = rows.find((candidate) => candidate.member.id === member.id);
     if (!row) return null;
+    const title = titleOf(row, rows);
     return {
       row,
       of: rows.length,
-      title: titleOf(row, rows),
+      title,
+      /** Ceux qui portent le même titre — lui, et ses ex æquo. */
+      holders: title ? titleHolders(title, rows).map((holder) => holder.member) : [],
       calls: memberCallPoints(lines, member.id, year),
     };
   }, [member, members, lines, club.history, year]);
+  const [posterOpen, setPosterOpen] = useState(false);
 
   return (
     <View className="flex-1 bg-ink" style={{ paddingTop: insets.top }}>
@@ -141,6 +148,26 @@ export default function MemberScreen() {
                   </Micro>
                   {standing.title ? (
                     <>
+                      {/* Son affiche : le titre qu'il porte, en trophée. Un
+                          appui l'ouvre en grand. */}
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel={`Voir l’affiche : ${standing.title.title}`}
+                        onPress={() => setPosterOpen(true)}
+                        style={{ marginVertical: 8 }}
+                      >
+                        <Image
+                          source={TITLE_ART[standing.title.key].poster}
+                          resizeMode="cover"
+                          style={{
+                            width: Math.min(width - 44, 280),
+                            height: Math.min(width - 44, 280),
+                            borderRadius: radius.card,
+                            borderWidth: 1,
+                            borderColor: c.goldMuted,
+                          }}
+                        />
+                      </Pressable>
                       <Text
                         style={{
                           fontFamily: f.display,
@@ -239,6 +266,12 @@ export default function MemberScreen() {
           </>
         )}
       </ScrollView>
+
+      <TitlePoster
+        title={posterOpen ? (standing?.title ?? null) : null}
+        holders={standing?.holders ?? []}
+        onClose={() => setPosterOpen(false)}
+      />
     </View>
   );
 }
