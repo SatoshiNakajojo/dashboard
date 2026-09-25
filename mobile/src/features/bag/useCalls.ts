@@ -88,6 +88,8 @@ const UNKNOWN_MEMBER: Omit<Member, 'id'> = {
 export function useCalls(
   currentUserId: string | null,
   membersById: Map<string, Member>,
+  /** Change pour relire les calls et les votes — l'onglet Classement, à chaque visite. */
+  revision = 0,
 ): CallsState {
   const { spot } = useBtcSpot();
   const source = useMemo(() => getCallsSource(), []);
@@ -123,7 +125,7 @@ export function useCalls(
       active = false;
       controller.abort();
     };
-  }, [source]);
+  }, [source, revision]);
 
   // --- Votes ---------------------------------------------------------------
 

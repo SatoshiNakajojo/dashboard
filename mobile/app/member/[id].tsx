@@ -9,7 +9,7 @@ import { Micro } from '@/components/ui/Micro';
 import { SectionTitle } from '@/components/ui/SectionTitle';
 import { memberCallPoints, pointLines, type MemberCallPoints } from '@/features/bag/callPoints';
 import { useCalls } from '@/features/bag/useCalls';
-import { clubStandings, titlesOf } from '@/features/club/clubStandings';
+import { clubStandings, titleOf } from '@/features/club/clubStandings';
 import { useClubNights } from '@/features/nights/useClubNights';
 import { useClubBets } from '@/features/oracle/useClubBets';
 import { clubYear } from '@/features/oracle/standings';
@@ -23,7 +23,13 @@ import {
 } from '@/features/profile/record';
 import { useMembers } from '@/hooks/useMembers';
 import { useSession } from '@/hooks/useSession';
-import { formatClubDate, formatInteger, formatPercent, toRoman } from '@/lib/format';
+import {
+  formatClubDate,
+  formatInteger,
+  formatPercent,
+  formatPoints,
+  toRoman,
+} from '@/lib/format';
 import { horizonOf } from '@/lib/horizons';
 import { assetClassStyle, c, f, perfColor, radius } from '@/theme/tokens';
 
@@ -64,7 +70,7 @@ export default function MemberScreen() {
   );
 
   // Sa place au classement du club, sur l'année en cours — le même calcul que
-  // l'onglet Calls → Classement.
+  // l'onglet Classement.
   const year = clubYear(club.now);
   const lines = useMemo(() => pointLines(calls.calls, club.now), [calls.calls, club.now]);
   const standing = useMemo(() => {
@@ -72,16 +78,10 @@ export default function MemberScreen() {
     const rows = clubStandings(members, lines, club.history, year);
     const row = rows.find((candidate) => candidate.member.id === member.id);
     if (!row) return null;
-    const titles = titlesOf(rows);
     return {
       row,
       of: rows.length,
-      title:
-        titles.truth === member.id
-          ? 'DÉTIENT LA VÉRITÉ'
-          : titles.offMark === member.id
-            ? 'À CÔTÉ DE LA PLAQUE'
-            : null,
+      title: titleOf(row, rows),
       calls: memberCallPoints(lines, member.id, year),
     };
   }, [member, members, lines, club.history, year]);
@@ -135,15 +135,37 @@ export default function MemberScreen() {
                   marques partout ailleurs — c'est comme ça qu'on le reconnaît. */}
               <View style={{ width: 28, height: 2, backgroundColor: member.color }} />
               {standing && !(calls.loading || club.loading) ? (
-                <Micro tracking={1.6} style={{ color: standing.title ? c.gold : c.sepiaMuted }}>
-                  {[
-                    `${toRoman(standing.row.rank)} / ${standing.of} AU CLASSEMENT ${year}`,
-                    `${signedPoints(standing.row.total)} PTS`,
-                    standing.title,
-                  ]
-                    .filter(Boolean)
-                    .join(' · ')}
-                </Micro>
+                <View className="items-center" style={{ gap: 6 }}>
+                  <Micro tracking={1.6} style={{ color: c.sepiaMuted }}>
+                    {`${toRoman(standing.row.rank)} / ${standing.of} AU CLASSEMENT ${year} · ${formatPoints(standing.row.total)} PTS`}
+                  </Micro>
+                  {standing.title ? (
+                    <>
+                      <Text
+                        style={{
+                          fontFamily: f.display,
+                          fontSize: 15,
+                          letterSpacing: 0.6,
+                          color: c.gold,
+                          textAlign: 'center',
+                        }}
+                      >
+                        {standing.title.title}
+                      </Text>
+                      <Text
+                        style={{
+                          fontFamily: f.serifItalic,
+                          fontSize: 14,
+                          lineHeight: 20,
+                          color: c.sepia,
+                          textAlign: 'center',
+                        }}
+                      >
+                        {`«\u00a0${standing.title.motto}\u00a0»`}
+                      </Text>
+                    </>
+                  ) : null}
+                </View>
               ) : null}
             </View>
 
@@ -227,12 +249,6 @@ export default function MemberScreen() {
 const CALLS_PREVIEW = 5;
 
 /** `+150`, `−200`, `0`. */
-function signedPoints(value: number): string {
-  if (value > 0) return `+${formatInteger(value)}`;
-  if (value < 0) return `−${formatInteger(-value)}`;
-  return '0';
-}
-
 function CallsSection({
   record,
   points,
@@ -292,9 +308,9 @@ function CallsSection({
                 marginTop: 10,
               }}
             >
-              {`Points des calls en ${year} : ${signedPoints(points.total)}${
-                points.latent !== 0 ? `, dont ${signedPoints(points.latent)} encore en jeu` : ''
-              } — comme auteur ${signedPoints(points.asAuthor)}, comme votant ${signedPoints(points.asVoter)}.`}
+              {`Points des calls en ${year} : ${formatPoints(points.total)}${
+                points.latent !== 0 ? `, dont ${formatPoints(points.latent)} encore en jeu` : ''
+              } — comme auteur ${formatPoints(points.asAuthor)}, comme votant ${formatPoints(points.asVoter)}.`}
             </Text>
           ) : null}
           {shown.map((call) => {

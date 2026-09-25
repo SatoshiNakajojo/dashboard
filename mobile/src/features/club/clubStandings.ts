@@ -1,5 +1,5 @@
 /**
- * Le classement du club : qui détient la vérité, qui est à côté de la plaque.
+ * Le classement du club : qui détient la vérité, qui finance les autres.
  *
  * Il additionne les deux jeux du club :
  *
@@ -8,9 +8,8 @@
  *   • les **points de l'Oracle** (`features/oracle/standings.ts`) — la justesse
  *     des paris résolus, pondérée par l'horizon.
  *
- * Tous les membres y figurent, même sans point : un membre qui ne joue pas
- * n'est pas plus « à côté de la plaque » qu'un autre, mais il doit voir où il
- * en est.
+ * Tous les membres y figurent, même sans point : celui qui ne joue pas encore
+ * doit voir où il en est.
  *
  * Module pur.
  */
@@ -67,22 +66,53 @@ export function clubStandings(
   return rows;
 }
 
+export interface ClubTitle {
+  rank: number;
+  title: string;
+  motto: string;
+}
+
+/** Les titres du club, du premier au cinquième. */
+export const CLUB_TITLES: readonly ClubTitle[] = [
+  {
+    rank: 1,
+    title: 'Oracle de Wall Street',
+    motto: 'Il ne trade pas le marché, il lui donne rendez-vous.',
+  },
+  {
+    rank: 2,
+    title: 'Le Loup de Wall Street',
+    motto: 'Il ne suit pas la tendance. La tendance le suit.',
+  },
+  {
+    rank: 3,
+    title: 'Le Chercheur en Pumpologie',
+    motto: 'Chaque perte est une nouvelle donnée scientifique.',
+  },
+  {
+    rank: 4,
+    title: 'Analyste de Boursorama',
+    motto: 'Il vient de découvrir le RSI et ne parle plus que de ça.',
+  },
+  {
+    rank: 5,
+    title: 'Fournisseur de Liquidité',
+    motto: 'Il ne trade plus, il finance les autres.',
+  },
+];
+
 /**
- * Les deux titres du classement, s'ils sont mérités : un seul premier, un seul
- * dernier, et un écart entre eux. Sept membres à zéro ne désignent personne.
+ * Le titre d'une ligne du classement : celui de son rang.
+ *
+ * Deux ex æquo partagent rang et titre. Tant que tout le monde est à égalité —
+ * au premier jour, sept membres à zéro — personne n'est titré : le podium ne
+ * se gagne pas à l'ordre alphabétique.
  */
-export function titlesOf(rows: readonly ClubStanding[]): {
-  truth: string | null;
-  offMark: string | null;
-} {
-  if (rows.length < 2) return { truth: null, offMark: null };
-  const first = rows[0]!;
-  const last = rows[rows.length - 1]!;
-  if (first.total === last.total) return { truth: null, offMark: null };
-  const soleFirst = rows.filter((row) => row.rank === first.rank).length === 1;
-  const soleLast = rows.filter((row) => row.rank === last.rank).length === 1;
-  return {
-    truth: soleFirst ? first.member.id : null,
-    offMark: soleLast ? last.member.id : null,
-  };
+export function titleOf(
+  row: Pick<ClubStanding, 'rank'>,
+  rows: readonly Pick<ClubStanding, 'total'>[],
+): ClubTitle | null {
+  const first = rows[0];
+  if (!first || rows.every((other) => other.total === first.total)) return null;
+  return CLUB_TITLES.find((title) => title.rank === row.rank) ?? null;
 }

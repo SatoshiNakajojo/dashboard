@@ -1,21 +1,19 @@
 /**
  * Les points des calls.
  *
- * Un call qui s'avère très rentable rapporte à son auteur ; un call qui
- * s'effondre lui coûte. Entre les deux, rien : un +12 % n'est pas un exploit,
- * un −8 % pas une faute.
+ * Une seule règle, lisible par tous : **celui qui fait le call prend 100 % des
+ * points, ceux qui se positionnent dessus en prennent 50 %.**
  *
- * Les votants sont notés sur le même call, à moitié : un bull gagne quand
- * l'auteur gagne et perd quand il perd ; un bear, l'inverse. Sans cette perte,
- * voter bull sur tout serait un billet de loterie gratuit — le classement
- * mesurerait la participation, pas le jugement.
+ * L'auteur est noté sur la perf de son call, palier par palier, à la hausse
+ * comme à la baisse (`GAIN_TIERS`, `LOSS_TIERS`). Un votant prend la moitié de
+ * ces points, arrondie vers zéro pour éviter les demi-points (12,5 → 12) : un
+ * bull gagne quand le call monte et perd quand il baisse ; un bear, l'inverse.
  *
  * La perf retenue est celle des classements du fil (`fameScore`) : en dollars
  * aujourd'hui, selon `LEADERBOARD.reference`. Un call en cours est noté sur son
- * cours du moment — ses points sont **latents** et bougent avec le marché ; un
- * call clôturé l'est sur sa sortie, et ses points sont **acquis**. Sans la note
- * latente, il suffirait de ne jamais clôturer un call perdant pour ne jamais
- * perdre de points.
+ * cours du moment — ses points sont **en jeu** et bougent avec le marché ; un
+ * call clôturé l'est sur sa sortie, et ses points sont **acquis**. Sans cela,
+ * il suffirait de ne jamais clôturer un call perdant pour ne jamais perdre.
  *
  * Module pur.
  */
@@ -24,37 +22,84 @@ import { CLUB_OFFSET_MINUTES } from '@/lib/clubTime';
 import { fameScore } from '@/lib/performance';
 import type { CallView, Vote } from '@/types/domain';
 
-/**
- * Le barème de l'auteur, du palier le plus haut au plus bas. Le premier palier
- * atteint l'emporte.
- */
-export const CALL_TIERS = [
-  { atLeast: 100, points: 300 },
-  { atLeast: 50, points: 200 },
-  { atLeast: 30, points: 100 },
-  { atMost: -50, points: -200 },
-  { atMost: -20, points: -100 },
+/** Paliers de hausse, du plus haut au plus bas : le premier atteint l'emporte. */
+export const GAIN_TIERS = [
+  { from: 100, to: null, points: 500 },
+  { from: 50, to: 100, points: 300 },
+  { from: 30, to: 50, points: 200 },
+  { from: 20, to: 30, points: 100 },
+  { from: 10, to: 20, points: 50 },
+  { from: 5, to: 10, points: 25 },
+  { from: 0, to: 5, points: 10 },
 ] as const;
 
-/** Ce que pèse un vote, rapporté aux points de l'auteur. */
+/** Paliers de baisse, sur la perte (en valeur absolue), du plus lourd au plus léger. */
+export const LOSS_TIERS = [
+  { from: 50, to: 100, points: -300 },
+  { from: 30, to: 50, points: -200 },
+  { from: 20, to: 30, points: -100 },
+  { from: 10, to: 20, points: -50 },
+  { from: 5, to: 10, points: -25 },
+  { from: 0, to: 5, points: -10 },
+] as const;
+
+/** Ce que prend un votant, rapporté aux points de l'auteur. */
 export const VOTER_SHARE = 0.5;
 
-/** Les points de l'auteur pour une perf donnée. 0 si elle est inconnue. */
+/**
+ * Les points de l'auteur pour une perf donnée.
+ *
+ * Une perf nulle — un call qui vient de paraître, à son prix d'entrée — ou
+ * inconnue ne rapporte rien : il ne s'est encore rien passé.
+ */
 export function authorPoints(perf: number | null): number {
-  if (perf === null || !Number.isFinite(perf)) return 0;
-  for (const tier of CALL_TIERS) {
-    if ('atLeast' in tier && perf >= tier.atLeast) return tier.points;
-    if ('atMost' in tier && perf <= tier.atMost) return tier.points;
-  }
-  return 0;
+  if (perf === null || !Number.isFinite(perf) || perf === 0) return 0;
+  if (perf > 0) return GAIN_TIERS.find((tier) => perf >= tier.from)!.points;
+  const loss = -perf;
+  return LOSS_TIERS.find((tier) => loss >= tier.from)!.points;
+}
+
+/** La part d'un votant : la moitié, arrondie vers zéro (12,5 → 12, −12,5 → −12). */
+export function voterShare(author: number): number {
+  return Math.trunc(author * VOTER_SHARE) + 0;
 }
 
 /** Les points d'un votant : la moitié de ceux de l'auteur, dans le sens de son vote. */
 export function voterPoints(side: Vote, perf: number | null): number {
-  const author = authorPoints(perf) * VOTER_SHARE;
+  const share = voterShare(authorPoints(perf));
   // `+ 0` : un bear sur un call neutre vaut 0, pas « −0 ».
-  return (side === 'bull' ? author : -author) + 0;
+  return (side === 'bull' ? share : -share) + 0;
 }
+
+/** Une ligne du barème, telle qu'on l'affiche. */
+export interface ScoreRow {
+  /** `+50 à +100 %`, `0 à −5 %`… */
+  label: string;
+  author: number;
+  bull: number;
+  bear: number;
+}
+
+const pct = (value: number, sign: '+' | '−') => (value === 0 ? '0' : `${sign}${value}`);
+
+/** Le barème complet, de la plus belle hausse à la pire baisse — pour l'écran. */
+export const SCORE_TABLE: readonly ScoreRow[] = [
+  ...GAIN_TIERS.map((tier) => ({
+    label:
+      tier.to === null
+        ? `${pct(tier.from, '+')} % et plus`
+        : `${pct(tier.from, '+')} à ${pct(tier.to, '+')} %`,
+    author: tier.points,
+    bull: voterShare(tier.points),
+    bear: -voterShare(tier.points),
+  })),
+  ...[...LOSS_TIERS].reverse().map((tier) => ({
+    label: `${pct(tier.from, '−')} à ${pct(tier.to, '−')} %`,
+    author: tier.points,
+    bull: voterShare(tier.points),
+    bear: -voterShare(tier.points),
+  })),
+];
 
 export type PointRole = 'author' | 'bull' | 'bear';
 

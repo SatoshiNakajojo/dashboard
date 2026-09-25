@@ -5,7 +5,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 
 import { Micro } from '@/components/ui/Micro';
 import { formatLeft } from '@/lib/format';
-import { VOTER_SHARE, CALL_TIERS } from '@/features/bag/callPoints';
 import { a, c, f, goldButtonGradient, radius } from '@/theme/tokens';
 import type { CallView, Vote } from '@/types/domain';
 
@@ -24,11 +23,6 @@ export interface VoteSheetProps {
   onSubmit: (vote: { side: Vote; reason: string }) => Promise<boolean>;
   onRemove: () => Promise<boolean>;
 }
-
-// Le barème, lu dans `callPoints.ts` : la phrase ne peut pas le contredire.
-const GAIN = CALL_TIERS.find((tier) => 'atLeast' in tier && tier.atLeast === 30)!;
-const LOSS = CALL_TIERS.find((tier) => 'atMost' in tier && tier.atMost === -20)!;
-const VOTE_GAIN = GAIN.points * VOTER_SHARE;
 
 /**
  * Bottom sheet « Voter » : bull ou bear, et la phrase qui l'explique.
@@ -199,7 +193,7 @@ export function VoteSheet({
           <Text
             style={{ fontFamily: f.sans, fontSize: 11, lineHeight: 17, color: c.sepiaMuted }}
           >
-            {`Si le call dépasse +${GAIN.atLeast} %, les bulls gagnent ${VOTE_GAIN} points et les bears en perdent ${VOTE_GAIN} ; s’il tombe sous −${-LOSS.atMost} %, c’est l’inverse. ${
+            {`Un votant prend la moitié des points de l’auteur : le bull gagne si le call monte et perd s’il baisse, le bear l’inverse. Barème complet dans l’onglet Classement. ${
               left > 0 ? `Votes ouverts encore ${formatLeft(left)}.` : 'Votes clos.'
             }`}
           </Text>

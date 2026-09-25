@@ -17,7 +17,7 @@ export interface ScreenHeaderProps {
 }
 
 /**
- * En-tête commun aux trois onglets : marque, surtitre, titre serif, avatar.
+ * En-tête commun aux onglets : marque, surtitre, titre serif, avatar.
  *
  * Le logo n'était que sur la porte d'entrée — une fois connecté, plus rien ne
  * disait chez qui on était. Il tient ici la place d'un sceau, à gauche du

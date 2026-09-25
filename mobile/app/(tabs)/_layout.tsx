@@ -18,6 +18,7 @@ const LABELS: Record<string, string> = {
   index: 'NIGHTS',
   bag: 'CALLS',
   oracle: 'ORACLE',
+  classement: 'CLASSEMENT',
 };
 
 /**
@@ -37,9 +38,11 @@ function ClubTabBar({ state, navigation }: TabBarProps) {
         // Resserré : la barre faisait 68 pt une fois l'inset ajouté, pour trois
         // mots sans icône. Elle en fait maintenant 54 sur un iPhone.
         paddingTop: 10,
-        paddingHorizontal: 16,
+        // Quatre libellés sans icône : « CLASSEMENT », le plus long, doit tenir
+        // sur un Android de 360 px comme sur un iPhone mini.
+        paddingHorizontal: 12,
         paddingBottom: bottomInset(insets.bottom),
-        gap: 6,
+        gap: 4,
       }}
     >
       {state.routes.map((route, index) => {
@@ -70,7 +73,11 @@ function ClubTabBar({ state, navigation }: TabBarProps) {
                 backgroundColor: focused ? c.gold : 'transparent',
               }}
             />
-            <Micro tracking={1.8} style={{ color: focused ? c.gold : c.sepiaMuted }}>
+            <Micro
+              tracking={1.5}
+              numberOfLines={1}
+              style={{ color: focused ? c.gold : c.sepiaMuted }}
+            >
               {label}
             </Micro>
           </Pressable>
@@ -89,6 +96,7 @@ export default function TabsLayout() {
       <Tabs.Screen name="index" />
       <Tabs.Screen name="bag" />
       <Tabs.Screen name="oracle" />
+      <Tabs.Screen name="classement" />
     </Tabs>
   );
 }

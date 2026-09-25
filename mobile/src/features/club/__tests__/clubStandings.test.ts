@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
 import type { PointLine } from '@/features/bag/callPoints';
-import { clubStandings, titlesOf } from '@/features/club/clubStandings';
+import { clubStandings, titleOf } from '@/features/club/clubStandings';
 import type { BetView } from '@/features/oracle/useOracle';
 import type { Member } from '@/types/domain';
 
@@ -64,23 +64,42 @@ describe('classement du club', () => {
     );
   });
 
-  it('désigne qui détient la vérité et qui est à côté de la plaque', () => {
-    const rows = clubStandings(MEMBERS, [line('john', 100), line('marco', -200)], [], 2026);
-    assert.deepEqual(titlesOf(rows), { truth: 'john', offMark: 'marco' });
-  });
-
-  it('ne désigne personne quand tout le monde est à égalité, ni un premier ex æquo', () => {
-    assert.deepEqual(titlesOf(clubStandings(MEMBERS, [], [], 2026)), {
-      truth: null,
-      offMark: null,
-    });
-    const tied = clubStandings(
-      MEMBERS,
-      [line('john', 100), line('alex', 100), line('lea', -100)],
+  it('titre les cinq premiers, ex æquo compris', () => {
+    const rows = clubStandings(
+      [...MEMBERS, member('sofia'), member('rayan'), member('toi')],
+      [
+        line('john', 500),
+        line('alex', 300),
+        line('lea', 300),
+        line('marco', 100),
+        line('sofia', 50),
+        line('rayan', 25),
+        line('toi', -10),
+      ],
       [],
       2026,
     );
-    assert.deepEqual(titlesOf(tied), { truth: null, offMark: 'lea' });
+    assert.deepEqual(
+      rows.map((r) => [r.member.id, r.rank, titleOf(r, rows)?.title ?? null]),
+      [
+        ['john', 1, 'Oracle de Wall Street'],
+        ['alex', 2, 'Le Loup de Wall Street'],
+        ['lea', 2, 'Le Loup de Wall Street'],
+        ['marco', 4, 'Analyste de Boursorama'],
+        ['sofia', 5, 'Fournisseur de Liquidité'],
+        ['rayan', 6, null],
+        ['toi', 7, null],
+      ],
+    );
+    assert.equal(
+      titleOf(rows[0]!, rows)?.motto,
+      'Il ne trade pas le marché, il lui donne rendez-vous.',
+    );
+  });
+
+  it('ne titre personne tant que tout le monde est à égalité', () => {
+    const rows = clubStandings(MEMBERS, [], [], 2026);
+    assert.ok(rows.every((row) => titleOf(row, rows) === null));
   });
 
   it('filtre les calls par année', () => {

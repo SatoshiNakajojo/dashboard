@@ -8,7 +8,7 @@ import { formatInteger, formatPercent, formatUsd } from '@/lib/format';
 import { c, f, goldRadial, goldRadialLocations, perfColor } from '@/theme/tokens';
 
 /**
- * Bandeau BTC, présent sur les trois onglets.
+ * Bandeau BTC, présent sur tous les onglets.
  *
  * Quand CoinGecko ne répond plus, le prix reste affiché et un libellé
  * `HORS LIGNE` prend la place de la variation 24 h : on ne masque jamais la
@@ -20,19 +20,33 @@ export function BtcTicker() {
   return (
     <View
       className="flex-row items-center gap-3 border-t border-b border-borderStrong"
-      style={{ marginHorizontal: 22, marginBottom: 16, paddingTop: 11, paddingBottom: 12, paddingHorizontal: 2 }}
+      style={{
+        marginHorizontal: 22,
+        marginBottom: 16,
+        paddingTop: 11,
+        paddingBottom: 12,
+        paddingHorizontal: 2,
+      }}
     >
       <LinearGradient
         colors={[...goldRadial]}
         locations={[...goldRadialLocations]}
         start={{ x: 0.34, y: 0.28 }}
         end={{ x: 1, y: 1 }}
-        style={{ width: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center' }}
+        style={{
+          width: 22,
+          height: 22,
+          borderRadius: 11,
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
       >
         <BitcoinGlyph size={13} />
       </LinearGradient>
 
-      <Text style={{ fontFamily: f.labelMed, fontSize: 14, letterSpacing: -0.14, color: c.ivory }}>
+      <Text
+        style={{ fontFamily: f.labelMed, fontSize: 14, letterSpacing: -0.14, color: c.ivory }}
+      >
         {formatUsd(spot.usd)}
       </Text>
 

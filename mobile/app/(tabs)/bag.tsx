@@ -1,14 +1,9 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 
 import { CallCard } from '@/components/CallCard';
 import { CloseCallSheet } from '@/components/CloseCallSheet';
-import { ClubStandings } from '@/components/ClubStandings';
 import { VoteSheet } from '@/components/VoteSheet';
-import { pointLines } from '@/features/bag/callPoints';
-import { clubStandings } from '@/features/club/clubStandings';
-import { clubYear } from '@/features/oracle/standings';
-import { useClubBets } from '@/features/oracle/useClubBets';
 import { ComposerSheet, type CallDraft } from '@/components/ComposerSheet';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { Fab } from '@/components/Fab';
@@ -28,14 +23,14 @@ import {
 import { formatPercent } from '@/lib/format';
 import { seasonAt } from '@/lib/season';
 import { a, c, f, radius } from '@/theme/tokens';
-import type { CallView, Member, Vote } from '@/types/domain';
+import type { CallView, Vote } from '@/types/domain';
 
 type BagView = 'bag' | 'closed' | 'rekt';
 
 /** Onglet Calls — fil des calls et classements de la saison. */
 export default function BagScreen() {
   const { userId } = useSession();
-  const { members, byId } = useMembers();
+  const { byId } = useMembers();
   const {
     calls,
     loading,
@@ -107,10 +102,10 @@ export default function BagScreen() {
           isBag
             ? 'Calls en cours · perf vs ₿'
             : isRekt
-              ? `Calls et Oracle · saison ${seasonAt().roman}`
+              ? `Classement vs bitcoin · saison ${seasonAt().roman}`
               : 'Positions closes · perf réalisée'
         }
-        title={isBag ? 'Les Calls' : isRekt ? 'Classement' : 'Clôturés'}
+        title={isBag ? 'Les Calls' : isRekt ? 'Rekt Board' : 'Clôturés'}
         me={me}
       >
         <View className="flex-row border-b border-border" style={{ gap: 26, marginBottom: 20 }}>
@@ -120,7 +115,7 @@ export default function BagScreen() {
             active={view === 'closed'}
             onPress={() => setView('closed')}
           />
-          <ViewTab label="Classement" active={isRekt} onPress={() => setView('rekt')} />
+          <ViewTab label="Rekt Board" active={isRekt} onPress={() => setView('rekt')} />
         </View>
 
         {!isRekt ? (
@@ -157,7 +152,7 @@ export default function BagScreen() {
             )}
           </View>
         ) : (
-          <Leaderboards calls={calls} loading={loading} members={members} byId={byId} />
+          <Leaderboards calls={calls} loading={loading} />
         )}
       </ScreenShell>
 
@@ -284,42 +279,13 @@ function ViewTab({
   );
 }
 
-function Leaderboards({
-  calls,
-  loading,
-  members,
-  byId,
-}: {
-  calls: CallView[];
-  loading: boolean;
-  members: Member[];
-  byId: Map<string, Member>;
-}) {
+function Leaderboards({ calls, loading }: { calls: CallView[]; loading: boolean }) {
   // Les deux tableaux sortent du même jeu de calls : ce sont les seuils qui les
   // séparent, pas deux sources de données (`src/lib/performance.ts`).
   const { fame, rekt } = splitLeaderboards(calls);
 
-  // Le classement du club : les points des calls, et ceux de l'Oracle, jugés
-  // comme dans son onglet (`useJudgedHistory`).
-  const club = useClubBets(byId);
-  const currentYear = clubYear(club.now);
-  const [year, setYear] = useState<number | null>(currentYear);
-  const lines = useMemo(() => pointLines(calls, club.now), [calls, club.now]);
-  const rows = useMemo(
-    () => clubStandings(members, lines, club.history, year),
-    [members, lines, club.history, year],
-  );
-
   return (
     <View style={{ gap: 26 }}>
-      <ClubStandings
-        rows={rows}
-        year={year}
-        currentYear={currentYear}
-        onYearChange={setYear}
-        loading={loading || club.loading}
-      />
-
       <View>
         <SectionTitle
           label="HALL OF FAME"

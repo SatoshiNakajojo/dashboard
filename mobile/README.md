@@ -105,7 +105,7 @@ qu'on n'a pas déposé le nouveau tracé.
 
 ## Ce qui a été vérifié
 
-- `npm run typecheck`, `npm run lint`, `npm test` — propres (493 tests).
+- `npm run typecheck`, `npm run lint`, `npm test` — propres (495 tests).
 - **Règles pures** : bornes et inversibilité du repère, monotonie du tracé,
   écart à la courbe réelle, espaces insécables du formatage français, perf vs ₿
   comme ratio et non soustraction, seuils et tri des deux classements.
@@ -399,7 +399,7 @@ nomme.
 
 Le logo ne vivait que sur la porte d'entrée : une fois connecté, plus rien ne
 disait chez qui on était. Il tient maintenant la place d'un sceau dans
-`ScreenHeader`, à gauche du titre, sur les trois onglets — petit, sans jamais
+`ScreenHeader`, à gauche du titre, sur tous les onglets — petit, sans jamais
 réclamer l'attention.
 
 **La palette a suivi.** L'or du design était à 36° de teinte, celui du logo à
@@ -734,28 +734,58 @@ Trois règles, tenues par la base (`ticker_votes_guard`, migration
 - **pas de vote sur son propre call** ;
 - **un call clôturé ne se vote plus**.
 
-**Les points des calls** (`src/features/bag/callPoints.ts`) :
+**Les points des calls** (`src/features/bag/callPoints.ts`). Une seule règle :
+**celui qui fait le call prend 100 % des points, ceux qui votent dessus en
+prennent 50 %** — arrondis vers zéro, pour éviter les demi-points (12,5 → 12).
 
 | Perf du call | Auteur | Bull | Bear |
 |---|---|---|---|
-| ≥ +100 % | +300 | +150 | −150 |
-| ≥ +50 % | +200 | +100 | −100 |
-| ≥ +30 % | +100 | +50 | −50 |
-| entre −20 % et +30 % | 0 | 0 | 0 |
-| ≤ −20 % | −100 | −50 | +50 |
-| ≤ −50 % | −200 | −100 | +100 |
+| +100 % et plus | +500 | +250 | −250 |
+| +50 à +100 % | +300 | +150 | −150 |
+| +30 à +50 % | +200 | +100 | −100 |
+| +20 à +30 % | +100 | +50 | −50 |
+| +10 à +20 % | +50 | +25 | −25 |
+| +5 à +10 % | +25 | +12 | −12 |
+| 0 à +5 % | +10 | +5 | −5 |
+| 0 à −5 % | −10 | −5 | +5 |
+| −5 à −10 % | −25 | −12 | +12 |
+| −10 à −20 % | −50 | −25 | +25 |
+| −20 à −30 % | −100 | −50 | +50 |
+| −30 à −50 % | −200 | −100 | +100 |
+| −50 à −100 % | −300 | −150 | +150 |
 
-Un vote juste rapporte la moitié de ce que gagne l'auteur ; un vote faux coûte
-autant. Sans cette perte, voter bull sur tout serait un billet de loterie
+Une borne appartient au palier du dessus : +5 % pile vaut 25, −5 % pile vaut
+−25. Une perf de 0 % tout rond — un call qui vient de paraître — ne rapporte
+rien. Un bull gagne quand le call monte et perd quand il baisse ; un bear,
+l'inverse : sans cette perte, voter sur tout serait un billet de loterie
 gratuit. Un call en cours est noté sur son cours du moment — ses points sont
-**en jeu** et bougent avec le marché ; clôturé, ils sont **acquis**. Sinon, il
-suffirait de ne jamais clôturer un call perdant.
+**en jeu** et bougent avec le marché ; clôturé, ils sont **acquis** et comptent
+pour l'année de la clôture. Sinon, il suffirait de ne jamais clôturer un call
+perdant.
 
-**Le classement du club** — Calls → **Classement** — additionne ces points et
-ceux de l'Oracle, sur l'année ou depuis toujours. Le premier **détient la
-vérité**, le dernier est **à côté de la plaque** (s'ils sont seuls à leur
-place, et qu'un écart les sépare). La page d'un membre affiche son rang et ses
-points (`src/features/club/clubStandings.ts`).
+**L'onglet Classement** additionne ces points et ceux de l'Oracle, sur l'année
+ou depuis toujours (`app/(tabs)/classement.tsx`) :
+
+- **un podium** — le deuxième à gauche, le premier au centre, le troisième à
+  droite. Tant que tout le monde est à égalité (en début d'année, sept membres
+  à zéro), pas de podium : on ne monte pas sur une marche à l'ordre
+  alphabétique ;
+- **le classement complet**, avec les titres du club :
+
+  | Rang | Titre | Devise |
+  |---|---|---|
+  | I | Oracle de Wall Street | « Il ne trade pas le marché, il lui donne rendez-vous. » |
+  | II | Le Loup de Wall Street | « Il ne suit pas la tendance. La tendance le suit. » |
+  | III | Le Chercheur en Pumpologie | « Chaque perte est une nouvelle donnée scientifique. » |
+  | IV | Analyste de Boursorama | « Il vient de découvrir le RSI et ne parle plus que de ça. » |
+  | V | Fournisseur de Liquidité | « Il ne trade plus, il finance les autres. » |
+
+  Deux ex æquo partagent rang et titre (`src/features/club/clubStandings.ts`) ;
+- **le barème** ci-dessus, lu dans `SCORE_TABLE` — la même table que le calcul,
+  pas une copie : l'écran ne peut pas contredire les règles.
+
+L'onglet relit calls, votes et paris à chaque visite. La page d'un membre
+affiche son rang, ses points, son titre et sa devise.
 
 ---
 

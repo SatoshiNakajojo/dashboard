@@ -94,8 +94,7 @@ export function OracleStandings({
         }}
       >
         Un pari résolu rapporte sa justesse, multipliée par 1 (une semaine) à 8 (dix ans). Ces
-        points comptent aussi au classement du club, avec ceux des calls (onglet Calls →
-        Classement).
+        points comptent aussi au classement du club, avec ceux des calls (onglet Classement).
       </Text>
     </View>
   );

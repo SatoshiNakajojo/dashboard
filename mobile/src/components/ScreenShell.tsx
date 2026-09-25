@@ -20,7 +20,7 @@ export interface ScreenShellProps {
 }
 
 /**
- * Chrome commun aux trois onglets : en-tête, bandeau BTC, zone scrollable.
+ * Chrome commun aux onglets : en-tête, bandeau BTC, zone scrollable.
  *
  * La barre de statut et l'encoche du prototype sont du décor de maquette —
  * on utilise la vraie safe area (README §8.11 et §8.12).

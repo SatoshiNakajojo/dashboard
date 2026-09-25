@@ -347,7 +347,7 @@ function StakesLine({
       </Micro>
       {nothing ? (
         <Text style={{ fontFamily: f.label, fontSize: 10, color: c.sepiaFaint }}>
-          aucun, entre −20 % et +30 %
+          aucun tant que le cours n’a pas bougé
         </Text>
       ) : (
         (

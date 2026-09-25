@@ -75,6 +75,13 @@ export function formatInteger(value: number): string {
   return normalizeSpaces(new Intl.NumberFormat('fr-FR').format(value));
 }
 
+/** Des points, signés : `+1 250`, `−12`, `0` — le signe se lit, même en petit. */
+export function formatPoints(value: number): string {
+  if (value > 0) return `+${formatInteger(value)}`;
+  if (value < 0) return `−${formatInteger(-value)}`;
+  return '0';
+}
+
 const MONTHS_SHORT = [
   'JANV', 'FÉVR', 'MARS', 'AVR', 'MAI', 'JUIN',
   'JUIL', 'AOÛT', 'SEPT', 'OCT', 'NOV', 'DÉC',

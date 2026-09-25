@@ -19,18 +19,18 @@ export interface ClubBets {
 }
 
 /**
- * Les paris du club, lus une fois — pour la page d'un membre.
+ * Les paris du club, lus une fois — pour la page d'un membre et le classement.
  *
  * Pas de temps réel ici : l'onglet Oracle a déjà son canal `predictions`, et
  * `supabase.channel()` rend le **même** canal à un second abonné — l'y
- * rebrancher casserait celui de l'onglet. Une page de profil n'a pas besoin de
- * voir un pari arriver à la seconde.
+ * rebrancher casserait celui de l'onglet. Un classement n'a pas besoin de voir
+ * un pari arriver à la seconde : il se relit quand `revision` change.
  */
-export function useClubBets(membersById: Map<string, Member>): ClubBets {
+export function useClubBets(membersById: Map<string, Member>, revision = 0): ClubBets {
   const [bets, setBets] = useState<Bet[]>(() => (supabase ? [] : MOCK_BETS));
   const [loading, setLoading] = useState(Boolean(supabase));
   const [error, setError] = useState<string | null>(null);
-  const [now] = useState(() => Date.now());
+  const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
     const client = supabase;
@@ -45,8 +45,10 @@ export function useClubBets(membersById: Map<string, Member>): ClubBets {
         .abortSignal(controller.signal);
 
       if (controller.signal.aborted) return;
+      setNow(Date.now());
       if (cause) setError(describeError(cause));
       else {
+        setError(null);
         setBets(
           (data ?? [])
             .map((row) => betFromRow(row as BetRow))
@@ -57,7 +59,7 @@ export function useClubBets(membersById: Map<string, Member>): ClubBets {
     })();
 
     return () => controller.abort();
-  }, []);
+  }, [revision]);
 
   const resolved = useMemo(() => resolvedBets(bets, now), [bets, now]);
   const history = useJudgedHistory(resolved, membersById, now);

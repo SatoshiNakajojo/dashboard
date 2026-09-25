@@ -63,6 +63,10 @@ export const a = {
   scrim: 'rgba(6,5,3,.62)',
   fameRule: 'rgba(168,128,47,.5)',
   rektRule: 'rgba(154,84,80,.5)',
+  // La plus haute marche du podium : l'or, en lumière rasante.
+  podiumTop: 'rgba(232,144,61,.20)',
+  podiumBottom: 'rgba(232,144,61,.03)',
+  podiumBorder: 'rgba(232,144,61,.45)',
 } as const;
 
 /**
