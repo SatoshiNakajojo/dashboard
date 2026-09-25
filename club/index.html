@@ -48,15 +48,15 @@
     </style>
     <script>
       (function () {
-        var bottomShim = function bottomShim(standalone, screenWidth, screenHeight, innerWidth, innerHeight) {
+        var bottomShim = function bottomShim(standalone, screenWidth, screenHeight, innerWidth, layoutHeight) {
   if (standalone !== true) return 0;
-  const sizes = [screenWidth, screenHeight, innerWidth, innerHeight];
+  const sizes = [screenWidth, screenHeight, innerWidth, layoutHeight];
   for (let i = 0; i < sizes.length; i++) {
     if (typeof sizes[i] !== 'number' || !isFinite(sizes[i]) || sizes[i] <= 0) return 0;
   }
   // iOS donne les dimensions de l'écran en portrait, quelle que soit
   // l'orientation : on les remet dans le sens de la fenêtre.
-  const landscape = innerWidth > innerHeight;
+  const landscape = innerWidth > layoutHeight;
   const fullWidth = landscape
     ? Math.max(screenWidth, screenHeight)
     : Math.min(screenWidth, screenHeight);
@@ -64,22 +64,47 @@
     ? Math.min(screenWidth, screenHeight)
     : Math.max(screenWidth, screenHeight);
   if (Math.abs(fullWidth - innerWidth) > 1) return 0;
-  const gap = Math.round(fullHeight - innerHeight);
+  const gap = Math.round(fullHeight - layoutHeight);
   return gap > 0 && gap <= 100 ? gap : 0;
 };
         var root = document.documentElement;
+        var probe = null;
+        var fits = 0;
+        function layoutHeight() {
+          if (!probe && document.body) {
+            probe = document.createElement('div');
+            probe.id = 'club-viewport-probe';
+            probe.setAttribute('aria-hidden', 'true');
+            probe.style.cssText = 'position:fixed;top:0;left:0;width:1px;height:100%;visibility:hidden;pointer-events:none';
+            document.body.appendChild(probe);
+            if (window.ResizeObserver) new ResizeObserver(function () { fit(); }).observe(probe);
+          }
+          return probe ? probe.getBoundingClientRect().height : innerHeight;
+        }
         function fit() {
-          var gap = bottomShim(navigator.standalone, screen.width, screen.height, innerWidth, innerHeight);
+          var layout = layoutHeight();
+          var gap = bottomShim(navigator.standalone, screen.width, screen.height, innerWidth, layout);
+          fits += 1;
+          window.__clubViewport = {
+            standalone: navigator.standalone === true,
+            screen: screen.height, inner: innerHeight, layout: Math.round(layout), gap: gap, fits: fits
+          };
           root.style.setProperty('--club-shim', gap + 'px');
           if (gap > 0) root.classList.add('club-shim');
           else root.classList.remove('club-shim');
           if (gap > 0 && window.scrollY !== 0) window.scrollTo(0, 0);
         }
         fit();
+        document.addEventListener('DOMContentLoaded', fit);
+        addEventListener('load', function () {
+          fit();
+          [150,600,1500,3000].forEach(function (ms) { setTimeout(fit, ms); });
+        });
         addEventListener('resize', fit);
         addEventListener('pageshow', fit);
         addEventListener('orientationchange', function () { setTimeout(fit, 300); });
         document.addEventListener('visibilitychange', fit);
+        if (window.visualViewport) window.visualViewport.addEventListener('resize', fit);
         addEventListener('scroll', function () {
           if (root.classList.contains('club-shim') && window.scrollY !== 0) window.scrollTo(0, 0);
         }, { passive: true });
@@ -102,7 +127,7 @@
     </noscript>
     <!-- The root element for your Expo app. -->
     <div id="root"></div>
-  <script src="/dashboard/club/_expo/static/js/web/entry-1e9775f75bfef6dacc250a66f479a659.js" defer></script>
+  <script src="/dashboard/club/_expo/static/js/web/entry-0446207a1beaa437328093bd1186da78.js" defer></script>
 
     <div id="boot" aria-label="Chargement" role="progressbar">
       <img id="boot-logo" src="icon-512.png" alt="" width="240" height="240" />
