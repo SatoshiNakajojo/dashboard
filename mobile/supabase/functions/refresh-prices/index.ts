@@ -16,7 +16,13 @@
 
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
-import { chunk, planUpdates, quoteRequests, type PricedTicker } from './plan.ts';
+import {
+  chunk,
+  planConfirmations,
+  planUpdates,
+  quoteRequests,
+  type PricedTicker,
+} from './plan.ts';
 import { neededRates, parseYahooQuote, toUsd, type YahooQuote } from '../_shared/yahooParse.ts';
 
 const COINGECKO = 'https://api.coingecko.com/api/v3';
@@ -166,7 +172,10 @@ Deno.serve(async (request) => {
 
   const { data, error } = await client
     .from('tickers')
-    .select('id, coingecko_id, yahoo_symbol, current_price')
+    // `*` : `entry_confirmed_at` n'existe qu'après la migration
+    // `20261002090000_live_entry_price` ; la nommer ferait échouer le relevé
+    // sur une base qui ne l'a pas encore.
+    .select('*')
     .or('coingecko_id.not.is.null,yahoo_symbol.not.is.null')
     // Une position close a un prix de sortie, pas un cours (la base le
     // garantit aussi : `tickers_freeze_call`).
@@ -218,7 +227,35 @@ Deno.serve(async (request) => {
   let updated = 0;
   const failures: string[] = [];
 
+  // v1.01 : les calls tout juste publiés reçoivent leur prix d'entrée réel —
+  // le cours lu ici, pas celui qu'a envoyé l'app. `is('entry_confirmed_at',
+  // null)` : une confirmation ne s'écrit qu'une fois.
+  const confirmations = planConfirmations(rows, {
+    coingecko: coingeckoPrices,
+    yahoo: yahooResult.prices,
+  });
+  let confirmed = 0;
+  for (const entry of confirmations) {
+    const { error: writeError } = await client
+      .from('tickers')
+      .update({
+        entry_price: entry.entryPrice,
+        entry_btc_price: entry.entryBtcPrice,
+        current_price: entry.entryPrice,
+        price_updated_at: now,
+        entry_confirmed_at: now,
+      })
+      .eq('id', entry.id)
+      .is('entry_confirmed_at', null);
+
+    if (writeError) failures.push(entry.id);
+    else confirmed += 1;
+  }
+  const confirmedIds = new Set(confirmations.map((entry) => entry.id));
+
   for (const update of updates) {
+    // Déjà écrit avec sa confirmation d'entrée.
+    if (confirmedIds.has(update.id)) continue;
     const { error: writeError } = await client
       .from('tickers')
       .update({ current_price: update.price, price_updated_at: now })
@@ -235,6 +272,7 @@ Deno.serve(async (request) => {
   return Response.json(
     {
       updated,
+      confirmed,
       skipped,
       failures,
       problems,

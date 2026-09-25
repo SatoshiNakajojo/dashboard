@@ -83,11 +83,7 @@ export default function BagScreen() {
 
   const handlePublish = async (draft: CallDraft) => {
     const sent = editing
-      ? await edit(editing.id, {
-          entryPrice: draft.entryPrice,
-          entryDate: draft.entryDate,
-          thesis: draft.thesis,
-        })
+      ? await edit(editing.id, { thesis: draft.thesis })
       : await publish(draft);
     // La sheet ne se referme que si le call est parti : sur échec, la saisie
     // reste à l'écran avec le message d'erreur.

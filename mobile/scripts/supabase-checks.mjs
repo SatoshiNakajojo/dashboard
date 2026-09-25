@@ -37,6 +37,11 @@ export const COLUMNS = [
     migration: '20260929090000_one_vote_change.sql',
   },
   { table: 'events', column: 'edited_at', migration: '20260930090000_edit_nights.sql' },
+  {
+    table: 'tickers',
+    column: 'entry_confirmed_at',
+    migration: '20261002090000_live_entry_price.sql',
+  },
 ];
 
 const ok = (label, detail) => ({ level: 'ok', label, detail });

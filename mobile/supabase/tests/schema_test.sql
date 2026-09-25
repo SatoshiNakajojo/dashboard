@@ -138,12 +138,15 @@ declare
   t      public.tickers%rowtype;
   failed boolean;
 begin
-  set local role authenticated;
-
+  -- Un call d'il y a un mois, prix d'entrée confirmé (v1.01 : un membre ne
+  -- peut plus publier dans le passé, d'où l'insertion par la base).
   insert into public.tickers (id, user_id, symbol, asset_class, entry_price, current_price,
-                              entry_btc_price, thesis, entered_on)
+                              entry_btc_price, thesis, entered_on, entry_confirmed_at)
   values ('dddddddd-0000-4000-8000-000000000002', 'aaaaaaaa-0000-4000-8000-000000000001',
-          '$SMR', 'ACTION', 10, 11, 60000, 'Petits réacteurs.', current_date - 30);
+          '$SMR', 'ACTION', 10, 11, 60000, 'Petits réacteurs.', current_date - 30,
+          now() - interval '30 days');
+
+  set local role authenticated;
 
   -- Clôturer : la perf devient réalisée, l'instant est posé par la base, et ce
   -- n'est pas une « modification ».
@@ -227,6 +230,97 @@ begin
   select * into t from public.tickers where id = 'dddddddd-0000-4000-8000-000000000003';
   assert t.closed_on is null, 'on ne clôture pas le call d’un autre';
   raise notice 'ok · tickers : on ne clôture que ses propres calls';
+end $$;
+
+-- --- Calls v1.01 : le prix d'entrée est le cours du marché --------------------
+
+do $$
+declare
+  john   constant uuid := 'aaaaaaaa-0000-4000-8000-000000000001';
+  call   uuid;
+  t      public.tickers%rowtype;
+  failed boolean;
+begin
+  set local role authenticated;
+
+  -- Publié « il y a deux semaines », au prix d'alors : la base remet à
+  -- aujourd'hui, maintenant, et le prix reste provisoire.
+  insert into public.tickers (user_id, symbol, asset_class, entry_price, current_price, thesis,
+                              entered_on, created_at, coingecko_id, entry_confirmed_at)
+  values (john, '$SOL', 'ALT', 90, 90, 'Le retour.', current_date - 14,
+          now() - interval '14 days', 'solana', now() - interval '14 days')
+  returning * into t;
+  call := t.id;
+  assert t.entered_on = (now() at time zone 'Pacific/Noumea')::date, 'entrée : aujourd’hui à Nouméa';
+  assert t.created_at = now(), 'publication : maintenant';
+  assert t.entry_confirmed_at is null, 'le prix envoyé reste provisoire';
+  assert t.votes_close_at = now() + interval '72 hours', 'la fenêtre de vote part de maintenant';
+  raise notice 'ok · calls v1.01 : un call se publie aujourd’hui, prix provisoire';
+
+  -- Le membre ne corrige ni le prix, ni le jour, ni la confirmation.
+  failed := false;
+  begin
+    update public.tickers set entry_price = 50 where id = call;
+  exception when check_violation then failed := true;
+  end;
+  assert failed, 'un membre ne change pas son prix d’entrée';
+  failed := false;
+  begin
+    update public.tickers set entry_confirmed_at = now() where id = call;
+  exception when check_violation then failed := true;
+  end;
+  assert failed, 'un membre ne confirme pas lui-même son prix';
+  failed := false;
+  begin
+    update public.tickers set entered_on = current_date - 3 where id = call;
+  exception when check_violation then failed := true;
+  end;
+  assert failed, 'un membre n’antidate pas son entrée';
+  -- La thèse, si.
+  update public.tickers set thesis = 'Le grand retour.' where id = call;
+  raise notice 'ok · calls v1.01 : le prix et le jour d’entrée ne se modifient pas';
+
+  -- Pas de clôture avant la confirmation.
+  failed := false;
+  begin
+    update public.tickers set exit_price = 120, closed_on = current_date where id = call;
+  exception when check_violation then failed := true;
+  end;
+  assert failed, 'on ne clôture pas un call au prix d’entrée provisoire';
+  reset role;
+
+  -- Le relevé des prix confirme au cours du serveur — sans marquer « modifié ».
+  update public.tickers
+     set entry_price = 101.5, current_price = 101.5, entry_btc_price = 111000,
+         entry_confirmed_at = now()
+   where id = call;
+  select * into t from public.tickers where id = call;
+  assert t.entry_price = 101.5 and t.entry_confirmed_at = now(), 'prix confirmé par le serveur';
+
+  -- Sur un call jamais retouché, la confirmation ne le marque pas « modifié ».
+  set local role authenticated;
+  insert into public.tickers (user_id, symbol, asset_class, entry_price, current_price, thesis,
+                              yahoo_symbol)
+  values (john, '$NVDA', 'ACTION', 130, 130, 'Les puces.', 'NVDA')
+  returning * into t;
+  reset role;
+  update public.tickers
+     set entry_price = 131.2, current_price = 131.2, entry_btc_price = 111000,
+         entry_confirmed_at = now()
+   where id = t.id;
+  select * into t from public.tickers where id = t.id;
+  assert t.entry_price = 131.2 and t.edited_at is null, 'une confirmation n’est pas une modification';
+  delete from public.tickers where id = t.id;
+  raise notice 'ok · calls v1.01 : le serveur confirme le prix d’entrée';
+
+  -- Confirmé : la clôture redevient possible.
+  set local role authenticated;
+  update public.tickers set exit_price = 120, closed_on = current_date where id = call;
+  reset role;
+  select * into t from public.tickers where id = call;
+  assert t.closed_on = current_date, 'clôturé une fois le prix confirmé';
+  raise notice 'ok · calls v1.01 : un call confirmé se clôture';
+  delete from public.tickers where id = call;
 end $$;
 
 -- --- Calls : des votes argumentés, dans une fenêtre -----------------------------
@@ -769,7 +863,7 @@ begin
   insert into public.tickers (user_id, symbol, asset_class, entry_price, current_price, thesis, entered_on)
   values (john, '$OKLO', 'ACTION', 20, 20, 'Réacteurs.', current_date - 10)
   returning id into call;
-  update public.tickers set exit_price = 30, closed_on = current_date - 1 where id = call;
+  update public.tickers set exit_price = 30, closed_on = current_date where id = call;
   reset role;
   select * into r from public.notification_outbox where dedupe_key = 'call_new:' || call;
   assert r.kind = 'call_new' and r.payload ->> 'symbol' = '$OKLO', 'call annoncé';

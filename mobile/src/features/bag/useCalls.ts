@@ -5,6 +5,7 @@ import { checkEntryDate, clubDateToIso, clubIsoDay, entryDayOf } from '@/lib/btc
 import { fetchBtcOn, resolveCoingeckoId } from '@/lib/coingecko';
 import { providerFor, toYahooSymbol } from '@/lib/quotes';
 import { callPerformance } from '@/lib/performance';
+import { fetchLivePrice, usablePrice } from './livePrice';
 import { entryBtcFor, liveBtc, mergeQuotes } from './quoteRefresh';
 import { useLiveQuotes } from './useLiveQuotes';
 import { describeError, supabase } from '@/lib/supabase';
@@ -14,19 +15,17 @@ import { getCallsSource, type CallDraftInput, type VoteRow } from './source';
 export interface PublishInput {
   assetClass: CallDraftInput['assetClass'];
   symbol: string;
+  /**
+   * Le cours live qu'affichait le composer. Relu à la publication ; il ne sert
+   * que si ce second relevé échoue — il est lui-même live, et le serveur le
+   * confirmera de toute façon.
+   */
   entryPrice: number;
   thesis: string;
   /** Place de cotation, pour suffixer le symbole Yahoo d'un titre non américain. */
   exchange?: string | null;
   /** Jeton choisi dans le composer ; à défaut, on résout le ticker nous-mêmes. */
   coingeckoId?: string | null;
-  /**
-   * Jour de l'entrée, `JJ/MM/AAAA` à l'heure du club. Vide : aujourd'hui.
-   *
-   * C'est lui qui fixe le référentiel vs ₿ : le bitcoin se compare depuis le
-   * même jour que le titre, pas depuis la publication.
-   */
-  entryDate?: string;
 }
 
 /** La sortie d'une position, telle que saisie. */
@@ -36,11 +35,11 @@ export interface CloseInput {
   exitDate: string;
 }
 
-/** Ce qu'un auteur corrige sur son call. */
+/**
+ * Ce qu'un auteur corrige sur son call : sa thèse. Le prix et le jour
+ * d'entrée sont ceux du marché à la publication (v1.01).
+ */
 export interface EditInput {
-  entryPrice: number;
-  /** `JJ/MM/AAAA`. */
-  entryDate: string;
   thesis: string;
 }
 
@@ -229,16 +228,6 @@ export function useCalls(
       setPublishing(true);
 
       try {
-        const entry = await resolveEntry(
-          input.assetClass,
-          input.entryPrice,
-          input.entryDate ?? '',
-        );
-        if ('problem' in entry) {
-          setError(entry.problem);
-          return false;
-        }
-
         // Un actif a un fournisseur, pas deux (contrainte
         // `tickers_one_quote_source`) : la classe d'actif décide, et la
         // résolution du symbole suit.
@@ -256,9 +245,30 @@ export function useCalls(
           ? null
           : (input.coingeckoId ?? (await resolveCoingeckoId(input.symbol)));
 
+        // Le prix d'entrée est le cours de cet instant — jamais une saisie.
+        // Un call BTC a déjà son cours : le spot que l'app tient à jour.
+        const entryPrice =
+          (input.assetClass === 'BTC' ? liveBtc(spot) : null) ??
+          (await fetchLivePrice({ assetClass: input.assetClass, yahooSymbol, coingeckoId })) ??
+          usablePrice(input.entryPrice);
+        if (entryPrice === null) {
+          setError(
+            `Cours live de ${input.symbol} introuvable : un call se publie au prix du marché. Réessayez dans un moment.`,
+          );
+          return false;
+        }
+
+        // Aujourd'hui, maintenant : la base impose de toute façon le jour.
+        const entry = await resolveEntry(input.assetClass, entryPrice, '');
+        if ('problem' in entry) {
+          setError(entry.problem);
+          return false;
+        }
+
         const ticker = await source.publish(
           {
             ...input,
+            entryPrice,
             btcSpot: entry.btcAtEntry,
             enteredOn: entry.enteredOn,
             coingeckoId,
@@ -277,15 +287,12 @@ export function useCalls(
         setPublishing(false);
       }
     },
-    [currentUserId, publishing, source, resolveEntry],
+    [currentUserId, publishing, source, resolveEntry, spot],
   );
 
   /**
-   * Corrige un de mes calls : prix, jour d'entrée, thèse.
-   *
-   * Le référentiel BTC n'est recalculé que si le jour d'entrée change — ou si
-   * c'est un call BTC, dont le référentiel **est** le prix d'entrée. Corriger
-   * une faute dans la thèse ne doit pas déplacer la colonne « vs ₿ ».
+   * Corrige la thèse d'un de mes calls. Le prix et le jour d'entrée, eux, ne
+   * se corrigent plus : ce sont ceux du marché à la publication (v1.01).
    */
   const edit = useCallback(
     async (tickerId: string, input: EditInput): Promise<boolean> => {
@@ -294,30 +301,7 @@ export function useCalls(
       setPublishing(true);
 
       try {
-        const sameDay = input.entryDate.trim() === entryDayOf(ticker);
-        let enteredOn = ticker.enteredOn ?? clubDateToIso(entryDayOf(ticker))!;
-        let entryBtcPrice = ticker.entryBtcPrice;
-
-        if (!sameDay || ticker.assetClass === 'BTC') {
-          const entry = await resolveEntry(
-            ticker.assetClass,
-            input.entryPrice,
-            input.entryDate,
-          );
-          if ('problem' in entry) {
-            setError(entry.problem);
-            return false;
-          }
-          enteredOn = entry.enteredOn;
-          entryBtcPrice = entry.btcAtEntry;
-        }
-
-        const next = await source.update(tickerId, {
-          entryPrice: input.entryPrice,
-          entryBtcPrice,
-          enteredOn,
-          thesis: input.thesis,
-        });
+        const next = await source.update(tickerId, { thesis: input.thesis });
         setTickers((rows) => rows.map((row) => (row.id === tickerId ? next : row)));
         setError(null);
         return true;
@@ -328,7 +312,7 @@ export function useCalls(
         setPublishing(false);
       }
     },
-    [tickers, currentUserId, publishing, source, resolveEntry],
+    [tickers, currentUserId, publishing, source],
   );
 
   /** Supprime un de mes calls. Ses votes partent avec lui (`on delete cascade`). */

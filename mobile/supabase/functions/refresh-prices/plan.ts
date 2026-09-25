@@ -13,7 +13,25 @@ export interface PricedTicker {
   /** Symbole Yahoo Finance, pour les actions et ETF. */
   yahoo_symbol: string | null;
   current_price: number | null;
+  /** `BTC` : son propre référentiel. Absent des lignes d'avant la v1.01. */
+  asset_class?: string | null;
+  /**
+   * `null` : le prix d'entrée envoyé par l'app est provisoire, et ce relevé
+   * doit le remplacer par le cours du serveur (v1.01). Absent : confirmé.
+   */
+  entry_confirmed_at?: string | null;
 }
+
+/** Le prix d'entrée d'un call, confirmé au cours que le serveur vient de lire. */
+export interface EntryConfirmation {
+  id: string;
+  entryPrice: number;
+  /** Le cours du bitcoin au même instant — le référentiel « vs ₿ ». */
+  entryBtcPrice: number;
+}
+
+/** L'identifiant CoinGecko du bitcoin, référentiel de toute entrée. */
+export const BITCOIN_ID = 'bitcoin';
 
 export interface PriceUpdate {
   id: string;
@@ -48,9 +66,50 @@ export function quoteRequests(rows: readonly PricedTicker[]): QuoteRequests {
   for (const row of rows) {
     if (row.coingecko_id) coingecko.add(row.coingecko_id);
     else if (row.yahoo_symbol) yahoo.add(row.yahoo_symbol);
+    // Une entrée à confirmer a besoin du bitcoin du même instant.
+    if (row.entry_confirmed_at === null && (row.coingecko_id || row.yahoo_symbol)) {
+      coingecko.add(BITCOIN_ID);
+    }
   }
 
   return { coingecko: [...coingecko].sort(), yahoo: [...yahoo].sort() };
+}
+
+/**
+ * Les entrées à confirmer (v1.01), au cours que le serveur vient de lire.
+ *
+ * Un call se publie au prix que l'app affichait ; ce prix n'engage à rien tant
+ * que le serveur ne l'a pas relu. Ici, il le relit : même fournisseur que le
+ * suivi du cours, même instant pour le bitcoin. Sans cours frais — ou sans
+ * bitcoin pour un call qui n'en est pas —, on attend le relevé suivant plutôt
+ * que de confirmer un prix faux.
+ */
+export function planConfirmations(
+  rows: readonly PricedTicker[],
+  prices: {
+    coingecko?: Readonly<Record<string, number>>;
+    yahoo?: Readonly<Record<string, number>>;
+  },
+): EntryConfirmation[] {
+  const valid = (value: number | undefined): value is number =>
+    typeof value === 'number' && Number.isFinite(value) && value > 0;
+  const btc = prices.coingecko?.[BITCOIN_ID];
+  const out: EntryConfirmation[] = [];
+
+  for (const row of rows) {
+    if (row.entry_confirmed_at !== null) continue;
+    const price = row.coingecko_id
+      ? prices.coingecko?.[row.coingecko_id]
+      : row.yahoo_symbol
+        ? prices.yahoo?.[row.yahoo_symbol]
+        : undefined;
+    if (!valid(price)) continue;
+    const entryBtcPrice = row.asset_class === 'BTC' ? price : btc;
+    if (!valid(entryBtcPrice)) continue;
+    out.push({ id: row.id, entryPrice: price, entryBtcPrice });
+  }
+
+  return out;
 }
 
 /**

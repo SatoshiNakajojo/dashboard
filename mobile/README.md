@@ -105,7 +105,7 @@ qu'on n'a pas déposé le nouveau tracé.
 
 ## Ce qui a été vérifié
 
-- `npm run typecheck`, `npm run lint`, `npm test` — propres (559 tests).
+- `npm run typecheck`, `npm run lint`, `npm test` — propres (562 tests).
 - **Règles pures** : bornes et inversibilité du repère, monotonie du tracé,
   écart à la courbe réelle, espaces insécables du formatage français, perf vs ₿
   comme ratio et non soustraction, seuils et tri des deux classements.
@@ -535,10 +535,10 @@ du bandeau (`HORS LIGNE`) : il se lit, il ne sert plus de référentiel.
 
 ## Corriger ou supprimer un call
 
-Un call publié était figé. L'auteur peut maintenant le **modifier** (prix
-d'entrée, date d'entrée, thèse) ou le **supprimer** (confirmé ; ses votes
-partent avec lui). Les boutons n'apparaissent que sur ses propres calls, et la
-base le vérifie aussi (RLS).
+Un call publié était figé. L'auteur peut maintenant **modifier sa thèse** ou le
+**supprimer** (confirmé ; ses votes partent avec lui). Depuis la v1.01, le prix
+et le jour d'entrée ne se modifient plus (voir ci-dessous). Les boutons
+n'apparaissent que sur ses propres calls, et la base le vérifie aussi (RLS).
 
 Reste figé ce sur quoi on parie : le titre, la classe, l'auteur, la date de
 publication — changer de titre, c'est un autre call. Et comme le prix d'entrée
@@ -546,6 +546,35 @@ fait le classement, toute correction est **datée par la base** (`edited_at`,
 migration `20260924100000_editable_calls`) : la carte affiche « modifié il y a
 2 h », et personne ne retouche son prix en silence. Le référentiel BTC n'est
 recalculé que si le jour d'entrée change.
+
+---
+
+## Le prix d'entrée est celui du marché (v1.01)
+
+Un call se publiait avec le prix et le jour qu'on voulait. Il suffisait donc
+d'attendre de voir un actif monter, puis de publier « le call d'il y a deux
+semaines » à son prix d'alors pour encaisser les points.
+
+Désormais, **un call se publie au cours du marché, maintenant** :
+
+- **dans l'app**, le composer n'a plus de champ prix ni de champ date. Il
+  affiche le cours live, sans le laisser modifier : spot BTC, Yahoo pour une
+  action ou un ETF, CoinGecko pour un jeton (celui choisi dans la liste, sinon
+  le mieux classé). La publication relit ce cours (`livePrice.ts`). Sans cours
+  de marché, pas de call ;
+- **la base** (`20261002090000_live_entry_price`, déclencheur
+  `tickers_live_entry`) pose elle-même le jour d'entrée (Nouméa) et l'heure de
+  publication, quoi que le client envoie. Elle refuse qu'un membre touche
+  ensuite au prix, au jour ou à la confirmation d'entrée ;
+- **le serveur confirme le prix**. Celui qu'envoie l'app n'est que provisoire :
+  au relevé suivant (toutes les 15 min), `refresh-prices` le remplace par le
+  cours qu'il lit lui-même, avec le bitcoin du même instant, et pose
+  `entry_confirmed_at`. Une app bricolée pourrait envoyer n'importe quel prix,
+  il ne tiendrait pas. D'ici là, la carte affiche **À CONFIRMER** sous le prix
+  d'entrée, et le call ne peut pas être clôturé.
+
+Les calls publiés avant la v1.01 gardent leur prix : la migration les marque
+confirmés, une fois pour toutes.
 
 ---
 

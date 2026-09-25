@@ -29,21 +29,18 @@ export interface CallDraftInput {
   coingeckoId: string | null;
   /** Symbole Yahoo Finance, pour une action ou un ETF. */
   yahooSymbol: string | null;
-  /** Jour de l'entrée, `AAAA-MM-JJ`. */
+  /** Jour de l'entrée, `AAAA-MM-JJ` — aujourd'hui ; la base l'impose. */
   enteredOn: string;
 }
 
 /**
- * Ce qu'un auteur peut corriger sur son call.
+ * Ce qu'un auteur peut corriger sur son call : sa thèse.
  *
- * Pas le titre, ni la classe : changer de titre, c'est un autre call. La base
- * le refuse aussi (`tickers_freeze_call`).
+ * Pas le titre ni la classe — changer de titre, c'est un autre call. Pas non
+ * plus le prix ni le jour d'entrée (v1.01) : ce sont ceux du marché à la
+ * publication. La base le refuse aussi (`tickers_live_entry`).
  */
 export interface CallPatch {
-  entryPrice: number;
-  /** Recalculé seulement si le jour d'entrée change ; sinon on renvoie l'ancien. */
-  entryBtcPrice: number | null;
-  enteredOn: string;
   thesis: string;
 }
 
@@ -99,8 +96,12 @@ export interface CallsSource {
 
 // ---------------------------------------------------------------------------
 
-const COLUMNS =
-  'id, user_id, symbol, asset_class, entry_price, current_price, entry_btc_price, size_usd, thesis, coingecko_id, yahoo_symbol, price_updated_at, created_at, entered_on, edited_at, exit_price, exit_btc_price, closed_on, closed_at, votes_close_at';
+/**
+ * `*` plutôt qu'une liste : l'app publiée doit fonctionner avant comme après
+ * une migration qui ajoute une colonne (`entry_confirmed_at`, v1.01) — le
+ * déploiement automatique peut précéder le `db push`.
+ */
+const COLUMNS = '*';
 
 interface Row {
   id: string;
@@ -123,6 +124,8 @@ interface Row {
   closed_on: string | null;
   closed_at: string | null;
   votes_close_at: string | null;
+  /** Absent avant la migration `20261002090000_live_entry_price`. */
+  entry_confirmed_at?: string | null;
 }
 
 /** `numeric` revient en chaîne depuis PostgREST : on ne suppose jamais un nombre. */
@@ -156,6 +159,10 @@ function fromRow(row: Row): Ticker {
     // Avant la migration des votes argumentés, la colonne n'existe pas : la
     // fenêtre se déduit alors de la publication, comme le ferait la base.
     votesCloseAt: row.votes_close_at ?? votesCloseFor(row.created_at),
+    // Sans la colonne, la base est d'avant la règle : tout prix y est tenu
+    // pour confirmé, comme la migration le fera.
+    entryConfirmedAt:
+      row.entry_confirmed_at === undefined ? row.created_at : row.entry_confirmed_at,
   };
 }
 
@@ -259,12 +266,7 @@ function createSupabaseSource(client: NonNullable<typeof supabase>): CallsSource
     async update(tickerId, patch) {
       const { data, error } = await client
         .from('tickers')
-        .update({
-          entry_price: patch.entryPrice,
-          entry_btc_price: patch.entryBtcPrice,
-          entered_on: patch.enteredOn,
-          thesis: patch.thesis,
-        })
+        .update({ thesis: patch.thesis })
         .eq('id', tickerId)
         .select(COLUMNS)
         .single();
@@ -380,6 +382,8 @@ function createMockSource(): CallsSource {
         closedOn: null,
         closedAt: null,
         votesCloseAt: votesCloseFor(new Date().toISOString()),
+        // Démo : pas de serveur pour relire le cours, il est tenu pour confirmé.
+        entryConfirmedAt: new Date().toISOString(),
       };
       tickers.unshift(ticker);
       return { ...ticker };

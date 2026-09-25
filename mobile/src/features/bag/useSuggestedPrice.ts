@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 
 import { useBtcSpot } from '@/hooks/useBtcMarket';
+import { fetchCoinPrices } from '@/lib/coingecko';
 import { providerFor, toYahooSymbol, type ExchangeKey } from '@/lib/quotes';
 import { fetchStockQuote } from '@/lib/yahoo';
 import type { AssetClass } from '@/theme/tokens';
@@ -9,7 +10,7 @@ export interface SuggestedPrice {
   /** Cours proposé comme prix d'entrée, en dollars. `null` si introuvable. */
   price: number | null;
   /** D'où il vient, pour le dire à l'écran. */
-  source: 'btc' | 'yahoo' | null;
+  source: 'btc' | 'yahoo' | 'coingecko' | null;
   /**
    * Le symbole réellement interrogé — `AI.PA`, pas `$AI`.
    *
@@ -31,9 +32,9 @@ const DEBOUNCE_MS = 550;
  * propose donc un cours que lorsqu'on sait le chercher — le spot BTC pour un
  * call bitcoin, Yahoo pour une action ou un ETF — et rien du tout sinon.
  *
- * Les alts ne sont pas couverts : résoudre un symbole CoinGecko demande un
- * aller-retour de recherche par frappe, ce qui épuiserait le quota. Ils sont
- * résolus à la publication, une seule fois.
+ * Un jeton, lui, se cote dès qu'on sait lequel c'est : `coingeckoId` — celui
+ * choisi dans la liste, ou à défaut le mieux classé. Pas de recherche par
+ * frappe ici : la liste du composer l'a déjà faite.
  *
  * `exchange` compte autant que le ticker : sans lui, `$AI` interroge C3.ai à
  * New York au lieu d'Air Liquide à Paris, et le prix proposé est celui d'une
@@ -43,10 +44,13 @@ export function useSuggestedPrice(
   assetClass: AssetClass,
   symbol: string,
   exchange?: ExchangeKey | null,
+  coingeckoId?: string | null,
 ): SuggestedPrice {
   const { spot } = useBtcSpot();
   const [quote, setQuote] = useState<{ price: number; symbol: string } | null>(null);
+  const [coin, setCoin] = useState<{ price: number; id: string } | null>(null);
   const [loading, setLoading] = useState(false);
+  const [coinLoading, setCoinLoading] = useState(false);
 
   const isStock = providerFor(assetClass) === 'yahoo';
   const yahooSymbol = isStock ? toYahooSymbol(symbol, exchange) : null;
@@ -75,8 +79,34 @@ export function useSuggestedPrice(
     };
   }, [yahooSymbol]);
 
+  const coinId = !isStock && assetClass !== 'BTC' ? (coingeckoId ?? null) : null;
+
+  useEffect(() => {
+    if (!coinId) return;
+    const controller = new AbortController();
+    let active = true;
+    const timer = setTimeout(async () => {
+      setCoinLoading(true);
+      const prices = await fetchCoinPrices([coinId], controller.signal);
+      if (!active || controller.signal.aborted) return;
+      const price = prices[coinId];
+      setCoin(typeof price === 'number' && price > 0 ? { price, id: coinId } : null);
+      setCoinLoading(false);
+    }, DEBOUNCE_MS);
+    return () => {
+      active = false;
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [coinId]);
+
   if (assetClass === 'BTC') {
     return { price: spot.usd, source: 'btc', symbol: 'BTC', loading: false };
+  }
+  if (coinId) {
+    return coin?.id === coinId
+      ? { price: coin.price, source: 'coingecko', symbol: coinId, loading: coinLoading }
+      : { price: null, source: null, symbol: coinId, loading: true };
   }
   if (isStock && quote?.symbol === yahooSymbol) {
     return { price: quote.price, source: 'yahoo', symbol: yahooSymbol, loading };

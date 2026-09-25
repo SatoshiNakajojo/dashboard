@@ -6,8 +6,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Micro } from '@/components/ui/Micro';
 import { useCoinSearch } from '@/features/bag/useCoinSearch';
 import { useSuggestedPrice } from '@/features/bag/useSuggestedPrice';
-import { checkEntryDate, entryDayOf } from '@/lib/btcAtDate';
-import { todayInClub } from '@/lib/clubTime';
+import { entryDayOf } from '@/lib/btcAtDate';
 import { formatUsd } from '@/lib/format';
 import { normalizeTicker, type CoinMatch } from '@/lib/coinSearch';
 import { DEFAULT_EXCHANGE, EXCHANGES, providerFor, type ExchangeKey } from '@/lib/quotes';
@@ -27,17 +26,16 @@ import type { CallView } from '@/types/domain';
 export interface CallDraft {
   assetClass: AssetClass;
   symbol: string;
+  /** Le cours live affiché — jamais une saisie (v1.01). */
   entryPrice: number;
   thesis: string;
   /** Place de cotation, pour les actions et ETF hors États-Unis. */
   exchange: ExchangeKey;
   /**
-   * Jeton choisi dans la liste, s'il l'a été. `null` laisse la publication
-   * résoudre le ticker elle-même, au mieux classé.
+   * Le jeton coté : celui choisi dans la liste, sinon le mieux classé. `null`
+   * laisse la publication résoudre le ticker elle-même.
    */
   coingeckoId: string | null;
-  /** Jour de l'entrée, `JJ/MM/AAAA`. Vide : aujourd'hui. */
-  entryDate: string;
 }
 
 export interface ComposerSheetProps {
@@ -77,16 +75,6 @@ export function ComposerSheet({
 }: ComposerSheetProps) {
   const [assetClass, setAssetClass] = useState<AssetClass>(editing?.assetClass ?? 'BTC');
   const [symbol, setSymbol] = useState(editing?.symbol ?? '$BTC');
-  const [entry, setEntry] = useState(() =>
-    editing ? String(editing.entryPrice).replace('.', ',') : '',
-  );
-  /**
-   * Le jour de l'entrée. Vide : aujourd'hui.
-   *
-   * Sans lui, un prix d'achat vieux de six mois se comparait au bitcoin des
-   * dernières minutes, et la colonne « vs ₿ » recopiait la perf.
-   */
-  const [entryDate, setEntryDate] = useState(() => (editing ? entryDayOf(editing) : ''));
   const [thesis, setThesis] = useState(editing?.thesis ?? '');
   const [exchange, setExchange] = useState<ExchangeKey>(DEFAULT_EXCHANGE);
   const [picked, setPicked] = useState<CoinMatch | null>(null);
@@ -107,27 +95,24 @@ export function ComposerSheet({
   const pinned =
     picked && normalizeTicker(symbol) === picked.symbol.toLowerCase() ? picked : null;
 
-  // Le cours proposé dépend de l'actif : spot BTC pour un call bitcoin, Yahoo
-  // pour une action ou un ETF, rien pour un alt — plutôt qu'un prix faux.
-  const suggested = useSuggestedPrice(assetClass, symbol, exchange);
-
-  const when = checkEntryDate(entryDate);
+  /** Le jeton coté : le choix du membre, ou le mieux classé de la liste. */
+  const coin = pinned ?? (isCoin ? (search.matches[0] ?? null) : null);
 
   /**
-   * Le prix saisi, ou le cours proposé à défaut — mais seulement pour une
-   * entrée du jour : le cours d'aujourd'hui n'est pas le prix d'un achat passé.
+   * Le prix d'entrée : le cours live, et rien d'autre (v1.01).
+   *
+   * Spot BTC pour un call bitcoin, Yahoo pour une action ou un ETF, CoinGecko
+   * pour un jeton. Pas de saisie, pas de date d'entrée : un call se publie au
+   * marché, maintenant. Sinon on attendrait de voir un actif monter pour
+   * publier « le call d'il y a deux semaines ». Le serveur relit ce cours au
+   * relevé suivant et le confirme.
    */
-  const entryPrice = (() => {
-    const parsed = Number(entry.replace(/[^\d.,]/g, '').replace(',', '.'));
-    if (Number.isFinite(parsed) && parsed > 0) return parsed;
-    return when.kind === 'today' ? (suggested.price ?? 0) : 0;
-  })();
+  const suggested = useSuggestedPrice(assetClass, symbol, exchange, coin?.id ?? null);
+  const entryPrice = suggested.price ?? 0;
 
   const reset = () => {
     setAssetClass('BTC');
     setSymbol('$BTC');
-    setEntry('');
-    setEntryDate('');
     setThesis('');
     setExchange(DEFAULT_EXCHANGE);
     setPicked(null);
@@ -140,8 +125,7 @@ export function ComposerSheet({
       entryPrice,
       thesis: thesis.trim(),
       exchange,
-      coingeckoId: pinned?.id ?? null,
-      entryDate: entryDate.trim(),
+      coingeckoId: coin?.id ?? null,
     });
     // Sur échec, on garde la saisie : le membre ne doit pas réécrire sa thèse.
     if (sent) reset();
@@ -158,21 +142,23 @@ export function ComposerSheet({
    * n'est plus pré-rempli au petit bonheur, un alt exige une saisie, et il faut
    * le dire.
    */
-  const blockedReason = !symbolValid
-    ? 'Un ticker comme « $BTC », lettres et chiffres.'
-    : when.kind === 'invalid'
-      ? 'Une date d’entrée comme 12/03/2026.'
-      : when.kind === 'future'
-        ? 'La date d’entrée est dans le futur.'
-        : entryPrice <= 0
-          ? when.kind === 'past'
-            ? 'Indiquez le prix d’entrée de ce jour-là.'
-            : suggested.loading
-              ? 'Recherche du cours…'
-              : 'Indiquez votre prix d’entrée.'
-          : thesis.trim().length === 0
-            ? 'Une thèse, même courte.'
-            : null;
+  const blockedReason = editing
+    ? thesis.trim().length === 0
+      ? 'Une thèse, même courte.'
+      : thesis.trim() === editing.thesis
+        ? 'Rien n’a encore changé.'
+        : null
+    : !symbolValid
+      ? 'Un ticker comme « $BTC », lettres et chiffres.'
+      : entryPrice <= 0
+        ? suggested.loading || search.loading
+          ? 'Recherche du cours live…'
+          : isCoin && search.empty
+            ? 'Aucun jeton connu sous ce ticker : sans cours de marché, pas de call.'
+            : 'Cours live introuvable pour ce ticker : un call se publie au prix du marché.'
+        : thesis.trim().length === 0
+          ? 'Une thèse, même courte.'
+          : null;
 
   const canPublish = blockedReason === null && !publishing;
 
@@ -315,64 +301,43 @@ export function ComposerSheet({
               }}
             >
               <Micro size={8.5} tracking={1.7} style={{ color: c.sepiaMuted }}>
-                {suggested.source === 'yahoo' ? 'PRIX D’ENTRÉE · YAHOO' : 'PRIX D’ENTRÉE'}
+                {editing ? 'PRIX D’ENTRÉE' : 'PRIX D’ENTRÉE · LIVE'}
               </Micro>
-              <TextInput
-                value={entry}
-                onChangeText={setEntry}
-                keyboardType="decimal-pad"
-                // Pré-rempli au cours du moment, mais éditable (README §5.5).
-                placeholder={
-                  suggested.loading
-                    ? '…'
-                    : suggested.price === null
-                      ? 'à saisir'
-                      : formatUsd(suggested.price)
-                }
-                placeholderTextColor={c.sepiaFaint}
+              <Text
+                accessibilityLabel="Prix d’entrée, cours live"
                 style={{
                   fontFamily: f.labelMed,
                   fontSize: 14,
-                  color: c.ivory,
+                  color: (editing ? editing.entryPrice : suggested.price)
+                    ? c.ivory
+                    : c.sepiaFaint,
                   marginTop: 8,
-                  padding: 0,
                 }}
-              />
+              >
+                {editing
+                  ? formatUsd(editing.entryPrice)
+                  : suggested.price !== null
+                    ? formatUsd(suggested.price)
+                    : suggested.loading || search.loading
+                      ? '…'
+                      : 'introuvable'}
+              </Text>
             </View>
           </View>
 
-          <View style={{ paddingBottom: 13, borderBottomWidth: 1, borderColor: c.hairline }}>
-            <Micro size={8.5} tracking={1.7} style={{ color: c.sepiaMuted }}>
-              DATE D’ENTRÉE
-            </Micro>
-            <TextInput
-              value={entryDate}
-              onChangeText={setEntryDate}
-              keyboardType="numbers-and-punctuation"
-              placeholder={`Aujourd’hui · ${todayInClub()}`}
-              placeholderTextColor={c.sepiaFaint}
-              accessibilityLabel="Date d’entrée, au format jour, mois, année"
-              style={{
-                fontFamily: f.labelMed,
-                fontSize: 14,
-                color: when.kind === 'invalid' || when.kind === 'future' ? c.oxblood : c.ivory,
-                marginTop: 8,
-                padding: 0,
-              }}
-            />
-            {when.kind === 'past' && assetClass !== 'BTC' ? (
-              <Text
-                style={{
-                  fontFamily: f.serifItalic,
-                  fontSize: 13,
-                  color: c.sepia,
-                  marginTop: 6,
-                }}
-              >
-                Le bitcoin sera comparé depuis ce jour-là.
-              </Text>
-            ) : null}
-          </View>
+          <Text
+            style={{
+              fontFamily: f.sans,
+              fontSize: 10,
+              lineHeight: 16,
+              color: c.sepiaFaint,
+              marginTop: -8,
+            }}
+          >
+            {editing
+              ? `Entrée au marché le ${entryDayOf(editing)}. Le prix et le jour d’entrée ne se modifient pas ; la thèse, si.`
+              : 'Un call se publie au cours du marché, maintenant : ni saisie, ni date passée. Le serveur relit ce cours dans le quart d’heure et le confirme.'}
+          </Text>
 
           {isStock && !editing && (
             <View>
@@ -493,9 +458,9 @@ export function ComposerSheet({
                   : search.loading
                     ? 'Recherche…'
                     : search.empty
-                      ? 'Aucun jeton connu sous ce ticker. Le call partira sans cours, et sa carte restera au prix d’entrée.'
+                      ? 'Aucun jeton connu sous ce ticker : sans cours de marché, pas de call.'
                       : search.matches.length > 0
-                        ? 'Sans choix, le mieux classé sera retenu.'
+                        ? `Sans choix, le mieux classé est retenu : ${search.matches[0]!.name}.`
                         : 'Tapez deux lettres pour voir les jetons connus.'}
               </Text>
             </View>

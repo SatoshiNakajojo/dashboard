@@ -126,7 +126,13 @@ export const CallCard = memo(function CallCard({
         className="flex-row"
         style={{ borderTopWidth: 1, borderBottomWidth: 1, borderColor: c.hairline }}
       >
-        <Stat label="ENTRÉE" value={formatPrice(call.entryPrice)} />
+        {/* v1.01 : le prix d'entrée est le cours live de la publication. Tant
+            que le serveur ne l'a pas relu (≤ 15 min), il reste provisoire. */}
+        <Stat
+          label="ENTRÉE"
+          value={formatPrice(call.entryPrice)}
+          note={call.entryConfirmedAt ? undefined : 'À CONFIRMER'}
+        />
         <Stat
           label="PERF"
           value={
@@ -345,6 +351,8 @@ interface StatProps {
   labelColor?: string;
   valueColor?: string;
   divided?: boolean;
+  /** Une précision sous la valeur — `À CONFIRMER`. */
+  note?: string;
 }
 
 function Stat({
@@ -353,6 +361,7 @@ function Stat({
   labelColor = c.sepiaMuted,
   valueColor = c.bone,
   divided,
+  note,
 }: StatProps) {
   return (
     <View
@@ -370,6 +379,11 @@ function Stat({
       <Text style={{ fontFamily: f.labelMed, fontSize: 12, color: valueColor, marginTop: 5 }}>
         {value}
       </Text>
+      {note ? (
+        <Micro size={7} tracking={1.2} style={{ color: c.goldMuted, marginTop: 4 }}>
+          {note}
+        </Micro>
+      ) : null}
     </View>
   );
 }

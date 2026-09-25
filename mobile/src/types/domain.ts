@@ -91,6 +91,12 @@ export interface Ticker {
   closedAt: string | null;
   /** Fin de la fenêtre de vote : publication + 72 h, posée par la base. */
   votesCloseAt: string;
+  /**
+   * Quand le serveur a confirmé le prix d'entrée au cours du marché
+   * (`refresh-prices`, v1.01). `null` : prix encore provisoire — celui que
+   * l'app affichait à la publication.
+   */
+  entryConfirmedAt: string | null;
 }
 
 /** Un vote sur un call, avec sa raison. */

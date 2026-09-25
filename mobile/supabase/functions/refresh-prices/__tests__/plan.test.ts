@@ -9,7 +9,13 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { chunk, planUpdates, quoteRequests, type PricedTicker } from '../plan.ts';
+import {
+  chunk,
+  planConfirmations,
+  planUpdates,
+  quoteRequests,
+  type PricedTicker,
+} from '../plan.ts';
 
 const crypto = (id: string, cg: string, current: number | null): PricedTicker => ({
   id,
@@ -159,5 +165,79 @@ describe('découpage en lots', () => {
 
   it('refuse une taille absurde plutôt que de boucler sans fin', () => {
     assert.throws(() => chunk([1, 2], 0), RangeError);
+  });
+});
+
+describe('confirmation du prix d’entrée (v1.01)', () => {
+  const pending = (over: Partial<PricedTicker>): PricedTicker => ({
+    id: 'x',
+    coingecko_id: null,
+    yahoo_symbol: null,
+    current_price: 90,
+    asset_class: 'ALT',
+    entry_confirmed_at: null,
+    ...over,
+  });
+
+  it('demande le bitcoin dès qu’une entrée attend sa confirmation', () => {
+    assert.deepEqual(quoteRequests([pending({ yahoo_symbol: 'NVDA' })]).coingecko, ['bitcoin']);
+    assert.deepEqual(
+      quoteRequests([
+        pending({ yahoo_symbol: 'NVDA', entry_confirmed_at: '2026-09-25T00:00:00Z' }),
+      ]).coingecko,
+      [],
+    );
+    // Une ligne d'avant la v1.01 n'a pas la colonne : elle est confirmée.
+    assert.deepEqual(
+      quoteRequests([{ id: 'y', coingecko_id: null, yahoo_symbol: 'NVDA', current_price: 1 }])
+        .coingecko,
+      [],
+    );
+  });
+
+  it('remplace le prix de l’app par le cours du serveur, avec le bitcoin du même instant', () => {
+    const plan = planConfirmations(
+      [
+        pending({ id: 'sol', coingecko_id: 'solana' }),
+        pending({ id: 'nvda', yahoo_symbol: 'NVDA', asset_class: 'ACTION' }),
+        pending({ id: 'btc', coingecko_id: 'bitcoin', asset_class: 'BTC' }),
+        pending({
+          id: 'fait',
+          coingecko_id: 'solana',
+          entry_confirmed_at: '2026-09-25T00:00:00Z',
+        }),
+        { id: 'ancien', coingecko_id: 'solana', yahoo_symbol: null, current_price: 1 },
+      ],
+      { coingecko: { solana: 101.5, bitcoin: 111000 }, yahoo: { NVDA: 131.2 } },
+    );
+    assert.deepEqual(plan, [
+      { id: 'sol', entryPrice: 101.5, entryBtcPrice: 111000 },
+      { id: 'nvda', entryPrice: 131.2, entryBtcPrice: 111000 },
+      { id: 'btc', entryPrice: 111000, entryBtcPrice: 111000 },
+    ]);
+  });
+
+  it('attend le relevé suivant plutôt que de confirmer sans cours', () => {
+    assert.deepEqual(
+      planConfirmations([pending({ coingecko_id: 'solana' })], {
+        coingecko: { bitcoin: 111000 },
+      }),
+      [],
+      'sans cours de l’actif',
+    );
+    assert.deepEqual(
+      planConfirmations([pending({ yahoo_symbol: 'NVDA', asset_class: 'ACTION' })], {
+        yahoo: { NVDA: 131.2 },
+      }),
+      [],
+      'sans bitcoin pour le référentiel',
+    );
+    assert.deepEqual(
+      planConfirmations([pending({ coingecko_id: 'solana' })], {
+        coingecko: { solana: -3, bitcoin: 111000 },
+      }),
+      [],
+      'un cours aberrant',
+    );
   });
 });
