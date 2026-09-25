@@ -24,12 +24,11 @@
  * dimensions quand le `<head>` se lit, et `innerHeight` peut ne pas refléter la
  * zone réellement donnée à la page. D'où :
  *
- *   • la mesure porte sur la hauteur **que la page reçoit vraiment** — une
- *     sonde `position: fixed; height: 100%`, la même règle que la chaîne
- *     `html` → `body` → `#root` — et non plus sur `innerHeight` ;
- *   • on remesure à la fin du chargement, puis à intervalles, et chaque fois
- *     que la sonde change de taille (`ResizeObserver`), avec ou sans
- *     événement `resize` ;
+ *   • on remesure à la fin du chargement, puis à intervalles — jamais en
+ *     continu : une mesure suivie en permanence (une sonde observée par
+ *     `ResizeObserver`) réagissait à sa propre correction, et faisait
+ *     clignoter le bas de l'app à chaque image. Un coupe-circuit
+ *     (`MAX_TOGGLES`) fige l'état si la page bascule trop souvent ;
  *   • chaque mesure est notée dans `window.__clubViewport`, que le panneau
  *     « À propos » de l'app installée affiche : on ne corrige plus à l'aveugle.
  */
@@ -93,11 +92,24 @@ export const SHIM_STYLE = `
 export const SETTLE_DELAYS_MS = [150, 600, 1500, 3000];
 
 /**
- * Le script : mesure, pose la variable, et remesure — fin de chargement,
- * délais, sonde redimensionnée, rotation, retour au premier plan, clavier.
+ * Le coupe-circuit : au-delà de ce nombre de bascules (bande ajoutée, puis
+ * retirée…), on fige l'état courant jusqu'au prochain retour au premier plan.
  *
- * La sonde n'existe qu'une fois `<body>` ouvert ; avant, faute de mieux, on
- * part de `innerHeight`, et la sonde prend le relais dès `DOMContentLoaded`.
+ * Leçon du terrain : une mesure qui réagit à sa propre correction entre en
+ * boucle — on allonge la page, iOS change la hauteur mesurée, on raccourcit,
+ * il la rechange… La sonde suivie par `ResizeObserver` faisait exactement
+ * cela, à chaque image : le bas de l'app clignotait. Quoi que fasse iOS, la
+ * page ne peut plus basculer que quelques fois.
+ */
+export const MAX_TOGGLES = 4;
+
+/**
+ * Le script : mesure, pose la variable, et remesure — fin de chargement,
+ * délais, rotation, retour au premier plan, clavier. Jamais en continu.
+ *
+ * La décision repose sur `innerHeight`, qui ne réagit pas à l'allongement du
+ * document. La sonde (`position: fixed; height: 100%`) n'est plus qu'un
+ * témoin, relevé pour le diagnostic : elle, elle y réagit sur iPhone.
  *
  * Le document étant plus haut que la zone visible d'après iOS, la page
  * pourrait défiler de la hauteur de la bande : on la ramène en haut.
@@ -108,29 +120,36 @@ export const SHIM_SCRIPT = `
         var root = document.documentElement;
         var probe = null;
         var fits = 0;
-        function layoutHeight() {
+        var toggles = 0;
+        function probeHeight() {
           if (!probe && document.body) {
             probe = document.createElement('div');
             probe.id = 'club-viewport-probe';
             probe.setAttribute('aria-hidden', 'true');
             probe.style.cssText = 'position:fixed;top:0;left:0;width:1px;height:100%;visibility:hidden;pointer-events:none';
             document.body.appendChild(probe);
-            if (window.ResizeObserver) new ResizeObserver(function () { fit(); }).observe(probe);
           }
-          return probe ? probe.getBoundingClientRect().height : innerHeight;
+          return probe ? Math.round(probe.getBoundingClientRect().height) : null;
         }
         function fit() {
-          var layout = layoutHeight();
-          var gap = bottomShim(navigator.standalone, screen.width, screen.height, innerWidth, layout);
+          var gap = bottomShim(navigator.standalone, screen.width, screen.height, innerWidth, innerHeight);
+          var wanted = gap + 'px';
+          var changed = root.style.getPropertyValue('--club-shim') !== wanted;
+          var frozen = changed && toggles >= ${MAX_TOGGLES};
+          if (changed && !frozen) {
+            toggles += 1;
+            root.style.setProperty('--club-shim', wanted);
+            if (gap > 0) root.classList.add('club-shim');
+            else root.classList.remove('club-shim');
+          }
           fits += 1;
           window.__clubViewport = {
             standalone: navigator.standalone === true,
-            screen: screen.height, inner: innerHeight, layout: Math.round(layout), gap: gap, fits: fits
+            screen: screen.height, inner: innerHeight, layout: probeHeight(),
+            gap: parseInt(root.style.getPropertyValue('--club-shim'), 10) || 0,
+            fits: fits, toggles: toggles, frozen: frozen
           };
-          root.style.setProperty('--club-shim', gap + 'px');
-          if (gap > 0) root.classList.add('club-shim');
-          else root.classList.remove('club-shim');
-          if (gap > 0 && window.scrollY !== 0) window.scrollTo(0, 0);
+          if (root.classList.contains('club-shim') && window.scrollY !== 0) window.scrollTo(0, 0);
         }
         fit();
         document.addEventListener('DOMContentLoaded', fit);
@@ -141,8 +160,11 @@ export const SHIM_SCRIPT = `
         addEventListener('resize', fit);
         addEventListener('pageshow', fit);
         addEventListener('orientationchange', function () { setTimeout(fit, 300); });
-        document.addEventListener('visibilitychange', fit);
-        if (window.visualViewport) window.visualViewport.addEventListener('resize', fit);
+        document.addEventListener('visibilitychange', function () {
+          // Retour au premier plan : iOS a pu tout recalculer, on réarme.
+          if (document.visibilityState === 'visible') toggles = 0;
+          fit();
+        });
         addEventListener('scroll', function () {
           if (root.classList.contains('club-shim') && window.scrollY !== 0) window.scrollTo(0, 0);
         }, { passive: true });

@@ -15,12 +15,16 @@ export interface ViewportInfo {
   screen: number;
   /** `innerHeight`, telle qu'iOS la déclare. */
   inner: number;
-  /** Hauteur réellement donnée à la page. */
-  layout: number;
+  /** Témoin : une sonde `fixed` à 100 % — `null` avant que la page existe. */
+  layout: number | null;
   /** Ce que le correctif ajoute sous la page. */
   gap: number;
   /** Nombre de mesures prises depuis l'ouverture. */
   fits: number;
+  /** Nombre de fois où la bande a été posée ou retirée. */
+  toggles: number;
+  /** Le coupe-circuit a figé l'état : la page basculait trop souvent. */
+  frozen: boolean;
 }
 
 export function viewportInfo(): ViewportInfo | null {
@@ -29,13 +33,15 @@ export function viewportInfo(): ViewportInfo | null {
   return info ?? null;
 }
 
-/** `ÉCRAN 844 · PAGE 797 · INNER 797 · CALE 47 · 6 MESURES`. */
+/** `ÉCRAN 844 · INNER 797 · PAGE 797 · CALE 47 · 6 MESURES · 1 BASCULE`. */
 export function describeViewport(info: ViewportInfo): string {
   return [
     `ÉCRAN ${info.screen}`,
-    `PAGE ${info.layout}`,
     `INNER ${info.inner}`,
+    `PAGE ${info.layout ?? '—'}`,
     `CALE ${info.gap}`,
     `${info.fits} ${info.fits > 1 ? 'MESURES' : 'MESURE'}`,
+    `${info.toggles} ${info.toggles > 1 ? 'BASCULES' : 'BASCULE'}`,
+    ...(info.frozen ? ['FIGÉ'] : []),
   ].join(' · ');
 }

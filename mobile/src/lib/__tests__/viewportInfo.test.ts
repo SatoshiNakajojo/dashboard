@@ -4,27 +4,20 @@ import { describe, it } from 'node:test';
 import { describeViewport, viewportInfo } from '@/lib/viewportInfo';
 
 describe('mesures d’écran', () => {
+  const base = { standalone: true, screen: 844, inner: 797, layout: 797, gap: 47 };
+
   it('se lisent en une ligne', () => {
     assert.equal(
-      describeViewport({
-        standalone: true,
-        screen: 844,
-        inner: 797,
-        layout: 797,
-        gap: 47,
-        fits: 6,
-      }),
-      'ÉCRAN 844 · PAGE 797 · INNER 797 · CALE 47 · 6 MESURES',
+      describeViewport({ ...base, fits: 6, toggles: 1, frozen: false }),
+      'ÉCRAN 844 · INNER 797 · PAGE 797 · CALE 47 · 6 MESURES · 1 BASCULE',
     );
+  });
+
+  it('disent quand le coupe-circuit a figé la page', () => {
     assert.ok(
-      describeViewport({
-        standalone: true,
-        screen: 844,
-        inner: 844,
-        layout: 844,
-        gap: 0,
-        fits: 1,
-      }).endsWith('1 MESURE'),
+      describeViewport({ ...base, layout: null, fits: 9, toggles: 4, frozen: true }).endsWith(
+        'PAGE — · CALE 47 · 9 MESURES · 4 BASCULES · FIGÉ',
+      ),
     );
   });
 
