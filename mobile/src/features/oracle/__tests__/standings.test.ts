@@ -49,7 +49,8 @@ describe('points d’un pari', () => {
     assert.equal(betPoints(resolved(LEA, '1w', 92.4)), 92);
     assert.equal(betPoints(resolved(LEA, '3m', 80)), 160);
     assert.equal(betPoints(resolved(LEA, '12m', 70)), 280);
-    assert.equal(betPoints(resolved(LEA, '10y', 50)), 400);
+    assert.equal(betPoints(resolved(LEA, '2w', 50)), 63);
+    assert.equal(betPoints(resolved(LEA, '1m', 50)), 75);
   });
 
   it('un pari sans cours ne vaut rien, plutôt que zéro', () => {

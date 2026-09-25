@@ -4,7 +4,7 @@ import { Text, View } from 'react-native';
 import { Micro } from '@/components/ui/Micro';
 import { SCORE_TABLE, VOTER_SHARE } from '@/features/bag/callPoints';
 import { formatPoints } from '@/lib/format';
-import { OPEN_HORIZONS, formatWeight } from '@/lib/horizons';
+import { HORIZONS, formatWeight } from '@/lib/horizons';
 import { c, f } from '@/theme/tokens';
 
 /** Les colonnes chiffrées, de même largeur : les points s'alignent. */
@@ -13,7 +13,7 @@ const COLUMN = 58;
 const tone = (value: number) =>
   value > 0 ? c.sage : value < 0 ? c.oxbloodMuted : c.sepiaFaint;
 
-const WEIGHTS = OPEN_HORIZONS.map(
+const WEIGHTS = HORIZONS.map(
   (h) => `${formatWeight(h.weight)} pour ${h.long.toLowerCase()}`,
 ).join(', ');
 

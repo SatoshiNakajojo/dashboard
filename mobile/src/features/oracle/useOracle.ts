@@ -345,12 +345,8 @@ export function useOracle(
    * horizon. Avant le chargement, on ne sait pas encore si j'ai un pari en
    * cours — en ouvrir un second, la base le refuserait.
    */
-  // Un horizon retiré n'accueille plus de nouveau pari ; celui qui y court
-  // encore se redessine jusqu'à son verrouillage, comme les autres.
   const editable =
-    Boolean(userId) &&
-    !loading &&
-    (mineBet ? phaseOfBet(mineBet, now) === 'open' : !horizonOf(horizon).retired);
+    Boolean(userId) && !loading && (!mineBet || phaseOfBet(mineBet, now) === 'open');
   /** Le jour zéro de mon tracé : l'ouverture de mon pari, ou maintenant. */
   const anchor = mineBet?.openedAt ?? now;
   const saved = mineBet?.path ?? EMPTY;

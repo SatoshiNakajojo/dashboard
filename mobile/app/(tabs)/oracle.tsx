@@ -148,6 +148,7 @@ export default function OracleScreen() {
         <HorizonPicker
           value={horizon}
           summary={oracle.summary}
+          canBet={Boolean(userId)}
           onChange={(key) => {
             setHorizon(key);
             setConfirmingClear(false);
@@ -489,71 +490,71 @@ export default function OracleScreen() {
  * Le choix de l'horizon.
  *
  * Six segments de largeur égale plutôt qu'une liste qui défile : on voit
- * d'un coup d'œil tous les horizons, et un point signale ceux où j'ai un pari
- * en cours — or s'il est encore révisable, oxblood s'il est verrouillé.
+ * d'un coup d'œil tous les horizons. Une pastille or marque ceux où **j'ai
+ * un pari à faire** — aucun pari en cours. Un horizon où j'ai déjà parié n'a
+ * rien à signaler.
  */
 function HorizonPicker({
   value,
   summary,
+  canBet,
   onChange,
 }: {
   value: HorizonKey;
   summary: ReturnType<typeof useOracle>['summary'];
+  /** Connecté : sinon, rien n'est « à faire ». */
+  canBet: boolean;
   onChange: (key: HorizonKey) => void;
 }) {
   return (
     <View className="flex-row" style={{ gap: 6 }} accessibilityRole="tablist">
-      {/* Les horizons ouverts, plus un horizon retiré tant qu'un pari y court
-          encore : il reste lisible jusqu'à sa résolution. */}
-      {HORIZONS.filter(({ key, retired }) => !retired || summary[key].open > 0).map(
-        ({ key, label, long }) => {
-          const active = key === value;
-          const mine = summary[key].mine;
-          return (
-            <Pressable
-              key={key}
-              accessibilityRole="tab"
-              accessibilityState={{ selected: active }}
-              accessibilityLabel={`${long}${mine ? ', vous avez un pari en cours' : ''}`}
-              onPress={() => onChange(key)}
+      {HORIZONS.map(({ key, label, long }) => {
+        const active = key === value;
+        const toDo = canBet && summary[key].mine === null;
+        return (
+          <Pressable
+            key={key}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: active }}
+            accessibilityLabel={`${long}${toDo ? ', pari à faire' : ''}`}
+            onPress={() => onChange(key)}
+            style={{
+              flex: 1,
+              alignItems: 'center',
+              paddingVertical: 9,
+              borderRadius: radius.button,
+              borderWidth: 1,
+              borderColor: active ? a.rsvpGoldBorder : c.border,
+              backgroundColor: active ? a.rsvpGoldBg : 'transparent',
+            }}
+          >
+            <Text
+              numberOfLines={1}
               style={{
-                flex: 1,
-                alignItems: 'center',
-                paddingVertical: 9,
-                borderRadius: radius.button,
-                borderWidth: 1,
-                borderColor: active ? a.rsvpGoldBorder : c.border,
-                backgroundColor: active ? a.rsvpGoldBg : 'transparent',
+                fontFamily: f.labelMed,
+                fontSize: 9,
+                letterSpacing: 0.9,
+                color: active ? c.gold : c.sepiaDim,
               }}
             >
-              <Text
-                numberOfLines={1}
+              {label}
+            </Text>
+            {toDo ? (
+              <View
                 style={{
-                  fontFamily: f.labelMed,
-                  fontSize: 9,
-                  letterSpacing: 0.9,
-                  color: active ? c.gold : c.sepiaDim,
+                  position: 'absolute',
+                  top: 4,
+                  right: 4,
+                  width: 5,
+                  height: 5,
+                  borderRadius: 2.5,
+                  backgroundColor: c.gold,
                 }}
-              >
-                {label}
-              </Text>
-              {mine ? (
-                <View
-                  style={{
-                    position: 'absolute',
-                    top: 4,
-                    right: 4,
-                    width: 5,
-                    height: 5,
-                    borderRadius: 2.5,
-                    backgroundColor: mine === 'locked' ? c.oxblood : c.gold,
-                  }}
-                />
-              ) : null}
-            </Pressable>
-          );
-        },
-      )}
+              />
+            ) : null}
+          </Pressable>
+        );
+      })}
     </View>
   );
 }

@@ -1,7 +1,7 @@
 /**
  * Horizons de pari.
  *
- * C'est le calendrier de paris qui engagent sept personnes sur dix ans. Un
+ * C'est le calendrier de paris qui engagent sept personnes jusqu'à un an. Un
  * verrouillage qui tombe au mauvais moment, ou une résolution décalée, ne se
  * rattrape pas : les tracés sont déjà déposés.
  */
@@ -19,7 +19,6 @@ import {
   lookbackDays,
   phaseOf,
   scheduleFor,
-  OPEN_HORIZONS,
   formatWeight,
 } from '@/lib/horizons';
 
@@ -38,15 +37,9 @@ describe('le catalogue', () => {
 
   it('couvre ce que le club a demandé (v1.01 : 2 sem. et 1 mois, plus de 5 ni 10 ans)', () => {
     assert.deepEqual(
-      OPEN_HORIZONS.map((h) => h.key),
+      HORIZONS.map((h) => h.key),
       ['1w', '2w', '1m', '3m', '6m', '12m'],
     );
-    // Retirés, mais toujours connus : un pari déjà déposé va à son terme.
-    assert.deepEqual(
-      HORIZONS.filter((h) => h.retired).map((h) => h.key),
-      ['5y', '10y'],
-    );
-    assert.equal(horizonOf('10y').days, 3650, 'un ancien pari à dix ans garde son calendrier');
   });
 
   it('pèse d’autant plus que le pari est long, sans toucher aux anciens poids', () => {
@@ -56,8 +49,8 @@ describe('le catalogue', () => {
       [...poids].sort((a, b) => a - b),
     );
     assert.deepEqual(
-      ['1w', '3m', '6m', '12m', '5y', '10y'].map((key) => horizonOf(key).weight),
-      [1, 2, 3, 4, 6, 8],
+      ['1w', '3m', '6m', '12m'].map((key) => horizonOf(key).weight),
+      [1, 2, 3, 4],
     );
     assert.equal(formatWeight(1.25), '×1,25');
     assert.equal(formatWeight(2), '×2');
@@ -115,16 +108,16 @@ describe('calendrier d’un pari', () => {
 
   it('résout à la bonne date', () => {
     assert.equal(scheduleFor('1w', T0).resolvesAt, T0 + 7 * DAY);
-    assert.equal(scheduleFor('10y', T0).resolvesAt, T0 + 3650 * DAY);
+    assert.equal(scheduleFor('1m', T0).resolvesAt, T0 + 30 * DAY);
   });
 
   it('donne à deux paris ouverts ensemble des calendriers différents', () => {
     // Le cœur de la demande : ils ne doivent pas se verrouiller ni se résoudre
     // en même temps.
     const semaine = scheduleFor('1w', T0);
-    const dixAns = scheduleFor('10y', T0);
-    assert.notEqual(semaine.locksAt, dixAns.locksAt);
-    assert.notEqual(semaine.resolvesAt, dixAns.resolvesAt);
+    const unAn = scheduleFor('12m', T0);
+    assert.notEqual(semaine.locksAt, unAn.locksAt);
+    assert.notEqual(semaine.resolvesAt, unAn.resolvesAt);
   });
 });
 
@@ -162,8 +155,8 @@ describe('bande de prix minimale', () => {
     );
   });
 
-  it('laisse tracer un bitcoin à 1 M$ sur dix ans depuis 110 k$', () => {
-    assert.ok(110_000 * bandFor('10y').high >= 1_000_000);
+  it('laisse tracer un bitcoin à 250 k$ sur un an depuis 110 k$', () => {
+    assert.ok(110_000 * bandFor('12m').high >= 250_000);
   });
 });
 
@@ -182,6 +175,7 @@ describe('fenêtre de révision, affichée', () => {
   it('parle en heures sous deux jours, en jours au-delà', () => {
     assert.equal(editingLabel('1w'), '24 H');
     assert.equal(editingLabel('3m'), '3 J');
-    assert.equal(editingLabel('10y'), '14 J');
+    assert.equal(editingLabel('2w'), '36 H');
+    assert.equal(editingLabel('12m'), '7 J');
   });
 });

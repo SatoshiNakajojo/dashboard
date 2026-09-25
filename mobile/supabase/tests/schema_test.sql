@@ -727,18 +727,14 @@ begin
   assert failed, 'on n’ouvre plus de pari à dix ans';
   raise notice 'ok · oracle v1.01 : cinq et dix ans refusés aux nouveaux paris';
 
-  -- Un pari à dix ans déposé avant la v1.01 reste valable et se redessine
-  -- jusqu'à son verrouillage.
-  alter table public.predictions disable trigger predictions_guard_trigger;
-  insert into public.predictions (user_id, horizon, path_data, opened_at, locked_at, resolves_at)
-  values ('aaaaaaaa-0000-4000-8000-000000000002', '10y', '[[0,110000],[3650,1200000]]'::jsonb,
-          now(), now() + interval '336 hours', now() + interval '3650 days')
-  returning id into ancien;
-  alter table public.predictions enable trigger predictions_guard_trigger;
-  update public.predictions set path_data = '[[0,110000],[3650,900000]]'::jsonb where id = ancien;
-  assert (select resolves_at from public.predictions where id = ancien) > now() + interval '3600 days',
-    'le calendrier d’un ancien pari à dix ans ne bouge pas';
-  raise notice 'ok · oracle v1.01 : un pari à dix ans déjà déposé va à son terme';
+  -- Les anciens paris à cinq et dix ans sont archivés, hors de portée de l'app.
+  assert to_regclass('public.predictions_retired') is not null, 'l’archive existe';
+  -- RLS sans aucune politique : aucune ligne pour un membre, quels que soient
+  -- les droits accordés sur la table.
+  assert (select relrowsecurity from pg_class where oid = 'public.predictions_retired'::regclass)
+     and not exists (select 1 from pg_policies where tablename = 'predictions_retired'),
+    'l’archive n’est pas lisible par les membres';
+  raise notice 'ok · oracle v1.01 : cinq et dix ans archivés, hors de l’app';
   delete from public.predictions;
 end $$;
 

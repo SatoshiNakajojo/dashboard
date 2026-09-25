@@ -50,8 +50,6 @@ export const HORIZON_PHRASES: Record<string, string> = {
   '3m': 'trois mois',
   '6m': 'six mois',
   '12m': 'un an',
-  '5y': 'cinq ans',
-  '10y': 'dix ans',
 };
 
 const spaces = (text: string) => text.replace(/[   ]/g, NBSP);

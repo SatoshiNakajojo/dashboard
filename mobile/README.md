@@ -11,7 +11,8 @@ le logo. Ce qu'elle apporte :
 
 - la session tient après la fermeture de l'app installée : plus d'e-mail ni de
   code à chaque ouverture ;
-- l'Oracle parie à 2 semaines et à 1 mois ; 5 et 10 ans sont retirés ;
+- l'Oracle parie à 2 semaines et à 1 mois ; 5 et 10 ans ont disparu, et une
+  pastille marque les horizons où l'on a un pari à faire ;
 - un call se publie au cours live, confirmé par le serveur ;
 - le clavier ne cache plus le champ où l'on écrit ;
 - une soirée se modifie, se supprime, et son lieu peut changer par un vote du
@@ -118,7 +119,7 @@ qu'on n'a pas déposé le nouveau tracé.
 
 ## Ce qui a été vérifié
 
-- `npm run typecheck`, `npm run lint`, `npm test` — propres (569 tests).
+- `npm run typecheck`, `npm run lint`, `npm test` — propres (570 tests).
 - **Règles pures** : bornes et inversibilité du repère, monotonie du tracé,
   écart à la courbe réelle, espaces insécables du formatage français, perf vs ₿
   comme ratio et non soustraction, seuils et tri des deux classements.
@@ -353,16 +354,17 @@ tous ensemble.
 | 1 an | 7 jours | J+365 | ×4 |
 
 **v1.01 : le club parie court.** Deux semaines et un mois sont arrivés ; cinq et
-dix ans sont **retirés** (migration `20261001090000_oracle_short_horizons`). La
-base refuse tout nouveau pari à cinq ou dix ans. Un pari déjà déposé garde son
-calendrier, sa résolution et ses points (×6 et ×8), et son onglet reste visible
-tant qu'il court. Les poids existants n'ont pas bougé : les changer aurait
+dix ans ont **disparu** : onglets, base et paris. Les paris qui couraient sur ces
+horizons sont archivés dans `predictions_retired` (migration
+`20261004090000_oracle_drop_long_horizons`). L'archive est fermée aux membres,
+mais rien n'est perdu. Les poids existants n'ont pas bougé : les changer aurait
 réécrit le classement de l'année. Les deux nouveaux s'intercalent entre la
 semaine et les trois mois.
 
 On choisit l'horizon en haut de l'écran ; le repère, le cadenas et la liste
-parlent alors de celui-là. Un point sur un horizon signale qu'on y a un pari
-en cours — or s'il est encore révisable, oxblood s'il est verrouillé. En bas,
+parlent alors de celui-là. Une pastille or sur un horizon signale **un pari à
+faire** : on n'y a encore rien déposé. Un horizon où l'on a parié n'a rien à
+signaler. En bas,
 l'**historique** mélange tous les horizons : c'est là qu'on relit qui avait vu
 juste.
 
@@ -1058,7 +1060,7 @@ Mise en place : `npm run push:setup` (voir `docs/INSTALLATION.md`).
 Chaque pari résolu rapporte des **points** : sa justesse (0 à 100), multipliée
 par le poids de son horizon — 1 pour une semaine, 1,25 pour deux semaines,
 1,5 pour un mois, 2 pour trois mois, 3 pour six mois, 4 pour un an
-(`HORIZONS[].weight` ; 6 et 8 pour les anciens paris à cinq et dix ans). Les points se **cumulent** : parier
+(`HORIZONS[].weight`). Les points se **cumulent** : parier
 souvent paie, parier loin aussi. Une simple moyenne aurait donné la première
 place à qui parie le moins ; elle reste affichée à côté, c'est elle qui dit qui
 vise juste.

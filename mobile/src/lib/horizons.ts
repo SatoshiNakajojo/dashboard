@@ -3,7 +3,7 @@
  *
  * L'Oracle ne connaissait qu'une saison de 90 jours, une prédiction par membre,
  * et tout se verrouillait ensemble. Le club veut parier sur une semaine **et**
- * sur dix ans, en parallèle, chaque pari suivant son propre calendrier.
+ * sur un an, en parallèle, chaque pari suivant son propre calendrier.
  *
  * Deux durées distinctes par horizon, et les confondre est le défaut qu'on
  * évite ici :
@@ -17,7 +17,7 @@
  * seconde est le pari lui-même.
  */
 
-export type HorizonKey = '1w' | '2w' | '1m' | '3m' | '6m' | '12m' | '5y' | '10y';
+export type HorizonKey = '1w' | '2w' | '1m' | '3m' | '6m' | '12m';
 
 export interface Horizon {
   key: HorizonKey;
@@ -35,14 +35,9 @@ export interface Horizon {
    * Viser juste à une semaine est facile — le bitcoin bouge de quelques pour
    * cent — et à un an beaucoup moins. Sans poids, le classement irait à qui
    * parie chaque semaine et fuit les longs horizons. Le poids croît moins vite
-   * que la durée : un pari à dix ans ne doit pas écraser dix ans de semaines.
+   * que la durée : un pari à un an ne doit pas écraser un an de semaines.
    */
   weight: number;
-  /**
-   * Horizon retiré (v1.01) : on n'y ouvre plus de pari, mais ceux qui
-   * courent encore vont à leur terme et comptent au classement.
-   */
-  retired?: boolean;
 }
 
 const DAY_MS = 86_400_000;
@@ -50,18 +45,13 @@ const DAY_MS = 86_400_000;
 /**
  * Les horizons, du plus court au plus long.
  *
- * v1.01 : le club parie court. Deux semaines et un mois arrivent ; cinq et
- * dix ans sont retirés. On n'y ouvre plus de pari, mais un pari déjà déposé
- * garde son calendrier, sa résolution et ses points. Les retirer de la liste
- * ferait lire un pari à cinq ans comme un pari à trois mois.
+ * v1.01 : le club parie court. Deux semaines et un mois sont arrivés ; cinq et
+ * dix ans ont disparu — onglets, base et paris (archivés dans
+ * `predictions_retired`, migration `20261004090000_oracle_drop_long_horizons`).
  *
  * Les poids existants ne bougent pas : les changer réécrirait le classement
  * de l'année. Les deux nouveaux s'intercalent entre la semaine (×1) et les
  * trois mois (×2).
- *
- * Les années comptent 365 jours et non 365,25 : un pari de dix ans qui se
- * résoudrait deux jours et demi plus tard que prévu n'intéresse personne, et la
- * simplicité vaut mieux qu'une exactitude que le club ne vérifiera pas.
  */
 export const HORIZONS: readonly Horizon[] = [
   { key: '1w', label: '1 SEM', long: 'Une semaine', days: 7, editingHours: 24, weight: 1 },
@@ -77,28 +67,7 @@ export const HORIZONS: readonly Horizon[] = [
   { key: '3m', label: '3 MOIS', long: 'Trois mois', days: 90, editingHours: 72, weight: 2 },
   { key: '6m', label: '6 MOIS', long: 'Six mois', days: 182, editingHours: 120, weight: 3 },
   { key: '12m', label: '1 AN', long: 'Un an', days: 365, editingHours: 168, weight: 4 },
-  {
-    key: '5y',
-    label: '5 ANS',
-    long: 'Cinq ans',
-    days: 5 * 365,
-    editingHours: 336,
-    weight: 6,
-    retired: true,
-  },
-  {
-    key: '10y',
-    label: '10 ANS',
-    long: 'Dix ans',
-    days: 10 * 365,
-    editingHours: 336,
-    weight: 8,
-    retired: true,
-  },
 ] as const;
-
-/** Les horizons où l'on peut ouvrir un pari. */
-export const OPEN_HORIZONS: readonly Horizon[] = HORIZONS.filter((horizon) => !horizon.retired);
 
 /** `×1`, `×1,25` — le poids, écrit à la française. */
 export function formatWeight(weight: number): string {
@@ -165,8 +134,8 @@ export function phaseOf(schedule: Schedule, now: number): BetPhase {
  * La bande de prix minimale d'un horizon, en multiples du cours du jour.
  *
  * Le repère se cale sur ce qu'il affiche — mais au moment d'ouvrir un pari à
- * dix ans, il n'affiche que quelques jours de cours, serrés autour du prix du
- * jour. Sans plancher de bande, on ne pourrait pas tracer un bitcoin à 1 M$ :
+ * un an, il n'affiche que quelques jours de cours, serrés autour du prix du
+ * jour. Sans plancher de bande, on ne pourrait pas tracer un bitcoin à 250 k$ :
  * le doigt butterait sur un plafond à 130 k$.
  *
  * La bande ne dépend **jamais** du tracé en cours. Sinon l'échelle se
@@ -187,10 +156,6 @@ export function bandFor(key: string): { low: number; high: number } {
       return { low: 0.5, high: 2 };
     case '12m':
       return { low: 0.4, high: 2.6 };
-    case '5y':
-      return { low: 0.3, high: 6 };
-    case '10y':
-      return { low: 0.3, high: 12 };
   }
 }
 
@@ -216,9 +181,6 @@ export function lookbackDays(key: string): number {
       return 60;
     case '12m':
       return 120;
-    case '5y':
-    case '10y':
-      return 360;
   }
 }
 
