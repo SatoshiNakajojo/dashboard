@@ -272,11 +272,13 @@ begin
   assert v.side = 'bear', 'on change d’avis dans la fenêtre';
 
   -- Le chemin de l'app : un upsert (PostgREST, `onConflict: 'ticker_id,user_id'`).
+  -- Même camp : on retouche la phrase (le camp, lui, a déjà changé une fois).
   insert into public.ticker_votes (ticker_id, user_id, side, reason)
-  values (call, john, 'bull', 'Je reviens bull.')
+  values (call, john, 'bear', 'Valorisation délirante, et dette qui monte.')
   on conflict (ticker_id, user_id) do update set side = excluded.side, reason = excluded.reason;
   select * into v from public.ticker_votes where ticker_id = call and user_id = john;
-  assert v.side = 'bull' and v.reason = 'Je reviens bull.', 'l’upsert de l’app change d’avis';
+  assert v.side = 'bear' and v.reason = 'Valorisation délirante, et dette qui monte.',
+    'l’upsert de l’app retouche la phrase';
   raise notice 'ok · votes : une phrase obligatoire, un avis qui peut changer dans la fenêtre';
 
   -- Voter sur son propre call : refusé.
@@ -328,6 +330,97 @@ begin
   select count(*) into n from public.ticker_votes where ticker_id = call;
   assert n = 0, 'la suppression en cascade passe';
   raise notice 'ok · votes : un call supprimé emporte ses votes';
+end $$;
+
+-- --- Calls : un seul changement d'avis par call ------------------------------
+
+do $$
+declare
+  john   constant uuid := 'aaaaaaaa-0000-4000-8000-000000000001';
+  alex   constant uuid := 'aaaaaaaa-0000-4000-8000-000000000002';
+  first  uuid;
+  second uuid;
+  v      public.ticker_votes%rowtype;
+  failed boolean;
+  n      integer;
+begin
+  insert into public.tickers (user_id, symbol, asset_class, entry_price, thesis)
+  values (alex, '$ONE', 'ACTION', 10, 'Un.') returning id into first;
+  insert into public.tickers (user_id, symbol, asset_class, entry_price, thesis)
+  values (alex, '$TWO', 'ACTION', 10, 'Deux.') returning id into second;
+
+  set local role authenticated;
+
+  -- Le chemin de l'app : un upsert. Premier vote, puis un changement de camp.
+  insert into public.ticker_votes (ticker_id, user_id, side, reason, changed_at)
+  values (first, john, 'bull', 'J’y crois.', '2000-01-01')
+  on conflict (ticker_id, user_id) do update set side = excluded.side, reason = excluded.reason;
+  select * into v from public.ticker_votes where ticker_id = first and user_id = john;
+  assert v.changed_at is null, 'un premier vote n’est pas un changement (et le client ne le pose pas)';
+
+  insert into public.ticker_votes (ticker_id, user_id, side, reason)
+  values (first, john, 'bear', 'Finalement non.')
+  on conflict (ticker_id, user_id) do update set side = excluded.side, reason = excluded.reason;
+  select * into v from public.ticker_votes where ticker_id = first and user_id = john;
+  assert v.side = 'bear' and v.changed_at = now(), 'le changement de camp est noté';
+
+  -- Un second changement : refusé.
+  failed := false;
+  begin
+    insert into public.ticker_votes (ticker_id, user_id, side, reason)
+    values (first, john, 'bull', 'Encore un revirement.')
+    on conflict (ticker_id, user_id) do update set side = excluded.side, reason = excluded.reason;
+  exception when check_violation then failed := true;
+  end;
+  assert failed, 'un seul changement de camp par call';
+
+  -- La phrase, elle, se retouche : même camp, le changement reste celui d'avant.
+  insert into public.ticker_votes (ticker_id, user_id, side, reason)
+  values (first, john, 'bear', 'Finalement non : la valorisation.')
+  on conflict (ticker_id, user_id) do update set side = excluded.side, reason = excluded.reason;
+  select * into v from public.ticker_votes where ticker_id = first and user_id = john;
+  assert v.reason = 'Finalement non : la valorisation.' and v.changed_at = now(), 'la phrase se retouche';
+
+  -- Ni retrait après un changement, ni changement falsifié.
+  failed := false;
+  begin
+    delete from public.ticker_votes where ticker_id = first and user_id = john;
+  exception when check_violation then failed := true;
+  end;
+  assert failed, 'on ne retire pas un vote qui a déjà changé de camp';
+  update public.ticker_votes set changed_at = null where ticker_id = first and user_id = john;
+  select * into v from public.ticker_votes where ticker_id = first and user_id = john;
+  assert v.changed_at is not null, 'le client n’efface pas son changement';
+  raise notice 'ok · votes : un seul changement de camp, la phrase reste libre';
+
+  -- Retirer son vote : c'est le changement, et il est définitif.
+  insert into public.ticker_votes (ticker_id, user_id, side, reason)
+  values (second, john, 'bull', 'Deux fois plus.');
+  delete from public.ticker_votes where ticker_id = second and user_id = john;
+  select count(*) into n from public.ticker_vote_withdrawals where ticker_id = second and user_id = john;
+  assert n = 1, 'le retrait est noté, et lisible par les membres';
+  failed := false;
+  begin
+    insert into public.ticker_votes (ticker_id, user_id, side, reason)
+    values (second, john, 'bear', 'Je reviens par l’autre côté.');
+  exception when check_violation then failed := true;
+  end;
+  assert failed, 'un vote retiré ne revient pas';
+  failed := false;
+  begin
+    delete from public.ticker_vote_withdrawals where ticker_id = second and user_id = john;
+    get diagnostics n = row_count;
+    failed := n = 0;
+  exception when insufficient_privilege then failed := true;
+  end;
+  assert failed, 'un membre n’efface pas son retrait';
+  raise notice 'ok · votes : retirer son vote est définitif';
+
+  reset role;
+  -- Le call supprimé emporte ses votes et ses retraits.
+  delete from public.tickers where id in (first, second);
+  select count(*) into n from public.ticker_vote_withdrawals where ticker_id in (first, second);
+  assert n = 0, 'les retraits partent avec le call';
 end $$;
 
 -- --- Oracle : des paris, pas une saison ---------------------------------------

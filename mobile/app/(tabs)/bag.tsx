@@ -142,7 +142,11 @@ export default function BagScreen() {
                     membersById={byId}
                     // On vote sur le call d'un autre, dans sa fenêtre ; la
                     // base le vérifie aussi (`ticker_votes_guard`).
-                    onVote={!mine && userId && call.votesOpen ? startVote : undefined}
+                    onVote={
+                      !mine && userId && call.votesOpen && !call.myVoteWithdrawn
+                        ? startVote
+                        : undefined
+                    }
                     onEdit={mine ? startEdit : undefined}
                     onDelete={mine ? askDelete : undefined}
                     onCloseCall={mine ? startClose : undefined}
@@ -200,7 +204,15 @@ export default function BagScreen() {
         // Une feuille neuve par call : elle s'initialise sur mon vote existant.
         key={voteTarget ? `${voteTarget.call.id}-${voteTarget.side}` : 'aucun'}
         target={voteTarget}
-        current={myVoteOn ? { side: myVoteOn.side, reason: myVoteOn.reason } : null}
+        current={
+          myVoteOn
+            ? {
+                side: myVoteOn.side,
+                reason: myVoteOn.reason,
+                changed: myVoteOn.changedAt !== null,
+              }
+            : null
+        }
         busy={voting}
         error={error}
         onClose={() => setVoteTarget(null)}

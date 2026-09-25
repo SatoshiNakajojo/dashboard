@@ -87,6 +87,15 @@ export type TickerVoteRow = {
   reason: string | null;
   /** Heure du choix de camp — posée par la base. */
   created_at: string;
+  /** Changement de camp — une fois au plus, posé par la base. */
+  changed_at: string | null;
+};
+
+/** Un vote retiré : définitif, écrit par `ticker_votes_guard`. */
+export type TickerVoteWithdrawalRow = {
+  ticker_id: string;
+  user_id: string;
+  withdrawn_at: string;
 };
 
 export type PredictionRow = {
@@ -151,6 +160,7 @@ export type Database = {
       potluck_items: Table<PotluckItemRow>;
       tickers: Table<TickerRow, Omit<Partial<TickerRow>, 'performance_percentage'>>;
       ticker_votes: Table<TickerVoteRow>;
+      ticker_vote_withdrawals: Table<TickerVoteWithdrawalRow>;
       predictions: Table<PredictionRow>;
       push_subscriptions: Table<PushSubscriptionRow>;
       notification_prefs: Table<NotificationPrefsRow>;

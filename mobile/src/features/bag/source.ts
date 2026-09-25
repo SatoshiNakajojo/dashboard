@@ -63,11 +63,18 @@ export interface VoteRow {
   /** La phrase du vote. `null` pour les votes d'avant la règle. */
   reason: string | null;
   createdAt: string;
+  /** Changement de camp — une fois au plus par call. `null` : jamais. */
+  changedAt: string | null;
 }
 
 export interface CallsSource {
   list(signal?: AbortSignal): Promise<Ticker[]>;
   listVotes(signal?: AbortSignal): Promise<VoteRow[]>;
+  /**
+   * Les calls sur lesquels ce membre a retiré son vote — c'est définitif.
+   * Information d'affichage : la base, elle, refuse le revote d'elle-même.
+   */
+  listMyWithdrawals(userId: string, signal?: AbortSignal): Promise<string[]>;
   /** Publie un call. Le ticker renvoyé porte l'identifiant définitif. */
   publish(draft: CallDraftInput, userId: string): Promise<Ticker>;
   /**
@@ -168,6 +175,7 @@ function voteFromRow(row: {
   side: Vote;
   reason: string | null;
   created_at: string;
+  changed_at?: string | null;
 }): VoteRow {
   return {
     tickerId: row.ticker_id,
@@ -175,8 +183,16 @@ function voteFromRow(row: {
     side: row.side,
     reason: row.reason,
     createdAt: row.created_at,
+    changedAt: row.changed_at ?? null,
   };
 }
+
+/**
+ * Les colonnes d'un vote : `*` plutôt qu'une liste, pour que l'app publiée
+ * fonctionne avant comme après la migration qui ajoute `changed_at` — le
+ * déploiement automatique peut précéder le `db push`.
+ */
+const VOTE_COLUMNS = '*';
 
 function createSupabaseSource(client: NonNullable<typeof supabase>): CallsSource {
   return {
@@ -193,15 +209,25 @@ function createSupabaseSource(client: NonNullable<typeof supabase>): CallsSource
     },
 
     async listVotes(signal) {
-      let query = client
-        .from('ticker_votes')
-        .select('ticker_id, user_id, side, reason, created_at')
-        .order('created_at');
+      let query = client.from('ticker_votes').select(VOTE_COLUMNS).order('created_at');
       if (signal) query = query.abortSignal(signal);
 
       const { data, error } = await query;
       if (error) throw error;
-      return (data ?? []).map(voteFromRow);
+      return (data ?? []).map((row) => voteFromRow(row as Parameters<typeof voteFromRow>[0]));
+    },
+
+    async listMyWithdrawals(userId, signal) {
+      let query = client
+        .from('ticker_vote_withdrawals')
+        .select('ticker_id')
+        .eq('user_id', userId);
+      if (signal) query = query.abortSignal(signal);
+      const { data, error } = await query;
+      // Avant la migration, la table n'existe pas : rien de retiré, et rien ne
+      // doit casser. La règle, elle, vit dans la base.
+      if (error) return [];
+      return (data ?? []).map((row) => row.ticker_id);
     },
 
     async publish(draft, userId) {
@@ -292,10 +318,10 @@ function createSupabaseSource(client: NonNullable<typeof supabase>): CallsSource
           { ticker_id: tickerId, user_id: userId, side: vote.side, reason: vote.reason },
           { onConflict: 'ticker_id,user_id' },
         )
-        .select('ticker_id, user_id, side, reason, created_at')
+        .select(VOTE_COLUMNS)
         .single();
       if (error) throw error;
-      return voteFromRow(data);
+      return voteFromRow(data as Parameters<typeof voteFromRow>[0]);
     },
   };
 }
@@ -311,6 +337,8 @@ function createMockSource(): CallsSource {
   const tickers: Ticker[] = MOCK_TICKERS.map((t) => ({ ...t }));
 
   const votes: VoteRow[] = MOCK_VOTE_ROWS.map((v) => ({ ...v }));
+  /** Les retraits, `tickerId:userId` — définitifs, comme dans la base. */
+  const withdrawals = new Set<string>();
 
   return {
     async list() {
@@ -321,6 +349,12 @@ function createMockSource(): CallsSource {
     async listVotes() {
       await delay(MOCK_LATENCY_MS);
       return votes.map((v) => ({ ...v }));
+    },
+
+    async listMyWithdrawals(userId) {
+      return [...withdrawals]
+        .filter((key) => key.endsWith(`:${userId}`))
+        .map((key) => key.split(':')[0]!);
     },
 
     async publish(draft, userId) {
@@ -414,22 +448,40 @@ function createMockSource(): CallsSource {
       }
       const index = votes.findIndex((v) => v.tickerId === tickerId && v.userId === userId);
       const previous = index >= 0 ? votes[index]! : null;
-      if (index >= 0) votes.splice(index, 1);
-      if (!vote) return null;
+      const key = `${tickerId}:${userId}`;
+      if (!vote) {
+        // Retirer son vote : c'est son unique changement d'avis, et c'est final.
+        if (!previous) return null;
+        if (previous.changedAt) {
+          throw new Error(
+            'Vous avez déjà changé d’avis sur ce call : votre vote est définitif',
+          );
+        }
+        votes.splice(index, 1);
+        withdrawals.add(key);
+        return null;
+      }
       if (call.userId === userId) throw new Error('On ne vote pas sur son propre call');
+      if (!previous && withdrawals.has(key)) {
+        throw new Error('Vous avez retiré votre vote sur ce call : ce retrait est définitif');
+      }
       const reason = vote.reason.trim();
       if (reason.length < 3)
         throw new Error('Un vote s’accompagne d’une phrase qui l’explique');
+      const switching = previous !== null && previous.side !== vote.side;
+      if (switching && previous.changedAt) {
+        throw new Error('Un seul changement d’avis par call : votre vote est définitif');
+      }
+      const now = new Date().toISOString();
       const row: VoteRow = {
         tickerId,
         userId,
         side: vote.side,
         reason,
-        createdAt:
-          previous && previous.side === vote.side
-            ? previous.createdAt
-            : new Date().toISOString(),
+        createdAt: previous && !switching ? previous.createdAt : now,
+        changedAt: switching ? now : (previous?.changedAt ?? null),
       };
+      if (index >= 0) votes.splice(index, 1);
       votes.push(row);
       return { ...row };
     },

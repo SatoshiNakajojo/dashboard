@@ -105,7 +105,7 @@ qu'on n'a pas déposé le nouveau tracé.
 
 ## Ce qui a été vérifié
 
-- `npm run typecheck`, `npm run lint`, `npm test` — propres (538 tests).
+- `npm run typecheck`, `npm run lint`, `npm test` — propres (541 tests).
 - **Règles pures** : bornes et inversibilité du repère, monotonie du tracé,
   écart à la courbe réelle, espaces insécables du formatage français, perf vs ₿
   comme ratio et non soustraction, seuils et tri des deux classements.
@@ -755,6 +755,13 @@ Trois règles, tenues par la base (`ticker_votes_guard`, migration
   une nouvelle phrase — la raison d'un bull ne justifie pas un bear —, revenir
   à son camp rend la phrase d'origine (`src/features/bag/voteEdit.ts`). Hors
   fenêtre, le vote est **verrouillé** : ni changé, ni retiré ;
+- **un seul changement de camp par call** (migration
+  `20260929090000_one_vote_change`) — sinon on attendrait la 71ᵉ heure pour
+  basculer du côté qui gagne. La base note le changement (`changed_at`) et
+  refuse le second ; la carte dit « AVIS CHANGÉ », et la feuille ne laisse plus
+  retoucher que la phrase. **Retirer son vote compte comme ce changement, et
+  il est définitif** (`ticker_vote_withdrawals`) : sans cela, retirer puis
+  revoter contournerait la règle. Le retrait se confirme en deux appuis ;
 - **pas de vote sur son propre call** ;
 - **un call clôturé ne se vote plus**.
 

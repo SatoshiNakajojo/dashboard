@@ -96,6 +96,8 @@ export function useCalls(
 
   const [tickers, setTickers] = useState<Ticker[]>([]);
   const [votes, setVotes] = useState<VoteRow[]>([]);
+  /** Les calls où j'ai retiré mon vote — définitif. */
+  const [withdrawn, setWithdrawn] = useState<ReadonlySet<string>>(() => new Set());
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [publishing, setPublishing] = useState(false);
@@ -107,11 +109,18 @@ export function useCalls(
     const controller = new AbortController();
     let active = true;
 
-    Promise.all([source.list(controller.signal), source.listVotes(controller.signal)])
-      .then(([rows, voteRows]) => {
+    Promise.all([
+      source.list(controller.signal),
+      source.listVotes(controller.signal),
+      currentUserId
+        ? source.listMyWithdrawals(currentUserId, controller.signal)
+        : Promise.resolve([]),
+    ])
+      .then(([rows, voteRows, withdrawals]) => {
         if (!active || controller.signal.aborted) return;
         setTickers(rows);
         setVotes(voteRows);
+        setWithdrawn(new Set(withdrawals));
         setError(null);
         setLoaded(true);
       })
@@ -125,7 +134,7 @@ export function useCalls(
       active = false;
       controller.abort();
     };
-  }, [source, revision]);
+  }, [source, revision, currentUserId]);
 
   // --- Votes ---------------------------------------------------------------
 
@@ -146,6 +155,7 @@ export function useCalls(
           );
           return row ? [...without, row] : without;
         });
+        if (!next) setWithdrawn((ids) => new Set(ids).add(tickerId));
         setError(null);
         return true;
       } catch (cause) {
@@ -423,6 +433,7 @@ export function useCalls(
         side: row.side,
         reason: row.reason,
         createdAt: row.createdAt,
+        changedAt: row.changedAt,
       });
       out.set(row.tickerId, list);
     }
@@ -451,7 +462,8 @@ export function useCalls(
     () =>
       priced.map((ticker) => {
         const voters = votesByCall.get(ticker.id) ?? [];
-        const mine = voters.find((v) => v.userId === currentUserId)?.side ?? null;
+        const myRow = voters.find((v) => v.userId === currentUserId) ?? null;
+        const mine = myRow?.side ?? null;
 
         return {
           ...ticker,
@@ -463,12 +475,14 @@ export function useCalls(
           bull: voters.filter((v) => v.side === 'bull').length,
           bear: voters.filter((v) => v.side === 'bear').length,
           myVote: mine,
+          myVoteChanged: myRow?.changedAt != null,
+          myVoteWithdrawn: myRow === null && withdrawn.has(ticker.id),
           voters,
           votesOpen: ticker.closedOn === null && now <= Date.parse(ticker.votesCloseAt),
           votesLeftMs: Date.parse(ticker.votesCloseAt) - now,
         };
       }),
-    [priced, votesByCall, currentUserId, membersById, spot, now],
+    [priced, votesByCall, currentUserId, membersById, spot, now, withdrawn],
   );
 
   return {

@@ -339,4 +339,5 @@ export const MOCK_VOTE_ROWS: VoteRow[] = [
   reason,
   // Une heure après la publication : dans la fenêtre de vote.
   createdAt: new Date(Date.parse(call.createdAt) + HOUR).toISOString(),
+  changedAt: null,
 }));

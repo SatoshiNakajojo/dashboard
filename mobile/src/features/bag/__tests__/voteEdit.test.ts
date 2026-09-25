@@ -3,6 +3,8 @@ import { describe, it } from 'node:test';
 
 import {
   canSubmit,
+  canSwitchSide,
+  canWithdraw,
   initialReason,
   myVoteStatus,
   reasonAfterSwitch,
@@ -49,14 +51,47 @@ describe('changer d’avis', () => {
   });
 
   it('dit sur la carte si le vote se modifie encore', () => {
-    assert.deepEqual(myVoteStatus('bear', true), {
-      label: 'VOTRE VOTE : BEAR',
+    const call = {
+      myVote: null,
+      myVoteChanged: false,
+      myVoteWithdrawn: false,
+      votesOpen: true,
+    };
+    assert.deepEqual(myVoteStatus({ ...call, myVote: 'bear' }), {
+      kind: 'vote',
+      side: 'bear',
+      changed: false,
       editable: true,
     });
-    assert.deepEqual(myVoteStatus('bull', false), {
-      label: 'VOTRE VOTE : BULL',
+    assert.deepEqual(myVoteStatus({ ...call, myVote: 'bull', votesOpen: false }), {
+      kind: 'vote',
+      side: 'bull',
+      changed: false,
       editable: false,
     });
-    assert.equal(myVoteStatus(null, true), null);
+    assert.deepEqual(myVoteStatus({ ...call, myVoteWithdrawn: true }), { kind: 'withdrawn' });
+    assert.equal(myVoteStatus(call), null);
+  });
+});
+
+describe('un seul changement d’avis par call', () => {
+  const CHANGED = { side: 'bear' as const, reason: 'Finalement non.', changed: true };
+
+  it('laisse changer de camp une fois', () => {
+    assert.equal(canSwitchSide(null), true);
+    assert.equal(canSwitchSide(BULL), true);
+    assert.equal(canSwitchSide(CHANGED), false);
+    assert.equal(canSubmit(CHANGED, 'bull', 'Encore un revirement.'), false);
+  });
+
+  it('laisse toujours retoucher la phrase', () => {
+    assert.equal(canSubmit(CHANGED, 'bear', 'Finalement non : la dette.'), true);
+    assert.equal(submitLabel(CHANGED, 'bear'), 'METTRE À JOUR');
+  });
+
+  it('fait du retrait le changement, et le refuse après un changement', () => {
+    assert.equal(canWithdraw(BULL), true);
+    assert.equal(canWithdraw(CHANGED), false);
+    assert.equal(canWithdraw(null), false);
   });
 });

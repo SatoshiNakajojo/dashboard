@@ -45,8 +45,7 @@ export const CallCard = memo(function CallCard({
   const cls = assetClassStyle[call.assetClass];
   const [showReasons, setShowReasons] = useState(false);
   const stakes = callStakes(call);
-  const myVote = call.myVote;
-  const voteStatus = myVoteStatus(myVote, call.votesOpen);
+  const voteStatus = myVoteStatus(call);
 
   return (
     <LinearGradient
@@ -182,20 +181,24 @@ export const CallCard = memo(function CallCard({
       </View>
 
       {/* Mon vote, et s'il se modifie encore : pendant les 72 h, on peut
-          changer d'avis ; ensuite, il est verrouillé. */}
-      {myVote && voteStatus ? (
+          changer de camp une fois, et retoucher sa phrase ; ensuite, il est
+          verrouillé. Un vote retiré l'est pour de bon. */}
+      {voteStatus?.kind === 'vote' ? (
         <View className="flex-row items-center justify-between" style={{ marginTop: 10 }}>
           <Micro size={8} tracking={1.4} style={{ color: c.sepiaMuted }}>
             {'VOTRE VOTE : '}
-            <Text style={{ color: myVote === 'bull' ? c.sage : c.oxblood }}>
-              {myVote.toUpperCase()}
+            <Text style={{ color: voteStatus.side === 'bull' ? c.sage : c.oxblood }}>
+              {voteStatus.side.toUpperCase()}
             </Text>
+            {voteStatus.changed ? (
+              <Text style={{ color: c.sepiaFaint }}>{' · AVIS CHANGÉ'}</Text>
+            ) : null}
           </Micro>
           {voteStatus.editable && onVote ? (
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Modifier mon vote"
-              onPress={() => onVote(call, myVote)}
+              onPress={() => onVote(call, voteStatus.side)}
               hitSlop={8}
             >
               <Micro size={8.5} tracking={1.5} style={{ color: c.gold }}>
@@ -207,6 +210,15 @@ export const CallCard = memo(function CallCard({
               VERROUILLÉ
             </Micro>
           )}
+        </View>
+      ) : voteStatus?.kind === 'withdrawn' ? (
+        <View className="flex-row items-center justify-between" style={{ marginTop: 10 }}>
+          <Micro size={8} tracking={1.4} style={{ color: c.sepiaMuted }}>
+            VOTE RETIRÉ
+          </Micro>
+          <Micro size={8} tracking={1.3} style={{ color: c.sepiaFaint }}>
+            DÉFINITIF
+          </Micro>
         </View>
       ) : null}
 
@@ -253,6 +265,11 @@ export const CallCard = memo(function CallCard({
                       >
                         {voter.side.toUpperCase()}
                       </Text>
+                      {voter.changedAt ? (
+                        <Text style={{ fontFamily: f.label, fontSize: 9, color: c.sepiaFaint }}>
+                          {' · a changé d’avis'}
+                        </Text>
+                      ) : null}
                     </Text>
                     <Text
                       style={{

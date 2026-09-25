@@ -23,6 +23,8 @@ function toViews(tickers = MOCK_TICKERS): CallView[] {
     bull: 0,
     bear: 0,
     myVote: null,
+    myVoteChanged: false,
+    myVoteWithdrawn: false,
     voters: [],
     votesOpen: false,
     votesLeftMs: 0,

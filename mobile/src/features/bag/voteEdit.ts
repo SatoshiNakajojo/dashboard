@@ -2,8 +2,10 @@
  * Voter, et changer d'avis.
  *
  * Tant que la fenêtre de vote est ouverte — 72 h après la publication du
- * call —, un vote se modifie : on change de camp, ou seulement de phrase.
- * Ensuite il est verrouillé ; la base le garantit (`ticker_votes_guard`).
+ * call —, un vote se modifie : on change de camp **une fois**, ou seulement de
+ * phrase, autant qu'on veut. Retirer son vote compte comme ce changement, et
+ * il est définitif. Après la fenêtre, tout est verrouillé ; la base le
+ * garantit (`ticker_votes_guard`, migration `20260929090000_one_vote_change`).
  *
  * Une règle de bon sens : changer de camp demande une **nouvelle** phrase. La
  * raison d'un vote bull ne justifie pas un vote bear ; la garder, c'est
@@ -22,6 +24,18 @@ export const REASON_MAX = 140;
 export interface CurrentVote {
   side: Vote;
   reason: string | null;
+  /** Ce vote a déjà changé de camp : il ne le fera plus. */
+  changed?: boolean;
+}
+
+/** On peut encore changer de camp : pas de vote, ou un vote jamais changé. */
+export function canSwitchSide(current: CurrentVote | null): boolean {
+  return !current?.changed;
+}
+
+/** Retirer son vote, c'est son unique changement : impossible s'il a eu lieu. */
+export function canWithdraw(current: CurrentVote | null): boolean {
+  return current !== null && !current.changed;
 }
 
 /** La phrase de départ, quand la feuille s'ouvre sur un camp. */
@@ -60,16 +74,29 @@ export function submitLabel(current: CurrentVote | null, side: Vote): string {
 export function canSubmit(current: CurrentVote | null, side: Vote, reason: string): boolean {
   const trimmed = reason.trim();
   if (trimmed.length < REASON_MIN || trimmed.length > REASON_MAX) return false;
+  if (current?.changed && current.side !== side) return false;
   if (current && current.side === side && trimmed === (current.reason ?? '').trim())
     return false;
   return true;
 }
 
-/** Ce que la carte dit de mon vote, s'il y en a un. */
-export function myVoteStatus(
-  myVote: Vote | null,
-  votesOpen: boolean,
-): { label: string; editable: boolean } | null {
-  if (!myVote) return null;
-  return { label: `VOTRE VOTE : ${myVote.toUpperCase()}`, editable: votesOpen };
+/** Ce que la carte dit de mon vote. */
+export type MyVoteStatus =
+  { kind: 'vote'; side: Vote; changed: boolean; editable: boolean } | { kind: 'withdrawn' };
+
+export function myVoteStatus(call: {
+  myVote: Vote | null;
+  myVoteChanged: boolean;
+  myVoteWithdrawn: boolean;
+  votesOpen: boolean;
+}): MyVoteStatus | null {
+  if (call.myVote) {
+    return {
+      kind: 'vote',
+      side: call.myVote,
+      changed: call.myVoteChanged,
+      editable: call.votesOpen,
+    };
+  }
+  return call.myVoteWithdrawn ? { kind: 'withdrawn' } : null;
 }

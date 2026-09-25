@@ -8,9 +8,12 @@ import {
   REASON_MAX,
   REASON_MIN,
   canSubmit as canSubmitVote,
+  canSwitchSide,
+  canWithdraw,
   initialReason,
   reasonAfterSwitch,
   submitLabel,
+  type CurrentVote,
 } from '@/features/bag/voteEdit';
 import { formatLeft } from '@/lib/format';
 import { a, c, f, goldButtonGradient, radius } from '@/theme/tokens';
@@ -20,7 +23,7 @@ export interface VoteSheetProps {
   /** Le call et le camp choisi au toucher. `null` : feuille fermée. */
   target: { call: CallView; side: Vote } | null;
   /** Mon vote actuel sur ce call, s'il y en a un. */
-  current: { side: Vote; reason: string | null } | null;
+  current: CurrentVote | null;
   busy?: boolean;
   error?: string | null;
   onClose: () => void;
@@ -54,6 +57,8 @@ export function VoteSheet({
   const [side, setSide] = useState<Vote>(target?.side ?? 'bull');
   const [reason, setReason] = useState(() => initialReason(current, target?.side ?? 'bull'));
   const [tried, setTried] = useState(false);
+  /** Retirer son vote est définitif : un premier appui demande confirmation. */
+  const [confirmingRemove, setConfirmingRemove] = useState(false);
 
   const call = target?.call ?? null;
   const trimmed = reason.trim();
@@ -177,11 +182,15 @@ export function VoteSheet({
             {(['bull', 'bear'] as const).map((option) => {
               const on = side === option;
               const tone = option === 'bull' ? c.sage : c.oxblood;
+              // Après un changement de camp, l'autre camp est fermé.
+              const locked = !canSwitchSide(current) && option !== current?.side;
               return (
                 <Pressable
                   key={option}
                   accessibilityRole="radio"
                   aria-checked={on}
+                  aria-disabled={locked}
+                  disabled={locked}
                   onPress={() => choose(option)}
                   style={{
                     flex: 1,
@@ -190,6 +199,7 @@ export function VoteSheet({
                     borderRadius: radius.button,
                     borderWidth: 1,
                     borderColor: on ? tone : c.borderLift,
+                    opacity: locked ? 0.35 : 1,
                   }}
                 >
                   <Text
@@ -243,9 +253,13 @@ export function VoteSheet({
             {`Un votant prend la moitié des points de l’auteur : le bull gagne si le call monte et perd s’il baisse, le bear l’inverse. Barème complet dans l’onglet Classement. ${
               left <= 0
                 ? 'Votes clos.'
-                : current
-                  ? `Vous pouvez changer d’avis encore ${formatLeft(left)} ; ensuite, votre vote est verrouillé.`
-                  : `Votes ouverts encore ${formatLeft(left)} — et votre vote reste modifiable jusque-là.`
+                : current?.changed
+                  ? `Vous avez déjà changé d’avis une fois : seule la phrase se modifie encore (${formatLeft(left)}).`
+                  : switching
+                    ? `Un seul changement de camp par call : après celui-ci, votre vote est définitif.`
+                    : current
+                      ? `Vous pouvez changer de camp une fois, encore ${formatLeft(left)} ; ensuite, votre vote est verrouillé.`
+                      : `Votes ouverts encore ${formatLeft(left)}. Vous pourrez changer de camp une fois, jusque-là.`
             }`}
           </Text>
 
@@ -275,27 +289,37 @@ export function VoteSheet({
             </LinearGradient>
           </Pressable>
 
-          {current ? (
+          {canWithdraw(current) ? (
             <Pressable
               accessibilityRole="button"
               onPress={() => {
+                // Définitif : un premier appui arme, le second retire.
+                if (!confirmingRemove) {
+                  setConfirmingRemove(true);
+                  return;
+                }
                 setTried(true);
                 void onRemove();
               }}
               disabled={busy}
               hitSlop={8}
-              style={{ alignSelf: 'center' }}
+              style={{ alignSelf: 'center', alignItems: 'center', gap: 4 }}
             >
               <Text
                 style={{
                   fontFamily: f.labelMed,
                   fontSize: 9,
                   letterSpacing: 1.62,
-                  color: c.oxbloodMuted,
+                  color: confirmingRemove ? c.oxblood : c.oxbloodMuted,
                 }}
               >
-                RETIRER MON VOTE
+                {confirmingRemove ? 'CONFIRMER : RETIRER DÉFINITIVEMENT' : 'RETIRER MON VOTE'}
               </Text>
+              {confirmingRemove ? (
+                <Text style={{ fontFamily: f.sans, fontSize: 10, color: c.sepia }}>
+                  C’est votre changement d’avis : vous ne pourrez plus voter sur ce call.
+                </Text>
+              ) : null}
             </Pressable>
           ) : null}
 

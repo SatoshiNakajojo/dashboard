@@ -20,6 +20,7 @@ const vote = (userId: string, side: VoteView['side']): VoteView => ({
   side,
   reason: 'parce que',
   createdAt: '2026-09-01T00:00:00Z',
+  changedAt: null,
 });
 
 const call = (

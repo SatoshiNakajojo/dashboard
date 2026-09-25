@@ -95,7 +95,8 @@ export function ScoreTable() {
         </Rule>
         <Rule>
           Un vote se fait dans les 72 heures qui suivent la publication, avec une phrase qui
-          l’explique. On ne vote pas sur son propre call.
+          l’explique. On peut changer de camp une seule fois ; retirer son vote compte comme ce
+          changement, et il est définitif. On ne vote pas sur son propre call.
         </Rule>
         <Rule>
           {`Oracle : chaque pari résolu rapporte sa justesse (de 0 à 100), multipliée selon la longueur de la prévision dessinée — ${WEIGHTS}. Viser juste de loin est plus dur ; un pari court, lui, se rejoue chaque semaine. Ces points s’ajoutent à ceux des calls.`}

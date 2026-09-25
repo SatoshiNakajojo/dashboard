@@ -97,6 +97,8 @@ export interface VoteView {
   reason: string | null;
   /** Heure du choix de camp. */
   createdAt: string;
+  /** Quand ce membre a changé de camp — une seule fois par call. `null` : jamais. */
+  changedAt: string | null;
 }
 
 /** Call prêt à l'affichage : perfs calculées, votes agrégés. */
@@ -111,6 +113,10 @@ export interface CallView extends Ticker {
   bull: number;
   bear: number;
   myVote: Vote | null;
+  /** Mon vote a déjà changé de camp : il est définitif (seule la phrase bouge). */
+  myVoteChanged: boolean;
+  /** J'ai retiré mon vote sur ce call : c'est définitif, je ne revote pas. */
+  myVoteWithdrawn: boolean;
   /** Tous les votes, du plus ancien au plus récent. */
   voters: VoteView[];
   /** On peut encore voter : fenêtre ouverte et call en cours. */
