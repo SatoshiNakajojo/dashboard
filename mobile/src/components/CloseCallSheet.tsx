@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { Modal, Pressable, Text, TextInput, View } from 'react-native';
+import { Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 
 import { Micro } from '@/components/ui/Micro';
+import { useKeyboardFrame } from '@/hooks/useKeyboardFrame';
 import { checkEntryDate, entryDayOf, isoToClubDate } from '@/lib/btcAtDate';
 import { todayInClub } from '@/lib/clubTime';
 import { formatPercent, formatPrice, formatUsd } from '@/lib/format';
@@ -81,9 +82,12 @@ export function CloseCallSheet({
 
   const shownError = tried && !busy ? error : null;
 
+  const keyboard = useKeyboardFrame();
+
   return (
     <Modal visible={call !== null} transparent animationType="slide" onRequestClose={onClose}>
-      <View className="flex-1 justify-end">
+      {/* Clavier ouvert, la feuille se cale au-dessus (`useKeyboardFrame`). */}
+      <View className="flex-1" style={keyboard.frame}>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Fermer"
@@ -108,6 +112,7 @@ export function CloseCallSheet({
             paddingHorizontal: 22,
             paddingBottom: 28,
             gap: 18,
+            ...keyboard.sheet,
           }}
         >
           <View
@@ -137,81 +142,89 @@ export function CloseCallSheet({
             </Pressable>
           </View>
 
-          {call ? (
-            <Text style={{ fontFamily: f.sans, fontSize: 12, lineHeight: 18, color: c.sepia }}>
-              {`${call.symbol} · entrée à ${formatPrice(call.entryPrice)} le ${entryDayOf(call)}`}
-            </Text>
-          ) : null}
-
-          <View
-            className="flex-row"
-            style={{ borderTopWidth: 1, borderBottomWidth: 1, borderColor: c.hairline }}
+          <ScrollView
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={{ gap: 18 }}
+            showsVerticalScrollIndicator={false}
           >
-            <View style={{ flex: 1, paddingVertical: 13 }}>
-              <Micro size={8.5} tracking={1.7} style={{ color: c.sepiaMuted }}>
-                PRIX DE SORTIE
-              </Micro>
-              <TextInput
-                value={price}
-                onChangeText={setPrice}
-                keyboardType="decimal-pad"
-                accessibilityLabel="Prix de sortie"
-                placeholder={live !== null && live > 0 ? formatUsd(live, 2) : 'à saisir'}
-                placeholderTextColor={c.sepiaFaint}
-                style={{
-                  fontFamily: f.labelMed,
-                  fontSize: 14,
-                  color: c.ivory,
-                  marginTop: 8,
-                  padding: 0,
-                }}
-              />
-            </View>
-            <View
-              style={{
-                flex: 1,
-                paddingVertical: 13,
-                paddingLeft: 16,
-                borderLeftWidth: 1,
-                borderLeftColor: c.hairline,
-              }}
-            >
-              <Micro size={8.5} tracking={1.7} style={{ color: c.sepiaMuted }}>
-                DATE DE SORTIE
-              </Micro>
-              <TextInput
-                value={date}
-                onChangeText={setDate}
-                keyboardType="numbers-and-punctuation"
-                accessibilityLabel="Date de sortie, au format jour, mois, année"
-                placeholder={`Aujourd’hui · ${todayInClub()}`}
-                placeholderTextColor={c.sepiaFaint}
-                style={{
-                  fontFamily: f.labelMed,
-                  fontSize: 14,
-                  color:
-                    when.kind === 'invalid' || when.kind === 'future' ? c.oxblood : c.ivory,
-                  marginTop: 8,
-                  padding: 0,
-                }}
-              />
-            </View>
-          </View>
+            {call ? (
+              <Text
+                style={{ fontFamily: f.sans, fontSize: 12, lineHeight: 18, color: c.sepia }}
+              >
+                {`${call.symbol} · entrée à ${formatPrice(call.entryPrice)} le ${entryDayOf(call)}`}
+              </Text>
+            ) : null}
 
-          <View className="flex-row items-baseline justify-between">
-            <Micro size={8.5} tracking={1.7} style={{ color: c.sepiaMuted }}>
-              PERF RÉALISÉE
-            </Micro>
-            <Text
-              style={{
-                fontFamily: f.labelMed,
-                fontSize: 16,
-                color: realized === null ? c.sepiaFaint : perfColor(realized),
-              }}
+            <View
+              className="flex-row"
+              style={{ borderTopWidth: 1, borderBottomWidth: 1, borderColor: c.hairline }}
             >
-              {realized === null ? '—' : formatPercent(realized)}
-            </Text>
-          </View>
+              <View style={{ flex: 1, paddingVertical: 13 }}>
+                <Micro size={8.5} tracking={1.7} style={{ color: c.sepiaMuted }}>
+                  PRIX DE SORTIE
+                </Micro>
+                <TextInput
+                  value={price}
+                  onChangeText={setPrice}
+                  keyboardType="decimal-pad"
+                  accessibilityLabel="Prix de sortie"
+                  placeholder={live !== null && live > 0 ? formatUsd(live, 2) : 'à saisir'}
+                  placeholderTextColor={c.sepiaFaint}
+                  style={{
+                    fontFamily: f.labelMed,
+                    fontSize: 14,
+                    color: c.ivory,
+                    marginTop: 8,
+                    padding: 0,
+                  }}
+                />
+              </View>
+              <View
+                style={{
+                  flex: 1,
+                  paddingVertical: 13,
+                  paddingLeft: 16,
+                  borderLeftWidth: 1,
+                  borderLeftColor: c.hairline,
+                }}
+              >
+                <Micro size={8.5} tracking={1.7} style={{ color: c.sepiaMuted }}>
+                  DATE DE SORTIE
+                </Micro>
+                <TextInput
+                  value={date}
+                  onChangeText={setDate}
+                  keyboardType="numbers-and-punctuation"
+                  accessibilityLabel="Date de sortie, au format jour, mois, année"
+                  placeholder={`Aujourd’hui · ${todayInClub()}`}
+                  placeholderTextColor={c.sepiaFaint}
+                  style={{
+                    fontFamily: f.labelMed,
+                    fontSize: 14,
+                    color:
+                      when.kind === 'invalid' || when.kind === 'future' ? c.oxblood : c.ivory,
+                    marginTop: 8,
+                    padding: 0,
+                  }}
+                />
+              </View>
+            </View>
+
+            <View className="flex-row items-baseline justify-between">
+              <Micro size={8.5} tracking={1.7} style={{ color: c.sepiaMuted }}>
+                PERF RÉALISÉE
+              </Micro>
+              <Text
+                style={{
+                  fontFamily: f.labelMed,
+                  fontSize: 16,
+                  color: realized === null ? c.sepiaFaint : perfColor(realized),
+                }}
+              >
+                {realized === null ? '—' : formatPercent(realized)}
+              </Text>
+            </View>
+          </ScrollView>
 
           <Pressable
             accessibilityRole="button"

@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { Modal, Pressable, Text, TextInput, View } from 'react-native';
+import { Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 
 import { Micro } from '@/components/ui/Micro';
+import { useKeyboardFrame } from '@/hooks/useKeyboardFrame';
 import {
   REASON_MAX,
   REASON_MIN,
@@ -77,9 +78,12 @@ export function VoteSheet({
     await onSubmit({ side, reason: trimmed });
   };
 
+  const keyboard = useKeyboardFrame();
+
   return (
     <Modal visible={call !== null} transparent animationType="slide" onRequestClose={onClose}>
-      <View className="flex-1 justify-end">
+      {/* Clavier ouvert, la feuille se cale au-dessus (`useKeyboardFrame`). */}
+      <View className="flex-1" style={keyboard.frame}>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Fermer"
@@ -104,6 +108,7 @@ export function VoteSheet({
             paddingHorizontal: 22,
             paddingBottom: 28,
             gap: 16,
+            ...keyboard.sheet,
           }}
         >
           <View
@@ -133,135 +138,141 @@ export function VoteSheet({
             </Pressable>
           </View>
 
-          {call ? (
-            <Text
-              numberOfLines={3}
-              style={{
-                fontFamily: f.serifItalic,
-                fontSize: 14,
-                lineHeight: 20,
-                color: c.sepia,
-              }}
-            >
-              {`${call.author.displayName} : « ${call.thesis} »`}
-            </Text>
-          ) : null}
+          <ScrollView
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={{ gap: 16 }}
+            showsVerticalScrollIndicator={false}
+          >
+            {call ? (
+              <Text
+                numberOfLines={3}
+                style={{
+                  fontFamily: f.serifItalic,
+                  fontSize: 14,
+                  lineHeight: 20,
+                  color: c.sepia,
+                }}
+              >
+                {`${call.author.displayName} : « ${call.thesis} »`}
+              </Text>
+            ) : null}
 
-          {current ? (
-            <View
-              style={{
-                gap: 4,
-                paddingLeft: 10,
-                borderLeftWidth: 2,
-                borderLeftColor: current.side === 'bull' ? c.sage : c.oxblood,
-              }}
-            >
-              <Micro size={8.5} tracking={1.6} style={{ color: c.sepiaMuted }}>
-                {'VOTRE VOTE ACTUEL · '}
-                <Text style={{ color: current.side === 'bull' ? c.sage : c.oxblood }}>
-                  {current.side.toUpperCase()}
-                </Text>
-              </Micro>
-              {current.reason ? (
-                <Text
-                  numberOfLines={2}
-                  style={{
-                    fontFamily: f.serifItalic,
-                    fontSize: 13,
-                    lineHeight: 18,
-                    color: c.sepia,
-                  }}
-                >
-                  {`«\u00a0${current.reason}\u00a0»`}
-                </Text>
-              ) : null}
-            </View>
-          ) : null}
-
-          <View className="flex-row" style={{ gap: 10 }}>
-            {(['bull', 'bear'] as const).map((option) => {
-              const on = side === option;
-              const tone = option === 'bull' ? c.sage : c.oxblood;
-              // Après un changement de camp, l'autre camp est fermé.
-              const locked = !canSwitchSide(current) && option !== current?.side;
-              return (
-                <Pressable
-                  key={option}
-                  accessibilityRole="radio"
-                  aria-checked={on}
-                  aria-disabled={locked}
-                  disabled={locked}
-                  onPress={() => choose(option)}
-                  style={{
-                    flex: 1,
-                    alignItems: 'center',
-                    paddingVertical: 11,
-                    borderRadius: radius.button,
-                    borderWidth: 1,
-                    borderColor: on ? tone : c.borderLift,
-                    opacity: locked ? 0.35 : 1,
-                  }}
-                >
+            {current ? (
+              <View
+                style={{
+                  gap: 4,
+                  paddingLeft: 10,
+                  borderLeftWidth: 2,
+                  borderLeftColor: current.side === 'bull' ? c.sage : c.oxblood,
+                }}
+              >
+                <Micro size={8.5} tracking={1.6} style={{ color: c.sepiaMuted }}>
+                  {'VOTRE VOTE ACTUEL · '}
+                  <Text style={{ color: current.side === 'bull' ? c.sage : c.oxblood }}>
+                    {current.side.toUpperCase()}
+                  </Text>
+                </Micro>
+                {current.reason ? (
                   <Text
+                    numberOfLines={2}
                     style={{
-                      fontFamily: f.labelMed,
-                      fontSize: 10,
-                      letterSpacing: 1.8,
-                      color: on ? tone : c.sepiaMuted,
+                      fontFamily: f.serifItalic,
+                      fontSize: 13,
+                      lineHeight: 18,
+                      color: c.sepia,
                     }}
                   >
-                    {option === 'bull' ? 'BULL — J’Y CROIS' : 'BEAR — PAS DU TOUT'}
+                    {`«\u00a0${current.reason}\u00a0»`}
                   </Text>
-                </Pressable>
-              );
-            })}
-          </View>
+                ) : null}
+              </View>
+            ) : null}
 
-          <View>
-            <Micro size={8.5} tracking={1.7} style={{ color: c.sepiaMuted }}>
-              {`POURQUOI · ${REASON_MAX - reason.length} SIGNES RESTANTS`}
-            </Micro>
-            <TextInput
-              value={reason}
-              onChangeText={setReason}
-              maxLength={REASON_MAX}
-              multiline
-              accessibilityLabel="Pourquoi ce vote"
-              placeholder={
-                switching
-                  ? 'En une phrase : pourquoi vous changez d’avis.'
-                  : side === 'bull'
-                    ? 'En une phrase : pourquoi vous y croyez.'
-                    : 'En une phrase : pourquoi vous n’y croyez pas.'
-              }
-              placeholderTextColor={c.sepiaFaint}
-              style={{
-                fontFamily: f.serifItalic,
-                fontSize: 15,
-                lineHeight: 23,
-                color: c.parchment,
-                marginTop: 8,
-                padding: 0,
-                minHeight: 46,
-              }}
-            />
-          </View>
+            <View className="flex-row" style={{ gap: 10 }}>
+              {(['bull', 'bear'] as const).map((option) => {
+                const on = side === option;
+                const tone = option === 'bull' ? c.sage : c.oxblood;
+                // Après un changement de camp, l'autre camp est fermé.
+                const locked = !canSwitchSide(current) && option !== current?.side;
+                return (
+                  <Pressable
+                    key={option}
+                    accessibilityRole="radio"
+                    aria-checked={on}
+                    aria-disabled={locked}
+                    disabled={locked}
+                    onPress={() => choose(option)}
+                    style={{
+                      flex: 1,
+                      alignItems: 'center',
+                      paddingVertical: 11,
+                      borderRadius: radius.button,
+                      borderWidth: 1,
+                      borderColor: on ? tone : c.borderLift,
+                      opacity: locked ? 0.35 : 1,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        fontFamily: f.labelMed,
+                        fontSize: 10,
+                        letterSpacing: 1.8,
+                        color: on ? tone : c.sepiaMuted,
+                      }}
+                    >
+                      {option === 'bull' ? 'BULL — J’Y CROIS' : 'BEAR — PAS DU TOUT'}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
 
-          <Text
-            style={{ fontFamily: f.sans, fontSize: 11, lineHeight: 17, color: c.sepiaMuted }}
-          >
-            {`Un votant prend la moitié des points de l’auteur : le bull gagne si le call monte et perd s’il baisse, le bear l’inverse. Barème complet dans l’onglet Classement. ${
-              left <= 0
-                ? 'Votes clos.'
-                : current?.changed
-                  ? `Vous avez déjà changé d’avis une fois : seule la phrase se modifie encore (${formatLeft(left)}).`
-                  : switching
-                    ? `Un seul changement de camp par call : après celui-ci, votre vote est définitif.`
-                    : current
-                      ? `Vous pouvez changer de camp une fois, encore ${formatLeft(left)} ; ensuite, votre vote est verrouillé.`
-                      : `Votes ouverts encore ${formatLeft(left)}. Vous pourrez changer de camp une fois, jusque-là.`
-            }`}
-          </Text>
+            <View>
+              <Micro size={8.5} tracking={1.7} style={{ color: c.sepiaMuted }}>
+                {`POURQUOI · ${REASON_MAX - reason.length} SIGNES RESTANTS`}
+              </Micro>
+              <TextInput
+                value={reason}
+                onChangeText={setReason}
+                maxLength={REASON_MAX}
+                multiline
+                accessibilityLabel="Pourquoi ce vote"
+                placeholder={
+                  switching
+                    ? 'En une phrase : pourquoi vous changez d’avis.'
+                    : side === 'bull'
+                      ? 'En une phrase : pourquoi vous y croyez.'
+                      : 'En une phrase : pourquoi vous n’y croyez pas.'
+                }
+                placeholderTextColor={c.sepiaFaint}
+                style={{
+                  fontFamily: f.serifItalic,
+                  fontSize: 15,
+                  lineHeight: 23,
+                  color: c.parchment,
+                  marginTop: 8,
+                  padding: 0,
+                  minHeight: 46,
+                }}
+              />
+            </View>
+
+            <Text
+              style={{ fontFamily: f.sans, fontSize: 11, lineHeight: 17, color: c.sepiaMuted }}
+            >
+              {`Un votant prend la moitié des points de l’auteur : le bull gagne si le call monte et perd s’il baisse, le bear l’inverse. Barème complet dans l’onglet Classement. ${
+                left <= 0
+                  ? 'Votes clos.'
+                  : current?.changed
+                    ? `Vous avez déjà changé d’avis une fois : seule la phrase se modifie encore (${formatLeft(left)}).`
+                    : switching
+                      ? `Un seul changement de camp par call : après celui-ci, votre vote est définitif.`
+                      : current
+                        ? `Vous pouvez changer de camp une fois, encore ${formatLeft(left)} ; ensuite, votre vote est verrouillé.`
+                        : `Votes ouverts encore ${formatLeft(left)}. Vous pourrez changer de camp une fois, jusque-là.`
+              }`}
+            </Text>
+          </ScrollView>
 
           <Pressable
             accessibilityRole="button"

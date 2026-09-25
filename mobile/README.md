@@ -105,7 +105,7 @@ qu'on n'a pas déposé le nouveau tracé.
 
 ## Ce qui a été vérifié
 
-- `npm run typecheck`, `npm run lint`, `npm test` — propres (562 tests).
+- `npm run typecheck`, `npm run lint`, `npm test` — propres (565 tests).
 - **Règles pures** : bornes et inversibilité du repère, monotonie du tracé,
   écart à la courbe réelle, espaces insécables du formatage français, perf vs ₿
   comme ratio et non soustraction, seuils et tri des deux classements.
@@ -640,6 +640,24 @@ Vérifié dans Chromium, profil persistant, avec un faux Supabase :
 - au retour du réseau, le jeton est renouvelé et l'app reprend
   (`PENDING → TOKEN_REFRESHED → RECOVERED`) ;
 - avec un jeton refusé, retour à la porte, motif affiché.
+
+---
+
+## Le clavier ne cache plus ce qu'on écrit
+
+Les feuilles du bas (soirée, call, vote, clôture) sont collées au bas de
+l'écran. Sur iPhone, le clavier monte par-dessus sans que la page ne
+rétrécisse : le champ où l'on écrivait passait dessous.
+
+`useKeyboardFrame` lit ce qui reste visible (`window.visualViewport`). Clavier
+ouvert, la feuille quitte le bas et se cale **en haut de la zone visible**. Elle
+prend au plus cette hauteur, défile, et amène le champ actif en vue. Le clavier
+est alors sous la zone de texte. Clavier refermé, elle retourne en bas. Le
+calcul est pur et testé (`src/lib/keyboardFrame.ts`).
+
+Vérifié dans Chromium avec un clavier simulé (iPhone 11, 336 px de clavier) :
+la thèse d'un call, le lieu et la dernière ligne « à apporter » d'une soirée
+restent au-dessus du clavier.
 
 ---
 

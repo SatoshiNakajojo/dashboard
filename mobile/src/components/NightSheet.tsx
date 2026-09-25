@@ -5,6 +5,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 
 import { Micro } from '@/components/ui/Micro';
 import { getPotluckSource } from '@/features/potluck/source';
+import { useKeyboardFrame } from '@/hooks/useKeyboardFrame';
 import { clubDateTimeParts, parseClubDateTime, todayInClub } from '@/lib/clubTime';
 import { MAX_THEME_LENGTH, normalizeThemes, suggestThemes } from '@/lib/nightThemes';
 import { a, c, f, goldButtonGradient, radius } from '@/theme/tokens';
@@ -187,6 +188,7 @@ export function NightSheet({
   };
 
   const shownError = tried && !creating ? error : null;
+  const keyboard = useKeyboardFrame();
 
   const toggleRemoved = (itemId: string) =>
     setRemoved((current) =>
@@ -198,7 +200,8 @@ export function NightSheet({
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View className="flex-1 justify-end">
+      {/* Clavier ouvert, la feuille se cale au-dessus (`useKeyboardFrame`). */}
+      <View className="flex-1" style={keyboard.frame}>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Fermer"
@@ -222,7 +225,7 @@ export function NightSheet({
             paddingTop: 16,
             paddingHorizontal: 22,
             paddingBottom: 28,
-            maxHeight: '92%',
+            ...keyboard.sheet,
           }}
         >
           <View style={{ width: 34, height: 2, backgroundColor: c.borderSheet, alignSelf: 'center' }} />

@@ -6,6 +6,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Micro } from '@/components/ui/Micro';
 import { useCoinSearch } from '@/features/bag/useCoinSearch';
 import { useSuggestedPrice } from '@/features/bag/useSuggestedPrice';
+import { useKeyboardFrame } from '@/hooks/useKeyboardFrame';
 import { entryDayOf } from '@/lib/btcAtDate';
 import { formatUsd } from '@/lib/format';
 import { normalizeTicker, type CoinMatch } from '@/lib/coinSearch';
@@ -161,10 +162,12 @@ export function ComposerSheet({
           : null;
 
   const canPublish = blockedReason === null && !publishing;
+  const keyboard = useKeyboardFrame();
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <View className="flex-1 justify-end">
+      {/* Clavier ouvert, la feuille se cale au-dessus (`useKeyboardFrame`). */}
+      <View className="flex-1" style={keyboard.frame}>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Fermer"
@@ -189,6 +192,7 @@ export function ComposerSheet({
             paddingHorizontal: 22,
             paddingBottom: 28,
             gap: 18,
+            ...keyboard.sheet,
           }}
         >
           <View
@@ -218,151 +222,40 @@ export function ComposerSheet({
             </Pressable>
           </View>
 
-          <View>
-            <Micro style={{ marginBottom: 10 }}>CLASSE D’ACTIF</Micro>
-            <View className="flex-row" style={{ gap: 8 }}>
-              {ASSET_CLASSES.map((key) => {
-                const on = assetClass === key;
-                const style = on ? assetClassStyle[key] : assetClassIdle;
-                return (
-                  <Pressable
-                    key={key}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: on, disabled: Boolean(editing) }}
-                    disabled={Boolean(editing)}
-                    onPress={() => {
-                      setAssetClass(key);
-                      // Une place retenue d'un call précédent n'a aucun sens
-                      // sur un jeton, et fausserait le symbole d'un retour aux
-                      // actions.
-                      if (providerFor(key) !== 'yahoo') setExchange(DEFAULT_EXCHANGE);
-                    }}
-                    style={{
-                      flex: 1,
-                      alignItems: 'center',
-                      paddingVertical: 9,
-                      borderRadius: radius.button,
-                      borderWidth: 1,
-                      borderColor: style.border,
-                      backgroundColor: style.bg,
-                      // En modification, seule la classe du call reste lisible.
-                      opacity: editing && !on ? 0.35 : 1,
-                    }}
-                  >
-                    <Text
-                      style={{
-                        fontFamily: f.labelMed,
-                        fontSize: 9,
-                        letterSpacing: 1.08,
-                        color: style.fg,
-                      }}
-                    >
-                      {key}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-          </View>
-
-          <View
-            className="flex-row"
-            style={{ borderTopWidth: 1, borderBottomWidth: 1, borderColor: c.hairline }}
+          <ScrollView
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={{ gap: 18 }}
+            showsVerticalScrollIndicator={false}
           >
-            <View style={{ flex: 1, paddingVertical: 13 }}>
-              <Micro size={8.5} tracking={1.7} style={{ color: c.sepiaMuted }}>
-                TICKER
-              </Micro>
-              <TextInput
-                value={symbol}
-                editable={!editing}
-                onChangeText={(text) => setSymbol(text.toUpperCase())}
-                autoCapitalize="characters"
-                autoCorrect={false}
-                maxLength={11}
-                placeholder="$BTC"
-                placeholderTextColor={c.sepiaFaint}
-                style={{
-                  fontFamily: f.serif,
-                  fontSize: 20,
-                  color: symbolValid ? c.ivory : c.oxblood,
-                  marginTop: 5,
-                  padding: 0,
-                }}
-              />
-            </View>
-            <View
-              style={{
-                flex: 1,
-                paddingVertical: 13,
-                paddingLeft: 16,
-                borderLeftWidth: 1,
-                borderLeftColor: c.hairline,
-              }}
-            >
-              <Micro size={8.5} tracking={1.7} style={{ color: c.sepiaMuted }}>
-                {editing ? 'PRIX D’ENTRÉE' : 'PRIX D’ENTRÉE · LIVE'}
-              </Micro>
-              <Text
-                accessibilityLabel="Prix d’entrée, cours live"
-                style={{
-                  fontFamily: f.labelMed,
-                  fontSize: 14,
-                  color: (editing ? editing.entryPrice : suggested.price)
-                    ? c.ivory
-                    : c.sepiaFaint,
-                  marginTop: 8,
-                }}
-              >
-                {editing
-                  ? formatUsd(editing.entryPrice)
-                  : suggested.price !== null
-                    ? formatUsd(suggested.price)
-                    : suggested.loading || search.loading
-                      ? '…'
-                      : 'introuvable'}
-              </Text>
-            </View>
-          </View>
-
-          <Text
-            style={{
-              fontFamily: f.sans,
-              fontSize: 10,
-              lineHeight: 16,
-              color: c.sepiaFaint,
-              marginTop: -8,
-            }}
-          >
-            {editing
-              ? `Entrée au marché le ${entryDayOf(editing)}. Le prix et le jour d’entrée ne se modifient pas ; la thèse, si.`
-              : 'Un call se publie au cours du marché, maintenant : ni saisie, ni date passée. Le serveur relit ce cours dans le quart d’heure et le confirme.'}
-          </Text>
-
-          {isStock && !editing && (
             <View>
-              <Micro style={{ marginBottom: 10 }}>PLACE DE COTATION</Micro>
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={{ gap: 8, paddingRight: 22 }}
-              >
-                {EXCHANGES.map(({ key, label }) => {
-                  const on = exchange === key;
-                  const style = on ? assetClassStyle[assetClass] : assetClassIdle;
+              <Micro style={{ marginBottom: 10 }}>CLASSE D’ACTIF</Micro>
+              <View className="flex-row" style={{ gap: 8 }}>
+                {ASSET_CLASSES.map((key) => {
+                  const on = assetClass === key;
+                  const style = on ? assetClassStyle[key] : assetClassIdle;
                   return (
                     <Pressable
                       key={key}
                       accessibilityRole="button"
-                      accessibilityState={{ selected: on }}
-                      onPress={() => setExchange(key)}
+                      accessibilityState={{ selected: on, disabled: Boolean(editing) }}
+                      disabled={Boolean(editing)}
+                      onPress={() => {
+                        setAssetClass(key);
+                        // Une place retenue d'un call précédent n'a aucun sens
+                        // sur un jeton, et fausserait le symbole d'un retour aux
+                        // actions.
+                        if (providerFor(key) !== 'yahoo') setExchange(DEFAULT_EXCHANGE);
+                      }}
                       style={{
-                        paddingHorizontal: 12,
-                        paddingVertical: 8,
+                        flex: 1,
+                        alignItems: 'center',
+                        paddingVertical: 9,
                         borderRadius: radius.button,
                         borderWidth: 1,
                         borderColor: style.border,
                         backgroundColor: style.bg,
+                        // En modification, seule la classe du call reste lisible.
+                        opacity: editing && !on ? 0.35 : 1,
                       }}
                     >
                       <Text
@@ -373,120 +266,244 @@ export function ComposerSheet({
                           color: style.fg,
                         }}
                       >
-                        {label.toUpperCase()}
+                        {key}
                       </Text>
                     </Pressable>
                   );
                 })}
-              </ScrollView>
-              <Text
+              </View>
+            </View>
+
+            <View
+              className="flex-row"
+              style={{ borderTopWidth: 1, borderBottomWidth: 1, borderColor: c.hairline }}
+            >
+              <View style={{ flex: 1, paddingVertical: 13 }}>
+                <Micro size={8.5} tracking={1.7} style={{ color: c.sepiaMuted }}>
+                  TICKER
+                </Micro>
+                <TextInput
+                  value={symbol}
+                  editable={!editing}
+                  onChangeText={(text) => setSymbol(text.toUpperCase())}
+                  autoCapitalize="characters"
+                  autoCorrect={false}
+                  maxLength={11}
+                  placeholder="$BTC"
+                  placeholderTextColor={c.sepiaFaint}
+                  style={{
+                    fontFamily: f.serif,
+                    fontSize: 20,
+                    color: symbolValid ? c.ivory : c.oxblood,
+                    marginTop: 5,
+                    padding: 0,
+                  }}
+                />
+              </View>
+              <View
                 style={{
-                  fontFamily: f.sans,
-                  fontSize: 10,
-                  lineHeight: 16,
-                  color: c.sepiaFaint,
-                  marginTop: 9,
+                  flex: 1,
+                  paddingVertical: 13,
+                  paddingLeft: 16,
+                  borderLeftWidth: 1,
+                  borderLeftColor: c.hairline,
                 }}
               >
-                {suggested.symbol
-                  ? `Suivi comme ${suggested.symbol} sur Yahoo Finance.`
-                  : 'Hors des États-Unis, Yahoo suffixe le ticker : AI.PA, pas AI.'}
-              </Text>
+                <Micro size={8.5} tracking={1.7} style={{ color: c.sepiaMuted }}>
+                  {editing ? 'PRIX D’ENTRÉE' : 'PRIX D’ENTRÉE · LIVE'}
+                </Micro>
+                <Text
+                  accessibilityLabel="Prix d’entrée, cours live"
+                  style={{
+                    fontFamily: f.labelMed,
+                    fontSize: 14,
+                    color: (editing ? editing.entryPrice : suggested.price)
+                      ? c.ivory
+                      : c.sepiaFaint,
+                    marginTop: 8,
+                  }}
+                >
+                  {editing
+                    ? formatUsd(editing.entryPrice)
+                    : suggested.price !== null
+                      ? formatUsd(suggested.price)
+                      : suggested.loading || search.loading
+                        ? '…'
+                        : 'introuvable'}
+                </Text>
+              </View>
             </View>
-          )}
 
-          {isCoin && (
-            <View>
-              <Micro style={{ marginBottom: 10 }}>JETON</Micro>
-              {search.matches.slice(0, 4).map((coin) => {
-                const on = pinned?.id === coin.id;
-                const style = on ? assetClassStyle[assetClass] : assetClassIdle;
-                return (
-                  <Pressable
-                    key={coin.id}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: on }}
-                    onPress={() => {
-                      setSymbol(`$${coin.symbol}`);
-                      setPicked(coin);
-                    }}
-                    className="flex-row items-baseline"
-                    style={{
-                      gap: 10,
-                      paddingHorizontal: 12,
-                      paddingVertical: 9,
-                      marginBottom: 6,
-                      borderRadius: radius.button,
-                      borderWidth: 1,
-                      borderColor: style.border,
-                      backgroundColor: style.bg,
-                    }}
-                  >
-                    <Text
+            <Text
+              style={{
+                fontFamily: f.sans,
+                fontSize: 10,
+                lineHeight: 16,
+                color: c.sepiaFaint,
+                marginTop: -8,
+              }}
+            >
+              {editing
+                ? `Entrée au marché le ${entryDayOf(editing)}. Le prix et le jour d’entrée ne se modifient pas ; la thèse, si.`
+                : 'Un call se publie au cours du marché, maintenant : ni saisie, ni date passée. Le serveur relit ce cours dans le quart d’heure et le confirme.'}
+            </Text>
+
+            {isStock && !editing && (
+              <View>
+                <Micro style={{ marginBottom: 10 }}>PLACE DE COTATION</Micro>
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  contentContainerStyle={{ gap: 8, paddingRight: 22 }}
+                >
+                  {EXCHANGES.map(({ key, label }) => {
+                    const on = exchange === key;
+                    const style = on ? assetClassStyle[assetClass] : assetClassIdle;
+                    return (
+                      <Pressable
+                        key={key}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: on }}
+                        onPress={() => setExchange(key)}
+                        style={{
+                          paddingHorizontal: 12,
+                          paddingVertical: 8,
+                          borderRadius: radius.button,
+                          borderWidth: 1,
+                          borderColor: style.border,
+                          backgroundColor: style.bg,
+                        }}
+                      >
+                        <Text
+                          style={{
+                            fontFamily: f.labelMed,
+                            fontSize: 9,
+                            letterSpacing: 1.08,
+                            color: style.fg,
+                          }}
+                        >
+                          {label.toUpperCase()}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </ScrollView>
+                <Text
+                  style={{
+                    fontFamily: f.sans,
+                    fontSize: 10,
+                    lineHeight: 16,
+                    color: c.sepiaFaint,
+                    marginTop: 9,
+                  }}
+                >
+                  {suggested.symbol
+                    ? `Suivi comme ${suggested.symbol} sur Yahoo Finance.`
+                    : 'Hors des États-Unis, Yahoo suffixe le ticker : AI.PA, pas AI.'}
+                </Text>
+              </View>
+            )}
+
+            {isCoin && (
+              <View>
+                <Micro style={{ marginBottom: 10 }}>JETON</Micro>
+                {search.matches.slice(0, 4).map((coin) => {
+                  const on = pinned?.id === coin.id;
+                  const style = on ? assetClassStyle[assetClass] : assetClassIdle;
+                  return (
+                    <Pressable
+                      key={coin.id}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: on }}
+                      onPress={() => {
+                        setSymbol(`$${coin.symbol}`);
+                        setPicked(coin);
+                      }}
+                      className="flex-row items-baseline"
                       style={{
-                        fontFamily: f.labelMed,
-                        fontSize: 10,
-                        letterSpacing: 1.08,
-                        color: style.fg,
+                        gap: 10,
+                        paddingHorizontal: 12,
+                        paddingVertical: 9,
+                        marginBottom: 6,
+                        borderRadius: radius.button,
+                        borderWidth: 1,
+                        borderColor: style.border,
+                        backgroundColor: style.bg,
                       }}
                     >
-                      {coin.symbol}
-                    </Text>
-                    <Text
-                      numberOfLines={1}
-                      style={{ flex: 1, fontFamily: f.sans, fontSize: 11, color: c.parchment }}
-                    >
-                      {coin.name}
-                    </Text>
-                    <Text style={{ fontFamily: f.labelMed, fontSize: 9, color: c.sepiaFaint }}>
-                      {coin.rank === null ? 'HORS RANG' : `#${coin.rank}`}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-              <Text
-                style={{
-                  fontFamily: f.sans,
-                  fontSize: 10,
-                  lineHeight: 16,
-                  color: search.empty ? c.sepia : c.sepiaFaint,
-                  marginTop: 3,
-                }}
-              >
-                {pinned
-                  ? `Suivi comme ${pinned.name} sur CoinGecko.`
-                  : search.loading
-                    ? 'Recherche…'
-                    : search.empty
-                      ? 'Aucun jeton connu sous ce ticker : sans cours de marché, pas de call.'
-                      : search.matches.length > 0
-                        ? `Sans choix, le mieux classé est retenu : ${search.matches[0]!.name}.`
-                        : 'Tapez deux lettres pour voir les jetons connus.'}
-              </Text>
-            </View>
-          )}
+                      <Text
+                        style={{
+                          fontFamily: f.labelMed,
+                          fontSize: 10,
+                          letterSpacing: 1.08,
+                          color: style.fg,
+                        }}
+                      >
+                        {coin.symbol}
+                      </Text>
+                      <Text
+                        numberOfLines={1}
+                        style={{
+                          flex: 1,
+                          fontFamily: f.sans,
+                          fontSize: 11,
+                          color: c.parchment,
+                        }}
+                      >
+                        {coin.name}
+                      </Text>
+                      <Text
+                        style={{ fontFamily: f.labelMed, fontSize: 9, color: c.sepiaFaint }}
+                      >
+                        {coin.rank === null ? 'HORS RANG' : `#${coin.rank}`}
+                      </Text>
+                    </Pressable>
+                  );
+                })}
+                <Text
+                  style={{
+                    fontFamily: f.sans,
+                    fontSize: 10,
+                    lineHeight: 16,
+                    color: search.empty ? c.sepia : c.sepiaFaint,
+                    marginTop: 3,
+                  }}
+                >
+                  {pinned
+                    ? `Suivi comme ${pinned.name} sur CoinGecko.`
+                    : search.loading
+                      ? 'Recherche…'
+                      : search.empty
+                        ? 'Aucun jeton connu sous ce ticker : sans cours de marché, pas de call.'
+                        : search.matches.length > 0
+                          ? `Sans choix, le mieux classé est retenu : ${search.matches[0]!.name}.`
+                          : 'Tapez deux lettres pour voir les jetons connus.'}
+                </Text>
+              </View>
+            )}
 
-          <View>
-            <Micro size={8.5} tracking={1.7} style={{ color: c.sepiaMuted }}>
-              {`THÈSE · ${THESIS_MAX - thesis.length} SIGNES RESTANTS`}
-            </Micro>
-            <TextInput
-              value={thesis}
-              onChangeText={setThesis}
-              maxLength={THESIS_MAX}
-              multiline
-              placeholder="Votre thèse, en une phrase."
-              placeholderTextColor={c.sepiaFaint}
-              style={{
-                fontFamily: f.serifItalic,
-                fontSize: 15,
-                lineHeight: 24,
-                color: c.parchment,
-                marginTop: 8,
-                padding: 0,
-              }}
-            />
-          </View>
+            <View>
+              <Micro size={8.5} tracking={1.7} style={{ color: c.sepiaMuted }}>
+                {`THÈSE · ${THESIS_MAX - thesis.length} SIGNES RESTANTS`}
+              </Micro>
+              <TextInput
+                value={thesis}
+                onChangeText={setThesis}
+                maxLength={THESIS_MAX}
+                multiline
+                placeholder="Votre thèse, en une phrase."
+                placeholderTextColor={c.sepiaFaint}
+                style={{
+                  fontFamily: f.serifItalic,
+                  fontSize: 15,
+                  lineHeight: 24,
+                  color: c.parchment,
+                  marginTop: 8,
+                  padding: 0,
+                }}
+              />
+            </View>
+          </ScrollView>
 
           <Pressable
             accessibilityRole="button"
