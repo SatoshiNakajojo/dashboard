@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 
+import { useAppRefresh } from '@/hooks/useAppRefresh';
 import { fetchCoinPrices } from '@/lib/coingecko';
 import { fetchStockQuote } from '@/lib/yahoo';
 import type { Ticker } from '@/types/domain';
@@ -31,6 +32,8 @@ export function useLiveQuotes(tickers: readonly Ticker[]): QuoteMap {
   const { coingeckoIds, yahooSymbols } = quoteTargets(tickers);
   const cgKey = coingeckoIds.join(',');
   const yhKey = yahooSymbols.join(',');
+  /** « Actualiser » : les cours se redemandent (`appRefresh.ts`). */
+  const refresh = useAppRefresh();
 
   useEffect(() => {
     const ids = cgKey ? cgKey.split(',') : [];
@@ -69,7 +72,7 @@ export function useLiveQuotes(tickers: readonly Ticker[]): QuoteMap {
       active = false;
       controller.abort();
     };
-  }, [cgKey, yhKey]);
+  }, [cgKey, yhKey, refresh]);
 
   return quotes;
 }

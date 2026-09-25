@@ -2,13 +2,15 @@ import { Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 
 import { BitcoinGlyph } from '@/components/ui/BitcoinGlyph';
+import { RefreshButton } from '@/components/RefreshButton';
 import { Micro } from '@/components/ui/Micro';
 import { useBtcSpot } from '@/hooks/useBtcMarket';
 import { formatInteger, formatPercent, formatUsd } from '@/lib/format';
 import { c, f, goldRadial, goldRadialLocations, perfColor } from '@/theme/tokens';
 
 /**
- * Bandeau BTC, présent sur tous les onglets.
+ * Bandeau BTC, présent sur tous les onglets — avec, à droite du bloc, le
+ * bouton ↻ qui actualise l'app.
  *
  * Quand CoinGecko ne répond plus, le prix reste affiché et un libellé
  * `HORS LIGNE` prend la place de la variation 24 h : on ne masque jamais la
@@ -69,6 +71,9 @@ export function BtcTicker() {
           {`BLOC ${formatInteger(blockHeight)}`}
         </Micro>
       )}
+
+      {/* Actualiser l'app : une PWA installée n'a pas d'autre moyen. */}
+      <RefreshButton />
     </View>
   );
 }

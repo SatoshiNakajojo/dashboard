@@ -134,6 +134,30 @@ self.addEventListener('push', function (event) {
   );
 });
 
+/**
+ * La dernière notification touchée, gardée pour l'app.
+ *
+ * Mise en veille par iOS, l'app ne se recharge pas quand on touche une
+ * notification : elle reprend l'écran tel qu'on l'avait laissé, et ni le
+ * message ni la navigation ci-dessous n'arrivent toujours. Elle relit donc
+ * cette entrée en revenant au premier plan (`src/lib/appRefresh.ts`).
+ */
+const PENDING_OPEN = './__club-open';
+
+function rememberOpen(target) {
+  return caches
+    .open(CACHE)
+    .then(function (cache) {
+      return cache.put(
+        PENDING_OPEN,
+        new Response(JSON.stringify({ url: target, at: Date.now() }), {
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      );
+    })
+    .catch(function () {});
+}
+
 /** Toucher la notification ouvre l'onglet dont elle parle — dans l'app si elle est ouverte. */
 self.addEventListener('notificationclick', function (event) {
   event.notification.close();
@@ -141,24 +165,35 @@ self.addEventListener('notificationclick', function (event) {
   const target = new URL(url, self.registration.scope).href;
 
   event.waitUntil(
-    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function (list) {
-      const open = list.find(function (client) {
-        return client.url.indexOf(self.registration.scope) === 0;
-      });
-      if (!open) return self.clients.openWindow(target);
-      // Le focus peut être refusé (pas d'activation) : on navigue quand même.
-      return open
-        .focus()
-        .catch(function () {
-          return open;
-        })
-        .then(function (client) {
-          return client && 'navigate' in client
-            ? client.navigate(target).catch(function () {
-                return client;
-              })
-            : client;
+    rememberOpen(target)
+      .then(function () {
+        return self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+      })
+      .then(function (list) {
+        const open = list.find(function (client) {
+          return client.url.indexOf(self.registration.scope) === 0;
         });
-    }),
+        if (!open) return self.clients.openWindow(target);
+        // L'app était en veille : elle relit ses données et va à l'écran dit,
+        // même si la navigation ci-dessous est refusée.
+        try {
+          open.postMessage({ type: 'club:open', url: target });
+        } catch (_error) {
+          // L'entrée gardée prendra le relais au retour au premier plan.
+        }
+        // Le focus peut être refusé (pas d'activation) : on navigue quand même.
+        return open
+          .focus()
+          .catch(function () {
+            return open;
+          })
+          .then(function (client) {
+            return client && 'navigate' in client
+              ? client.navigate(target).catch(function () {
+                  return client;
+                })
+              : client;
+          });
+      }),
   );
 });

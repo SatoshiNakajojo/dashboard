@@ -304,7 +304,7 @@ begin
   -- Pas de clôture avant la confirmation.
   failed := false;
   begin
-    update public.tickers set exit_price = 120, closed_on = current_date where id = call;
+    update public.tickers set exit_price = 120, closed_on = (now() at time zone 'Pacific/Noumea')::date where id = call;
   exception when check_violation then failed := true;
   end;
   assert failed, 'on ne clôture pas un call au prix d’entrée provisoire';
@@ -336,10 +336,10 @@ begin
 
   -- Confirmé : la clôture redevient possible.
   set local role authenticated;
-  update public.tickers set exit_price = 120, closed_on = current_date where id = call;
+  update public.tickers set exit_price = 120, closed_on = (now() at time zone 'Pacific/Noumea')::date where id = call;
   reset role;
   select * into t from public.tickers where id = call;
-  assert t.closed_on = current_date, 'clôturé une fois le prix confirmé';
+  assert t.closed_on = (now() at time zone 'Pacific/Noumea')::date, 'clôturé une fois le prix confirmé';
   raise notice 'ok · calls v1.01 : un call confirmé se clôture';
   delete from public.tickers where id = call;
 end $$;
@@ -880,7 +880,7 @@ begin
   insert into public.tickers (user_id, symbol, asset_class, entry_price, current_price, thesis, entered_on)
   values (john, '$OKLO', 'ACTION', 20, 20, 'Réacteurs.', current_date - 10)
   returning id into call;
-  update public.tickers set exit_price = 30, closed_on = current_date where id = call;
+  update public.tickers set exit_price = 30, closed_on = (now() at time zone 'Pacific/Noumea')::date where id = call;
   reset role;
   select * into r from public.notification_outbox where dedupe_key = 'call_new:' || call;
   assert r.kind = 'call_new' and r.payload ->> 'symbol' = '$OKLO', 'call annoncé';
@@ -1226,6 +1226,86 @@ begin
   perform set_config('test.uid', '', true);
   delete from public.events where id = ev2;
   delete from public.profiles where id in (lea, marco, sofia, rayan, toi);
+end $$;
+
+-- --- Qui amène quoi : un membre ajoute ce qu'il apporte (v1.01) -------------
+do $$
+declare
+  ev     constant uuid := 'bbbbbbbb-0000-4000-8000-000000000001';
+  john   constant uuid := 'aaaaaaaa-0000-4000-8000-000000000001';
+  alex   constant uuid := 'aaaaaaaa-0000-4000-8000-000000000002';
+  zoe    constant uuid := 'aaaaaaaa-0000-4000-8000-0000000000f1';
+  line   uuid;
+  who    uuid;
+  n      integer;
+  failed boolean;
+begin
+  insert into auth.users (id) values (zoe);
+  insert into public.profiles (id, display_name, initials, color) values (zoe, 'Zoé', 'ZO', '#7A6FB0');
+
+  set local role authenticated;
+  perform set_config('test.uid', alex::text, true);
+
+  -- Alex apporte un dessert que l'organisateur n'avait pas demandé.
+  insert into public.potluck_items (event_id, item_name, assigned_user_id, position)
+  values (ev, 'Dessert', alex, 90)
+  returning id, added_by into line, who;
+  assert who = alex, 'la ligne ajoutée à son nom a son auteur';
+  raise notice 'ok · potluck : un membre ajoute ce qu''il apporte, à son nom';
+
+  -- Pas au nom d'un autre.
+  failed := false;
+  begin
+    insert into public.potluck_items (event_id, item_name, assigned_user_id, position)
+    values (ev, 'Vin', john, 91);
+  exception when insufficient_privilege or check_violation then failed := true;
+  end;
+  assert failed, 'ajouter une ligne au nom d''un autre doit être refusé';
+
+  -- L'auteur se déduit : une ligne libre n'en a pas, et il ne se réécrit pas.
+  insert into public.potluck_items (event_id, item_name, assigned_user_id, added_by, position)
+  values (ev, 'Glaçons', null, alex, 92)
+  returning added_by into who;
+  assert who is null, 'une ligne libre est un besoin, sans auteur';
+  update public.potluck_items set added_by = null where id = line;
+  select added_by into who from public.potluck_items where id = line;
+  assert who = alex, 'l''auteur d''une ligne ne se réécrit pas';
+  raise notice 'ok · potluck : ni au nom d''un autre, ni d''auteur déclaré à la main';
+
+  -- Un autre membre ne retire pas la ligne d'Alex ; Alex, si.
+  perform set_config('test.uid', zoe::text, true);
+  delete from public.potluck_items where id = line;
+  get diagnostics n = row_count;
+  assert n = 0, 'on ne retire pas la ligne d''un autre';
+  perform set_config('test.uid', alex::text, true);
+  delete from public.potluck_items where id = line;
+  get diagnostics n = row_count;
+  assert n = 1, 'l''auteur retire sa ligne';
+
+  -- Rendue puis prise par Zoé : elle ne disparaît plus sous ses yeux.
+  insert into public.potluck_items (event_id, item_name, assigned_user_id, position)
+  values (ev, 'Guitare', alex, 93)
+  returning id into line;
+  update public.potluck_items set assigned_user_id = null where id = line;
+  perform set_config('test.uid', zoe::text, true);
+  update public.potluck_items set assigned_user_id = zoe where id = line and assigned_user_id is null;
+  perform set_config('test.uid', alex::text, true);
+  delete from public.potluck_items where id = line;
+  get diagnostics n = row_count;
+  assert n = 0, 'une ligne prise par un autre reste';
+  raise notice 'ok · potluck : l''auteur retire sa ligne, tant que personne d''autre ne l''a prise';
+
+  -- L'organisateur retire toujours une ligne libre.
+  perform set_config('test.uid', john::text, true);
+  delete from public.potluck_items where event_id = ev and item_name = 'Glaçons';
+  get diagnostics n = row_count;
+  assert n = 1, 'l''organisateur retire une ligne libre';
+  raise notice 'ok · potluck : l''organisateur retire toujours les lignes libres';
+
+  reset role;
+  perform set_config('test.uid', '', true);
+  delete from public.potluck_items where event_id = ev and item_name = 'Guitare';
+  delete from public.profiles where id = zoe;
 end $$;
 
 rollback;

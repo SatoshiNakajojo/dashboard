@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
+import { useAppRefresh } from '@/hooks/useAppRefresh';
 import { describeError, supabase } from '@/lib/supabase';
 import { loadNights, mockNights, type EventWithAttendance } from './useEvents';
 
@@ -22,6 +23,8 @@ export function useClubNights(): {
   );
   const [loading, setLoading] = useState(Boolean(supabase));
   const [error, setError] = useState<string | null>(null);
+  const refresh = useAppRefresh();
+  const loadedOnce = useRef(false);
 
   useEffect(() => {
     const client = supabase;
@@ -33,15 +36,18 @@ export function useClubNights(): {
         const loaded = await loadNights(client, controller.signal);
         if (controller.signal.aborted) return;
         setEvents(loaded);
+        setError(null);
+        loadedOnce.current = true;
       } catch (cause) {
         if (controller.signal.aborted) return;
-        setError(describeError(cause));
+        // Une relecture qui échoue garde l'agenda affiché.
+        if (!loadedOnce.current) setError(describeError(cause));
       }
       setLoading(false);
     })();
 
     return () => controller.abort();
-  }, []);
+  }, [refresh]);
 
   return { events, loading, error };
 }

@@ -60,6 +60,11 @@ export interface PotluckItem {
   itemName: string;
   assignedUserId: Uuid | null;
   position: number;
+  /**
+   * Le membre qui a ajouté la ligne pour l'apporter lui-même (v1.01). Absent
+   * ou `null` : un besoin posé par l'organisateur.
+   */
+  addedBy?: Uuid | null;
 }
 
 /** Ligne de potluck enrichie du membre assigné, prête à l'affichage. */

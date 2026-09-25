@@ -47,6 +47,8 @@ export type PotluckItemRow = {
   item_name: string;
   assigned_user_id: string | null;
   position: number;
+  /** Migration `20261008090000_potluck_member_lines`. */
+  added_by?: string | null;
   created_at: string;
   updated_at: string;
 };

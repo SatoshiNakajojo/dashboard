@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { onMockAdoption } from '@/features/nights/proposals';
 import { getPotluckSource } from '@/features/potluck/source';
+import { useAppRefresh } from '@/hooks/useAppRefresh';
 import { pushNotice, type AttendanceNotice } from '@/lib/attendanceNotice';
 import { normalizeThemes } from '@/lib/nightThemes';
 import { describeError, supabase } from '@/lib/supabase';
@@ -135,6 +136,9 @@ export function useEvents(currentUserId: string | null): EventsState {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notices, setNotices] = useState<AttendanceNotice[]>([]);
+  /** « Actualiser » : l'agenda se relit (`appRefresh.ts`). */
+  const refresh = useAppRefresh();
+  const loadedOnce = useRef(false);
 
   /**
    * L'abonnement temps réel se monte une fois et ne se redémarre pas quand
@@ -158,15 +162,18 @@ export function useEvents(currentUserId: string | null): EventsState {
         const loaded = await loadNights(client, controller.signal);
         if (controller.signal.aborted) return;
         setEvents(loaded);
+        if (loadedOnce.current) setError(null);
+        loadedOnce.current = true;
       } catch (cause) {
         if (controller.signal.aborted) return;
-        setError(describeError(cause));
+        // Une relecture qui échoue garde l'agenda affiché, sans alarme.
+        if (!loadedOnce.current) setError(describeError(cause));
       }
       setLoading(false);
     })();
 
     return () => controller.abort();
-  }, []);
+  }, [refresh]);
 
   /**
    * Les soirées en direct.

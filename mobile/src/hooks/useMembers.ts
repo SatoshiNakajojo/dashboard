@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 
 import { profileRevision, subscribeToProfileChange } from '@/features/auth/useAuth';
+import { useAppRefresh } from '@/hooks/useAppRefresh';
 import { parseLinks } from '@/lib/profileLinks';
 import { supabase } from '@/lib/supabase';
 import { MEMBER_LIST } from '@/mocks/members';
@@ -39,6 +40,9 @@ export function useMembers(): MembersState {
     profileRevision,
   );
 
+  /** « Actualiser » : l'annuaire se relit aussi (`appRefresh.ts`). */
+  const refresh = useAppRefresh();
+
   useEffect(() => {
     const client = supabase;
     if (!client) return;
@@ -71,7 +75,7 @@ export function useMembers(): MembersState {
     })();
 
     return () => controller.abort();
-  }, [revision]);
+  }, [revision, refresh]);
 
   // Mémoïsé : une Map neuve à chaque rendu relançait tous les calculs qui en
   // dépendent — les perfs des calls, les classements — et redessinait les cartes.

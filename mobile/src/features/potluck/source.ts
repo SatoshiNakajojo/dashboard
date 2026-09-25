@@ -30,6 +30,16 @@ export interface PotluckSource {
   /** Ajoute des lignes libres en fin de liste — tout membre peut le faire. */
   add(eventId: string, names: readonly string[]): Promise<void>;
   /**
+   * « J'apporte aussi… » : une ligne en fin de liste, déjà à son nom. Rend la
+   * ligne créée — la liste l'affiche sans attendre le temps réel.
+   */
+  bring(eventId: string, userId: string, name: string): Promise<PotluckItem>;
+  /**
+   * Retire une ligne qu'on a soi-même ajoutée (et qu'on apporte, ou libre).
+   * `false` si elle n'est pas à nous d'enlever — avant la migration, par exemple.
+   */
+  withdraw(itemId: string, userId: string): Promise<boolean>;
+  /**
    * Retire une ligne **libre**. Seul le créateur de la soirée le peut (RLS) ;
    * `false` si la ligne a été prise entre-temps, ou n'est pas à nous d'enlever.
    */
@@ -48,6 +58,8 @@ interface Row {
   item_name: string;
   assigned_user_id: string | null;
   position: number;
+  /** Absent avant la migration `20261008090000_potluck_member_lines`. */
+  added_by?: string | null;
 }
 
 function fromRow(row: Row): PotluckItem {
@@ -57,10 +69,25 @@ function fromRow(row: Row): PotluckItem {
     itemName: row.item_name,
     assignedUserId: row.assigned_user_id,
     position: row.position,
+    addedBy: row.added_by ?? null,
   };
 }
 
-const COLUMNS = 'id, event_id, item_name, assigned_user_id, position';
+// `*` : la colonne `added_by` n'existe qu'après sa migration, et la nommer
+// casserait la liste d'une base pas encore à jour.
+const COLUMNS = '*';
+
+/** La position après la dernière ligne de la soirée. */
+async function nextPosition(client: NonNullable<typeof supabase>, eventId: string) {
+  const { data, error } = await client
+    .from('potluck_items')
+    .select('position')
+    .eq('event_id', eventId)
+    .order('position', { ascending: false })
+    .limit(1);
+  if (error) throw error;
+  return (data?.[0]?.position ?? 0) + 1;
+}
 
 function createSupabaseSource(client: NonNullable<typeof supabase>): PotluckSource {
   return {
@@ -110,23 +137,39 @@ function createSupabaseSource(client: NonNullable<typeof supabase>): PotluckSour
       if (names.length === 0) return;
       // À la suite de ce qui existe : la liste ne se réordonne pas sous les
       // yeux de ceux qui ont déjà pris une ligne.
-      const { data: last, error: readError } = await client
-        .from('potluck_items')
-        .select('position')
-        .eq('event_id', eventId)
-        .order('position', { ascending: false })
-        .limit(1);
-      if (readError) throw readError;
-      const after = last?.[0]?.position ?? 0;
+      const first = await nextPosition(client, eventId);
 
       const { error } = await client.from('potluck_items').insert(
         names.map((name, index) => ({
           event_id: eventId,
           item_name: name,
-          position: after + index + 1,
+          position: first + index,
         })),
       );
       if (error) throw error;
+    },
+
+    async bring(eventId, userId, name) {
+      const position = await nextPosition(client, eventId);
+      const { data, error } = await client
+        .from('potluck_items')
+        .insert({ event_id: eventId, item_name: name, assigned_user_id: userId, position })
+        .select(COLUMNS)
+        .single();
+      if (error) throw error;
+      return fromRow(data as Row);
+    },
+
+    async withdraw(itemId, userId) {
+      const { data, error } = await client
+        .from('potluck_items')
+        .delete()
+        .eq('id', itemId)
+        .eq('added_by', userId)
+        .select('id');
+      // Avant la migration, la colonne n'existe pas : la ligne se libère.
+      if (error) return false;
+      return (data?.length ?? 0) > 0;
     },
 
     async remove(itemId) {
@@ -245,6 +288,36 @@ function createMockSource(): PotluckSource {
         store.set(item.id, item);
         emit(eventId, { type: 'INSERT', item: { ...item } });
       });
+    },
+
+    async bring(eventId, userId, name) {
+      await delay(MOCK_LATENCY_MS);
+      const after = Math.max(
+        0,
+        ...[...store.values()].filter((i) => i.eventId === eventId).map((i) => i.position),
+      );
+      added += 1;
+      const item: PotluckItem = {
+        id: `33333333-3333-4333-9333-${String(added).padStart(12, '0')}`,
+        eventId,
+        itemName: name,
+        assignedUserId: userId,
+        position: after + 1,
+        addedBy: userId,
+      };
+      store.set(item.id, item);
+      emit(eventId, { type: 'INSERT', item: { ...item } });
+      return { ...item };
+    },
+
+    async withdraw(itemId, userId) {
+      await delay(MOCK_LATENCY_MS);
+      const item = store.get(itemId);
+      if (!item || item.addedBy !== userId) return false;
+      if (item.assignedUserId !== null && item.assignedUserId !== userId) return false;
+      store.delete(itemId);
+      emit(item.eventId, { type: 'DELETE', item });
+      return true;
     },
 
     async remove(itemId) {

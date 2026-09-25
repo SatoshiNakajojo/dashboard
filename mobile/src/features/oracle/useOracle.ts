@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import { useAppRefresh } from '@/hooks/useAppRefresh';
 import { useBtcSince, type BtcHistoryState } from '@/hooks/useBtcMarket';
 import { accuracyPercent } from '@/lib/accuracy';
 import { frameFor, samePath, type Frame, type PricePoint } from '@/lib/chart';
@@ -188,6 +189,9 @@ export function useOracle(
   const [drafts, setDrafts] = useState<Partial<Record<HorizonKey, PricePoint[]>>>({});
 
   const now = useClock(bets);
+  /** « Actualiser » : les paris se relisent (`appRefresh.ts`). */
+  const refresh = useAppRefresh();
+  const loadedOnce = useRef(false);
 
   // --- Chargement, puis temps réel ------------------------------------------
 
@@ -205,8 +209,11 @@ export function useOracle(
 
       if (controller.signal.aborted) return;
       if (cause) {
-        setError(describeError(cause));
+        // Une relecture qui échoue garde les paris affichés.
+        if (!loadedOnce.current) setError(describeError(cause));
       } else {
+        if (loadedOnce.current) setError(null);
+        loadedOnce.current = true;
         setBets(
           (data ?? [])
             .map((row) => betFromRow(row as BetRow))
@@ -217,7 +224,7 @@ export function useOracle(
     })();
 
     return () => controller.abort();
-  }, []);
+  }, [refresh]);
 
   /**
    * Un pari déposé par un membre apparaît chez les six autres sans recharger.

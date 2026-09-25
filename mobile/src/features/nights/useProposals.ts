@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
+import { useAppRefresh } from '@/hooks/useAppRefresh';
 import { describeError } from '@/lib/supabase';
 import type { EventProposal, ProposalChoice } from '@/types/domain';
 import { getProposalsSource } from './proposals';
@@ -52,6 +53,7 @@ export function useProposals(
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [revision, setRevision] = useState(0);
+  const refresh = useAppRefresh();
 
   useEffect(() => {
     const controller = new AbortController();
@@ -68,7 +70,7 @@ export function useProposals(
         setLoading(false);
       });
     return () => controller.abort();
-  }, [source, eventId, revision]);
+  }, [source, eventId, revision, refresh]);
 
   useEffect(
     () => source.subscribe(eventId, () => setRevision((value) => value + 1)),

@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import { useAppRefresh } from '@/hooks/useAppRefresh';
 import { useBtcSpot } from '@/hooks/useBtcMarket';
 import { checkEntryDate, clubDateToIso, clubIsoDay } from '@/lib/btcAtDate';
 import { fetchBtcOn, resolveCoingeckoId } from '@/lib/coingecko';
@@ -93,6 +94,9 @@ export function useCalls(
   const [error, setError] = useState<string | null>(null);
   const [publishing, setPublishing] = useState(false);
   const [voting, setVoting] = useState(false);
+  /** « Actualiser » : les calls et les votes se relisent (`appRefresh.ts`). */
+  const refresh = useAppRefresh();
+  const loadedOnce = useRef(false);
 
   // --- Chargement ----------------------------------------------------------
 
@@ -114,10 +118,12 @@ export function useCalls(
         setWithdrawn(new Set(withdrawals));
         setError(null);
         setLoaded(true);
+        loadedOnce.current = true;
       })
       .catch((cause: unknown) => {
         if (!active || controller.signal.aborted) return;
-        setError(describeError(cause));
+        // Une relecture qui échoue garde les calls affichés, sans alarme.
+        if (!loadedOnce.current) setError(describeError(cause));
         setLoaded(true);
       });
 
@@ -125,7 +131,7 @@ export function useCalls(
       active = false;
       controller.abort();
     };
-  }, [source, revision, currentUserId]);
+  }, [source, revision, refresh, currentUserId]);
 
   // --- Votes ---------------------------------------------------------------
 

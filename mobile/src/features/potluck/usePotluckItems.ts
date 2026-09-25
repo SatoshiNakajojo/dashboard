@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import { useAppRefresh } from '@/hooks/useAppRefresh';
 import { describeError } from '@/lib/supabase';
 import type { Member, PotluckItem, PotluckRow } from '@/types/domain';
 import { getPotluckSource, type PotluckChange } from './source';
@@ -29,6 +30,13 @@ export interface PotluckState {
   assignedCount: number;
   totalCount: number;
   toggle: (itemId: string) => void;
+  /**
+   * « J'apporte aussi… » : ajoute une ligne à son nom. `true` si elle est
+   * enregistrée ; sinon `notice` dit pourquoi.
+   */
+  bring: (name: string) => Promise<boolean>;
+  /** Ajout en cours. */
+  bringing: boolean;
   reload: () => void;
 }
 
@@ -50,6 +58,11 @@ export function usePotluckItems(
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [reloadToken, setReloadToken] = useState(0);
+  const [bringing, setBringing] = useState(false);
+  /** « Actualiser » : la liste se relit (`appRefresh.ts`). */
+  const refresh = useAppRefresh();
+  /** La soirée dont la liste a été lue au moins une fois. */
+  const loadedEvent = useRef<string | null>(null);
 
   const source = useMemo(() => getPotluckSource(), []);
   const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -79,10 +92,12 @@ export function usePotluckItems(
         setItems(rows);
         setError(null);
         setLoadedFor(eventId);
+        loadedEvent.current = eventId;
       })
       .catch((cause: unknown) => {
         if (!active || controller.signal.aborted) return;
-        setError(describeError(cause));
+        // Une relecture qui échoue garde la liste affichée.
+        if (loadedEvent.current !== eventId) setError(describeError(cause));
         setLoadedFor(eventId);
       });
 
@@ -90,7 +105,7 @@ export function usePotluckItems(
       active = false;
       controller.abort();
     };
-  }, [eventId, source, reloadToken]);
+  }, [eventId, source, reloadToken, refresh]);
 
   const loading = loadedFor !== eventId;
 
@@ -139,6 +154,9 @@ export function usePotluckItems(
 
       const claiming = effectiveAssignee === null;
       const optimistic = claiming ? currentUserId : null;
+      // Sa propre ligne « en plus » : ne plus l'apporter, c'est la retirer —
+      // personne ne l'avait demandée, elle n'a pas à rester « à prendre ».
+      const withdrawing = !claiming && item.addedBy === currentUserId;
 
       inFlight.current.add(itemId);
       setPending((current) => new Map(current).set(itemId, optimistic));
@@ -160,6 +178,26 @@ export function usePotluckItems(
           return next;
         });
       };
+
+      if (withdrawing) {
+        source
+          .withdraw(itemId, currentUserId)
+          .then(async (removed) => {
+            if (removed) {
+              setItems((current) => current.filter((candidate) => candidate.id !== itemId));
+              settle(undefined);
+              return;
+            }
+            // Pas retirée (base pas encore à jour) : on se libère, simplement.
+            const applied = await source.release(itemId, currentUserId);
+            settle(applied ? null : undefined);
+          })
+          .catch((cause: unknown) => {
+            settle(undefined);
+            announce(describeError(cause));
+          });
+        return;
+      }
 
       const write = claiming
         ? source.claim(itemId, currentUserId)
@@ -187,6 +225,32 @@ export function usePotluckItems(
         });
     },
     [announce, currentUserId, items, pending, source],
+  );
+
+  // --- J'apporte aussi… -----------------------------------------------------
+
+  const bring = useCallback(
+    async (name: string): Promise<boolean> => {
+      const trimmed = name.trim();
+      if (!currentUserId || trimmed.length === 0) return false;
+      setBringing(true);
+      try {
+        const item = await source.bring(eventId, currentUserId, trimmed);
+        // Le temps réel apportera la même ligne : on la place sans doublon.
+        setItems((current) =>
+          current.some((candidate) => candidate.id === item.id)
+            ? current
+            : [...current, item].sort((a, b) => a.position - b.position),
+        );
+        return true;
+      } catch (cause) {
+        announce(describeError(cause));
+        return false;
+      } finally {
+        setBringing(false);
+      }
+    },
+    [announce, currentUserId, eventId, source],
   );
 
   // --- Projection d'affichage ----------------------------------------------
@@ -221,6 +285,8 @@ export function usePotluckItems(
     assignedCount: rows.filter((row) => !row.isFree).length,
     totalCount: rows.length,
     toggle,
+    bring,
+    bringing,
     reload: useCallback(() => {
       setLoadedFor(null);
       setError(null);

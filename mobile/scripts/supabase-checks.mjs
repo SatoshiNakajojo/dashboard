@@ -48,6 +48,11 @@ export const COLUMNS = [
     column: 'exit_confirmed_at',
     migration: '20261007090000_live_exit_price.sql',
   },
+  {
+    table: 'potluck_items',
+    column: 'added_by',
+    migration: '20261008090000_potluck_member_lines.sql',
+  },
 ];
 
 const ok = (label, detail) => ({ level: 'ok', label, detail });

@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
+import { useAppRefresh } from '@/hooks/useAppRefresh';
 import { describeError, supabase } from '@/lib/supabase';
 import { MOCK_BETS } from '@/mocks/oracle';
 import type { Member } from '@/types/domain';
@@ -31,6 +32,8 @@ export function useClubBets(membersById: Map<string, Member>, revision = 0): Clu
   const [loading, setLoading] = useState(Boolean(supabase));
   const [error, setError] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
+  const refresh = useAppRefresh();
+  const loadedOnce = useRef(false);
 
   useEffect(() => {
     const client = supabase;
@@ -46,8 +49,11 @@ export function useClubBets(membersById: Map<string, Member>, revision = 0): Clu
 
       if (controller.signal.aborted) return;
       setNow(Date.now());
-      if (cause) setError(describeError(cause));
-      else {
+      // Une relecture qui échoue garde les paris affichés.
+      if (cause) {
+        if (!loadedOnce.current) setError(describeError(cause));
+      } else {
+        loadedOnce.current = true;
         setError(null);
         setBets(
           (data ?? [])
@@ -59,7 +65,7 @@ export function useClubBets(membersById: Map<string, Member>, revision = 0): Clu
     })();
 
     return () => controller.abort();
-  }, [revision]);
+  }, [revision, refresh]);
 
   const resolved = useMemo(() => resolvedBets(bets, now), [bets, now]);
   const history = useJudgedHistory(resolved, membersById, now);

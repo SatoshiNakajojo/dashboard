@@ -18,7 +18,12 @@ le logo. Ce qu'elle apporte :
 - une soirée se modifie, se supprime, et son lieu peut changer par un vote du
   club ;
 - un podium à cinq marches, le clic de JCGI, un seul changement d'avis par
-  call.
+  call ;
+- un bouton ↻ à droite du numéro de bloc actualise l'app, et la passe à la
+  nouvelle version s'il y en a une ;
+- rouverte après quelques secondes, ou par une notification, l'app relit tout
+  et va à l'écran dont parle la notification ;
+- dans « Qui amène quoi », chacun ajoute ce qu'il apporte en plus.
 
 Trois onglets, trois mécaniques :
 
@@ -119,7 +124,7 @@ qu'on n'a pas déposé le nouveau tracé.
 
 ## Ce qui a été vérifié
 
-- `npm run typecheck`, `npm run lint`, `npm test` — propres (580 tests).
+- `npm run typecheck`, `npm run lint`, `npm test` — propres (588 tests).
 - **Règles pures** : bornes et inversibilité du repère, monotonie du tracé,
   écart à la courbe réelle, espaces insécables du formatage français, perf vs ₿
   comme ratio et non soustraction, seuils et tri des deux classements.
@@ -278,6 +283,28 @@ seuls les participants votent, majorité qui suit les présences, accord de
 l'organisateur, rejet, notifications, suppression en cascade) et dans Chromium.
 Dans la démo, Alex propose chez lui pour les Grillades, que vous organisez :
 votre « pour » déplace la soirée.
+
+### « J'apporte aussi… » (v1.01)
+
+La liste était celle de l'organisateur : un membre qui voulait apporter un
+dessert ou une bouteille n'avait pas de ligne à cocher. Sous « Qui amène
+quoi », **J'APPORTE AUSSI…** ouvre une petite feuille, calée au-dessus du
+clavier. La ligne arrive au bas de la liste, **déjà à son nom**, marquée
+« en plus ». S'il ne l'apporte plus, il la touche et elle **disparaît** :
+personne ne l'avait demandée, elle n'a pas à rester « à prendre ».
+
+La base tient la règle (migration `20261008090000_potluck_member_lines`) :
+
+- on ajoute une ligne libre ou **à son nom**, jamais au nom d'un autre ;
+- `added_by` se déduit (déclencheur `potluck_items_author`) : une ligne
+  ajoutée déjà prise a pour auteur son porteur, une ligne libre est un besoin
+  sans auteur, et l'auteur ne se réécrit pas ;
+- l'auteur retire sa ligne tant qu'elle est libre ou à lui. Si un autre l'a
+  prise entre-temps, elle reste. L'organisateur retire toujours les lignes
+  libres.
+
+Avant la migration, l'ajout marche déjà ; toucher sa ligne la libère au lieu
+de la retirer. Vérifié en base (4 blocs) et dans Chromium.
 
 ---
 
@@ -1070,6 +1097,36 @@ le profil le dit au lieu de montrer un bouton inerte. Toucher une
 notification ouvre l'onglet dont elle parle.
 
 Mise en place : `npm run push:setup` (voir `docs/INSTALLATION.md`).
+
+### Actualiser l'app (v1.01)
+
+iOS ne ferme pas l'app installée : il la met en veille. Rouverte quelques
+minutes plus tard — souvent en touchant une notification —, elle reprenait
+l'écran tel qu'on l'avait laissé. Le temps réel s'était tu pendant la veille
+et rien ne s'était relu. On ne voyait pas ce dont parlait la notification, et
+il fallait fermer puis rouvrir l'app.
+
+Un seul signal désormais, `refreshAppData()` (`src/lib/appRefresh.ts`), que
+chaque chargement écoute (`useAppRefresh`) : soirées, calls, paris, membres,
+listes, propositions, cours. La relecture est silencieuse : l'écran garde ce
+qu'il montre jusqu'à la réponse, et un échec le laisse tel quel. Le signal
+part :
+
+- du **bouton ↻**, à droite du numéro de bloc. Il relit tout, puis compare le
+  bundle de `index.html` en ligne à celui qui tourne : si une nouvelle version
+  est publiée, il recharge l'app dessus ;
+- du **retour au premier plan** après au moins 10 s d'absence (un aller-retour
+  pour copier un ticker ne relance rien), et du retour du réseau ;
+- du **toucher d'une notification**. Le service worker range la notification
+  touchée (`__club-open`, dans son cache) et l'annonce à l'app ouverte
+  (`club:open`). L'app va à l'écran dont elle parle, même quand iOS refuse la
+  navigation du service worker. Une entrée de plus de 2 minutes est ignorée.
+
+Le nouveau service worker prend la main une fois l'app **fermée** (pas de
+`skipWaiting`, voir `public/sw.js`). Le retour au premier plan, lui, marche
+dès la mise à jour. Vérifié dans Chromium : bouton sans nouvelle version,
+bouton avec (rechargement), retour après 2 s (rien) et après 10 s (relecture),
+message du service worker, entrée gardée.
 
 ---
 

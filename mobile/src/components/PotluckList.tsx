@@ -1,6 +1,7 @@
-import { memo, useCallback } from 'react';
+import { memo, useCallback, useState } from 'react';
 import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 
+import { BringSheet } from '@/components/BringSheet';
 import { MemberAvatar } from '@/components/MemberAvatar';
 import { Micro } from '@/components/ui/Micro';
 import { SectionTitle } from '@/components/ui/SectionTitle';
@@ -23,15 +24,38 @@ export interface PotluckListProps {
  *   • **à moi**        — pastille sauge cochée, re-tap pour se libérer ;
  *   • **à un autre**   — prénom + avatar, inerte.
  *
+ * Et tout membre peut ajouter ce qu'il apporte en plus (« J'apporte
+ * aussi… ») : la ligne arrive à son nom, et disparaît s'il la touche.
+ *
  * Toute la logique d'assignation vit dans `usePotluckItems` ; ce fichier ne
  * fait que la peindre. C'est ce qui permet de tester la règle métier sans
  * monter un arbre React.
  */
 export function PotluckList({ eventId, currentUserId, membersById }: PotluckListProps) {
-  const { rows, loading, error, notice, assignedCount, totalCount, toggle, reload } =
-    usePotluckItems(eventId, currentUserId, membersById);
+  const {
+    rows,
+    loading,
+    error,
+    notice,
+    assignedCount,
+    totalCount,
+    toggle,
+    bring,
+    bringing,
+    reload,
+  } = usePotluckItems(eventId, currentUserId, membersById);
+  const [bringOpen, setBringOpen] = useState(false);
 
   const handleToggle = useCallback((itemId: string) => toggle(itemId), [toggle]);
+
+  const submitBring = useCallback(
+    async (name: string) => {
+      const saved = await bring(name);
+      if (saved) setBringOpen(false);
+      return saved;
+    },
+    [bring],
+  );
 
   return (
     <View>
@@ -57,7 +81,38 @@ export function PotluckList({ eventId, currentUserId, membersById }: PotluckList
         ))
       )}
 
-      {notice ? (
+      {!loading && !error && currentUserId !== null ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="J’apporte aussi quelque chose"
+          onPress={() => setBringOpen(true)}
+          style={({ pressed }) => ({
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 12,
+            paddingVertical: 12,
+            paddingHorizontal: 2,
+            backgroundColor: pressed ? a.pressed : 'transparent',
+          })}
+        >
+          <Text
+            style={{
+              width: 14,
+              textAlign: 'center',
+              fontFamily: f.label,
+              fontSize: 14,
+              color: c.gold,
+            }}
+          >
+            +
+          </Text>
+          <Micro tracking={1.8} style={{ color: c.gold }}>
+            J’APPORTE AUSSI…
+          </Micro>
+        </Pressable>
+      ) : null}
+
+      {notice && !bringOpen ? (
         <Text
           className="mt-3"
           style={{ fontFamily: f.sans, fontSize: 11, lineHeight: 17, color: c.oxbloodMuted }}
@@ -65,6 +120,14 @@ export function PotluckList({ eventId, currentUserId, membersById }: PotluckList
           {notice}
         </Text>
       ) : null}
+
+      <BringSheet
+        visible={bringOpen}
+        busy={bringing}
+        error={notice}
+        onClose={() => setBringOpen(false)}
+        onSubmit={submitBring}
+      />
     </View>
   );
 }
@@ -135,6 +198,11 @@ const PotluckLine = memo(function PotluckLine({ row, interactive, onToggle }: Po
         }}
       >
         {row.itemName}
+        {row.addedBy ? (
+          <Text style={{ fontFamily: f.sans, fontSize: 11, color: c.sepiaFaint }}>
+            {' · en plus'}
+          </Text>
+        ) : null}
       </Text>
 
       {row.isFree ? (
@@ -155,6 +223,9 @@ const PotluckLine = memo(function PotluckLine({ row, interactive, onToggle }: Po
 
 function accessibilityLabel(row: PotluckRow): string {
   if (row.isFree) return `${row.itemName}, à prendre`;
+  if (row.isMine && row.addedBy) {
+    return `${row.itemName}, vous l'apportez en plus — toucher pour la retirer`;
+  }
   if (row.isMine) return `${row.itemName}, vous l'apportez — toucher pour vous libérer`;
   return `${row.itemName}, apporté par ${row.assignee?.displayName ?? 'un membre'}`;
 }

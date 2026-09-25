@@ -1,5 +1,6 @@
 import { useEffect, useState, useSyncExternalStore } from 'react';
 
+import { subscribeToAppRefresh } from '@/lib/appRefresh';
 import { fetchBlockHeight, fetchBtcSince, fetchBtcSpot } from '@/lib/coingecko';
 import { isOffline } from '@/lib/spotFreshness';
 import { MOCK_BTC_CHANGE_24H, MOCK_BTC_SPOT, MOCK_BLOCK_HEIGHT } from '@/mocks/calls';
@@ -82,6 +83,11 @@ function subscribe(listener: () => void): () => void {
     }
   };
 }
+
+// « Actualiser » : le cours et le bloc se relisent aussitôt (`appRefresh.ts`).
+subscribeToAppRefresh(() => {
+  if (listeners.size > 0) void refresh();
+});
 
 const snapshot = () => current;
 

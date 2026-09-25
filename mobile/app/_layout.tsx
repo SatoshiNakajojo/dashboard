@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { View } from 'react-native';
-import { Stack, useRouter, useSegments } from 'expo-router';
+import { Stack, useRouter, useSegments, type Href } from 'expo-router';
 import Head from 'expo-router/head';
 import { StatusBar } from 'expo-status-bar';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -9,6 +9,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { useFonts } from 'expo-font';
 
 import { BootScreen } from '@/components/BootScreen';
+import { installAppRefresh } from '@/lib/appRefresh';
 import { hideBootShell } from '@/lib/bootShell';
 import { installClickSound } from '@/lib/clickSound';
 import { announceProfileChange, useProfileBootstrap } from '@/features/auth/useAuth';
@@ -104,6 +105,12 @@ function AuthGate() {
   useEffect(() => {
     if (epoch > 0) announceProfileChange();
   }, [epoch]);
+
+  // L'app revient au premier plan, ou l'on touche une notification : elle
+  // relit ses données et va à l'écran dont parle la notification.
+  useEffect(() => {
+    installAppRefresh((route) => router.navigate(route as Href));
+  }, [router]);
 
   const onSignIn = segments[0] === '(auth)';
 
