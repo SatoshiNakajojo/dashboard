@@ -3,12 +3,22 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { describeError } from '@/lib/supabase';
 import type { EventProposal, ProposalChoice } from '@/types/domain';
 import { getProposalsSource } from './proposals';
-import { myChoice, orderProposals, tally, type Tally } from './proposalRules';
+import {
+  canVote,
+  myChoice,
+  orderProposals,
+  tally,
+  type Tally,
+  type VoteContext,
+} from './proposalRules';
 
 export interface ProposalView extends EventProposal {
+  /** Le décompte, voix des participants seulement. */
   tally: Tally;
   /** Mon vote sur cette proposition. */
   mine: ProposalChoice | null;
+  /** Je participe à la soirée : je peux voter. */
+  canVote: boolean;
 }
 
 export interface ProposalsState {
@@ -28,7 +38,11 @@ export interface ProposalsState {
  * un : une adoption touche la proposition, ses sœurs et leurs votes d'un coup,
  * et la liste d'une soirée tient en quelques lignes.
  */
-export function useProposals(eventId: string, currentUserId: string | null): ProposalsState {
+export function useProposals(
+  eventId: string,
+  currentUserId: string | null,
+  context: VoteContext,
+): ProposalsState {
   const source = useMemo(() => getProposalsSource(), []);
   const [snapshot, setSnapshot] = useState<{
     proposals: EventProposal[];
@@ -79,9 +93,11 @@ export function useProposals(eventId: string, currentUserId: string | null): Pro
   const propose = useCallback(
     (location: string, comment: string) =>
       currentUserId
-        ? run(() => source.propose(eventId, currentUserId, location.trim(), comment.trim()))
+        ? run(() =>
+            source.propose(eventId, currentUserId, location.trim(), comment.trim(), context),
+          )
         : Promise.resolve(false),
-    [currentUserId, eventId, run, source],
+    [context, currentUserId, eventId, run, source],
   );
 
   const withdraw = useCallback(
@@ -94,19 +110,20 @@ export function useProposals(eventId: string, currentUserId: string | null): Pro
   const vote = useCallback(
     async (proposalId: string, choice: ProposalChoice | null) => {
       if (!currentUserId) return;
-      await run(() => source.vote({ id: proposalId, eventId }, currentUserId, choice));
+      await run(() => source.vote({ id: proposalId, eventId }, currentUserId, choice, context));
     },
-    [currentUserId, eventId, run, source],
+    [context, currentUserId, eventId, run, source],
   );
 
   const proposals = useMemo(
     () =>
       orderProposals(snapshot.proposals).map((proposal) => ({
         ...proposal,
-        tally: tally(snapshot.votes, proposal.id),
+        tally: tally(snapshot.votes, proposal, context),
         mine: myChoice(snapshot.votes, proposal.id, currentUserId),
+        canVote: canVote(context, proposal, currentUserId),
       })),
-    [snapshot, currentUserId],
+    [snapshot, currentUserId, context],
   );
 
   return { proposals, loading, error, busy, propose, withdraw, vote };

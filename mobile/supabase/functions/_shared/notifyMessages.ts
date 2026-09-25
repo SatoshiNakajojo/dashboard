@@ -10,7 +10,15 @@
  */
 
 export type NotificationKind =
-  'night_new' | 'night_reminder' | 'call_new' | 'call_closed' | 'oracle_resolved';
+  | 'night_new'
+  | 'night_reminder'
+  | 'call_new'
+  | 'call_closed'
+  | 'oracle_resolved'
+  /** Un membre propose un autre lieu pour une soirée (v1.01). */
+  | 'night_proposal'
+  /** La soirée change de lieu, par vote. */
+  | 'night_moved';
 
 /** Les réglages qu'un membre coche ; une notification relève d'un seul. */
 export type NotificationCategory = 'nights' | 'reminders' | 'calls' | 'oracle';
@@ -21,6 +29,8 @@ export const CATEGORY_OF: Record<NotificationKind, NotificationCategory> = {
   call_new: 'calls',
   call_closed: 'calls',
   oracle_resolved: 'oracle',
+  night_proposal: 'nights',
+  night_moved: 'nights',
 };
 
 export interface PushMessage {
@@ -146,6 +156,40 @@ export function composeMessage(
           180,
         ),
         url: './',
+        tag: `night-${str(payload.event_id)}`,
+      };
+    }
+
+    case 'night_proposal': {
+      const title = str(payload.title);
+      const location = str(payload.location);
+      if (!title || !location) return null;
+      const comment = clip(str(payload.comment), 110);
+      return {
+        title: `Autre lieu proposé · ${title}`,
+        body: clip(
+          `${context.actorName ?? 'Un membre'} propose ${location} au lieu de ${str(payload.current)}${
+            comment ? ` : « ${comment} »` : '.'
+          } Les participants votent.`,
+          200,
+        ),
+        url: './',
+        tag: `proposal-${str(payload.proposal_id)}`,
+      };
+    }
+
+    case 'night_moved': {
+      const title = str(payload.title);
+      const location = str(payload.location);
+      if (!title || !location) return null;
+      return {
+        title: `${title} change de lieu`,
+        body: clip(
+          `Désormais : ${location} — ${nightWhen(str(payload.starts_at))}. Décidé par le vote des participants.`,
+          180,
+        ),
+        url: './',
+        // Remplace l'annonce de la soirée, qui portait l'ancien lieu.
         tag: `night-${str(payload.event_id)}`,
       };
     }

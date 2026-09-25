@@ -1,23 +1,23 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 
 import { Micro } from '@/components/ui/Micro';
 import { SectionTitle } from '@/components/ui/SectionTitle';
-import { canPropose, majorityOf, tallyLine } from '@/features/nights/proposalRules';
+import { canPropose, tallyLine, type VoteContext } from '@/features/nights/proposalRules';
+import type { EventWithAttendance } from '@/features/nights/useEvents';
 import { useProposals, type ProposalView } from '@/features/nights/useProposals';
 import { useKeyboardFrame } from '@/hooks/useKeyboardFrame';
 import { clubDateTimeParts } from '@/lib/clubTime';
 import { a, c, f, goldButtonGradient, radius } from '@/theme/tokens';
-import type { ClubEvent, Member, ProposalChoice } from '@/types/domain';
+import type { Member, ProposalChoice } from '@/types/domain';
 
 export interface EventProposalsProps {
-  event: ClubEvent;
+  /** La soirée, avec ses présents : ce sont eux qui votent. */
+  event: EventWithAttendance;
   currentUserId: string | null;
   membersById: Map<string, Member>;
-  /** Taille du club : la majorité absolue en découle (4 sur 7). */
-  clubSize: number;
 }
 
 const LOCATION_MAX = 80;
@@ -28,18 +28,18 @@ const COMMENT_MAX = 280;
  * « Autre lieu ? » — les contre-propositions d'une soirée.
  *
  * Un membre qui ne peut pas venir là où la soirée est prévue propose un autre
- * lieu, avec sa raison ; le club vote. À la majorité absolue des pour, la base
- * déplace la soirée (`event_proposals_tally`) ; à la majorité des contre, la
- * proposition tombe. Rien ne s'affiche tant qu'il n'y a ni proposition, ni
- * possibilité d'en faire une.
+ * lieu, avec sa raison ; les participants votent. À leur majorité — ou dès
+ * que l'organisateur est d'accord —, la base déplace la soirée
+ * (`event_proposal_settle`) ; à la majorité des contre, la proposition tombe.
+ * Rien ne s'affiche tant qu'il n'y a ni proposition, ni possibilité d'en faire
+ * une.
  */
-export function EventProposals({
-  event,
-  currentUserId,
-  membersById,
-  clubSize,
-}: EventProposalsProps) {
-  const state = useProposals(event.id, currentUserId);
+export function EventProposals({ event, currentUserId, membersById }: EventProposalsProps) {
+  const context = useMemo<VoteContext>(
+    () => ({ attendeeIds: event.attendeeIds, organizerId: event.createdBy }),
+    [event.attendeeIds, event.createdBy],
+  );
+  const state = useProposals(event.id, currentUserId, context);
   const [composing, setComposing] = useState(false);
   const allowed = canPropose(event, state.proposals, currentUserId);
   const open = state.proposals.filter((proposal) => proposal.status === 'open').length;
@@ -50,10 +50,7 @@ export function EventProposals({
 
   return (
     <View style={{ marginBottom: 18 }}>
-      <SectionTitle
-        label="Autre lieu ?"
-        hint={open > 0 ? `${open} EN VOTE · ${majorityOf(clubSize)} VOIX DÉCIDENT` : undefined}
-      />
+      <SectionTitle label="Autre lieu ?" hint={open > 0 ? `${open} EN VOTE` : undefined} />
 
       {state.proposals.map((proposal) => (
         <ProposalRow
@@ -61,8 +58,7 @@ export function EventProposals({
           proposal={proposal}
           author={nameOf(proposal.userId)}
           mineAuthor={proposal.userId === currentUserId}
-          canVote={currentUserId !== null}
-          clubSize={clubSize}
+          organizer={event.createdBy !== null && event.createdBy === currentUserId}
           busy={state.busy}
           onVote={(choice) => void state.vote(proposal.id, choice)}
           onWithdraw={() => void state.withdraw(proposal.id)}
@@ -108,7 +104,6 @@ export function EventProposals({
         key={composing ? 'ouverte' : 'fermée'}
         visible={composing}
         currentLocation={event.location}
-        majority={majorityOf(clubSize)}
         busy={state.busy}
         error={state.error}
         onClose={() => setComposing(false)}
@@ -128,8 +123,7 @@ function ProposalRow({
   proposal,
   author,
   mineAuthor,
-  canVote,
-  clubSize,
+  organizer,
   busy,
   onVote,
   onWithdraw,
@@ -137,8 +131,8 @@ function ProposalRow({
   proposal: ProposalView;
   author: string;
   mineAuthor: boolean;
-  canVote: boolean;
-  clubSize: number;
+  /** Je suis l'organisateur : mon « pour » suffit. */
+  organizer: boolean;
   busy: boolean;
   onVote: (choice: ProposalChoice | null) => void;
   onWithdraw: () => void;
@@ -196,7 +190,7 @@ function ProposalRow({
         {`« ${proposal.comment} »`}
       </Text>
       <Micro size={8} tracking={1.2} style={{ color: c.sepiaMuted }}>
-        {tallyLine(proposal.tally, clubSize)}
+        {tallyLine(proposal.tally)}
       </Micro>
 
       {mineAuthor ? (
@@ -212,53 +206,64 @@ function ProposalRow({
             RETIRER MA PROPOSITION
           </Micro>
         </Pressable>
-      ) : canVote ? (
-        <View className="flex-row" style={{ gap: 8, marginTop: 4 }}>
-          {(['for', 'against'] as const).map((choice) => {
-            const on = proposal.mine === choice;
-            const tone = choice === 'for' ? c.sage : c.oxblood;
-            return (
-              <Pressable
-                key={choice}
-                accessibilityRole="radio"
-                aria-checked={on}
-                accessibilityLabel={
-                  choice === 'for'
-                    ? `Pour : aller à ${proposal.location}`
-                    : 'Contre : garder le lieu actuel'
-                }
-                disabled={busy}
-                // Retoucher son choix le retire : on peut s'abstenir.
-                onPress={() => onVote(on ? null : choice)}
-                style={{
-                  flex: 1,
-                  alignItems: 'center',
-                  paddingVertical: 9,
-                  borderRadius: radius.button,
-                  borderWidth: 1,
-                  borderColor: on ? tone : c.borderLift,
-                  backgroundColor: on
-                    ? choice === 'for'
-                      ? a.rsvpSageBg
-                      : 'transparent'
-                    : 'transparent',
-                }}
-              >
-                <Text
+      ) : proposal.canVote ? (
+        <View style={{ gap: 6, marginTop: 4 }}>
+          {organizer ? (
+            <Text style={{ fontFamily: f.sans, fontSize: 11, lineHeight: 16, color: c.sepia }}>
+              Vous organisez : votre accord suffit à changer de lieu.
+            </Text>
+          ) : null}
+          <View className="flex-row" style={{ gap: 8 }}>
+            {(['for', 'against'] as const).map((choice) => {
+              const on = proposal.mine === choice;
+              const tone = choice === 'for' ? c.sage : c.oxblood;
+              return (
+                <Pressable
+                  key={choice}
+                  accessibilityRole="radio"
+                  aria-checked={on}
+                  accessibilityLabel={
+                    choice === 'for'
+                      ? `Pour : aller à ${proposal.location}`
+                      : 'Contre : garder le lieu actuel'
+                  }
+                  disabled={busy}
+                  // Retoucher son choix le retire : on peut s'abstenir.
+                  onPress={() => onVote(on ? null : choice)}
                   style={{
-                    fontFamily: f.labelMed,
-                    fontSize: 9.5,
-                    letterSpacing: 1.6,
-                    color: on ? tone : c.sepiaMuted,
+                    flex: 1,
+                    alignItems: 'center',
+                    paddingVertical: 9,
+                    borderRadius: radius.button,
+                    borderWidth: 1,
+                    borderColor: on ? tone : c.borderLift,
+                    backgroundColor: on
+                      ? choice === 'for'
+                        ? a.rsvpSageBg
+                        : 'transparent'
+                      : 'transparent',
                   }}
                 >
-                  {choice === 'for' ? 'POUR CE LIEU' : 'GARDER L’ACTUEL'}
-                </Text>
-              </Pressable>
-            );
-          })}
+                  <Text
+                    style={{
+                      fontFamily: f.labelMed,
+                      fontSize: 9.5,
+                      letterSpacing: 1.6,
+                      color: on ? tone : c.sepiaMuted,
+                    }}
+                  >
+                    {choice === 'for' ? 'POUR CE LIEU' : 'GARDER L’ACTUEL'}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
         </View>
-      ) : null}
+      ) : (
+        <Text style={{ fontFamily: f.sans, fontSize: 11, lineHeight: 16, color: c.sepiaMuted }}>
+          Seuls les participants votent : dites « Je viens » pour donner votre avis.
+        </Text>
+      )}
     </View>
   );
 }
@@ -268,7 +273,6 @@ function ProposalRow({
 function ProposalSheet({
   visible,
   currentLocation,
-  majority,
   busy,
   error,
   onClose,
@@ -276,7 +280,6 @@ function ProposalSheet({
 }: {
   visible: boolean;
   currentLocation: string;
-  majority: number;
   busy: boolean;
   error: string | null;
   onClose: () => void;
@@ -417,7 +420,9 @@ function ProposalSheet({
             <Text
               style={{ fontFamily: f.sans, fontSize: 11, lineHeight: 17, color: c.sepiaMuted }}
             >
-              {`Le club vote, et vous votez pour d’office. À ${majority} voix pour, la soirée change de lieu ; à ${majority} contre, la proposition tombe.`}
+              {
+                'Votent les participants de la soirée, et vous votez pour d’office. À la majorité des pour — ou avec l’accord de l’organisateur —, la soirée change de lieu ; à la majorité des contre, la proposition tombe.'
+              }
             </Text>
           </ScrollView>
 

@@ -1012,17 +1012,18 @@ declare
   failed boolean;
   n      integer;
 begin
-  -- Le club au complet : sept membres, majorité à quatre.
+  -- Le club au complet ; ce sont les participants de chaque soirée qui votent.
   insert into auth.users (id) values (lea), (marco), (sofia), (rayan), (toi) on conflict do nothing;
   insert into public.profiles (id, display_name, initials, color) values
     (lea, 'Léa', 'LE', '#C9A227'), (marco, 'Marco', 'MC', '#8E7CC3'),
     (sofia, 'Sofia', 'SF', '#C0504D'), (rayan, 'Rayan', 'RY', '#4F81BD'),
     (toi, 'Toi', 'TU', '#EEE8DA');
-  assert public.club_majority() = 4, 'majorité absolue à sept : quatre';
 
+  -- Grillades chez John ; Léa, Marco et Sofia viennent.
   insert into public.events (starts_at, title, location, themes, created_by)
   values (now() + interval '3 days', 'Grillades', 'Chez John', array['Crypto Night'], john)
   returning id into ev;
+  insert into public.event_attendees (event_id, user_id) values (ev, lea), (ev, marco), (ev, sofia);
 
   set local role authenticated;
 
@@ -1050,7 +1051,6 @@ begin
   end;
   assert failed, 'on ne vote pas contre sa propre proposition';
 
-  -- Le créateur modifie sa soirée, il ne la contre-propose pas.
   perform set_config('test.uid', john::text, true);
   failed := false;
   begin
@@ -1059,7 +1059,6 @@ begin
   end;
   assert failed, 'le créateur ne contre-propose pas sa propre soirée';
 
-  -- Proposer le lieu actuel n'a pas de sens.
   perform set_config('test.uid', lea::text, true);
   failed := false;
   begin
@@ -1069,24 +1068,40 @@ begin
   assert failed, 'proposer le lieu actuel est refusé';
   raise notice 'ok · contre-propositions : une par membre, pas le créateur, pas le même lieu';
 
-  -- Marco propose autre chose en parallèle.
+  -- Rayan ne vient pas : il ne vote pas.
+  perform set_config('test.uid', rayan::text, true);
+  failed := false;
+  begin
+    insert into public.event_proposal_votes (proposal_id, event_id, choice) values (prop, ev, 'for');
+  exception when check_violation then failed := true;
+  end;
+  assert failed, 'seuls les participants votent';
+  raise notice 'ok · contre-propositions : seuls les participants votent';
+
+  -- Participants : John, Alex, Léa, Marco, Sofia → majorité à 3.
+  -- Marco propose autre chose en parallèle, et vote contre celle d'Alex.
   perform set_config('test.uid', marco::text, true);
   insert into public.event_proposals (event_id, location, comment)
   values (ev, 'Chez Marco', 'J’ai une terrasse.') returning id into autre;
-  insert into public.event_proposal_votes (proposal_id, choice) values (prop, 'against');
+  insert into public.event_proposal_votes (proposal_id, event_id, choice) values (prop, ev, 'against');
 
-  -- Pour : Alex, Léa, Sofia. Contre : Marco. Trois voix ne suffisent pas.
-  perform set_config('test.uid', lea::text, true);
-  insert into public.event_proposal_votes (proposal_id, choice) values (prop, 'for');
-  perform set_config('test.uid', sofia::text, true);
-  insert into public.event_proposal_votes (proposal_id, choice) values (prop, 'against');
-  update public.event_proposal_votes set choice = 'for' where proposal_id = prop and user_id = sofia;
-  select * into e from public.events where id = ev;
-  assert e.location = 'Chez John', 'trois pour sur sept : le lieu ne bouge pas';
-
-  -- La quatrième voix pour déplace la soirée.
+  -- Rayan dit « Je viens » : six participants, la majorité passe à 4.
   perform set_config('test.uid', rayan::text, true);
-  insert into public.event_proposal_votes (proposal_id, choice) values (prop, 'for');
+  insert into public.event_attendees (event_id, user_id) values (ev, rayan);
+  insert into public.event_proposal_votes (proposal_id, event_id, choice) values (prop, ev, 'for');
+  perform set_config('test.uid', lea::text, true);
+  insert into public.event_proposal_votes (proposal_id, event_id, choice) values (prop, ev, 'for');
+  select * into e from public.events where id = ev;
+  assert e.location = 'Chez John', 'trois pour sur six participants : le lieu ne bouge pas';
+
+  -- Rayan ne vient plus : cinq participants, majorité à 3, et Alex + Léa pour
+  -- font 2. Sofia vote pour : 3 sur 5, la soirée change de lieu.
+  perform set_config('test.uid', rayan::text, true);
+  delete from public.event_attendees where event_id = ev and user_id = rayan;
+  select * into e from public.events where id = ev;
+  assert e.location = 'Chez John', 'la voix de Rayan ne compte plus, 2 pour sur 5';
+  perform set_config('test.uid', sofia::text, true);
+  insert into public.event_proposal_votes (proposal_id, event_id, choice) values (prop, ev, 'for');
   reset role;
   select * into e from public.events where id = ev;
   select * into p from public.event_proposals where id = prop;
@@ -1096,35 +1111,67 @@ begin
   assert p.status = 'adopted' and p.decided_at = now(), 'proposition adoptée';
   select * into p from public.event_proposals where id = autre;
   assert p.status = 'rejected', 'les autres propositions ouvertes tombent';
-  raise notice 'ok · contre-propositions : à quatre voix sur sept, la soirée change de lieu';
+  raise notice 'ok · contre-propositions : à la majorité des participants, la soirée change de lieu';
+
+  -- Le club est prévenu de la proposition, puis du changement de lieu.
+  assert exists (
+    select 1 from public.notification_outbox
+     where dedupe_key = 'night_proposal:' || prop and kind = 'night_proposal' and actor = alex
+       and payload ->> 'current' = 'Chez John' and payload ->> 'location' = 'Chez Alex — Anse Vata'
+  ), 'contre-proposition annoncée au club';
+  assert exists (
+    select 1 from public.notification_outbox
+     where dedupe_key = 'night_moved:' || prop and kind = 'night_moved' and actor is null
+  ), 'changement de lieu annoncé à tout le club';
+  assert not exists (
+    select 1 from public.notification_outbox where dedupe_key = 'night_moved:' || autre
+  ), 'une proposition tombée n’est pas annoncée comme un déménagement';
+  raise notice 'ok · notifications : contre-proposition et changement de lieu annoncés';
 
   set local role authenticated;
-  perform set_config('test.uid', toi::text, true);
+  perform set_config('test.uid', lea::text, true);
   failed := false;
   begin
-    insert into public.event_proposal_votes (proposal_id, choice) values (prop, 'against');
+    update public.event_proposal_votes set choice = 'against' where proposal_id = prop and user_id = lea;
   exception when check_violation then failed := true;
   end;
   assert failed, 'le vote est clos une fois la proposition tranchée';
 
-  -- Une autre soirée : quatre contre, la proposition est rejetée.
+  -- L'organisateur est d'accord : adoptée aussitôt, même seul.
   reset role;
   insert into public.events (starts_at, title, location, themes, created_by)
   values (now() + interval '5 days', 'Trading', 'Loft Sofia', array['Stock Night'], sofia)
   returning id into ev2;
+  insert into public.event_attendees (event_id, user_id) values (ev2, lea), (ev2, marco), (ev2, john);
   set local role authenticated;
   perform set_config('test.uid', alex::text, true);
   insert into public.event_proposals (event_id, location, comment)
   values (ev2, 'Plage', 'Il fera beau.') returning id into prop;
-  foreach autre in array array[john, lea, marco, sofia] loop
-    perform set_config('test.uid', autre::text, true);
-    insert into public.event_proposal_votes (proposal_id, choice) values (prop, 'against');
-  end loop;
+  perform set_config('test.uid', sofia::text, true);
+  insert into public.event_proposal_votes (proposal_id, event_id, choice) values (prop, ev2, 'for');
   reset role;
   select * into p from public.event_proposals where id = prop;
   select * into e from public.events where id = ev2;
-  assert p.status = 'rejected' and e.location = 'Loft Sofia', 'quatre contre : rejetée, le lieu reste';
-  raise notice 'ok · contre-propositions : à quatre contre, la proposition est rejetée';
+  assert p.status = 'adopted' and e.location = 'Plage', 'l’organisateur pour : adoptée aussitôt';
+  raise notice 'ok · contre-propositions : l’accord de l’organisateur suffit';
+
+  -- Une soirée à trois : deux contre, la proposition tombe.
+  update public.events set location = 'Loft Sofia' where id = ev2;
+  delete from public.event_attendees where event_id = ev2 and user_id in (marco, john);
+  set local role authenticated;
+  perform set_config('test.uid', alex::text, true);
+  insert into public.event_proposals (event_id, location, comment)
+  values (ev2, 'Chez Alex', 'Plus près.') returning id into prop;
+  -- Participants : Sofia, Léa, Alex → majorité à 2.
+  perform set_config('test.uid', lea::text, true);
+  insert into public.event_proposal_votes (proposal_id, event_id, choice) values (prop, ev2, 'against');
+  perform set_config('test.uid', sofia::text, true);
+  insert into public.event_proposal_votes (proposal_id, event_id, choice) values (prop, ev2, 'against');
+  reset role;
+  select * into p from public.event_proposals where id = prop;
+  select * into e from public.events where id = ev2;
+  assert p.status = 'rejected' and e.location = 'Loft Sofia', 'deux contre sur trois : rejetée, le lieu reste';
+  raise notice 'ok · contre-propositions : à la majorité des contre, la proposition est rejetée';
 
   -- Retirer sa proposition ouverte ; pas celle d'un autre.
   set local role authenticated;

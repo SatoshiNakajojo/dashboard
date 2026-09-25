@@ -6,10 +6,10 @@
 
 import { supabase } from '@/lib/supabase';
 import { MOCK_EVENTS } from '@/mocks/events';
-import { MEMBER_LIST, MEMBERS } from '@/mocks/members';
+import { MEMBERS } from '@/mocks/members';
 import type { EventProposalRow, EventProposalVoteRow } from '@/types/database';
 import type { EventProposal, ProposalChoice, ProposalVote } from '@/types/domain';
-import { majorityOf, tally } from './proposalRules';
+import { outcome, tally, type VoteContext } from './proposalRules';
 
 export interface ProposalsSnapshot {
   proposals: EventProposal[];
@@ -18,7 +18,17 @@ export interface ProposalsSnapshot {
 
 export interface ProposalsSource {
   list(eventId: string, signal?: AbortSignal): Promise<ProposalsSnapshot>;
-  propose(eventId: string, userId: string, location: string, comment: string): Promise<void>;
+  /**
+   * `context` ne sert qu'à la démo, qui tranche elle-même ; en production,
+   * la base connaît les participants.
+   */
+  propose(
+    eventId: string,
+    userId: string,
+    location: string,
+    comment: string,
+    context: VoteContext,
+  ): Promise<void>;
   /** Retire sa proposition, tant qu'elle est ouverte. */
   withdraw(proposalId: string): Promise<void>;
   /** Vote pour ou contre ; `null` retire son vote. */
@@ -26,6 +36,7 @@ export interface ProposalsSource {
     proposal: { id: string; eventId: string },
     userId: string,
     choice: ProposalChoice | null,
+    context: VoteContext,
   ): Promise<void>;
   /** Un changement sur les propositions ou les votes de la soirée. */
   subscribe(eventId: string, onChange: () => void): () => void;
@@ -164,8 +175,8 @@ export function onMockAdoption(listener: AdoptionListener): () => void {
 
 function createMockSource(): ProposalsSource {
   // Démo : Alex ne peut pas venir aux Grillades (proposées par « Toi ») et
-  // propose chez lui. Trois pour, un contre : une voix de plus, et la soirée
-  // change de lieu.
+  // propose chez lui. Participants : Alex, Rayan, Léa et Toi ; deux pour, un
+  // contre. Votre accord d'organisateur suffit à changer de lieu.
   const grillades = MOCK_EVENTS[1]!.id;
   const seed = '66666666-6666-4666-8666-000000000000';
   const proposals: EventProposal[] = [
@@ -182,20 +193,16 @@ function createMockSource(): ProposalsSource {
   ];
   const votes: ProposalVote[] = [
     { proposalId: seed, userId: MEMBERS.alex!.id, choice: 'for' },
-    { proposalId: seed, userId: MEMBERS.lea!.id, choice: 'for' },
     { proposalId: seed, userId: MEMBERS.rayan!.id, choice: 'for' },
-    { proposalId: seed, userId: MEMBERS.marco!.id, choice: 'against' },
+    { proposalId: seed, userId: MEMBERS.lea!.id, choice: 'against' },
   ];
   const listeners = new Map<string, Set<() => void>>();
   let sequence = 0;
   const emit = (eventId: string) => listeners.get(eventId)?.forEach((listener) => listener());
-  const clubSize = MEMBER_LIST.length;
-
-  const settle = (proposal: EventProposal) => {
-    const count = tally(votes, proposal.id);
-    const majority = majorityOf(clubSize);
+  const settle = (proposal: EventProposal, context: VoteContext) => {
+    const verdict = outcome(tally(votes, proposal, context));
     const now = new Date().toISOString();
-    if (count.for >= majority) {
+    if (verdict === 'adopted') {
       proposal.status = 'adopted';
       proposal.decidedAt = now;
       for (const other of proposals) {
@@ -209,7 +216,7 @@ function createMockSource(): ProposalsSource {
         }
       }
       adoptionListeners.forEach((listener) => listener(proposal.eventId, proposal.location));
-    } else if (count.against >= majority) {
+    } else if (verdict === 'rejected') {
       proposal.status = 'rejected';
       proposal.decidedAt = now;
     }
@@ -225,7 +232,7 @@ function createMockSource(): ProposalsSource {
       };
     },
 
-    async propose(eventId, userId, location, comment) {
+    async propose(eventId, userId, location, comment, context) {
       if (
         proposals.some(
           (p) => p.eventId === eventId && p.userId === userId && p.status === 'open',
@@ -246,7 +253,7 @@ function createMockSource(): ProposalsSource {
       };
       proposals.push(proposal);
       votes.push({ proposalId: proposal.id, userId, choice: 'for' });
-      settle(proposal);
+      settle(proposal, context);
       emit(eventId);
     },
 
@@ -260,7 +267,7 @@ function createMockSource(): ProposalsSource {
       emit(removed!.eventId);
     },
 
-    async vote(target, userId, choice) {
+    async vote(target, userId, choice, context) {
       const proposalId = target.id;
       const proposal = proposals.find((p) => p.id === proposalId);
       if (!proposal || proposal.status !== 'open')
@@ -268,7 +275,7 @@ function createMockSource(): ProposalsSource {
       const index = votes.findIndex((v) => v.proposalId === proposalId && v.userId === userId);
       if (index !== -1) votes.splice(index, 1);
       if (choice) votes.push({ proposalId, userId, choice });
-      settle(proposal);
+      settle(proposal, context);
       emit(proposal.eventId);
     },
 

@@ -131,8 +131,48 @@ describe('messages', () => {
     assert.ok(message.body.includes('…'));
   });
 
+  it('prévient d’une contre-proposition, avec sa raison', () => {
+    const message = composeMessage(
+      'night_proposal',
+      {
+        proposal_id: 'p1',
+        event_id: 'e1',
+        title: 'Grillades',
+        current: 'Chez John',
+        location: 'Chez Alex — Anse Vata',
+        comment: 'Je garde mes enfants : on peut le faire chez moi ?',
+        starts_at: '2026-10-03T08:30:00Z',
+      },
+      { actorName: 'Alex', btcSpot: null },
+    )!;
+    assert.equal(message.title, 'Autre lieu proposé · Grillades');
+    assert.equal(
+      message.body,
+      'Alex propose Chez Alex — Anse Vata au lieu de Chez John : « Je garde mes enfants : on peut le faire chez moi ? » Les participants votent.',
+    );
+    assert.equal(message.tag, 'proposal-p1');
+  });
+
+  it('annonce un changement de lieu, à la place de l’annonce de la soirée', () => {
+    const message = composeMessage(
+      'night_moved',
+      {
+        event_id: 'e1',
+        title: 'Grillades',
+        location: 'Chez Alex — Anse Vata',
+        starts_at: '2026-10-03T08:30:00Z',
+      },
+      none,
+    )!;
+    assert.equal(message.title, 'Grillades change de lieu');
+    assert.match(message.body, /^Désormais : Chez Alex — Anse Vata — sam\..*19:30\. Décidé/);
+    assert.equal(message.tag, 'night-e1');
+  });
+
   it('n’envoie rien sur une charge inexploitable', () => {
     assert.equal(composeMessage('night_new', {}, none), null);
+    assert.equal(composeMessage('night_proposal', { title: 'Grillades' }, none), null);
+    assert.equal(composeMessage('night_moved', { location: 'Ici' }, none), null);
     assert.equal(composeMessage('oracle_resolved', { horizon: '2y' }, none), null);
   });
 

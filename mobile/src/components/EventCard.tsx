@@ -207,7 +207,6 @@ export function EventCard({
             event={event}
             currentUserId={currentUserId}
             membersById={membersById}
-            clubSize={membersById.size || CLUB_SIZE}
           />
 
           <PotluckList
