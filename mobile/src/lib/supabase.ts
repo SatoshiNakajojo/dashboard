@@ -11,6 +11,7 @@ import 'react-native-url-polyfill/auto';
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { journaledFetch } from '@/lib/authJournal';
 import type { Database } from '@/types/database';
 
 const URL = process.env.EXPO_PUBLIC_SUPABASE_URL;
@@ -38,6 +39,12 @@ export const supabase: SupabaseClient<Database> | null = isSupabaseConfigured
          * devant un écran qui l'ignore.
          */
         detectSessionInUrl: Platform.OS === 'web',
+      },
+      global: {
+        // Les renouvellements de session qui échouent laissent une trace dans
+        // le journal de l'appareil (`authJournal.ts`) — statut et code, jamais
+        // un jeton.
+        fetch: journaledFetch((...args) => fetch(...args)),
       },
       realtime: {
         // Plafond de messages par seconde — le potluck est bavard à plusieurs.

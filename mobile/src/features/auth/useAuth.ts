@@ -206,8 +206,10 @@ export function useProfileBootstrap(userId: string | null): ProfileBootstrap {
         .maybeSingle();
 
       if (controller.signal.aborted) return;
+      // Une lecture ratée (réseau, jeton pas encore renouvelé) ne dit rien de
+      // l'existence du profil : on ne renvoie pas un membre au prénom pour ça.
       if (cause) setError(describeError(cause));
-      setNeedsProfile(!data);
+      setNeedsProfile(!cause && !data);
       setChecked(userId);
       setCheckedAt(revision);
     })();

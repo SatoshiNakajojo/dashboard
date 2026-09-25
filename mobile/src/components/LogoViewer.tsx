@@ -3,6 +3,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ClubChannels } from '@/components/ClubChannels';
 import { Micro } from '@/components/ui/Micro';
+import { describeJournal, readJournal } from '@/lib/authJournal';
+import { isSupabaseConfigured } from '@/lib/supabase';
 import { describeViewport, viewportInfo } from '@/lib/viewportInfo';
 import { brand } from '@/theme/brand';
 import { c, f } from '@/theme/tokens';
@@ -101,6 +103,7 @@ function About() {
         lines={['J.C. GLOBAL INVESTMENTS', 'SOFTWARE DEPARTMENT, NEW CALEDONIA']}
       />
       <ViewportLine />
+      <SessionLine />
     </View>
   );
 }
@@ -143,6 +146,21 @@ function ViewportLine() {
   return (
     <Micro tracking={1.2} size={7} style={{ color: c.sepiaFaint, textAlign: 'center' }}>
       {describeViewport(info)}
+    </Micro>
+  );
+}
+
+/**
+ * Le journal de session de l'appareil, sur une ligne (`src/lib/authJournal.ts`) :
+ * renouvellements, reprises après un démarrage sans réseau, dernier refus du
+ * serveur. De quoi comprendre, sur une capture, pourquoi un membre a dû se
+ * reconnecter.
+ */
+function SessionLine() {
+  if (!isSupabaseConfigured) return null;
+  return (
+    <Micro tracking={1.2} size={7} style={{ color: c.sepiaFaint, textAlign: 'center' }}>
+      {describeJournal(readJournal())}
     </Micro>
   );
 }

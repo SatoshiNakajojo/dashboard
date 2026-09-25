@@ -11,7 +11,7 @@ import { useFonts } from 'expo-font';
 import { BootScreen } from '@/components/BootScreen';
 import { hideBootShell } from '@/lib/bootShell';
 import { installClickSound } from '@/lib/clickSound';
-import { useProfileBootstrap } from '@/features/auth/useAuth';
+import { announceProfileChange, useProfileBootstrap } from '@/features/auth/useAuth';
 import { useSession } from '@/hooks/useSession';
 import { isSupabaseConfigured } from '@/lib/supabase';
 import { brand } from '@/theme/brand';
@@ -24,6 +24,9 @@ void SplashScreen.preventAutoHideAsync();
 installClickSound();
 
 export default function RootLayout() {
+  // Une session retrouvée après un démarrage sans réseau : l'app se remonte,
+  // et ce qu'elle a lu avec un jeton expiré se relit (`useSession`).
+  const { epoch } = useSession();
   // Les trois familles ont des rôles non interchangeables (`tokens.ts`) :
   // l'app n'affiche rien tant qu'elles ne sont pas toutes chargées. Ce sont
   // des sous-ensembles latins, embarqués dans le projet (`assets/fonts/`).
@@ -63,6 +66,7 @@ export default function RootLayout() {
           </Head>
           <AuthGate />
           <Stack
+            key={epoch}
             screenOptions={{ headerShown: false, contentStyle: { backgroundColor: c.ink } }}
           >
             <Stack.Screen name="(tabs)" />
@@ -92,8 +96,14 @@ export default function RootLayout() {
 function AuthGate() {
   const router = useRouter();
   const segments = useSegments();
-  const { userId, loading } = useSession();
+  const { userId, loading, epoch } = useSession();
   const profile = useProfileBootstrap(userId);
+
+  // Le profil se revérifie avec le jeton renouvelé : lu avec l'ancien, il
+  // avait pu échouer.
+  useEffect(() => {
+    if (epoch > 0) announceProfileChange();
+  }, [epoch]);
 
   const onSignIn = segments[0] === '(auth)';
 

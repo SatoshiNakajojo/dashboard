@@ -105,7 +105,7 @@ qu'on n'a pas déposé le nouveau tracé.
 
 ## Ce qui a été vérifié
 
-- `npm run typecheck`, `npm run lint`, `npm test` — propres (549 tests).
+- `npm run typecheck`, `npm run lint`, `npm test` — propres (557 tests).
 - **Règles pures** : bornes et inversibilité du repère, monotonie du tracé,
   écart à la courbe réelle, espaces insécables du formatage français, perf vs ₿
   comme ratio et non soustraction, seuils et tri des deux classements.
@@ -552,6 +552,57 @@ Le cours BTC est maintenant **un seul relevé partagé** par tous les écrans
 (`useBtcSpot`), deux demandes simultanées n'en font qu'une (`withCache`), et
 `HORS LIGNE` n'apparaît qu'après trois minutes **sans aucune** réponse
 (`spotFreshness.ts`) : un refus ponctuel n'est pas une panne.
+
+---
+
+## La porte à chaque ouverture
+
+Des membres, l'app installée sur leur téléphone, devaient retaper leur e-mail
+puis le code à chaque réouverture.
+
+**La cause.** Le jeton d'accès de Supabase vit une heure. Rouverte plus tard,
+l'app le renouvelle au démarrage. Si cet appel échoue un instant (réseau pas
+encore prêt au lancement, 4G lente), supabase-js **garde** la session dans le
+stockage mais répond « pas de session ». La garde de route envoyait alors le
+membre à la porte, pour une session parfaitement vivante. Reproduit dans
+Chromium avec un faux Supabase dont le renouvellement tombe : e-mail demandé,
+session toujours rangée.
+
+**Le correctif** (`src/hooks/useSession.ts`) :
+
+- **un seul état de session pour toute l'app**, au lieu d'un abonnement par
+  écran ;
+- « pas de session » ne suffit plus. Tant qu'un jeton de renouvellement est
+  rangé sur l'appareil, le membre reste dans l'app (`pending`) et l'on
+  réessaie : au retour du réseau, au retour au premier plan, et toutes les
+  20 s. Une fois la session renouvelée, l'app se remonte, et ce qu'elle a lu
+  avec le jeton expiré se relit. Seul un `SIGNED_OUT` ramène à la porte, quand
+  le serveur a vraiment refusé le jeton ;
+- une lecture ratée du profil ne fait plus croire qu'il n'existe pas.
+  Auparavant, elle renvoyait à l'étape du prénom ;
+- l'app demande au navigateur un stockage **persistant**
+  (`navigator.storage.persist()`), pour qu'il ne soit pas évincé.
+
+**Le journal de session** (`src/lib/authJournal.ts`) garde, sur l'appareil,
+les derniers événements : connexion, renouvellement, reprise, refus du
+serveur. Il ne contient jamais de jeton, seulement un statut HTTP et un code
+d'erreur. Le panneau « À propos » (toucher le logo) le résume en une ligne.
+Après une déconnexion, l'écran de connexion en donne le motif :
+
+- `refusé de renouveler la session (400 refresh_token_already_used)` : le
+  serveur a révoqué la session ;
+- `sa session a été effacée par le navigateur ou le système` : le stockage a
+  été vidé, par exemple par un navigateur réglé pour tout effacer à la
+  fermeture.
+
+Une capture d'écran suffit donc à trancher, si le problème revenait.
+
+Vérifié dans Chromium, profil persistant, avec un faux Supabase :
+
+- sans réseau à la réouverture, le membre reste dans l'app (avant : e-mail) ;
+- au retour du réseau, le jeton est renouvelé et l'app reprend
+  (`PENDING → TOKEN_REFRESHED → RECOVERED`) ;
+- avec un jeton refusé, retour à la porte, motif affiché.
 
 ---
 

@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { Micro } from '@/components/ui/Micro';
 import { useAuth, useProfileBootstrap } from '@/features/auth/useAuth';
+import { readJournal, signOutReason } from '@/lib/authJournal';
 import { useSession } from '@/hooks/useSession';
 import { brand } from '@/theme/brand';
 import { c, f, goldButtonGradient, radius } from '@/theme/tokens';
@@ -26,6 +27,8 @@ export default function SignInScreen() {
   const [creating, setCreating] = useState(false);
 
   const onProfileStep = Boolean(userId) && profile.needsProfile;
+  /** Pourquoi cet appareil n'est plus connecté, si son journal le sait. */
+  const [reason] = useState(() => signOutReason(readJournal()));
 
   return (
     <KeyboardAvoidingView
@@ -160,6 +163,23 @@ export default function SignInScreen() {
         >
           Club fermé. Seules les adresses déjà inscrites reçoivent un code.
         </Text>
+
+        {/* Le motif de la dernière déconnexion, si l'appareil le connaît : de
+            quoi dire au club ce qui s'est passé, capture à l'appui. */}
+        {reason && !onProfileStep ? (
+          <Text
+            style={{
+              fontFamily: f.sans,
+              fontSize: 9.5,
+              lineHeight: 14,
+              color: c.sepiaFaint,
+              textAlign: 'center',
+              marginTop: 10,
+            }}
+          >
+            {reason}
+          </Text>
+        ) : null}
       </View>
     </KeyboardAvoidingView>
   );
