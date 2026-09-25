@@ -108,7 +108,10 @@ describe('classement du club', () => {
         ['toi', 7, null],
       ],
     );
-    assert.equal(titleOf(rows[0]!, rows)?.motto, 'Les marchés parlent. L’Oracle écoute.');
+    assert.equal(
+      titleOf(rows[0]!, rows)?.motto,
+      'Il ne trade pas le marché, il lui donne rendez-vous.',
+    );
     // Deux loups ex æquo : le titre de troisième reste vacant.
     const holders = (rank: number) =>
       titleHolders(

@@ -774,7 +774,7 @@ ou depuis toujours (`app/(tabs)/classement.tsx`) :
 
   | Rang | Titre | Devise |
   |---|---|---|
-  | I | L’Oracle de Wall Street | « Les marchés parlent. L’Oracle écoute. » |
+  | I | L’Oracle de Wall Street | « Il ne trade pas le marché, il lui donne rendez-vous. » |
   | II | Le Loup de Wall Street | « Il ne suit pas la tendance. La tendance le suit. » |
   | III | Le Chercheur en Pumpologie | « Chaque perte est une nouvelle donnée scientifique. » |
   | IV | L’Analyste de Boursorama | « Il peut aussi vous proposer une assurance vie. » |

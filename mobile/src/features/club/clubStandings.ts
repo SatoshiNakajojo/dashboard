@@ -85,7 +85,7 @@ export const CLUB_TITLES: readonly ClubTitle[] = [
     rank: 1,
     key: 'oracle',
     title: 'L’Oracle de Wall Street',
-    motto: 'Les marchés parlent. L’Oracle écoute.',
+    motto: 'Il ne trade pas le marché, il lui donne rendez-vous.',
   },
   {
     rank: 2,
