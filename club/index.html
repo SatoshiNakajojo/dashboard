@@ -40,23 +40,34 @@
       #root { -webkit-user-select: none; user-select: none; }
     </style>
     <style>
-      html.club-shim { height: calc(100% + var(--club-shim, 0px)); overscroll-behavior: none; }
+      html.club-shim { height: var(--club-height) !important; overscroll-behavior: none; }
       html.club-shim, html.club-shim body { overflow: visible; }
       html.club-shim body > div:not([id]):not([style]) > div {
-        bottom: calc(-1 * var(--club-shim, 0px)) !important;
+        bottom: auto !important;
+        height: var(--club-height) !important;
       }
     </style>
     <script>
       (function () {
-        var bottomShim = function bottomShim(standalone, screenWidth, screenHeight, innerWidth, layoutHeight) {
+        var pageHeight = function pageHeight(
+  standalone,
+  screenWidth,
+  screenHeight,
+  innerWidth,
+  innerHeight,
+  orientation,
+) {
   if (standalone !== true) return 0;
-  const sizes = [screenWidth, screenHeight, innerWidth, layoutHeight];
+  const sizes = [screenWidth, screenHeight, innerWidth, innerHeight];
   for (let i = 0; i < sizes.length; i++) {
     if (typeof sizes[i] !== 'number' || !isFinite(sizes[i]) || sizes[i] <= 0) return 0;
   }
   // iOS donne les dimensions de l'écran en portrait, quelle que soit
-  // l'orientation : on les remet dans le sens de la fenêtre.
-  const landscape = innerWidth > layoutHeight;
+  // l'orientation : on les remet dans le bon sens. L'orientation vient de
+  // l'écran quand il la donne — pas des proportions de la fenêtre, qu'un
+  // clavier ouvert rend plus large que haute en plein portrait.
+  const landscape =
+    orientation === 'landscape' || (orientation !== 'portrait' && innerWidth > innerHeight);
   const fullWidth = landscape
     ? Math.max(screenWidth, screenHeight)
     : Math.min(screenWidth, screenHeight);
@@ -64,13 +75,15 @@
     ? Math.min(screenWidth, screenHeight)
     : Math.max(screenWidth, screenHeight);
   if (Math.abs(fullWidth - innerWidth) > 1) return 0;
-  const gap = Math.round(fullHeight - layoutHeight);
-  return gap > 0 && gap <= 100 ? gap : 0;
+  const gap = fullHeight - innerHeight;
+  if (gap < -1 || gap > 100) return -1;
+  return Math.round(fullHeight);
 };
         var root = document.documentElement;
         var probe = null;
         var fits = 0;
         var toggles = 0;
+        var frozen = false;
         function probeHeight() {
           if (!probe && document.body) {
             probe = document.createElement('div');
@@ -81,23 +94,38 @@
           }
           return probe ? Math.round(probe.getBoundingClientRect().height) : null;
         }
+        function orientation() {
+          var type = screen.orientation && screen.orientation.type;
+          if (type) return type.indexOf('landscape') === 0 ? 'landscape' : 'portrait';
+          if (typeof window.orientation === 'number') return Math.abs(window.orientation) === 90 ? 'landscape' : 'portrait';
+          return '';
+        }
         function fit() {
-          var gap = bottomShim(navigator.standalone, screen.width, screen.height, innerWidth, innerHeight);
-          var wanted = gap + 'px';
-          var changed = root.style.getPropertyValue('--club-shim') !== wanted;
-          var frozen = changed && toggles >= 4;
-          if (changed && !frozen) {
-            toggles += 1;
-            root.style.setProperty('--club-shim', wanted);
-            if (gap > 0) root.classList.add('club-shim');
-            else root.classList.remove('club-shim');
+          var height = pageHeight(navigator.standalone, screen.width, screen.height, innerWidth, innerHeight, orientation());
+          if (height !== -1) {
+            var wanted = height > 0 ? height + 'px' : '';
+            if (root.style.getPropertyValue('--club-height') !== wanted) {
+              if (toggles >= 4) {
+                frozen = true;
+              } else {
+                toggles += 1;
+                if (height > 0) {
+                  root.style.setProperty('--club-height', wanted);
+                  root.classList.add('club-shim');
+                } else {
+                  root.style.removeProperty('--club-height');
+                  root.classList.remove('club-shim');
+                }
+              }
+            }
           }
           fits += 1;
+          var applied = parseInt(root.style.getPropertyValue('--club-height'), 10) || 0;
           window.__clubViewport = {
             standalone: navigator.standalone === true,
             screen: screen.height, inner: innerHeight, layout: probeHeight(),
-            gap: parseInt(root.style.getPropertyValue('--club-shim'), 10) || 0,
-            fits: fits, toggles: toggles, frozen: frozen
+            gap: applied ? Math.max(0, applied - innerHeight) : 0,
+            height: applied, fits: fits, toggles: toggles, frozen: frozen
           };
           if (root.classList.contains('club-shim') && window.scrollY !== 0) window.scrollTo(0, 0);
         }
@@ -111,8 +139,7 @@
         addEventListener('pageshow', fit);
         addEventListener('orientationchange', function () { setTimeout(fit, 300); });
         document.addEventListener('visibilitychange', function () {
-          // Retour au premier plan : iOS a pu tout recalculer, on réarme.
-          if (document.visibilityState === 'visible') toggles = 0;
+          if (document.visibilityState === 'visible') { toggles = 0; frozen = false; }
           fit();
         });
         addEventListener('scroll', function () {
@@ -137,7 +164,7 @@
     </noscript>
     <!-- The root element for your Expo app. -->
     <div id="root"></div>
-  <script src="/dashboard/club/_expo/static/js/web/entry-caea18688167b0699ab8949bb61e119c.js" defer></script>
+  <script src="/dashboard/club/_expo/static/js/web/entry-344accbb6ee397a60a33e66b44ff3377.js" defer></script>
 
     <div id="boot" aria-label="Chargement" role="progressbar">
       <img id="boot-logo" src="icon-512.png" alt="" width="240" height="240" />
