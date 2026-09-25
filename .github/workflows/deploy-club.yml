@@ -47,13 +47,13 @@ jobs:
       EXPO_NO_TELEMETRY: 1
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           # Assez d'histoire pour rejouer la publication sur un main qui a
           # bougé entre-temps.
           fetch-depth: 20
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
