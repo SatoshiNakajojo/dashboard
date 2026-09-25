@@ -85,22 +85,34 @@ jobs:
 
       - name: Pousser club/
         working-directory: .
+        # Pas de rebase : main a pu avancer depuis le checkout —
+        # typiquement la publication de l'exécution précédente — et rejouer un
+        # club/ sur un autre club/ entre toujours en conflit, les bundles
+        # changeant de nom à chaque build. On met la build de côté, on se
+        # replace sur le main du moment, et on l'y recopie telle quelle.
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add club
-          if git diff --cached --quiet; then
-            echo 'club/ est déjà à jour : rien à publier.'
-            exit 0
-          fi
-          git commit -m "Club : nouvelle version (${GITHUB_SHA::7})"
+          build="$(mktemp -d)"
+          cp -a club/. "$build/"
           for attempt in 1 2 3; do
-            if git pull --rebase origin main && git push origin HEAD:main; then
+            git fetch --quiet origin main
+            git checkout --quiet --force -B publish origin/main
+            rm -rf club
+            mkdir club
+            cp -a "$build/." club/
+            git add -A club
+            if git diff --cached --quiet; then
+              echo 'club/ est déjà à jour : rien à publier.'
+              exit 0
+            fi
+            git commit --quiet -m "Club : nouvelle version (${GITHUB_SHA::7})"
+            if git push origin HEAD:main; then
               exit 0
             fi
             sleep $((attempt * 5))
           done
-          echo '::error::Impossible de pousser club/ — main a-t-il été modifié à la main en même temps ?'
+          echo '::error::Impossible de pousser club/ après trois essais.'
           exit 1
 
       # Pages reconstruit le site à chaque push sur main ; on le lui demande

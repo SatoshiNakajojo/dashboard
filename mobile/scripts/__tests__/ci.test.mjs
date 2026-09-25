@@ -115,6 +115,22 @@ describe('le robot de déploiement', () => {
     }
   });
 
+  it('publie sa build sur le main du moment, sans rejouer un club/ sur un autre', () => {
+    // Deux exécutions à la suite : la seconde trouvait main avancé par la
+    // publication de la première, et `pull --rebase` butait sur les bundles
+    // renommés (v1.01, run 15). La build est recopiée sur le main à jour.
+    assert.ok(!WORKFLOW.includes('pull --rebase'), 'pas de rebase de club/');
+    const push = WORKFLOW.slice(WORKFLOW.indexOf('- name: Pousser club/'));
+    for (const step of [
+      'cp -a club/.',
+      'git fetch',
+      '-B publish origin/main',
+      'cp -a "$build/." club/',
+    ]) {
+      assert.ok(push.includes(step), `« ${step} » attendu dans l’étape de publication`);
+    }
+  });
+
   it('ne lit que des variables publiques', () => {
     for (const name of REQUIRED_ENV) assert.ok(WORKFLOW.includes(`secrets.${name}`));
     assert.ok(!/SERVICE_ROLE|VAPID_PRIVATE/.test(WORKFLOW), 'aucune clé privée dans la build');
