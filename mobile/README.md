@@ -6,6 +6,19 @@ React Native (Expo SDK 57) · TypeScript · NativeWind v4 · Supabase.
 
 **[Comment l'installer sur un téléphone →](docs/INSTALLATION.md)**
 
+**Version v1.01** (`app.json` : 1.0.1). Visible dans « À propos », en touchant
+le logo. Ce qu'elle apporte :
+
+- la session tient après la fermeture de l'app installée : plus d'e-mail ni de
+  code à chaque ouverture ;
+- l'Oracle parie à 2 semaines et à 1 mois ; 5 et 10 ans sont retirés ;
+- un call se publie au cours live, confirmé par le serveur ;
+- le clavier ne cache plus le champ où l'on écrit ;
+- une soirée se modifie, se supprime, et son lieu peut changer par un vote du
+  club ;
+- un podium à cinq marches, le clic de JCGI, un seul changement d'avis par
+  call.
+
 Trois onglets, trois mécaniques :
 
 | Onglet | Ce qu'il fait |
@@ -222,8 +235,6 @@ C'est la base qui tient les règles (migration `20260930090000_edit_nights`) :
 
 Comme la création, la modification n'est pas optimiste. Le temps réel pousse la
 nouvelle version aux six autres membres.
-
----
 
 ### Supprimer une soirée, ou proposer un autre lieu (v1.01)
 

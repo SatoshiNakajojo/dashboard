@@ -93,7 +93,7 @@ function About() {
   return (
     <View className="items-center" style={{ width: '86%', maxWidth: 420, gap: 12 }}>
       <Micro tracking={2.2} size={8} style={{ color: c.sepiaFaint }}>
-        À PROPOS
+        {`À PROPOS · ${brand.version.toUpperCase()}`}
       </Micro>
       <Credit role="vibe-coded by" lines={['SATOSHI NAKAJOJO']} />
       {/* Coupé à la main : laissé au retour automatique, le nom finissait sur
