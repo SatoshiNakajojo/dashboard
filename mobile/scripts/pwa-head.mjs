@@ -15,6 +15,8 @@
  * marque-page qui rouvre Safari avec sa barre d'adresse.
  */
 
+import { VIEWPORT_SHIM } from './viewport-shim.mjs';
+
 export const INK = '#0A0806';
 
 /** Repère d'idempotence : si cette balise est là, le reste l'est aussi. */
@@ -35,7 +37,7 @@ export const PWA_HEAD = `
       html, body, #root { background-color: ${INK}; height: 100%; }
       body { margin: 0; overscroll-behavior-y: none; -webkit-tap-highlight-color: transparent; }
       #root { -webkit-user-select: none; user-select: none; }
-    </style>
+    </style>${VIEWPORT_SHIM}
     <script>
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', function () {
@@ -73,6 +75,8 @@ export const REQUIRED = [
   'serviceWorker',
   // Sans elle, l'app reste un rectangle noir le temps de charger son bundle.
   'id="boot"',
+  // Sans elle, l'app installée sur iPhone s'arrête 47 pt au-dessus du bord.
+  'club-shim',
 ];
 
 export function missingTags(html) {

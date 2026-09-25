@@ -28,10 +28,12 @@ export const MIN_BOTTOM_PADDING = 10;
 /**
  * La marge à réserver sous la barre d'onglets.
  *
- * La borne haute n'est pas de la superstition : dans une PWA autonome iOS,
- * `env(safe-area-inset-bottom)` remonte parfois bien plus que les 34 pt de la
- * barre d'accueil, et une marge décorative ne doit pas suivre une valeur
- * aberrante.
+ * La borne haute reste une garde : une marge décorative ne doit pas suivre une
+ * valeur aberrante. Mais les « plus de 70 pt » qu'on croyait lire sur une
+ * capture de l'app installée n'étaient pas un inset : c'était la bande de
+ * 47 pt qu'iOS laisse sous la page (barre d'état `black-translucent`), ajoutée
+ * aux 34 de la barre d'accueil. Cette bande-là se récupère ailleurs, avant le
+ * premier rendu : `scripts/viewport-shim.mjs`.
  */
 export function bottomInset(reported: number): number {
   if (!Number.isFinite(reported)) return MIN_BOTTOM_PADDING;

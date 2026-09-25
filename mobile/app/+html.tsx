@@ -4,6 +4,8 @@ import { ScrollViewStyleReset } from 'expo-router/html';
 import { brand } from '@/theme/brand';
 import { c } from '@/theme/tokens';
 
+import { SHIM_SCRIPT, SHIM_STYLE } from '../scripts/viewport-shim.mjs';
+
 /**
  * Coquille HTML de la build web.
  *
@@ -48,6 +50,10 @@ export default function Root({ children }: PropsWithChildren) {
         <ScrollViewStyleReset />
 
         <style dangerouslySetInnerHTML={{ __html: SHELL_CSS }} />
+        {/* La bande vide sous l'app installée sur iPhone : voir
+            `scripts/viewport-shim.mjs`. Même code que la build `single`. */}
+        <style dangerouslySetInnerHTML={{ __html: SHIM_STYLE }} />
+        <script dangerouslySetInnerHTML={{ __html: SHIM_SCRIPT }} />
         <script dangerouslySetInnerHTML={{ __html: REGISTER_SW }} />
       </head>
       <body>{children}</body>

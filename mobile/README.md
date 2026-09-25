@@ -105,7 +105,7 @@ qu'on n'a pas déposé le nouveau tracé.
 
 ## Ce qui a été vérifié
 
-- `npm run typecheck`, `npm run lint`, `npm test` — propres (496 tests).
+- `npm run typecheck`, `npm run lint`, `npm test` — propres (506 tests).
 - **Règles pures** : bornes et inversibilité du repère, monotonie du tracé,
   écart à la courbe réelle, espaces insécables du formatage français, perf vs ₿
   comme ratio et non soustraction, seuils et tri des deux classements.
@@ -954,6 +954,29 @@ système de quelques points ; sans borne, on reperd ce qu'on vient de récupére
 Le bouton flottant descend au passage de 96 à 24 pt : il était calé sur la
 hauteur de barre de la maquette, et flottait au milieu de la liste où il
 masquait un ticker sur deux.
+
+### La bande qui restait, et qui n'était pas à nous
+
+Même resserrée, la barre gardait une bande vide d'une quarantaine de points
+sous ses libellés, sur l'app installée. Ce n'était ni la barre ni l'inset :
+en mode autonome avec une barre d'état `black-translucent`, iOS dessine la page
+sur tout l'écran — elle passe sous l'heure — mais calcule sa zone de mise en
+page comme si la barre d'état ne la recouvrait pas. `innerHeight` et
+`height: 100%` valent l'écran **moins** la barre d'état (844 − 47 = 797 pt sur
+un iPhone 12 à 14), et l'app s'arrêtait 47 pt au-dessus du bord. Les « plus de
+70 pt d'inset » qu'on avait cru lire sur la première capture, c'étaient ces
+47 pt ajoutés aux 34 de la barre d'accueil.
+
+`scripts/viewport-shim.mjs` mesure l'écart entre l'écran et la zone de mise en
+page, et allonge le document d'autant — seulement dans l'app installée sur iOS
+(`navigator.standalone`), en pleine largeur, et pour un écart de barre d'état
+(100 pt au plus : un clavier ouvert n'est pas une barre d'état). Partout
+ailleurs l'écart vaut 0 et rien ne bouge. Deux effets de bord sont traités :
+les feuilles (`Modal`, en `position: fixed`, donc ancrées à la zone trop courte)
+sont prolongées d'autant, et le document, désormais plus haut que ce qu'iOS
+croit visible, est ramené en haut s'il défile. Le script est en ligne dans
+`<head>` : la page a la bonne hauteur avant le premier rendu, et le déploiement
+échoue si la balise manque.
 
 ---
 
