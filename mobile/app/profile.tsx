@@ -7,6 +7,7 @@ import { Avatar } from '@/components/ui/Avatar';
 import { Micro } from '@/components/ui/Micro';
 import { SectionTitle } from '@/components/ui/SectionTitle';
 import { NotificationSettings } from '@/components/NotificationSettings';
+import { SoundSettings } from '@/components/SoundSettings';
 import { colorChoices, type ColorChoice } from '@/features/profile/colors';
 import { useProfile, type ProfileState } from '@/features/profile/useProfile';
 import { colorName } from '@/features/auth/profile';
@@ -82,6 +83,7 @@ export default function ProfileScreen() {
             {/* Hors du formulaire : ces réglages s'enregistrent au toucher, le
                 bouton « enregistrer » du profil ne les concerne pas. */}
             <NotificationSettings userId={userId} />
+            <SoundSettings />
           </>
         )}
       </ScrollView>

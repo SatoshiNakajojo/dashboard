@@ -10,6 +10,7 @@ import { useFonts } from 'expo-font';
 
 import { BootScreen } from '@/components/BootScreen';
 import { hideBootShell } from '@/lib/bootShell';
+import { installClickSound } from '@/lib/clickSound';
 import { useProfileBootstrap } from '@/features/auth/useAuth';
 import { useSession } from '@/hooks/useSession';
 import { isSupabaseConfigured } from '@/lib/supabase';
@@ -18,6 +19,9 @@ import { c } from '@/theme/tokens';
 import '../global.css';
 
 void SplashScreen.preventAutoHideAsync();
+
+// Le clic au toucher, comme sur l'app JCGI : un écouteur pour toute l'app.
+installClickSound();
 
 export default function RootLayout() {
   // Les trois familles ont des rôles non interchangeables (`tokens.ts`) :

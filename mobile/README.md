@@ -105,7 +105,7 @@ qu'on n'a pas déposé le nouveau tracé.
 
 ## Ce qui a été vérifié
 
-- `npm run typecheck`, `npm run lint`, `npm test` — propres (544 tests).
+- `npm run typecheck`, `npm run lint`, `npm test` — propres (549 tests).
 - **Règles pures** : bornes et inversibilité du repère, monotonie du tracé,
   écart à la courbe réelle, espaces insécables du formatage français, perf vs ₿
   comme ratio et non soustraction, seuils et tri des deux classements.
@@ -552,6 +552,29 @@ Le cours BTC est maintenant **un seul relevé partagé** par tous les écrans
 (`useBtcSpot`), deux demandes simultanées n'en font qu'une (`withCache`), et
 `HORS LIGNE` n'apparaît qu'après trois minutes **sans aucune** réponse
 (`spotFreshness.ts`) : un refus ponctuel n'est pas une panne.
+
+---
+
+## Le clic de JCGI
+
+Toucher un bouton fait le même petit clic que sur l'app JCGI (`src/lib/clickSound.ts`).
+Il n'y a pas de fichier son : le clic est **synthétisé** par Web Audio, avec les mêmes
+réglages que `cgiSound.keyclick` dans `app.jsx`. C'est un souffle de bruit de 28 ms, en
+passe-bande autour de 2,2 kHz, éteint en 25 ms. Une vibration de 8 ms l'accompagne là où
+le navigateur la permet.
+
+Un seul écouteur, en capture sur le document, sert toute l'app. Tout ce qui se touche
+clique : bouton, lien, onglet, interrupteur ou choix. Un bouton désactivé se tait, car un
+clic ferait croire qu'il s'est passé quelque chose. Les champs de saisie et le vide se
+taisent aussi. Sur iPhone, la session audio passe en `ambient` : le clic se mêle à la
+musique sans la couper, et le bouton silencieux le coupe. Le profil a un interrupteur
+**Clic au toucher**, propre à l'appareil (`localStorage`), actif par défaut.
+
+Vérifié dans Chromium en mode tactile, en comptant les sons joués :
+
+- un clic par toucher sur un onglet, une carte, « Je viens », le `+` ou `FERMER` ;
+- aucun sur un bouton éteint, un champ texte ou un fond ;
+- plus aucun une fois le son coupé, y compris après un rechargement.
 
 ---
 

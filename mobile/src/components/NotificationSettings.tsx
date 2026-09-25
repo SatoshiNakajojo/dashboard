@@ -173,7 +173,7 @@ function ActionButton({
 }
 
 /** Un interrupteur dessiné : or quand il est ouvert, comme le reste des choix. */
-function Toggle({ on }: { on: boolean }) {
+export function Toggle({ on }: { on: boolean }) {
   return (
     <View
       style={{
