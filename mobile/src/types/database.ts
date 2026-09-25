@@ -31,6 +31,8 @@ export type EventRow = {
   themes: string[];
   created_by: string;
   created_at: string;
+  /** Posée par la base (migration `20260930090000_edit_nights`). */
+  edited_at: string | null;
 };
 
 export type EventAttendeeRow = {

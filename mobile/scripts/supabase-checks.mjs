@@ -36,6 +36,7 @@ export const COLUMNS = [
     column: 'changed_at',
     migration: '20260929090000_one_vote_change.sql',
   },
+  { table: 'events', column: 'edited_at', migration: '20260930090000_edit_nights.sql' },
 ];
 
 const ok = (label, detail) => ({ level: 'ok', label, detail });

@@ -24,6 +24,10 @@ export interface ClubEvent {
   location: string;
   /** Crypto Night, Stock Night… une soirée peut en porter plusieurs. */
   themes: string[];
+  /** Qui l'a proposée — le seul à pouvoir la modifier. */
+  createdBy: Uuid | null;
+  /** Dernière modification de la date, du titre, du lieu ou des thèmes. */
+  editedAt: string | null;
 }
 
 /** `potluck_items` — une ligne « qui amène quoi ». */

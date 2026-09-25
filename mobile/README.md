@@ -105,7 +105,7 @@ qu'on n'a pas déposé le nouveau tracé.
 
 ## Ce qui a été vérifié
 
-- `npm run typecheck`, `npm run lint`, `npm test` — propres (541 tests).
+- `npm run typecheck`, `npm run lint`, `npm test` — propres (544 tests).
 - **Règles pures** : bornes et inversibilité du repère, monotonie du tracé,
   écart à la courbe réelle, espaces insécables du formatage français, perf vs ₿
   comme ratio et non soustraction, seuils et tri des deux classements.
@@ -199,6 +199,29 @@ La création n'est **pas** optimiste, contrairement au RSVP : une Crypto Night
 qui apparaîtrait puis disparaîtrait serait pire que trois secondes d'attente,
 parce que les six autres membres la voient. Le potluck est écrit ensuite, et son
 échec ne défait pas la soirée : une soirée sans liste reste une soirée.
+
+### Modifier une soirée publiée
+
+Celui qui a proposé la soirée voit **MODIFIER** à côté de « Je viens », sur la
+carte dépliée. La même feuille s'ouvre, pré-remplie : date et heure relues à
+l'heure de Nouméa (`clubDateTimeParts`), thèmes, titre, lieu. La liste en place
+s'y affiche : une ligne **libre** se retire, une ligne **prise** reste. Quelqu'un
+s'est engagé à l'apporter, et ce n'est pas à l'organisateur de le décommander
+d'un geste. On peut aussi ajouter des lignes, qui viennent en fin de liste.
+`ENREGISTRER` reste éteint tant que rien n'a changé.
+
+C'est la base qui tient les règles (migration `20260930090000_edit_nights`) :
+
+- seul le créateur écrit : `events_update_own` existait déjà, et un autre membre
+  obtient zéro ligne, ce que l'app lui dit ;
+- `edited_at` est posé par un déclencheur quand la date, le titre, le lieu ou
+  les thèmes changent. La carte affiche alors **MODIFIÉE LE 25/09**, car un
+  membre qui avait noté 19 h 30 doit voir que l'heure a bougé ;
+- `created_by` et `created_at` ne se réécrivent pas : une soirée ne change pas
+  d'auteur.
+
+Comme la création, la modification n'est pas optimiste. Le temps réel pousse la
+nouvelle version aux six autres membres.
 
 ---
 

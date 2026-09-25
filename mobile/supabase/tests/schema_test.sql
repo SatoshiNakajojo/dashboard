@@ -332,6 +332,43 @@ begin
   raise notice 'ok · votes : un call supprimé emporte ses votes';
 end $$;
 
+-- --- Soirées : modifier après publication ------------------------------------
+
+do $$
+declare
+  john  constant uuid := 'aaaaaaaa-0000-4000-8000-000000000001';
+  alex  constant uuid := 'aaaaaaaa-0000-4000-8000-000000000002';
+  night uuid;
+  e     public.events%rowtype;
+  n     integer;
+begin
+  insert into public.events (starts_at, title, location, themes, created_by)
+  values (now() + interval '5 days', 'Grillades', 'Rooftop', array['Crypto Night'], john)
+  returning id into night;
+
+  set local role authenticated;
+
+  -- Le créateur modifie : l'heure bouge, la base le note.
+  update public.events
+     set starts_at = now() + interval '6 days', location = 'Plage de l’Anse Vata',
+         created_by = alex, created_at = '2000-01-01', edited_at = '2000-01-01'
+   where id = night;
+  select * into e from public.events where id = night;
+  assert e.location = 'Plage de l’Anse Vata' and e.edited_at = now(), 'la modification est datée';
+  assert e.created_by = john and e.created_at > '2001-01-01', 'ni l’auteur ni la création ne se réécrivent';
+
+  -- Un autre membre ne la modifie pas.
+  perform set_config('test.uid', alex::text, true);
+  update public.events set title = 'Détournée' where id = night;
+  get diagnostics n = row_count;
+  assert n = 0, 'on ne modifie que ses propres soirées';
+  perform set_config('test.uid', john::text, true);
+  raise notice 'ok · soirées : le créateur modifie, la base date la modification';
+
+  reset role;
+  delete from public.events where id = night;
+end $$;
+
 -- --- Calls : un seul changement d'avis par call ------------------------------
 
 do $$

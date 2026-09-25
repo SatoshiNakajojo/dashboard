@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import { getPotluckSource } from '@/features/potluck/source';
 import { pushNotice, type AttendanceNotice } from '@/lib/attendanceNotice';
 import { normalizeThemes } from '@/lib/nightThemes';
 import { describeError, supabase } from '@/lib/supabase';
@@ -22,6 +23,14 @@ export interface NightDraft {
   potluck: string[];
 }
 
+/** Une soirée modifiée : ses champs, et ce qui change dans sa liste. */
+export interface NightEdit extends Omit<NightDraft, 'potluck'> {
+  /** Lignes à ajouter en fin de liste. */
+  potluckAdded: string[];
+  /** Lignes **libres** à retirer, par identifiant. */
+  potluckRemoved: string[];
+}
+
 export interface EventsState {
   events: EventWithAttendance[];
   loading: boolean;
@@ -32,11 +41,43 @@ export interface EventsState {
   create: (draft: NightDraft) => Promise<boolean>;
   /** Écriture en cours — le bouton s'en sert. */
   creating: boolean;
+  /**
+   * Modifie une soirée publiée — réservé à celui qui l'a proposée. Résout
+   * `false` si rien n'a été enregistré.
+   */
+  update: (eventId: string, edit: NightEdit) => Promise<boolean>;
+  /** Modification en cours. */
+  saving: boolean;
   /** Les « X vient à Y » reçus des autres membres, la plus récente en tête. */
   notices: AttendanceNotice[];
   /** Referme une annonce — au doigt, ou à l'expiration de son minuteur. */
   dismissNotice: (id: string) => void;
 }
+
+/**
+ * `*` plutôt qu'une liste : avant la migration `20260930090000_edit_nights`,
+ * nommer `edited_at` ferait échouer toute la lecture de l'agenda.
+ */
+const EVENT_COLUMNS = '*';
+
+/** Une ligne `events` — entière ou poussée par le temps réel — en soirée. */
+export function fromEventRow(
+  row: Partial<EventRow>,
+  attendeeIds: string[],
+): EventWithAttendance {
+  return {
+    id: row.id ?? '',
+    startsAt: row.starts_at ?? '',
+    title: row.title ?? '',
+    location: row.location ?? '',
+    themes: row.themes ?? [],
+    createdBy: row.created_by ?? null,
+    editedAt: row.edited_at ?? null,
+    attendeeIds,
+  };
+}
+
+const byStart = (a: ClubEvent, b: ClubEvent) => a.startsAt.localeCompare(b.startsAt);
 
 /**
  * L'agenda et ses présences, lus une fois.
@@ -51,7 +92,7 @@ export async function loadNights(
   const [eventsResult, attendeesResult] = await Promise.all([
     client
       .from('events')
-      .select('id, starts_at, title, location, themes')
+      .select(EVENT_COLUMNS)
       .order('starts_at', { ascending: true })
       .abortSignal(signal),
     client.from('event_attendees').select('event_id, user_id').abortSignal(signal),
@@ -66,14 +107,9 @@ export async function loadNights(
     byEvent.set(row.event_id, list);
   }
 
-  return (eventsResult.data ?? []).map((row) => ({
-    id: row.id,
-    startsAt: row.starts_at,
-    title: row.title,
-    location: row.location,
-    themes: row.themes ?? [],
-    attendeeIds: byEvent.get(row.id) ?? [],
-  }));
+  return ((eventsResult.data ?? []) as Partial<EventRow>[]).map((row) =>
+    fromEventRow(row, byEvent.get(row.id ?? '') ?? []),
+  );
 }
 
 /** Les soirées du mode démo, avec leurs présences. */
@@ -93,6 +129,7 @@ export function useEvents(currentUserId: string | null): EventsState {
   );
   const [loading, setLoading] = useState(Boolean(supabase));
   const [creating, setCreating] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notices, setNotices] = useState<AttendanceNotice[]>([]);
 
@@ -153,17 +190,13 @@ export function useEvents(currentUserId: string | null): EventsState {
           if (payload.eventType === 'DELETE') {
             return current.filter((event) => event.id !== row.id);
           }
-          const incoming: EventWithAttendance = {
-            id: row.id!,
-            startsAt: row.starts_at ?? '',
-            title: row.title ?? '',
-            location: row.location ?? '',
-            themes: row.themes ?? [],
-            // Les présences arrivent par leur propre table, déjà en temps réel.
-            attendeeIds: current.find((event) => event.id === row.id)?.attendeeIds ?? [],
-          };
+          // Les présences arrivent par leur propre table, déjà en temps réel.
+          const incoming = fromEventRow(
+            row,
+            current.find((event) => event.id === row.id)?.attendeeIds ?? [],
+          );
           const without = current.filter((event) => event.id !== row.id);
-          return [...without, incoming].sort((a, b) => a.startsAt.localeCompare(b.startsAt));
+          return [...without, incoming].sort(byStart);
         });
       })
       /**
@@ -304,7 +337,7 @@ export function useEvents(currentUserId: string | null): EventsState {
             themes: normalizeThemes(draft.themes),
             created_by: currentUserId,
           })
-          .select('id, starts_at, title, location, themes')
+          .select(EVENT_COLUMNS)
           .single();
 
         if (cause || !data) {
@@ -327,18 +360,9 @@ export function useEvents(currentUserId: string | null): EventsState {
         // Le canal temps réel va pousser la même ligne, mais on ne l'attend
         // pas : celui qui vient de créer sa soirée doit la voir tout de suite.
         // L'insertion est idempotente — l'écho retombera sur un état à jour.
+        const created = fromEventRow(data as Partial<EventRow>, []);
         setEvents((current) =>
-          [
-            ...current,
-            {
-              id: data.id,
-              startsAt: data.starts_at,
-              title: data.title,
-              location: data.location,
-              themes: data.themes ?? [],
-              attendeeIds: [],
-            },
-          ].sort((a, b) => a.startsAt.localeCompare(b.startsAt)),
+          [...current.filter((event) => event.id !== created.id), created].sort(byStart),
         );
         return true;
       } finally {
@@ -348,12 +372,129 @@ export function useEvents(currentUserId: string | null): EventsState {
     [creating, currentUserId],
   );
 
+  /**
+   * Modifie une soirée déjà publiée.
+   *
+   * Comme la création, pas d'optimisme : la carte ne change qu'une fois la base
+   * d'accord. La RLS (`events_update_own`) réserve l'écriture au créateur ; un
+   * autre membre obtiendrait zéro ligne, et on le lui dit. `edited_at` est posé
+   * par la base, pas par nous.
+   *
+   * La liste suit, comme à la création : ajouter des lignes, retirer des lignes
+   * encore libres. Son échec n'annule pas la modification de la soirée.
+   */
+  const update = useCallback(
+    async (eventId: string, edit: NightEdit): Promise<boolean> => {
+      const before = events.find((event) => event.id === eventId);
+      if (!currentUserId || !before || saving) return false;
+
+      const fields = {
+        starts_at: edit.startsAt,
+        title: edit.title.trim(),
+        location: edit.location.trim(),
+        themes: normalizeThemes(edit.themes),
+      };
+
+      setSaving(true);
+      setError(null);
+      try {
+        let after: EventWithAttendance;
+        const client = supabase;
+        if (client) {
+          const { data, error: cause } = await client
+            .from('events')
+            .update(fields)
+            .eq('id', eventId)
+            .select(EVENT_COLUMNS);
+          if (cause) {
+            setError(describeError(cause));
+            return false;
+          }
+          const row = (data as Partial<EventRow>[] | null)?.[0];
+          if (!row) {
+            setError('Seul le membre qui a proposé cette soirée peut la modifier.');
+            return false;
+          }
+          after = fromEventRow(row, before.attendeeIds);
+        } else {
+          // Démo : la même règle que la base, en mémoire.
+          if (before.createdBy !== currentUserId) {
+            setError('Seul le membre qui a proposé cette soirée peut la modifier.');
+            return false;
+          }
+          const moved =
+            Date.parse(fields.starts_at) !== Date.parse(before.startsAt) ||
+            fields.title !== before.title ||
+            fields.location !== before.location ||
+            fields.themes.join('\n') !== before.themes.join('\n');
+          after = {
+            ...before,
+            startsAt: fields.starts_at,
+            title: fields.title,
+            location: fields.location,
+            themes: fields.themes,
+            editedAt: moved ? new Date().toISOString() : before.editedAt,
+          };
+        }
+
+        setEvents((current) =>
+          current.map((event) => (event.id === eventId ? after : event)).sort(byStart),
+        );
+
+        const potluck = getPotluckSource();
+        const lines = edit.potluckAdded.map((name) => name.trim()).filter(Boolean);
+        try {
+          let kept = 0;
+          for (const itemId of edit.potluckRemoved) {
+            if (!(await potluck.remove(itemId))) kept += 1;
+          }
+          if (lines.length > 0) await potluck.add(eventId, lines);
+          if (kept > 0) {
+            setError(
+              kept === 1
+                ? 'Une ligne a été prise entre-temps : elle reste sur la liste.'
+                : `${kept} lignes ont été prises entre-temps : elles restent sur la liste.`,
+            );
+          }
+        } catch (cause) {
+          setError(describeError(cause));
+        }
+        return true;
+      } finally {
+        setSaving(false);
+      }
+    },
+    [currentUserId, events, saving],
+  );
+
   const dismissNotice = useCallback((id: string) => {
     setNotices((current) => current.filter((notice) => notice.id !== id));
   }, []);
 
   return useMemo(
-    () => ({ events, loading, error, toggleRsvp, create, creating, notices, dismissNotice }),
-    [events, loading, error, toggleRsvp, create, creating, notices, dismissNotice],
+    () => ({
+      events,
+      loading,
+      error,
+      toggleRsvp,
+      create,
+      creating,
+      update,
+      saving,
+      notices,
+      dismissNotice,
+    }),
+    [
+      events,
+      loading,
+      error,
+      toggleRsvp,
+      create,
+      creating,
+      update,
+      saving,
+      notices,
+      dismissNotice,
+    ],
   );
 }

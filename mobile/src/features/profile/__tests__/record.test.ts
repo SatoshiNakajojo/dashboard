@@ -78,6 +78,8 @@ describe('les soirées d’un membre', () => {
     title: id,
     location: 'Ici',
     themes: ['Crypto Night'],
+    createdBy: null,
+    editedAt: null,
     attendeeIds,
   });
 

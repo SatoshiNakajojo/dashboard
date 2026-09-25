@@ -27,6 +27,13 @@ export interface PotluckSource {
   claim(itemId: string, userId: string): Promise<boolean>;
   /** `true` si la ligne a été libérée, `false` si elle ne nous appartenait plus. */
   release(itemId: string, userId: string): Promise<boolean>;
+  /** Ajoute des lignes libres en fin de liste — tout membre peut le faire. */
+  add(eventId: string, names: readonly string[]): Promise<void>;
+  /**
+   * Retire une ligne **libre**. Seul le créateur de la soirée le peut (RLS) ;
+   * `false` si la ligne a été prise entre-temps, ou n'est pas à nous d'enlever.
+   */
+  remove(itemId: string): Promise<boolean>;
   /** S'abonne aux changements de l'événement. Renvoie la fonction de désabonnement. */
   subscribe(eventId: string, onChange: (change: PotluckChange) => void): () => void;
 }
@@ -99,6 +106,42 @@ function createSupabaseSource(client: NonNullable<typeof supabase>): PotluckSour
       return (data?.length ?? 0) > 0;
     },
 
+    async add(eventId, names) {
+      if (names.length === 0) return;
+      // À la suite de ce qui existe : la liste ne se réordonne pas sous les
+      // yeux de ceux qui ont déjà pris une ligne.
+      const { data: last, error: readError } = await client
+        .from('potluck_items')
+        .select('position')
+        .eq('event_id', eventId)
+        .order('position', { ascending: false })
+        .limit(1);
+      if (readError) throw readError;
+      const after = last?.[0]?.position ?? 0;
+
+      const { error } = await client.from('potluck_items').insert(
+        names.map((name, index) => ({
+          event_id: eventId,
+          item_name: name,
+          position: after + index + 1,
+        })),
+      );
+      if (error) throw error;
+    },
+
+    async remove(itemId) {
+      // `.is(…, null)` : une ligne qu'un membre vient de prendre reste.
+      const { data, error } = await client
+        .from('potluck_items')
+        .delete()
+        .eq('id', itemId)
+        .is('assigned_user_id', null)
+        .select('id');
+
+      if (error) throw error;
+      return (data?.length ?? 0) > 0;
+    },
+
     subscribe(eventId, onChange) {
       const channel = client
         .channel(`potluck:${eventId}`)
@@ -145,6 +188,7 @@ function delay(ms: number) {
 function createMockSource(): PotluckSource {
   const store = new Map<string, PotluckItem>(MOCK_POTLUCK_ITEMS.map((i) => [i.id, { ...i }]));
   const listeners = new Map<string, Set<Listener>>();
+  let added = 0;
 
   function emit(eventId: string, change: PotluckChange) {
     listeners.get(eventId)?.forEach((listener) => listener(change));
@@ -180,6 +224,35 @@ function createMockSource(): PotluckSource {
       const next = { ...item, assignedUserId: null };
       store.set(itemId, next);
       emit(item.eventId, { type: 'UPDATE', item: next });
+      return true;
+    },
+
+    async add(eventId, names) {
+      await delay(MOCK_LATENCY_MS);
+      const after = Math.max(
+        0,
+        ...[...store.values()].filter((i) => i.eventId === eventId).map((i) => i.position),
+      );
+      names.forEach((itemName, index) => {
+        added += 1;
+        const item: PotluckItem = {
+          id: `33333333-3333-4333-9333-${String(added).padStart(12, '0')}`,
+          eventId,
+          itemName,
+          assignedUserId: null,
+          position: after + index + 1,
+        };
+        store.set(item.id, item);
+        emit(eventId, { type: 'INSERT', item: { ...item } });
+      });
+    },
+
+    async remove(itemId) {
+      await delay(MOCK_LATENCY_MS);
+      const item = store.get(itemId);
+      if (!item || item.assignedUserId !== null) return false;
+      store.delete(itemId);
+      emit(item.eventId, { type: 'DELETE', item });
       return true;
     },
 

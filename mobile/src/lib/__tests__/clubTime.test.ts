@@ -10,7 +10,12 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { CLUB_OFFSET_SUFFIX, parseClubDateTime, todayInClub } from '@/lib/clubTime';
+import {
+  CLUB_OFFSET_SUFFIX,
+  clubDateTimeParts,
+  parseClubDateTime,
+  todayInClub,
+} from '@/lib/clubTime';
 import { formatTime, splitEventDate } from '@/lib/format';
 
 describe('lecture d’une date de soirée', () => {
@@ -92,5 +97,34 @@ describe('affichage d’une soirée', () => {
   it('reste lisible sur une date absente', () => {
     assert.equal(formatTime('pas une date'), '--:--');
     assert.deepEqual(splitEventDate(''), { day: '--', month: '' });
+  });
+});
+
+describe('relire une soirée pour la modifier', () => {
+  it('rend la date et l’heure de Nouméa, quel que soit le format stocké', () => {
+    assert.deepEqual(clubDateTimeParts('2026-10-03T19:30:00+11:00'), {
+      date: '03/10/2026',
+      time: '19:30',
+    });
+    // Ce que renvoie la base : de l'UTC.
+    assert.deepEqual(clubDateTimeParts('2026-10-03T08:30:00+00:00'), {
+      date: '03/10/2026',
+      time: '19:30',
+    });
+    // Minuit passé à Nouméa, encore la veille en UTC.
+    assert.deepEqual(clubDateTimeParts('2026-12-31T13:15:00Z'), {
+      date: '01/01/2027',
+      time: '00:15',
+    });
+  });
+
+  it('fait l’aller-retour avec la saisie', () => {
+    const iso = parseClubDateTime('29/02/2028', '22:05')!;
+    const parts = clubDateTimeParts(iso)!;
+    assert.equal(parseClubDateTime(parts.date, parts.time), iso);
+  });
+
+  it('refuse ce qui n’est pas une date', () => {
+    assert.equal(clubDateTimeParts('pas une date'), null);
   });
 });

@@ -62,3 +62,18 @@ export function todayInClub(now: number = Date.now()): string {
   const here = new Date(now + CLUB_OFFSET_MINUTES * 60_000);
   return `${pad(here.getUTCDate())}/${pad(here.getUTCMonth() + 1)}/${here.getUTCFullYear()}`;
 }
+
+/**
+ * L'inverse de `parseClubDateTime` : un instant, relu à l'heure de Nouméa, dans
+ * le format des champs de saisie — pour pré-remplir la feuille d'une soirée
+ * qu'on modifie. `'2026-10-03T08:30:00Z'` → `{ date: '03/10/2026', time: '19:30' }`.
+ */
+export function clubDateTimeParts(iso: string): { date: string; time: string } | null {
+  const ms = Date.parse(iso);
+  if (!Number.isFinite(ms)) return null;
+  const here = new Date(ms + CLUB_OFFSET_MINUTES * 60_000);
+  return {
+    date: `${pad(here.getUTCDate())}/${pad(here.getUTCMonth() + 1)}/${here.getUTCFullYear()}`,
+    time: `${pad(here.getUTCHours())}:${pad(here.getUTCMinutes())}`,
+  };
+}

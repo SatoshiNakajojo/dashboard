@@ -1,12 +1,14 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 
 import { Micro } from '@/components/ui/Micro';
-import { parseClubDateTime, todayInClub } from '@/lib/clubTime';
+import { getPotluckSource } from '@/features/potluck/source';
+import { clubDateTimeParts, parseClubDateTime, todayInClub } from '@/lib/clubTime';
 import { MAX_THEME_LENGTH, normalizeThemes, suggestThemes } from '@/lib/nightThemes';
 import { a, c, f, goldButtonGradient, radius } from '@/theme/tokens';
+import type { ClubEvent, PotluckItem } from '@/types/domain';
 
 export interface NightSheetDraft {
   startsAt: string;
@@ -16,15 +18,29 @@ export interface NightSheetDraft {
   potluck: string[];
 }
 
+export interface NightSheetEdit extends Omit<NightSheetDraft, 'potluck'> {
+  potluckAdded: string[];
+  potluckRemoved: string[];
+}
+
 export interface NightSheetProps {
   visible: boolean;
   /** Thèmes déjà employés par le club, proposés avant les nouveaux. */
   knownThemes?: string[];
   /** Écriture en cours : le bouton se verrouille et annonce l'attente. */
   creating?: boolean;
+  /** Le refus de la base, montré sous le bouton après un envoi. */
+  error?: string | null;
   onClose: () => void;
   /** Résout `true` si la soirée est partie ; la feuille ne se ferme qu'alors. */
-  onCreate: (draft: NightSheetDraft) => Promise<boolean> | boolean;
+  onCreate?: (draft: NightSheetDraft) => Promise<boolean> | boolean;
+  /**
+   * La soirée à modifier : la feuille s'ouvre pré-remplie, et enregistre par
+   * `onSave`. Le parent la remonte avec une `key` par soirée.
+   */
+  editing?: ClubEvent | null;
+  /** Résout `true` si la modification est enregistrée. */
+  onSave?: (edit: NightSheetEdit) => Promise<boolean> | boolean;
 }
 
 /** Contraintes de la base — refuser ici ce qu'elle refuserait de toute façon. */
@@ -34,22 +50,60 @@ const ITEM_MAX = 60;
 
 /** Six lignes vides : assez pour une soirée, sans transformer l'écran en tableur. */
 const POTLUCK_SLOTS = 6;
+/** En modification, la liste existe déjà : de quoi la compléter. */
+const EDIT_POTLUCK_SLOTS = 3;
 
-/** Bottom sheet « Proposer une Crypto Night ». */
+const sameThemes = (one: readonly string[], other: readonly string[]) =>
+  normalizeThemes([...one]).join('\n').toLocaleLowerCase('fr') ===
+  normalizeThemes([...other]).join('\n').toLocaleLowerCase('fr');
+
+/**
+ * Bottom sheet « Proposer une soirée » — ou, avec `editing`, « Modifier la
+ * soirée » : les mêmes champs, pré-remplis, et la liste existante dont on peut
+ * retirer les lignes encore libres.
+ */
 export function NightSheet({
   visible,
   knownThemes = [],
   creating = false,
+  error = null,
   onClose,
   onCreate,
+  editing = null,
+  onSave,
 }: NightSheetProps) {
-  const [date, setDate] = useState(() => todayInClub());
-  const [time, setTime] = useState('19:30');
-  const [title, setTitle] = useState('');
-  const [location, setLocation] = useState('');
-  const [picked, setPicked] = useState<string[]>([]);
+  const initial = editing ? clubDateTimeParts(editing.startsAt) : null;
+  const slots = editing ? EDIT_POTLUCK_SLOTS : POTLUCK_SLOTS;
+
+  const [date, setDate] = useState(() => initial?.date ?? todayInClub());
+  const [time, setTime] = useState(initial?.time ?? '19:30');
+  const [title, setTitle] = useState(editing?.title ?? '');
+  const [location, setLocation] = useState(editing?.location ?? '');
+  const [picked, setPicked] = useState<string[]>(() => editing?.themes ?? []);
   const [invented, setInvented] = useState('');
-  const [potluck, setPotluck] = useState<string[]>(() => Array<string>(POTLUCK_SLOTS).fill(''));
+  const [potluck, setPotluck] = useState<string[]>(() => Array<string>(slots).fill(''));
+  /** Le message d'erreur n'est le nôtre qu'après un envoi depuis cette feuille. */
+  const [tried, setTried] = useState(false);
+
+  /** La liste actuelle de la soirée modifiée, et les lignes marquées à retirer. */
+  const [existing, setExisting] = useState<PotluckItem[] | null>(null);
+  const [removed, setRemoved] = useState<string[]>([]);
+
+  const editingId = editing?.id ?? null;
+  useEffect(() => {
+    if (!editingId) return;
+    const controller = new AbortController();
+    getPotluckSource()
+      .list(editingId, controller.signal)
+      .then((items) => {
+        if (!controller.signal.aborted) setExisting(items);
+      })
+      // Illisible : on ne propose que l'ajout, la liste reste intacte.
+      .catch(() => {
+        if (!controller.signal.aborted) setExisting([]);
+      });
+    return () => controller.abort();
+  }, [editingId]);
 
   const startsAt = parseClubDateTime(date, time);
 
@@ -68,7 +122,7 @@ export function NightSheet({
     setLocation('');
     setPicked([]);
     setInvented('');
-    setPotluck(Array<string>(POTLUCK_SLOTS).fill(''));
+    setPotluck(Array<string>(slots).fill(''));
   };
 
   const toggleTheme = (theme: string) =>
@@ -95,20 +149,49 @@ export function NightSheet({
             ? 'Où ça se passe.'
             : null;
 
-  const canCreate = blockedReason === null && !creating;
+  const added = potluck.map((item) => item.trim()).filter((item) => item.length > 0);
+
+  /** En modification, un bouton qui n'enregistrerait rien reste éteint. */
+  const unchanged =
+    editing !== null &&
+    startsAt !== null &&
+    Date.parse(startsAt) === Date.parse(editing.startsAt) &&
+    title.trim() === editing.title &&
+    location.trim() === editing.location &&
+    sameThemes(themes, editing.themes) &&
+    added.length === 0 &&
+    removed.length === 0;
+
+  const canCreate = blockedReason === null && !unchanged && !creating;
 
   const submit = async () => {
     if (startsAt === null) return;
-    const sent = await onCreate({
-      startsAt,
-      title,
-      location,
-      themes,
-      potluck: potluck.filter((item) => item.trim().length > 0),
-    });
+    setTried(true);
+    if (editing) {
+      await onSave?.({
+        startsAt,
+        title,
+        location,
+        themes,
+        potluckAdded: added,
+        potluckRemoved: removed,
+      });
+      return;
+    }
+    const sent = await onCreate?.({ startsAt, title, location, themes, potluck: added });
     // Sur échec, on garde la saisie : personne ne doit retaper sa liste.
-    if (sent) reset();
+    if (sent) {
+      reset();
+      setTried(false);
+    }
   };
+
+  const shownError = tried && !creating ? error : null;
+
+  const toggleRemoved = (itemId: string) =>
+    setRemoved((current) =>
+      current.includes(itemId) ? current.filter((id) => id !== itemId) : [...current, itemId],
+    );
 
   const setSlot = (index: number, value: string) =>
     setPotluck((current) => current.map((item, i) => (i === index ? value : item)));
@@ -146,7 +229,7 @@ export function NightSheet({
 
           <View className="flex-row items-baseline justify-between" style={{ marginTop: 16 }}>
             <Text style={{ fontFamily: f.serif, fontSize: 22, color: c.ivory }}>
-              Proposer une soirée
+              {editing ? 'Modifier la soirée' : 'Proposer une soirée'}
             </Text>
             <Pressable accessibilityRole="button" onPress={onClose}>
               <Text
@@ -249,8 +332,14 @@ export function NightSheet({
               maxLength={LOCATION_MAX}
             />
 
+            {editing ? (
+              <ExistingPotluck items={existing} removed={removed} onToggle={toggleRemoved} />
+            ) : null}
+
             <View style={{ marginTop: 22 }}>
-              <Micro style={{ marginBottom: 4 }}>À APPORTER</Micro>
+              <Micro style={{ marginBottom: 4 }}>
+                {editing ? 'AJOUTER À LA LISTE' : 'À APPORTER'}
+              </Micro>
               <Text
                 style={{
                   fontFamily: f.sans,
@@ -299,7 +388,13 @@ export function NightSheet({
               <Text
                 style={{ fontFamily: f.labelSemi, fontSize: 10, letterSpacing: 2.4, color: c.onGold }}
               >
-                {creating ? 'CRÉATION…' : 'INSCRIRE AU CALENDRIER'}
+                {editing
+                  ? creating
+                    ? 'ENREGISTREMENT…'
+                    : 'ENREGISTRER'
+                  : creating
+                    ? 'CRÉATION…'
+                    : 'INSCRIRE AU CALENDRIER'}
               </Text>
             </LinearGradient>
           </Pressable>
@@ -309,12 +404,18 @@ export function NightSheet({
               fontFamily: f.sans,
               fontSize: 10,
               lineHeight: 16,
-              color: blockedReason ? c.sepia : c.sepiaFaint,
+              color: shownError ? c.oxblood : blockedReason ? c.sepia : c.sepiaFaint,
               textAlign: 'center',
               marginTop: 12,
             }}
           >
-            {blockedReason ?? 'Heure de Nouméa. Tout le club la verra.'}
+            {shownError ??
+              blockedReason ??
+              (unchanged
+                ? 'Rien n’a encore changé.'
+                : editing
+                  ? 'Heure de Nouméa. La carte indiquera au club qu’elle a été modifiée.'
+                  : 'Heure de Nouméa. Tout le club la verra.')}
           </Text>
         </View>
       </View>
@@ -323,6 +424,78 @@ export function NightSheet({
 }
 
 // ---------------------------------------------------------------------------
+
+/**
+ * La liste déjà en place, en modification.
+ *
+ * Une ligne libre se retire (au toucher, barrée jusqu'à l'enregistrement) ;
+ * une ligne prise reste : quelqu'un s'est engagé à l'apporter, ce n'est pas à
+ * l'organisateur de le décommander d'un geste.
+ */
+function ExistingPotluck({
+  items,
+  removed,
+  onToggle,
+}: {
+  items: PotluckItem[] | null;
+  removed: string[];
+  onToggle: (itemId: string) => void;
+}) {
+  return (
+    <View style={{ marginTop: 22 }}>
+      <Micro style={{ marginBottom: 4 }}>LISTE ACTUELLE</Micro>
+      {items === null ? (
+        <Text style={{ fontFamily: f.sans, fontSize: 11, color: c.sepiaFaint, paddingVertical: 9 }}>
+          …
+        </Text>
+      ) : items.length === 0 ? (
+        <Text style={{ fontFamily: f.sans, fontSize: 11, color: c.sepiaFaint, paddingVertical: 9 }}>
+          Rien pour l’instant.
+        </Text>
+      ) : (
+        items.map((item) => {
+          const taken = item.assignedUserId !== null;
+          const gone = removed.includes(item.id);
+          return (
+            <View
+              key={item.id}
+              className="flex-row items-center justify-between"
+              style={{ paddingVertical: 9, borderBottomWidth: 1, borderBottomColor: c.hairline }}
+            >
+              <Text
+                style={{
+                  flex: 1,
+                  fontFamily: f.sans,
+                  fontSize: 14,
+                  color: gone ? c.sepiaFaint : c.parchment,
+                  textDecorationLine: gone ? 'line-through' : 'none',
+                }}
+              >
+                {item.itemName}
+              </Text>
+              {taken ? (
+                <Micro size={8} tracking={1.4} style={{ color: c.sage }}>
+                  PRISE
+                </Micro>
+              ) : (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={gone ? `Garder ${item.itemName}` : `Retirer ${item.itemName}`}
+                  onPress={() => onToggle(item.id)}
+                  hitSlop={8}
+                >
+                  <Micro size={8} tracking={1.4} style={{ color: gone ? c.gold : c.oxbloodMuted }}>
+                    {gone ? 'GARDER' : 'RETIRER'}
+                  </Micro>
+                </Pressable>
+              )}
+            </View>
+          );
+        })
+      )}
+    </View>
+  );
+}
 
 function Line({
   label,

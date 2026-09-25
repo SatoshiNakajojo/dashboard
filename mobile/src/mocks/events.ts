@@ -9,6 +9,8 @@ export const MOCK_EVENTS: ClubEvent[] = [
     title: 'Pastaga & Wine Tasting',
     location: 'Penthouse — Marco',
     themes: ['Crypto Night'],
+    createdBy: MEMBERS.marco!.id,
+    editedAt: null,
   },
   {
     id: '22222222-2222-4222-8222-000000000002',
@@ -16,6 +18,9 @@ export const MOCK_EVENTS: ClubEvent[] = [
     title: 'Grillades & Halving Talk',
     location: 'Rooftop — Alex',
     themes: ['Crypto Night', 'Stock Night'],
+    // Proposée par le membre de démo : c'est elle qu'il peut modifier.
+    createdBy: MEMBERS.me!.id,
+    editedAt: null,
   },
   {
     id: '22222222-2222-4222-8222-000000000003',
@@ -23,6 +28,8 @@ export const MOCK_EVENTS: ClubEvent[] = [
     title: 'Night Trading Session',
     location: 'Loft — Sofia',
     themes: ['Stock Night', 'Vibe Coding Night'],
+    createdBy: MEMBERS.sofia!.id,
+    editedAt: '2026-09-20T09:12:00+11:00',
   },
 ];
 

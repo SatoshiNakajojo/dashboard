@@ -5,6 +5,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { PotluckList } from '@/components/PotluckList';
 import { MemberAvatar } from '@/components/MemberAvatar';
 import { Micro } from '@/components/ui/Micro';
+import { clubDateTimeParts } from '@/lib/clubTime';
 import { formatTime, splitEventDate } from '@/lib/format';
 import { CLUB_SIZE } from '@/mocks/members';
 import { formatThemes } from '@/lib/nightThemes';
@@ -18,6 +19,8 @@ export interface EventCardProps {
   membersById: Map<string, Member>;
   defaultExpanded?: boolean;
   onToggleRsvp: (eventId: string) => void;
+  /** Ouvre la modification — proposée seulement à celui qui a créé la soirée. */
+  onEdit?: (eventId: string) => void;
 }
 
 const MAX_STACKED_AVATARS = 5;
@@ -29,12 +32,15 @@ export function EventCard({
   membersById,
   defaultExpanded = false,
   onToggleRsvp,
+  onEdit,
 }: EventCardProps) {
   const [expanded, setExpanded] = useState(defaultExpanded);
 
   const { day, month } = splitEventDate(event.startsAt);
   const going = currentUserId !== null && event.attendeeIds.includes(currentUserId);
   const stacked = event.attendeeIds.slice(0, MAX_STACKED_AVATARS);
+  const mine = currentUserId !== null && event.createdBy === currentUserId;
+  const editedOn = event.editedAt ? clubDateTimeParts(event.editedAt)?.date.slice(0, 5) : null;
 
   return (
     <LinearGradient
@@ -100,6 +106,12 @@ export function EventCard({
             >
               {`${event.location} · ${formatTime(event.startsAt)}`}
             </Text>
+            {/* Qui avait noté 19 h 30 doit voir que l'heure a bougé. */}
+            {editedOn ? (
+              <Micro size={8} tracking={1.4} style={{ color: c.gold, marginTop: 6 }}>
+                {`MODIFIÉE LE ${editedOn}`}
+              </Micro>
+            ) : null}
           </View>
         </View>
 
@@ -161,6 +173,33 @@ export function EventCard({
               </View>
             </Pressable>
 
+            {mine && onEdit ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Modifier ${event.title}`}
+                onPress={() => onEdit(event.id)}
+                style={{
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  paddingVertical: 11,
+                  paddingHorizontal: 16,
+                  borderRadius: radius.button,
+                  borderWidth: 1,
+                  borderColor: c.borderLift,
+                }}
+              >
+                <Text
+                  style={{
+                    fontFamily: f.labelMed,
+                    fontSize: 10,
+                    letterSpacing: 1.8,
+                    color: c.sepia,
+                  }}
+                >
+                  MODIFIER
+                </Text>
+              </Pressable>
+            ) : null}
           </View>
 
           <PotluckList

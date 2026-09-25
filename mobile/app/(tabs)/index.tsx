@@ -17,10 +17,23 @@ import { c, f } from '@/theme/tokens';
 export default function NightsScreen() {
   const { userId } = useSession();
   const { byId } = useMembers();
-  const { events, loading, error, toggleRsvp, create, creating, notices, dismissNotice } =
-    useEvents(userId);
+  const {
+    events,
+    loading,
+    error,
+    toggleRsvp,
+    create,
+    creating,
+    update,
+    saving,
+    notices,
+    dismissNotice,
+  } = useEvents(userId);
 
   const [sheetOpen, setSheetOpen] = useState(false);
+  /** La soirée qu'on modifie — la feuille se remonte à chaque soirée. */
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const editing = editingId ? (events.find((event) => event.id === editingId) ?? null) : null;
   const [asMonth, setAsMonth] = useState(false);
   const [month, setMonth] = useState(() => currentMonth());
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
@@ -54,6 +67,13 @@ export default function NightsScreen() {
     // saisie reste à l'écran avec son message.
     if (created) setSheetOpen(false);
     return created;
+  };
+
+  const handleSave = async (edit: Parameters<typeof update>[1]) => {
+    if (!editingId) return false;
+    const saved = await update(editingId, edit);
+    if (saved) setEditingId(null);
+    return saved;
   };
 
   return (
@@ -125,6 +145,7 @@ export default function NightsScreen() {
                 // La première carte est dépliée par défaut (README §7.1).
                 defaultExpanded={index === 0}
                 onToggleRsvp={toggleRsvp}
+                onEdit={setEditingId}
               />
             ))
           )}
@@ -140,8 +161,20 @@ export default function NightsScreen() {
       <NightSheet
         visible={sheetOpen}
         creating={creating}
+        error={error}
         onClose={() => setSheetOpen(false)}
         onCreate={handleCreate}
+      />
+      {/* Seul celui qui l'a proposée modifie une soirée : la carte ne montre
+          MODIFIER qu'à lui, et la RLS (`events_update_own`) le garantit. */}
+      <NightSheet
+        key={editingId ?? 'aucune'}
+        visible={editing !== null}
+        editing={editing}
+        creating={saving}
+        error={error}
+        onClose={() => setEditingId(null)}
+        onSave={handleSave}
       />
     </>
   );
