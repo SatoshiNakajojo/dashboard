@@ -22,8 +22,8 @@
         flex: 1;
       }
     </style>
-  <link rel="icon" href="/dashboard/club/favicon.ico"/><link rel="preload" href="/dashboard/club/_expo/static/css/web-22ba9265deb5b096356f6b0c12b0e631.css" as="style">
-<link rel="stylesheet" href="/dashboard/club/_expo/static/css/web-22ba9265deb5b096356f6b0c12b0e631.css">
+  <link rel="icon" href="/dashboard/club/favicon.ico"/><link rel="preload" href="/dashboard/club/_expo/static/css/web-0df19d86874ea85c0feab5cb8aed4742.css" as="style">
+<link rel="stylesheet" href="/dashboard/club/_expo/static/css/web-0df19d86874ea85c0feab5cb8aed4742.css">
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -70,29 +70,36 @@
         var root = document.documentElement;
         var probe = null;
         var fits = 0;
-        function layoutHeight() {
+        var toggles = 0;
+        function probeHeight() {
           if (!probe && document.body) {
             probe = document.createElement('div');
             probe.id = 'club-viewport-probe';
             probe.setAttribute('aria-hidden', 'true');
             probe.style.cssText = 'position:fixed;top:0;left:0;width:1px;height:100%;visibility:hidden;pointer-events:none';
             document.body.appendChild(probe);
-            if (window.ResizeObserver) new ResizeObserver(function () { fit(); }).observe(probe);
           }
-          return probe ? probe.getBoundingClientRect().height : innerHeight;
+          return probe ? Math.round(probe.getBoundingClientRect().height) : null;
         }
         function fit() {
-          var layout = layoutHeight();
-          var gap = bottomShim(navigator.standalone, screen.width, screen.height, innerWidth, layout);
+          var gap = bottomShim(navigator.standalone, screen.width, screen.height, innerWidth, innerHeight);
+          var wanted = gap + 'px';
+          var changed = root.style.getPropertyValue('--club-shim') !== wanted;
+          var frozen = changed && toggles >= 4;
+          if (changed && !frozen) {
+            toggles += 1;
+            root.style.setProperty('--club-shim', wanted);
+            if (gap > 0) root.classList.add('club-shim');
+            else root.classList.remove('club-shim');
+          }
           fits += 1;
           window.__clubViewport = {
             standalone: navigator.standalone === true,
-            screen: screen.height, inner: innerHeight, layout: Math.round(layout), gap: gap, fits: fits
+            screen: screen.height, inner: innerHeight, layout: probeHeight(),
+            gap: parseInt(root.style.getPropertyValue('--club-shim'), 10) || 0,
+            fits: fits, toggles: toggles, frozen: frozen
           };
-          root.style.setProperty('--club-shim', gap + 'px');
-          if (gap > 0) root.classList.add('club-shim');
-          else root.classList.remove('club-shim');
-          if (gap > 0 && window.scrollY !== 0) window.scrollTo(0, 0);
+          if (root.classList.contains('club-shim') && window.scrollY !== 0) window.scrollTo(0, 0);
         }
         fit();
         document.addEventListener('DOMContentLoaded', fit);
@@ -103,8 +110,11 @@
         addEventListener('resize', fit);
         addEventListener('pageshow', fit);
         addEventListener('orientationchange', function () { setTimeout(fit, 300); });
-        document.addEventListener('visibilitychange', fit);
-        if (window.visualViewport) window.visualViewport.addEventListener('resize', fit);
+        document.addEventListener('visibilitychange', function () {
+          // Retour au premier plan : iOS a pu tout recalculer, on réarme.
+          if (document.visibilityState === 'visible') toggles = 0;
+          fit();
+        });
         addEventListener('scroll', function () {
           if (root.classList.contains('club-shim') && window.scrollY !== 0) window.scrollTo(0, 0);
         }, { passive: true });
@@ -127,7 +137,7 @@
     </noscript>
     <!-- The root element for your Expo app. -->
     <div id="root"></div>
-  <script src="/dashboard/club/_expo/static/js/web/entry-0446207a1beaa437328093bd1186da78.js" defer></script>
+  <script src="/dashboard/club/_expo/static/js/web/entry-caea18688167b0699ab8949bb61e119c.js" defer></script>
 
     <div id="boot" aria-label="Chargement" role="progressbar">
       <img id="boot-logo" src="icon-512.png" alt="" width="240" height="240" />
