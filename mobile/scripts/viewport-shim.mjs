@@ -17,6 +17,21 @@
  * l'écart mesuré entre l'écran et la zone de mise en page. Sur tout ce qui ne
  * présente pas le défaut — Android, ordinateur, onglet Safari, iPad en fenêtre
  * — l'écart mesuré est nul et rien ne change.
+ *
+ * Deuxième leçon, sur le terrain : **au lancement**, la première mesure ne
+ * suffit pas. L'app s'ouvrait avec la bande, et la perdait après un passage en
+ * arrière-plan — seul moment où l'on remesurait. iOS n'a pas fini de fixer ses
+ * dimensions quand le `<head>` se lit, et `innerHeight` peut ne pas refléter la
+ * zone réellement donnée à la page. D'où :
+ *
+ *   • la mesure porte sur la hauteur **que la page reçoit vraiment** — une
+ *     sonde `position: fixed; height: 100%`, la même règle que la chaîne
+ *     `html` → `body` → `#root` — et non plus sur `innerHeight` ;
+ *   • on remesure à la fin du chargement, puis à intervalles, et chaque fois
+ *     que la sonde change de taille (`ResizeObserver`), avec ou sans
+ *     événement `resize` ;
+ *   • chaque mesure est notée dans `window.__clubViewport`, que le panneau
+ *     « À propos » de l'app installée affiche : on ne corrige plus à l'aveugle.
  */
 
 /** Au-delà, ce n'est plus une barre d'état : un clavier, une fenêtre réduite. */
@@ -25,6 +40,8 @@ export const MAX_SHIM = 100;
 /**
  * L'écart à combler sous la zone de mise en page, en points CSS.
  *
+ * `layoutHeight` est la hauteur que la page reçoit pour sa mise en page.
+ *
  * Nul hors de l'app installée sur iOS (`navigator.standalone` n'existe que
  * là), hors plein écran en largeur (iPad en Split View ou Stage Manager), et
  * pour toute mesure incohérente : dans le doute, on ne touche à rien.
@@ -32,15 +49,15 @@ export const MAX_SHIM = 100;
  * Sans dépendance ni référence extérieure : son texte est recopié tel quel
  * dans la page, et tourne avant le bundle.
  */
-export function bottomShim(standalone, screenWidth, screenHeight, innerWidth, innerHeight) {
+export function bottomShim(standalone, screenWidth, screenHeight, innerWidth, layoutHeight) {
   if (standalone !== true) return 0;
-  const sizes = [screenWidth, screenHeight, innerWidth, innerHeight];
+  const sizes = [screenWidth, screenHeight, innerWidth, layoutHeight];
   for (let i = 0; i < sizes.length; i++) {
     if (typeof sizes[i] !== 'number' || !isFinite(sizes[i]) || sizes[i] <= 0) return 0;
   }
   // iOS donne les dimensions de l'écran en portrait, quelle que soit
   // l'orientation : on les remet dans le sens de la fenêtre.
-  const landscape = innerWidth > innerHeight;
+  const landscape = innerWidth > layoutHeight;
   const fullWidth = landscape
     ? Math.max(screenWidth, screenHeight)
     : Math.min(screenWidth, screenHeight);
@@ -48,7 +65,7 @@ export function bottomShim(standalone, screenWidth, screenHeight, innerWidth, in
     ? Math.min(screenWidth, screenHeight)
     : Math.max(screenWidth, screenHeight);
   if (Math.abs(fullWidth - innerWidth) > 1) return 0;
-  const gap = Math.round(fullHeight - innerHeight);
+  const gap = Math.round(fullHeight - layoutHeight);
   return gap > 0 && gap <= 100 ? gap : 0;
 }
 
@@ -72,9 +89,15 @@ export const SHIM_STYLE = `
         bottom: calc(-1 * var(--club-shim, 0px)) !important;
       }`;
 
+/** Remesures après le chargement : iOS peut fixer ses dimensions tard. */
+export const SETTLE_DELAYS_MS = [150, 600, 1500, 3000];
+
 /**
- * Le script : mesure, pose la variable, et remesure quand la fenêtre change
- * (rotation, retour au premier plan, clavier).
+ * Le script : mesure, pose la variable, et remesure — fin de chargement,
+ * délais, sonde redimensionnée, rotation, retour au premier plan, clavier.
+ *
+ * La sonde n'existe qu'une fois `<body>` ouvert ; avant, faute de mieux, on
+ * part de `innerHeight`, et la sonde prend le relais dès `DOMContentLoaded`.
  *
  * Le document étant plus haut que la zone visible d'après iOS, la page
  * pourrait défiler de la hauteur de la bande : on la ramène en haut.
@@ -83,18 +106,43 @@ export const SHIM_SCRIPT = `
       (function () {
         var bottomShim = ${bottomShim.toString()};
         var root = document.documentElement;
+        var probe = null;
+        var fits = 0;
+        function layoutHeight() {
+          if (!probe && document.body) {
+            probe = document.createElement('div');
+            probe.id = 'club-viewport-probe';
+            probe.setAttribute('aria-hidden', 'true');
+            probe.style.cssText = 'position:fixed;top:0;left:0;width:1px;height:100%;visibility:hidden;pointer-events:none';
+            document.body.appendChild(probe);
+            if (window.ResizeObserver) new ResizeObserver(function () { fit(); }).observe(probe);
+          }
+          return probe ? probe.getBoundingClientRect().height : innerHeight;
+        }
         function fit() {
-          var gap = bottomShim(navigator.standalone, screen.width, screen.height, innerWidth, innerHeight);
+          var layout = layoutHeight();
+          var gap = bottomShim(navigator.standalone, screen.width, screen.height, innerWidth, layout);
+          fits += 1;
+          window.__clubViewport = {
+            standalone: navigator.standalone === true,
+            screen: screen.height, inner: innerHeight, layout: Math.round(layout), gap: gap, fits: fits
+          };
           root.style.setProperty('--club-shim', gap + 'px');
           if (gap > 0) root.classList.add('club-shim');
           else root.classList.remove('club-shim');
           if (gap > 0 && window.scrollY !== 0) window.scrollTo(0, 0);
         }
         fit();
+        document.addEventListener('DOMContentLoaded', fit);
+        addEventListener('load', function () {
+          fit();
+          ${JSON.stringify(SETTLE_DELAYS_MS)}.forEach(function (ms) { setTimeout(fit, ms); });
+        });
         addEventListener('resize', fit);
         addEventListener('pageshow', fit);
         addEventListener('orientationchange', function () { setTimeout(fit, 300); });
         document.addEventListener('visibilitychange', fit);
+        if (window.visualViewport) window.visualViewport.addEventListener('resize', fit);
         addEventListener('scroll', function () {
           if (root.classList.contains('club-shim') && window.scrollY !== 0) window.scrollTo(0, 0);
         }, { passive: true });

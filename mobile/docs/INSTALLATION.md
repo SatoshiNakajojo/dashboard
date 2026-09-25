@@ -319,7 +319,59 @@ qu'aucune clé secrète n'est partie en ligne.
 
 ---
 
-## 2. Publier (à refaire à chaque nouvelle version)
+## 2. Publier
+
+### 2.0 Déploiement automatique — ce qu'on fait désormais
+
+Depuis `.github/workflows/deploy-club.yml`, **chaque push sur `main` qui touche
+l'app la publie tout seul** : GitHub vérifie la configuration, installe,
+contrôle (types, lint, tests), construit, publie dans `club/`, vérifie le
+bundle, puis pousse `club/`. Deux à cinq minutes plus tard, les membres ont la
+nouvelle version à leur prochaine ouverture. Plus de `build:web`, de `deploy`
+ni de `git add club` à taper.
+
+**Une seule fois**, donnez à GitHub les variables publiques de la build — il
+n'a pas votre `mobile/.env` :
+
+```bash
+cd ~/dashboard/mobile
+npm run ci:secrets
+```
+
+Avec la CLI GitHub (`gh`, connectée), le script pose les secrets et lance le
+premier déploiement. Sans elle, il ouvre la page **Settings → Secrets and
+variables → Actions → New repository secret** et, pour chaque secret, met la
+valeur dans le presse-papiers : on colle le nom affiché dans *Name*, la valeur
+dans *Secret*, *Add secret*, puis Entrée dans le terminal pour la suivante.
+Aucune valeur n'est affichée. Ensuite : onglet **Actions** → *Déployer le
+club* → **Run workflow** pour la première publication.
+
+| Secret | Obligatoire |
+|---|---|
+| `EXPO_PUBLIC_SUPABASE_URL` | oui |
+| `EXPO_PUBLIC_SUPABASE_ANON_KEY` | oui |
+| `EXPO_PUBLIC_VAPID_PUBLIC_KEY` | oui |
+| `EXPO_PUBLIC_COINGECKO_API_KEY` | non |
+
+Ce sont les variables **publiques** : elles partent de toute façon dans l'app
+publiée. Les clés privées (`SUPABASE_SERVICE_ROLE_KEY`, `VAPID_PRIVATE_KEY`)
+n'entrent jamais dans GitHub.
+
+Les garde-fous (`scripts/ci.mjs`) : le robot **refuse de publier** si une
+variable obligatoire manque — l'app partirait sur ses données de
+démonstration —, si une clé secrète s'est glissée dans une variable publique,
+ou si le bundle construit ne contient pas l'adresse Supabase ou contient un
+secret. Un test qui échoue bloque aussi la publication : le site garde alors sa
+version précédente.
+
+Ce qui reste à la main : **les migrations** (`npx supabase db push`) et les
+**fonctions Edge** — elles touchent la base de production, on les lance en
+connaissance de cause.
+
+> **Ne publiez plus à la main en parallèle.** Un `npm run deploy` suivi d'un
+> push de `club/` pendant que le robot travaille ferait se croiser deux
+> publications. La procédure manuelle ci-dessous reste valable en secours, si
+> GitHub Actions est indisponible.
 
 ### 2.1 Les variables d'environnement
 
@@ -339,7 +391,7 @@ La clé `anon` est **faite pour être publique** : c'est la RLS qui protège les
 données, pas le secret de cette clé. Ne mettez jamais la clé `service_role`
 ici — elle contourne la RLS.
 
-### 2.2 Construire et déployer
+### 2.2 Construire et déployer à la main (secours)
 
 Depuis n'importe quel dossier du dépôt :
 
@@ -426,9 +478,12 @@ tout premier accès, l'app demande un prénom et crée le profil.
 
 ## Mettre à jour
 
-Rejouez `npm run build:web && npm run deploy`, commitez, poussez. Les membres
-reçoivent la nouvelle version à la prochaine ouverture : le service worker sert
-la coquille en réseau d'abord, et ne retombe sur son cache que hors-ligne.
+Rien à faire : chaque push sur `main` qui touche l'app la publie (§2.0). Le
+suivi est dans l'onglet **Actions** du dépôt — une coche verte, c'est en ligne ;
+une croix rouge, le site a gardé sa version précédente et le journal dit
+pourquoi. Les membres reçoivent la nouvelle version à la prochaine ouverture :
+le service worker sert la coquille en réseau d'abord, et ne retombe sur son
+cache que hors-ligne.
 
 Il n'active jamais une version de force pendant qu'on s'en sert — c'est
 volontaire, et c'est la leçon inscrite dans le service worker du dashboard JCGI

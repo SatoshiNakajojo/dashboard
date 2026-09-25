@@ -11,7 +11,14 @@ import { describe, it } from 'node:test';
 
 import { decorate } from '../decorate-web.mjs';
 import { missingTags } from '../pwa-head.mjs';
-import { MAX_SHIM, SHIM_SCRIPT, VIEWPORT_SHIM, bottomShim } from '../viewport-shim.mjs';
+import {
+  MAX_SHIM,
+  SETTLE_DELAYS_MS,
+  SHIM_SCRIPT,
+  SHIM_STYLE,
+  VIEWPORT_SHIM,
+  bottomShim,
+} from '../viewport-shim.mjs';
 
 describe('écart à combler', () => {
   it('rend la barre d’état d’un iPhone 12 à 14', () => {
@@ -81,6 +88,25 @@ describe('injection', () => {
       html.indexOf('function bottomShim') < html.indexOf('</head>'),
       'la page doit être à la bonne hauteur avant le premier rendu',
     );
+  });
+
+  it('remesure après le lancement, pas seulement au retour de l’arrière-plan', () => {
+    // Sur le terrain : l'app s'ouvrait avec la bande, et ne la perdait qu'au
+    // retour de l'arrière-plan — seul moment où l'on remesurait.
+    assert.ok(SHIM_SCRIPT.includes("addEventListener('load'"));
+    assert.ok(SHIM_SCRIPT.includes('DOMContentLoaded'));
+    assert.ok(SHIM_SCRIPT.includes('ResizeObserver'), 'la sonde doit être suivie');
+    for (const ms of SETTLE_DELAYS_MS) assert.ok(SHIM_SCRIPT.includes(String(ms)));
+    // La hauteur mesurée est celle que reçoit la page, pas `innerHeight`.
+    assert.ok(SHIM_SCRIPT.includes('club-viewport-probe'));
+    assert.ok(SHIM_SCRIPT.includes('height:100%'));
+    assert.ok(SHIM_SCRIPT.includes('__clubViewport'), 'les mesures restent lisibles');
+  });
+
+  it('ne prolonge pas la sonde comme une feuille', () => {
+    // Elle porte un id : le sélecteur des feuilles l'exclut.
+    assert.ok(SHIM_SCRIPT.includes("probe.id = 'club-viewport-probe'"));
+    assert.ok(SHIM_STYLE.includes('body > div:not([id])'));
   });
 
   it('fait échouer le déploiement d’un document qui ne l’a pas', () => {

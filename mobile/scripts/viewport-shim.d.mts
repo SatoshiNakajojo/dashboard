@@ -4,8 +4,9 @@ export declare function bottomShim(
   screenWidth: number,
   screenHeight: number,
   innerWidth: number,
-  innerHeight: number,
+  layoutHeight: number,
 ): number;
 export declare const SHIM_STYLE: string;
 export declare const SHIM_SCRIPT: string;
+export declare const SETTLE_DELAYS_MS: readonly number[];
 export declare const VIEWPORT_SHIM: string;

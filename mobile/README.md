@@ -24,7 +24,7 @@ accent rare, sur fond encre chaude. Référence : `Bitcoin Club v2.dc.html`.
 ```bash
 npm install
 npm start        # développement
-npm run build:web && npm run deploy   # publier la PWA
+npm run build:web && npm run deploy   # publier la PWA à la main (secours : GitHub Actions le fait à chaque push)
 npm run check:supabase                # dit ce qui manque au backend
 ```
 
@@ -105,7 +105,7 @@ qu'on n'a pas déposé le nouveau tracé.
 
 ## Ce qui a été vérifié
 
-- `npm run typecheck`, `npm run lint`, `npm test` — propres (506 tests).
+- `npm run typecheck`, `npm run lint`, `npm test` — propres (526 tests).
 - **Règles pures** : bornes et inversibilité du repère, monotonie du tracé,
   écart à la courbe réelle, espaces insécables du formatage français, perf vs ₿
   comme ratio et non soustraction, seuils et tri des deux classements.
@@ -716,6 +716,25 @@ clôture (`closed_at`), refuse une sortie avant l'entrée ou dans le futur, fige
 `current_price` au prix de sortie — `refresh-prices` n'y touche plus, et la
 colonne générée `performance_percentage` donne la perf réalisée sans changer de
 définition — et un call se publie toujours ouvert.
+
+---
+
+## Déploiement automatique
+
+Chaque push sur `main` qui touche `mobile/` publie l'app
+(`.github/workflows/deploy-club.yml`) : configuration vérifiée, `npm ci`,
+types, lint, tests, build, publication dans `club/`, bundle vérifié, push de
+`club/`. Rien ne part si une étape échoue — le site garde sa version.
+
+Les garde-fous vivent dans `scripts/ci.mjs`, parce qu'un robot publie sans
+relecture : pas de build sans Supabase (ce serait l'app de démonstration,
+qui ne plante pas, elle ment), pas de clé secrète dans une variable publique ni
+dans le bundle. Les journaux nomment les variables, jamais leurs valeurs.
+
+Les quatre variables publiques de la build sont des secrets du dépôt, posés
+une fois par `npm run ci:secrets` (via `gh` s'il est là, sinon par la page web
+et le presse-papiers, sans rien afficher). Les migrations et les fonctions
+Edge restent à la main : elles touchent la production.
 
 ---
 

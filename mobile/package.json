@@ -56,7 +56,8 @@
     "deploy": "node scripts/deploy-pages.mjs",
     "check:supabase": "node scripts/check-supabase.mjs",
     "members:add": "node scripts/add-members.mjs",
-    "push:setup": "node scripts/push-setup.mjs"
+    "push:setup": "node scripts/push-setup.mjs",
+    "ci:secrets": "node scripts/ci-secrets.mjs"
   },
   "private": true
 }

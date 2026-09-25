@@ -3,6 +3,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ClubChannels } from '@/components/ClubChannels';
 import { Micro } from '@/components/ui/Micro';
+import { describeViewport, viewportInfo } from '@/lib/viewportInfo';
 import { brand } from '@/theme/brand';
 import { c, f } from '@/theme/tokens';
 
@@ -99,6 +100,7 @@ function About() {
         role="design by"
         lines={['J.C. GLOBAL INVESTMENTS', 'SOFTWARE DEPARTMENT, NEW CALEDONIA']}
       />
+      <ViewportLine />
     </View>
   );
 }
@@ -127,5 +129,20 @@ function Credit({ role, lines }: { role: string; lines: string[] }) {
         ))}
       </View>
     </View>
+  );
+}
+
+/**
+ * Les mesures d'écran de l'app installée, en tout petit : une capture de ce
+ * panneau suffit à diagnostiquer la bande basse d'un iPhone
+ * (`src/lib/viewportInfo.ts`). Rien hors de l'app installée.
+ */
+function ViewportLine() {
+  const info = viewportInfo();
+  if (!info?.standalone) return null;
+  return (
+    <Micro tracking={1.2} size={7} style={{ color: c.sepiaFaint, textAlign: 'center' }}>
+      {describeViewport(info)}
+    </Micro>
   );
 }

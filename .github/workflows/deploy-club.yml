@@ -1,0 +1,115 @@
+# Déploiement automatique de l'app du club.
+#
+# À chaque push sur main qui touche l'app (mobile/), GitHub la contrôle, la
+# construit et la publie dans club/, que GitHub Pages sert à
+# https://satoshinakajojo.github.io/dashboard/club/. Plus rien à taper.
+#
+# Les quatre variables publiques de la build vivent dans les secrets du dépôt
+# (Settings → Secrets and variables → Actions) : `npm run ci:secrets`, depuis
+# mobile/, les pose une fois pour toutes. Les clés privées (service_role,
+# VAPID privée) n'entrent jamais ici.
+#
+# Voir « Déploiement automatique » dans mobile/docs/INSTALLATION.md.
+
+name: Déployer le club
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'mobile/**'
+      - '.github/workflows/deploy-club.yml'
+  # Le bouton « Run workflow » de l'onglet Actions : pour relancer à la main.
+  workflow_dispatch:
+
+# Une publication à la fois, dans l'ordre : la dernière poussée gagne.
+concurrency:
+  group: deploy-club
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pages: write
+
+jobs:
+  deploy:
+    name: Contrôler, construire, publier
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: mobile
+    env:
+      EXPO_PUBLIC_SUPABASE_URL: ${{ secrets.EXPO_PUBLIC_SUPABASE_URL }}
+      EXPO_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.EXPO_PUBLIC_SUPABASE_ANON_KEY }}
+      EXPO_PUBLIC_VAPID_PUBLIC_KEY: ${{ secrets.EXPO_PUBLIC_VAPID_PUBLIC_KEY }}
+      EXPO_PUBLIC_COINGECKO_API_KEY: ${{ secrets.EXPO_PUBLIC_COINGECKO_API_KEY }}
+      EXPO_NO_TELEMETRY: 1
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Assez d'histoire pour rejouer la publication sur un main qui a
+          # bougé entre-temps.
+          fetch-depth: 20
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      # Sans Supabase, la build partirait sur l'app de démonstration :
+      # on s'arrête avant, en nommant ce qui manque (jamais sa valeur).
+      - name: Vérifier la configuration
+        run: node scripts/ci.mjs env
+
+      - name: Installer
+        run: npm ci
+
+      - name: Contrôler (types, lint, tests)
+        run: |
+          npx tsc --noEmit
+          npm run lint
+          npm test
+
+      - name: Construire
+        run: npm run build:web
+
+      - name: Publier dans club/
+        run: npm run deploy
+
+      # Une vraie app du club, et aucun secret dans le JavaScript public.
+      - name: Vérifier le bundle publié
+        run: node scripts/ci.mjs bundle
+
+      - name: Pousser club/
+        working-directory: .
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add club
+          if git diff --cached --quiet; then
+            echo 'club/ est déjà à jour : rien à publier.'
+            exit 0
+          fi
+          git commit -m "Club : nouvelle version (${GITHUB_SHA::7})"
+          for attempt in 1 2 3; do
+            if git pull --rebase origin main && git push origin HEAD:main; then
+              exit 0
+            fi
+            sleep $((attempt * 5))
+          done
+          echo '::error::Impossible de pousser club/ — main a-t-il été modifié à la main en même temps ?'
+          exit 1
+
+      # Pages reconstruit le site à chaque push sur main ; on le lui demande
+      # aussi explicitement, sans échouer si l'API ne s'y prête pas.
+      - name: Demander la mise en ligne
+        working-directory: .
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api -X POST "repos/${GITHUB_REPOSITORY}/pages/builds" --silent
+          echo 'GitHub Pages : mise en ligne demandée.'
