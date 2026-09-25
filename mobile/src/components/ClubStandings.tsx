@@ -55,11 +55,9 @@ export function ClubStandings({ rows, loading, meId, onOpenTitle }: ClubStanding
             </View>
 
             <View style={{ paddingTop: 2 }}>
-              <MemberAvatar
-                member={row.member}
-                size={30}
-                ringColor={mine ? c.gold : undefined}
-              />
+              {/* Pas de liseré pour sa propre ligne : « · vous » la repère déjà,
+                  et tous les avatars du classement restent identiques. */}
+              <MemberAvatar member={row.member} size={30} />
             </View>
 
             <View className="flex-1" style={{ gap: 3 }}>
