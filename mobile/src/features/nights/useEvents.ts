@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import { onMockAdoption } from '@/features/nights/proposals';
 import { getPotluckSource } from '@/features/potluck/source';
 import { pushNotice, type AttendanceNotice } from '@/lib/attendanceNotice';
 import { normalizeThemes } from '@/lib/nightThemes';
@@ -48,6 +49,8 @@ export interface EventsState {
   update: (eventId: string, edit: NightEdit) => Promise<boolean>;
   /** Modification en cours. */
   saving: boolean;
+  /** Supprime une soirée — réservé à celui qui l'a proposée. */
+  remove: (eventId: string) => Promise<boolean>;
   /** Les « X vient à Y » reçus des autres membres, la plus récente en tête. */
   notices: AttendanceNotice[];
   /** Referme une annonce — au doigt, ou à l'expiration de son minuteur. */
@@ -467,6 +470,62 @@ export function useEvents(currentUserId: string | null): EventsState {
     [currentUserId, events, saving],
   );
 
+  /**
+   * Supprime une de mes soirées. Présences, liste et contre-propositions
+   * partent avec elle (`on delete cascade`) ; le temps réel l'ôte chez les
+   * autres. La RLS (`events_delete_own`) la réserve à son créateur.
+   */
+  const remove = useCallback(
+    async (eventId: string): Promise<boolean> => {
+      const event = events.find((candidate) => candidate.id === eventId);
+      if (!currentUserId || !event || saving) return false;
+      if (event.createdBy !== currentUserId) {
+        setError('Seul le membre qui a proposé cette soirée peut la supprimer.');
+        return false;
+      }
+      setSaving(true);
+      setError(null);
+      try {
+        const client = supabase;
+        if (client) {
+          const { data, error: cause } = await client
+            .from('events')
+            .delete()
+            .eq('id', eventId)
+            .select('id');
+          if (cause) {
+            setError(describeError(cause));
+            return false;
+          }
+          if (!data || data.length === 0) {
+            setError('Seul le membre qui a proposé cette soirée peut la supprimer.');
+            return false;
+          }
+        }
+        setEvents((current) => current.filter((candidate) => candidate.id !== eventId));
+        return true;
+      } finally {
+        setSaving(false);
+      }
+    },
+    [currentUserId, events, saving],
+  );
+
+  // Démo : une contre-proposition adoptée déplace la soirée, comme la base
+  // le fait en production (et que le temps réel rapporte).
+  useEffect(() => {
+    if (supabase) return;
+    return onMockAdoption((eventId, location) =>
+      setEvents((current) =>
+        current.map((event) =>
+          event.id === eventId
+            ? { ...event, location, editedAt: new Date().toISOString() }
+            : event,
+        ),
+      ),
+    );
+  }, []);
+
   const dismissNotice = useCallback((id: string) => {
     setNotices((current) => current.filter((notice) => notice.id !== id));
   }, []);
@@ -481,6 +540,7 @@ export function useEvents(currentUserId: string | null): EventsState {
       creating,
       update,
       saving,
+      remove,
       notices,
       dismissNotice,
     }),
@@ -493,6 +553,7 @@ export function useEvents(currentUserId: string | null): EventsState {
       creating,
       update,
       saving,
+      remove,
       notices,
       dismissNotice,
     ],

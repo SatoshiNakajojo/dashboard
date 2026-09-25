@@ -42,6 +42,7 @@ export const COLUMNS = [
     column: 'entry_confirmed_at',
     migration: '20261002090000_live_entry_price.sql',
   },
+  { table: 'event_proposals', column: 'status', migration: '20261003090000_event_proposals.sql' },
 ];
 
 const ok = (label, detail) => ({ level: 'ok', label, detail });

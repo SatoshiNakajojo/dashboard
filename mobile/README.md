@@ -105,7 +105,7 @@ qu'on n'a pas déposé le nouveau tracé.
 
 ## Ce qui a été vérifié
 
-- `npm run typecheck`, `npm run lint`, `npm test` — propres (565 tests).
+- `npm run typecheck`, `npm run lint`, `npm test` — propres (569 tests).
 - **Règles pures** : bornes et inversibilité du repère, monotonie du tracé,
   écart à la courbe réelle, espaces insécables du formatage français, perf vs ₿
   comme ratio et non soustraction, seuils et tri des deux classements.
@@ -222,6 +222,41 @@ C'est la base qui tient les règles (migration `20260930090000_edit_nights`) :
 
 Comme la création, la modification n'est pas optimiste. Le temps réel pousse la
 nouvelle version aux six autres membres.
+
+---
+
+### Supprimer une soirée, ou proposer un autre lieu (v1.01)
+
+**Supprimer.** Dans la feuille « Modifier la soirée », son créateur a
+**SUPPRIMER LA SOIRÉE**, en deux appuis. Présences, liste et
+contre-propositions partent avec elle, et le temps réel l'ôte chez les autres.
+La RLS (`events_delete_own`) la réserve à son créateur.
+
+**Proposer un autre lieu.** « Je ne peux pas venir chez John, je garde mes
+enfants : on peut le faire chez moi ? » Sur la carte dépliée, la section
+**Autre lieu ?** permet à un autre membre de proposer un lieu, avec sa raison.
+Le créateur, lui, modifie directement sa soirée. Le club vote : **POUR CE
+LIEU** ou **GARDER L'ACTUEL**. Retoucher son choix le retire.
+
+La règle vit dans la base (migration `20261003090000_event_proposals`) :
+
+- l'auteur vote pour d'office. On a une proposition ouverte à la fois par
+  soirée, avant son début, et jamais pour le lieu actuel ;
+- dès que les **pour** atteignent la **majorité absolue du club** (4 sur 7,
+  `club_majority()`), la base réécrit le lieu. La carte affiche « modifiée »
+  et « lieu changé par vote », et les autres propositions ouvertes tombent ;
+- dès que les **contre** l'atteignent, la proposition est rejetée.
+
+Pourquoi la majorité absolue plutôt que « plus de pour que de contre » à
+l'instant ? Sinon, la première voix pour, à 2 contre 1, déplacerait la soirée
+pendant que le reste du club dort. À la majorité, le lieu ne change que si le
+club le veut, et personne n'attend d'échéance. La carte dit ce qui manque :
+`3 POUR · 1 CONTRE · ENCORE 1 VOIX POUR CHANGER DE LIEU`.
+
+Vérifié en base (5 blocs : une proposition par membre, jamais le créateur,
+adoption à 4 voix, rejet à 4 contre, retrait, suppression en cascade) et dans
+Chromium. Dans la démo, Alex propose chez lui pour les Grillades, avec 3 pour
+et 1 contre : votre voix déplace la soirée.
 
 ---
 

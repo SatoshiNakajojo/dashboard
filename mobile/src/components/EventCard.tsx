@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 
+import { EventProposals } from '@/components/EventProposals';
 import { PotluckList } from '@/components/PotluckList';
 import { MemberAvatar } from '@/components/MemberAvatar';
 import { Micro } from '@/components/ui/Micro';
@@ -201,6 +202,13 @@ export function EventCard({
               </Pressable>
             ) : null}
           </View>
+
+          <EventProposals
+            event={event}
+            currentUserId={currentUserId}
+            membersById={membersById}
+            clubSize={membersById.size || CLUB_SIZE}
+          />
 
           <PotluckList
             eventId={event.id}

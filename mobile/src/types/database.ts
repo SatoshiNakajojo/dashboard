@@ -51,6 +51,26 @@ export type PotluckItemRow = {
   updated_at: string;
 };
 
+/** Contre-proposition de lieu (migration `20261003090000_event_proposals`). */
+export type EventProposalRow = {
+  id: string;
+  event_id: string;
+  user_id: string;
+  location: string;
+  comment: string;
+  status: 'open' | 'adopted' | 'rejected';
+  created_at: string;
+  decided_at: string | null;
+};
+
+export type EventProposalVoteRow = {
+  proposal_id: string;
+  user_id: string;
+  event_id: string;
+  choice: 'for' | 'against';
+  created_at: string;
+};
+
 export type TickerRow = {
   id: string;
   user_id: string;
@@ -160,6 +180,8 @@ export type Database = {
       events: Table<EventRow>;
       event_attendees: Table<EventAttendeeRow>;
       potluck_items: Table<PotluckItemRow>;
+      event_proposals: Table<EventProposalRow>;
+      event_proposal_votes: Table<EventProposalVoteRow>;
       tickers: Table<TickerRow, Omit<Partial<TickerRow>, 'performance_percentage'>>;
       ticker_votes: Table<TickerVoteRow>;
       ticker_vote_withdrawals: Table<TickerVoteWithdrawalRow>;
@@ -170,6 +192,7 @@ export type Database = {
     Views: Record<never, never>;
     Functions: {
       is_member: { Args: Record<string, never>; Returns: boolean };
+      club_majority: { Args: Record<string, never>; Returns: number };
       is_valid_path: { Args: { path: unknown }; Returns: boolean };
       is_valid_price_path: { Args: { path: unknown }; Returns: boolean };
       taken_profile_colors: { Args: Record<string, never>; Returns: string[] };

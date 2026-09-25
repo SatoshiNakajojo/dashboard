@@ -30,6 +30,29 @@ export interface ClubEvent {
   editedAt: string | null;
 }
 
+/** Une contre-proposition de lieu pour une soirée, soumise au vote du club. */
+export interface EventProposal {
+  id: Uuid;
+  eventId: Uuid;
+  /** Qui la propose — il vote pour, d'office. */
+  userId: Uuid;
+  location: string;
+  /** Pourquoi : « je garde mes enfants, on peut le faire chez moi ». */
+  comment: string;
+  /** Tranchée par la base, à la majorité absolue du club. */
+  status: 'open' | 'adopted' | 'rejected';
+  createdAt: string;
+  decidedAt: string | null;
+}
+
+export type ProposalChoice = 'for' | 'against';
+
+export interface ProposalVote {
+  proposalId: Uuid;
+  userId: Uuid;
+  choice: ProposalChoice;
+}
+
 /** `potluck_items` — une ligne « qui amène quoi ». */
 export interface PotluckItem {
   id: Uuid;

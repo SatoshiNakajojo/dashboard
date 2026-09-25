@@ -989,6 +989,181 @@ begin
   raise notice 'ok · profiles : la fonction reste fermée aux visiteurs';
 end $$;
 
+-- --- Soirées v1.01 : contre-propositions de lieu, votées -----------------------
+
+-- Le bloc précédent a figé `auth.uid()` sur un visiteur : on rend la main à
+-- `test.uid`, comme en tête de fichier.
+create or replace function auth.uid() returns uuid language sql stable as $$
+  select coalesce(nullif(current_setting('test.uid', true), ''),
+                  'aaaaaaaa-0000-4000-8000-000000000001')::uuid
+$$;
+
+do $$
+declare
+  john   constant uuid := 'aaaaaaaa-0000-4000-8000-000000000001';
+  alex   constant uuid := 'aaaaaaaa-0000-4000-8000-000000000002';
+  lea    constant uuid := 'aaaaaaaa-0000-4000-8000-000000000011';
+  marco  constant uuid := 'aaaaaaaa-0000-4000-8000-000000000012';
+  sofia  constant uuid := 'aaaaaaaa-0000-4000-8000-000000000013';
+  rayan  constant uuid := 'aaaaaaaa-0000-4000-8000-000000000014';
+  toi    constant uuid := 'aaaaaaaa-0000-4000-8000-000000000015';
+  ev     uuid;
+  ev2    uuid;
+  prop   uuid;
+  autre  uuid;
+  p      public.event_proposals%rowtype;
+  e      public.events%rowtype;
+  failed boolean;
+  n      integer;
+begin
+  -- Le club au complet : sept membres, majorité à quatre.
+  insert into auth.users (id) values (lea), (marco), (sofia), (rayan), (toi) on conflict do nothing;
+  insert into public.profiles (id, display_name, initials, color) values
+    (lea, 'Léa', 'LE', '#C9A227'), (marco, 'Marco', 'MC', '#8E7CC3'),
+    (sofia, 'Sofia', 'SF', '#C0504D'), (rayan, 'Rayan', 'RY', '#4F81BD'),
+    (toi, 'Toi', 'TU', '#EEE8DA');
+  assert public.club_majority() = 4, 'majorité absolue à sept : quatre';
+
+  insert into public.events (starts_at, title, location, themes, created_by)
+  values (now() + interval '3 days', 'Grillades', 'Chez John', array['Crypto Night'], john)
+  returning id into ev;
+
+  set local role authenticated;
+
+  -- Alex ne peut pas venir chez John : il propose chez lui, et vote pour d'office.
+  perform set_config('test.uid', alex::text, true);
+  insert into public.event_proposals (event_id, location, comment)
+  values (ev, '  Chez Alex — Anse Vata ', 'Je garde mes enfants : on peut le faire chez moi ?')
+  returning * into p;
+  prop := p.id;
+  assert p.user_id = alex and p.status = 'open' and p.location = 'Chez Alex — Anse Vata', 'proposition ouverte';
+  select count(*) into n from public.event_proposal_votes where proposal_id = prop and choice = 'for';
+  assert n = 1, 'l’auteur vote pour d’office';
+
+  failed := false;
+  begin
+    insert into public.event_proposals (event_id, location, comment) values (ev, 'Ailleurs', 'Encore une idée.');
+  exception when unique_violation then failed := true;
+  end;
+  assert failed, 'une proposition ouverte par membre et par soirée';
+
+  failed := false;
+  begin
+    update public.event_proposal_votes set choice = 'against' where proposal_id = prop and user_id = alex;
+  exception when check_violation then failed := true;
+  end;
+  assert failed, 'on ne vote pas contre sa propre proposition';
+
+  -- Le créateur modifie sa soirée, il ne la contre-propose pas.
+  perform set_config('test.uid', john::text, true);
+  failed := false;
+  begin
+    insert into public.event_proposals (event_id, location, comment) values (ev, 'Chez moi', 'Pour voir.');
+  exception when check_violation then failed := true;
+  end;
+  assert failed, 'le créateur ne contre-propose pas sa propre soirée';
+
+  -- Proposer le lieu actuel n'a pas de sens.
+  perform set_config('test.uid', lea::text, true);
+  failed := false;
+  begin
+    insert into public.event_proposals (event_id, location, comment) values (ev, 'chez john', 'Pareil.');
+  exception when check_violation then failed := true;
+  end;
+  assert failed, 'proposer le lieu actuel est refusé';
+  raise notice 'ok · contre-propositions : une par membre, pas le créateur, pas le même lieu';
+
+  -- Marco propose autre chose en parallèle.
+  perform set_config('test.uid', marco::text, true);
+  insert into public.event_proposals (event_id, location, comment)
+  values (ev, 'Chez Marco', 'J’ai une terrasse.') returning id into autre;
+  insert into public.event_proposal_votes (proposal_id, choice) values (prop, 'against');
+
+  -- Pour : Alex, Léa, Sofia. Contre : Marco. Trois voix ne suffisent pas.
+  perform set_config('test.uid', lea::text, true);
+  insert into public.event_proposal_votes (proposal_id, choice) values (prop, 'for');
+  perform set_config('test.uid', sofia::text, true);
+  insert into public.event_proposal_votes (proposal_id, choice) values (prop, 'against');
+  update public.event_proposal_votes set choice = 'for' where proposal_id = prop and user_id = sofia;
+  select * into e from public.events where id = ev;
+  assert e.location = 'Chez John', 'trois pour sur sept : le lieu ne bouge pas';
+
+  -- La quatrième voix pour déplace la soirée.
+  perform set_config('test.uid', rayan::text, true);
+  insert into public.event_proposal_votes (proposal_id, choice) values (prop, 'for');
+  reset role;
+  select * into e from public.events where id = ev;
+  select * into p from public.event_proposals where id = prop;
+  assert e.location = 'Chez Alex — Anse Vata', format('la soirée change de lieu, obtenu %s', e.location);
+  assert e.edited_at = now(), 'la carte dira « modifiée »';
+  assert e.created_by = john, 'la soirée reste celle de John';
+  assert p.status = 'adopted' and p.decided_at = now(), 'proposition adoptée';
+  select * into p from public.event_proposals where id = autre;
+  assert p.status = 'rejected', 'les autres propositions ouvertes tombent';
+  raise notice 'ok · contre-propositions : à quatre voix sur sept, la soirée change de lieu';
+
+  set local role authenticated;
+  perform set_config('test.uid', toi::text, true);
+  failed := false;
+  begin
+    insert into public.event_proposal_votes (proposal_id, choice) values (prop, 'against');
+  exception when check_violation then failed := true;
+  end;
+  assert failed, 'le vote est clos une fois la proposition tranchée';
+
+  -- Une autre soirée : quatre contre, la proposition est rejetée.
+  reset role;
+  insert into public.events (starts_at, title, location, themes, created_by)
+  values (now() + interval '5 days', 'Trading', 'Loft Sofia', array['Stock Night'], sofia)
+  returning id into ev2;
+  set local role authenticated;
+  perform set_config('test.uid', alex::text, true);
+  insert into public.event_proposals (event_id, location, comment)
+  values (ev2, 'Plage', 'Il fera beau.') returning id into prop;
+  foreach autre in array array[john, lea, marco, sofia] loop
+    perform set_config('test.uid', autre::text, true);
+    insert into public.event_proposal_votes (proposal_id, choice) values (prop, 'against');
+  end loop;
+  reset role;
+  select * into p from public.event_proposals where id = prop;
+  select * into e from public.events where id = ev2;
+  assert p.status = 'rejected' and e.location = 'Loft Sofia', 'quatre contre : rejetée, le lieu reste';
+  raise notice 'ok · contre-propositions : à quatre contre, la proposition est rejetée';
+
+  -- Retirer sa proposition ouverte ; pas celle d'un autre.
+  set local role authenticated;
+  perform set_config('test.uid', lea::text, true);
+  insert into public.event_proposals (event_id, location, comment)
+  values (ev2, 'Chez Léa', 'Un jardin.') returning id into prop;
+  perform set_config('test.uid', alex::text, true);
+  delete from public.event_proposals where id = prop;
+  get diagnostics n = row_count;
+  assert n = 0, 'on ne retire pas la proposition d’un autre';
+  perform set_config('test.uid', lea::text, true);
+  delete from public.event_proposals where id = prop;
+  get diagnostics n = row_count;
+  assert n = 1, 'on retire sa proposition ouverte';
+  raise notice 'ok · contre-propositions : on retire la sienne, pas celle des autres';
+
+  -- Supprimer une soirée : seulement la sienne, et tout part avec elle.
+  perform set_config('test.uid', alex::text, true);
+  delete from public.events where id = ev;
+  get diagnostics n = row_count;
+  assert n = 0, 'on ne supprime pas la soirée d’un autre';
+  perform set_config('test.uid', john::text, true);
+  delete from public.events where id = ev;
+  get diagnostics n = row_count;
+  assert n = 1, 'le créateur supprime sa soirée';
+  reset role;
+  select count(*) into n from public.event_proposals where event_id = ev;
+  assert n = 0, 'ses propositions partent avec elle';
+  raise notice 'ok · soirées : le créateur supprime sa soirée, propositions comprises';
+
+  perform set_config('test.uid', '', true);
+  delete from public.events where id = ev2;
+  delete from public.profiles where id in (lea, marco, sofia, rayan, toi);
+end $$;
+
 rollback;
 
 \echo 'Tous les tests de schéma sont passés.'

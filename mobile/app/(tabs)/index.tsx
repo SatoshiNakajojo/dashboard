@@ -26,6 +26,7 @@ export default function NightsScreen() {
     creating,
     update,
     saving,
+    remove,
     notices,
     dismissNotice,
   } = useEvents(userId);
@@ -175,6 +176,12 @@ export default function NightsScreen() {
         error={error}
         onClose={() => setEditingId(null)}
         onSave={handleSave}
+        onDelete={async () => {
+          if (!editingId) return false;
+          const removed = await remove(editingId);
+          if (removed) setEditingId(null);
+          return removed;
+        }}
       />
     </>
   );

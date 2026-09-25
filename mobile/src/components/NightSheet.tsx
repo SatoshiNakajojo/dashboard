@@ -42,6 +42,8 @@ export interface NightSheetProps {
   editing?: ClubEvent | null;
   /** Résout `true` si la modification est enregistrée. */
   onSave?: (edit: NightSheetEdit) => Promise<boolean> | boolean;
+  /** Supprime la soirée modifiée — après une confirmation. */
+  onDelete?: () => Promise<boolean> | boolean;
 }
 
 /** Contraintes de la base — refuser ici ce qu'elle refuserait de toute façon. */
@@ -72,6 +74,7 @@ export function NightSheet({
   onCreate,
   editing = null,
   onSave,
+  onDelete,
 }: NightSheetProps) {
   const initial = editing ? clubDateTimeParts(editing.startsAt) : null;
   const slots = editing ? EDIT_POTLUCK_SLOTS : POTLUCK_SLOTS;
@@ -85,6 +88,8 @@ export function NightSheet({
   const [potluck, setPotluck] = useState<string[]>(() => Array<string>(slots).fill(''));
   /** Le message d'erreur n'est le nôtre qu'après un envoi depuis cette feuille. */
   const [tried, setTried] = useState(false);
+  /** Supprimer est définitif : un premier appui arme, le second supprime. */
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   /** La liste actuelle de la soirée modifiée, et les lignes marquées à retirer. */
   const [existing, setExisting] = useState<PotluckItem[] | null>(null);
@@ -420,6 +425,39 @@ export function NightSheet({
                   ? 'Heure de Nouméa. La carte indiquera au club qu’elle a été modifiée.'
                   : 'Heure de Nouméa. Tout le club la verra.')}
           </Text>
+
+          {editing && onDelete ? (
+            <Pressable
+              accessibilityRole="button"
+              disabled={creating}
+              hitSlop={8}
+              onPress={() => {
+                if (!confirmingDelete) {
+                  setConfirmingDelete(true);
+                  return;
+                }
+                setTried(true);
+                void onDelete();
+              }}
+              style={{ alignSelf: 'center', alignItems: 'center', gap: 4, marginTop: 14 }}
+            >
+              <Text
+                style={{
+                  fontFamily: f.labelMed,
+                  fontSize: 9,
+                  letterSpacing: 1.62,
+                  color: confirmingDelete ? c.oxblood : c.oxbloodMuted,
+                }}
+              >
+                {confirmingDelete ? 'CONFIRMER : SUPPRIMER LA SOIRÉE' : 'SUPPRIMER LA SOIRÉE'}
+              </Text>
+              {confirmingDelete ? (
+                <Text style={{ fontFamily: f.sans, fontSize: 10, color: c.sepia }}>
+                  Présences, liste et propositions partiront avec elle.
+                </Text>
+              ) : null}
+            </Pressable>
+          ) : null}
         </View>
       </View>
     </Modal>
