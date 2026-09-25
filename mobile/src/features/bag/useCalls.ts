@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { useBtcSpot } from '@/hooks/useBtcMarket';
-import { checkEntryDate, clubDateToIso, clubIsoDay, entryDayOf } from '@/lib/btcAtDate';
+import { checkEntryDate, clubDateToIso, clubIsoDay } from '@/lib/btcAtDate';
 import { fetchBtcOn, resolveCoingeckoId } from '@/lib/coingecko';
 import { providerFor, toYahooSymbol } from '@/lib/quotes';
 import { callPerformance } from '@/lib/performance';
@@ -26,13 +26,6 @@ export interface PublishInput {
   exchange?: string | null;
   /** Jeton choisi dans le composer ; à défaut, on résout le ticker nous-mêmes. */
   coingeckoId?: string | null;
-}
-
-/** La sortie d'une position, telle que saisie. */
-export interface CloseInput {
-  exitPrice: number;
-  /** `JJ/MM/AAAA`. Vide : aujourd'hui. */
-  exitDate: string;
 }
 
 /**
@@ -62,9 +55,8 @@ export interface CallsState {
   /** Supprime un de mes calls. */
   remove: (tickerId: string) => Promise<boolean>;
   /** Clôture un de mes calls, ou corrige sa sortie. */
-  close: (tickerId: string, input: CloseInput) => Promise<boolean>;
-  /** Rouvre un de mes calls clos. */
-  reopen: (tickerId: string) => Promise<boolean>;
+  /** Clôture au cours live (v1.01) — définitif. */
+  close: (tickerId: string) => Promise<boolean>;
   /** Publication en cours — le bouton du composer s'en sert. */
   publishing: boolean;
 }
@@ -335,41 +327,45 @@ export function useCalls(
   );
 
   /**
-   * Clôture un de mes calls — ou corrige la sortie d'un call déjà clos.
+   * Clôture un de mes calls, au cours du marché (v1.01).
    *
-   * Le référentiel vs ₿ s'arrête le jour de la sortie : on va chercher le cours
-   * du bitcoin ce jour-là, comme pour l'entrée. Sans lui, la perf vs ₿ d'une
-   * position close continuerait de bouger avec le bitcoin d'aujourd'hui.
+   * Plus de prix ni de jour saisis : on sort maintenant, au cours live relu
+   * ici. Le référentiel vs ₿ s'arrête aujourd'hui, au bitcoin du moment. Le
+   * serveur confirme ensuite le prix au relevé suivant, et la clôture est
+   * définitive : ni correction, ni réouverture.
    */
   const close = useCallback(
-    async (tickerId: string, input: CloseInput): Promise<boolean> => {
+    async (tickerId: string): Promise<boolean> => {
       const ticker = tickers.find((row) => row.id === tickerId);
-      if (!ticker || ticker.userId !== currentUserId || publishing) return false;
-      if (!(Number.isFinite(input.exitPrice) && input.exitPrice > 0)) {
-        setError('Indiquez le prix de sortie.');
+      if (!ticker || ticker.userId !== currentUserId || ticker.closedOn || publishing) {
         return false;
       }
       setPublishing(true);
 
       try {
-        const exit = await resolveEntry(
-          ticker.assetClass,
-          input.exitPrice,
-          input.exitDate,
-          'sortie',
-        );
+        const exitPrice =
+          (ticker.assetClass === 'BTC' ? liveBtc(spot) : null) ??
+          (await fetchLivePrice({
+            assetClass: ticker.assetClass,
+            yahooSymbol: ticker.yahooSymbol,
+            coingeckoId: ticker.coingeckoId,
+          })) ??
+          usablePrice(ticker.currentPrice);
+        if (exitPrice === null) {
+          setError(
+            `Cours live de ${ticker.symbol} introuvable : un call se clôture au prix du marché. Réessayez dans un moment.`,
+          );
+          return false;
+        }
+
+        const exit = await resolveEntry(ticker.assetClass, exitPrice, '', 'sortie');
         if ('problem' in exit) {
           setError(exit.problem);
           return false;
         }
-        const entryIso = ticker.enteredOn ?? clubDateToIso(entryDayOf(ticker))!;
-        if (exit.enteredOn < entryIso) {
-          setError(`La sortie ne peut pas précéder l’entrée (${entryDayOf(ticker)}).`);
-          return false;
-        }
 
         const next = await source.setExit(tickerId, {
-          exitPrice: input.exitPrice,
+          exitPrice,
           exitBtcPrice: exit.btcAtEntry,
           closedOn: exit.enteredOn,
         });
@@ -383,25 +379,7 @@ export function useCalls(
         setPublishing(false);
       }
     },
-    [tickers, currentUserId, publishing, source, resolveEntry],
-  );
-
-  /** Rouvre un de mes calls clos : il reprend son cours, et la carte le dit. */
-  const reopen = useCallback(
-    async (tickerId: string): Promise<boolean> => {
-      const ticker = tickers.find((row) => row.id === tickerId);
-      if (!ticker || ticker.userId !== currentUserId || ticker.closedOn === null) return false;
-      try {
-        const next = await source.setExit(tickerId, null);
-        setTickers((rows) => rows.map((row) => (row.id === tickerId ? next : row)));
-        setError(null);
-        return true;
-      } catch (cause) {
-        setError(describeError(cause));
-        return false;
-      }
-    },
-    [tickers, currentUserId, source],
+    [tickers, currentUserId, publishing, source, resolveEntry, spot],
   );
 
   // --- Projection d'affichage ----------------------------------------------
@@ -479,7 +457,6 @@ export function useCalls(
     edit,
     remove,
     close,
-    reopen,
     publishing,
   };
 }

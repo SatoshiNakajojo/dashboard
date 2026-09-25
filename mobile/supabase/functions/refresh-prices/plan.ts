@@ -20,6 +20,13 @@ export interface PricedTicker {
    * doit le remplacer par le cours du serveur (v1.01). Absent : confirmé.
    */
   entry_confirmed_at?: string | null;
+  /** Clôturé ce jour-là ; `null` : en cours. */
+  closed_on?: string | null;
+  /**
+   * `null` sur un call clôturé : le prix de sortie envoyé par l'app est
+   * provisoire, ce relevé le confirme. Absent : confirmé.
+   */
+  exit_confirmed_at?: string | null;
 }
 
 /** Le prix d'entrée d'un call, confirmé au cours que le serveur vient de lire. */
@@ -30,8 +37,27 @@ export interface EntryConfirmation {
   entryBtcPrice: number;
 }
 
+/** Le prix de sortie d'un call, confirmé au cours que le serveur vient de lire. */
+export interface ExitConfirmation {
+  id: string;
+  exitPrice: number;
+  exitBtcPrice: number;
+}
+
 /** L'identifiant CoinGecko du bitcoin, référentiel de toute entrée. */
 export const BITCOIN_ID = 'bitcoin';
+
+const isClosed = (row: PricedTicker) => row.closed_on !== null && row.closed_on !== undefined;
+
+/** Un call clôturé dont la sortie attend sa confirmation (v1.01). */
+export function awaitsExit(row: PricedTicker): boolean {
+  return isClosed(row) && row.exit_confirmed_at === null;
+}
+
+/** Ce que ce relevé doit lire : les calls en cours, et les sorties à confirmer. */
+export function isTracked(row: PricedTicker): boolean {
+  return !isClosed(row) || awaitsExit(row);
+}
 
 export interface PriceUpdate {
   id: string;
@@ -66,8 +92,11 @@ export function quoteRequests(rows: readonly PricedTicker[]): QuoteRequests {
   for (const row of rows) {
     if (row.coingecko_id) coingecko.add(row.coingecko_id);
     else if (row.yahoo_symbol) yahoo.add(row.yahoo_symbol);
-    // Une entrée à confirmer a besoin du bitcoin du même instant.
-    if (row.entry_confirmed_at === null && (row.coingecko_id || row.yahoo_symbol)) {
+    // Une entrée ou une sortie à confirmer a besoin du bitcoin du même instant.
+    if (
+      (row.entry_confirmed_at === null || awaitsExit(row)) &&
+      (row.coingecko_id || row.yahoo_symbol)
+    ) {
       coingecko.add(BITCOIN_ID);
     }
   }
@@ -97,7 +126,7 @@ export function planConfirmations(
   const out: EntryConfirmation[] = [];
 
   for (const row of rows) {
-    if (row.entry_confirmed_at !== null) continue;
+    if (row.entry_confirmed_at !== null || isClosed(row)) continue;
     const price = row.coingecko_id
       ? prices.coingecko?.[row.coingecko_id]
       : row.yahoo_symbol
@@ -134,6 +163,8 @@ export function planUpdates(
   let skipped = 0;
 
   for (const row of rows) {
+    // Une position close ne suit plus le cours : sa sortie se confirme à part.
+    if (isClosed(row)) continue;
     const price = row.coingecko_id
       ? prices.coingecko?.[row.coingecko_id]
       : row.yahoo_symbol
@@ -153,6 +184,39 @@ export function planUpdates(
   }
 
   return { updates, skipped };
+}
+
+/**
+ * Les sorties à confirmer (v1.01) : comme l'entrée, le prix envoyé par l'app
+ * au moment de clôturer n'est que provisoire, et ce relevé le remplace par le
+ * cours lu par le serveur.
+ */
+export function planExitConfirmations(
+  rows: readonly PricedTicker[],
+  prices: {
+    coingecko?: Readonly<Record<string, number>>;
+    yahoo?: Readonly<Record<string, number>>;
+  },
+): ExitConfirmation[] {
+  const valid = (value: number | undefined): value is number =>
+    typeof value === 'number' && Number.isFinite(value) && value > 0;
+  const btc = prices.coingecko?.[BITCOIN_ID];
+  const out: ExitConfirmation[] = [];
+
+  for (const row of rows) {
+    if (!awaitsExit(row)) continue;
+    const price = row.coingecko_id
+      ? prices.coingecko?.[row.coingecko_id]
+      : row.yahoo_symbol
+        ? prices.yahoo?.[row.yahoo_symbol]
+        : undefined;
+    if (!valid(price)) continue;
+    const exitBtcPrice = row.asset_class === 'BTC' ? price : btc;
+    if (!valid(exitBtcPrice)) continue;
+    out.push({ id: row.id, exitPrice: price, exitBtcPrice });
+  }
+
+  return out;
 }
 
 /** Découpe en lots : CoinGecko tolère mal les très longues listes. */

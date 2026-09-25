@@ -1,39 +1,34 @@
 import { useState } from 'react';
-import { Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { Modal, Pressable, ScrollView, Text, View } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 
 import { Micro } from '@/components/ui/Micro';
 import { useKeyboardFrame } from '@/hooks/useKeyboardFrame';
-import { checkEntryDate, entryDayOf, isoToClubDate } from '@/lib/btcAtDate';
-import { todayInClub } from '@/lib/clubTime';
+import { entryDayOf } from '@/lib/btcAtDate';
 import { formatPercent, formatPrice, formatUsd } from '@/lib/format';
 import { performancePercent } from '@/lib/performance';
 import { a, c, f, goldButtonGradient, perfColor, radius } from '@/theme/tokens';
 import type { CallView } from '@/types/domain';
-import type { CloseInput } from '@/features/bag/useCalls';
 
 export interface CloseCallSheetProps {
-  /** Le call à clôturer, ou dont on corrige la sortie. `null` : feuille fermée. */
+  /** Le call à clôturer. `null` : feuille fermée. */
   call: CallView | null;
   busy?: boolean;
   /** Pourquoi la dernière clôture a échoué — affiché dans la feuille. */
   error?: string | null;
   onClose: () => void;
-  /** Résout `true` si la sortie est enregistrée ; la feuille ne se ferme qu'alors. */
-  onSubmit: (input: CloseInput) => Promise<boolean>;
-  /** Présent sur un call déjà clos : annuler la sortie. */
-  onReopen?: () => void;
+  /** Résout `true` si la clôture est enregistrée ; la feuille ne se ferme qu'alors. */
+  onSubmit: () => Promise<boolean>;
 }
 
 /**
- * Bottom sheet « Clôturer le call ».
+ * Bottom sheet « Clôturer le call » — au cours du marché (v1.01).
  *
- * Deux champs : le prix et le jour de la sortie. Le jour décide du bitcoin de
- * référence — celui de ce jour-là — et la perf affichée devient réalisée.
- *
- * L'état s'initialise à partir du call : le parent remonte la feuille avec une
- * `key` différente pour chaque call.
+ * Plus de champ : ni prix, ni jour de sortie. On sort **maintenant**, au cours
+ * live que la feuille affiche ; la clôture le relit, et le serveur le confirme
+ * au relevé suivant. Sinon on attendrait le repli pour déclarer être sorti au
+ * plus haut, la semaine d'avant. Une clôture est définitive.
  */
 export function CloseCallSheet({
   call,
@@ -41,52 +36,24 @@ export function CloseCallSheet({
   error = null,
   onClose,
   onSubmit,
-  onReopen,
 }: CloseCallSheetProps) {
-  const correcting = call?.closed ?? false;
-  const [price, setPrice] = useState(() =>
-    call?.exitPrice ? String(call.exitPrice).replace('.', ',') : '',
-  );
-  const [date, setDate] = useState(() => isoToClubDate(call?.closedOn) ?? '');
   /** L'erreur affichée est celle de notre envoi, pas un reste d'un autre geste. */
   const [tried, setTried] = useState(false);
+  const keyboard = useKeyboardFrame();
 
-  const when = checkEntryDate(date);
-  const live = call && !call.closed ? call.currentPrice : null;
-
-  /** Le prix saisi, ou le cours du moment pour une sortie du jour. */
-  const exitPrice = (() => {
-    const parsed = Number(price.replace(/[^\d.,]/g, '').replace(',', '.'));
-    if (Number.isFinite(parsed) && parsed > 0) return parsed;
-    return when.kind === 'today' && live !== null && live > 0 ? live : 0;
-  })();
-
-  const realized =
-    call && exitPrice > 0 ? performancePercent(call.entryPrice, exitPrice) : null;
-
-  const blockedReason =
-    when.kind === 'invalid'
-      ? 'Une date de sortie comme 12/03/2026.'
-      : when.kind === 'future'
-        ? 'La date de sortie est dans le futur.'
-        : exitPrice <= 0
-          ? 'Indiquez le prix de sortie.'
-          : null;
-
-  const canSubmit = call !== null && blockedReason === null && !busy;
+  const live =
+    call && call.currentPrice !== null && call.currentPrice > 0 ? call.currentPrice : null;
+  const realized = call && live !== null ? performancePercent(call.entryPrice, live) : null;
+  const canSubmit = call !== null && !busy;
+  const shownError = tried && !busy ? error : null;
 
   const submit = async () => {
     setTried(true);
-    await onSubmit({ exitPrice, exitDate: date.trim() });
+    await onSubmit();
   };
-
-  const shownError = tried && !busy ? error : null;
-
-  const keyboard = useKeyboardFrame();
 
   return (
     <Modal visible={call !== null} transparent animationType="slide" onRequestClose={onClose}>
-      {/* Clavier ouvert, la feuille se cale au-dessus (`useKeyboardFrame`). */}
       <View className="flex-1" style={keyboard.frame}>
         <Pressable
           accessibilityRole="button"
@@ -126,7 +93,7 @@ export function CloseCallSheet({
 
           <View className="flex-row items-baseline justify-between">
             <Text style={{ fontFamily: f.serif, fontSize: 22, color: c.ivory }}>
-              {correcting ? 'Corriger la sortie' : 'Clôturer le call'}
+              Clôturer le call
             </Text>
             <Pressable accessibilityRole="button" onPress={onClose}>
               <Text
@@ -142,11 +109,7 @@ export function CloseCallSheet({
             </Pressable>
           </View>
 
-          <ScrollView
-            keyboardShouldPersistTaps="handled"
-            contentContainerStyle={{ gap: 18 }}
-            showsVerticalScrollIndicator={false}
-          >
+          <ScrollView contentContainerStyle={{ gap: 18 }} showsVerticalScrollIndicator={false}>
             {call ? (
               <Text
                 style={{ fontFamily: f.sans, fontSize: 12, lineHeight: 18, color: c.sepia }}
@@ -161,23 +124,19 @@ export function CloseCallSheet({
             >
               <View style={{ flex: 1, paddingVertical: 13 }}>
                 <Micro size={8.5} tracking={1.7} style={{ color: c.sepiaMuted }}>
-                  PRIX DE SORTIE
+                  PRIX DE SORTIE · LIVE
                 </Micro>
-                <TextInput
-                  value={price}
-                  onChangeText={setPrice}
-                  keyboardType="decimal-pad"
-                  accessibilityLabel="Prix de sortie"
-                  placeholder={live !== null && live > 0 ? formatUsd(live, 2) : 'à saisir'}
-                  placeholderTextColor={c.sepiaFaint}
+                <Text
+                  accessibilityLabel="Prix de sortie, cours live"
                   style={{
                     fontFamily: f.labelMed,
                     fontSize: 14,
-                    color: c.ivory,
+                    color: live === null ? c.sepiaFaint : c.ivory,
                     marginTop: 8,
-                    padding: 0,
                   }}
-                />
+                >
+                  {live === null ? 'relu à la clôture' : formatUsd(live, 2)}
+                </Text>
               </View>
               <View
                 style={{
@@ -189,41 +148,27 @@ export function CloseCallSheet({
                 }}
               >
                 <Micro size={8.5} tracking={1.7} style={{ color: c.sepiaMuted }}>
-                  DATE DE SORTIE
+                  PERF RÉALISÉE
                 </Micro>
-                <TextInput
-                  value={date}
-                  onChangeText={setDate}
-                  keyboardType="numbers-and-punctuation"
-                  accessibilityLabel="Date de sortie, au format jour, mois, année"
-                  placeholder={`Aujourd’hui · ${todayInClub()}`}
-                  placeholderTextColor={c.sepiaFaint}
+                <Text
                   style={{
                     fontFamily: f.labelMed,
                     fontSize: 14,
-                    color:
-                      when.kind === 'invalid' || when.kind === 'future' ? c.oxblood : c.ivory,
+                    color: realized === null ? c.sepiaFaint : perfColor(realized),
                     marginTop: 8,
-                    padding: 0,
                   }}
-                />
+                >
+                  {realized === null ? '—' : formatPercent(realized)}
+                </Text>
               </View>
             </View>
 
-            <View className="flex-row items-baseline justify-between">
-              <Micro size={8.5} tracking={1.7} style={{ color: c.sepiaMuted }}>
-                PERF RÉALISÉE
-              </Micro>
-              <Text
-                style={{
-                  fontFamily: f.labelMed,
-                  fontSize: 16,
-                  color: realized === null ? c.sepiaFaint : perfColor(realized),
-                }}
-              >
-                {realized === null ? '—' : formatPercent(realized)}
-              </Text>
-            </View>
+            <Text
+              style={{ fontFamily: f.sans, fontSize: 10, lineHeight: 16, color: c.sepiaFaint }}
+            >
+              On sort au cours du marché, maintenant : ni saisie, ni date passée. Le serveur
+              relit ce cours dans le quart d’heure et le confirme. Une clôture est définitive.
+            </Text>
           </ScrollView>
 
           <Pressable
@@ -247,43 +192,22 @@ export function CloseCallSheet({
                   color: c.onGold,
                 }}
               >
-                {busy ? 'ENREGISTREMENT…' : correcting ? 'ENREGISTRER' : 'CLÔTURER LE CALL'}
+                {busy ? 'CLÔTURE…' : 'CLÔTURER AU COURS LIVE'}
               </Text>
             </LinearGradient>
           </Pressable>
-
-          {onReopen ? (
-            <Pressable
-              accessibilityRole="button"
-              onPress={onReopen}
-              hitSlop={8}
-              style={{ alignSelf: 'center' }}
-            >
-              <Text
-                style={{
-                  fontFamily: f.labelMed,
-                  fontSize: 9,
-                  letterSpacing: 1.62,
-                  color: c.oxbloodMuted,
-                }}
-              >
-                ROUVRIR LE CALL
-              </Text>
-            </Pressable>
-          ) : null}
 
           <Text
             style={{
               fontFamily: f.sans,
               fontSize: 10,
               lineHeight: 16,
-              color: shownError ? c.oxblood : blockedReason ? c.sepia : c.sepiaFaint,
+              color: shownError ? c.oxblood : c.sepiaFaint,
               textAlign: 'center',
             }}
           >
-            {shownError ||
-              blockedReason ||
-              'La perf ne bougera plus. Le bitcoin est comparé jusqu’à ce jour-là.'}
+            {shownError ??
+              'La perf ne bougera plus. Le bitcoin est comparé jusqu’à aujourd’hui.'}
           </Text>
         </View>
       </View>

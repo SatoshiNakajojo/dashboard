@@ -11,7 +11,9 @@ import { describe, it } from 'node:test';
 
 import {
   chunk,
+  isTracked,
   planConfirmations,
+  planExitConfirmations,
   planUpdates,
   quoteRequests,
   type PricedTicker,
@@ -238,6 +240,61 @@ describe('confirmation du prix d’entrée (v1.01)', () => {
       }),
       [],
       'un cours aberrant',
+    );
+  });
+});
+
+describe('confirmation du prix de sortie (v1.01)', () => {
+  const closed = (over: Partial<PricedTicker>): PricedTicker => ({
+    id: 'x',
+    coingecko_id: null,
+    yahoo_symbol: null,
+    current_price: 90,
+    asset_class: 'ACTION',
+    entry_confirmed_at: '2026-09-01T00:00:00Z',
+    closed_on: '2026-09-25',
+    exit_confirmed_at: null,
+    ...over,
+  });
+
+  it('suit les calls en cours et les sorties à confirmer, pas les sorties faites', () => {
+    assert.equal(isTracked(closed({ closed_on: null })), true);
+    assert.equal(isTracked(closed({})), true);
+    assert.equal(isTracked(closed({ exit_confirmed_at: '2026-09-25T01:00:00Z' })), false);
+    // Avant la migration, la colonne n'existe pas : la sortie est tenue pour faite.
+    const ancien = closed({});
+    delete ancien.exit_confirmed_at;
+    assert.equal(isTracked(ancien), false);
+  });
+
+  it('remplace le prix de sortie par le cours du serveur, sans toucher au cours suivi', () => {
+    const rows = [
+      closed({ id: 'nvda', yahoo_symbol: 'NVDA' }),
+      closed({ id: 'btc', coingecko_id: 'bitcoin', asset_class: 'BTC' }),
+      closed({ id: 'ouvert', yahoo_symbol: 'NVDA', closed_on: null }),
+    ];
+    const prices = { coingecko: { bitcoin: 111000 }, yahoo: { NVDA: 131.2 } };
+    assert.deepEqual(planExitConfirmations(rows, prices), [
+      { id: 'nvda', exitPrice: 131.2, exitBtcPrice: 111000 },
+      { id: 'btc', exitPrice: 111000, exitBtcPrice: 111000 },
+    ]);
+    assert.deepEqual(
+      planUpdates(rows, prices).updates.map((u) => u.id),
+      ['ouvert'],
+      'une position close ne suit plus le cours',
+    );
+    assert.deepEqual(planConfirmations(rows, prices), [], 'pas d’entrée à confirmer ici');
+    assert.deepEqual(quoteRequests(rows).coingecko, ['bitcoin']);
+  });
+
+  it('attend le relevé suivant sans cours ni bitcoin', () => {
+    assert.deepEqual(
+      planExitConfirmations([closed({ yahoo_symbol: 'NVDA' })], { yahoo: { NVDA: 131.2 } }),
+      [],
+    );
+    assert.deepEqual(
+      planExitConfirmations([closed({ yahoo_symbol: 'NVDA' })], { coingecko: { bitcoin: 1 } }),
+      [],
     );
   });
 });

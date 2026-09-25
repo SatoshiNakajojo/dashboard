@@ -148,18 +148,20 @@ begin
 
   set local role authenticated;
 
-  -- Clôturer : la perf devient réalisée, l'instant est posé par la base, et ce
-  -- n'est pas une « modification ».
+  -- Clôturer : la perf devient réalisée, l'instant et le jour sont posés par la
+  -- base — même si le client antidate —, et ce n'est pas une « modification ».
   update public.tickers
      set exit_price = 15, exit_btc_price = 66000, closed_on = current_date - 1,
          closed_at = '2000-01-01', current_price = 99
    where id = 'dddddddd-0000-4000-8000-000000000002';
   select * into t from public.tickers where id = 'dddddddd-0000-4000-8000-000000000002';
   assert t.closed_at = now(), 'la base date la clôture';
+  assert t.closed_on = (now() at time zone 'Pacific/Noumea')::date, 'on sort aujourd’hui, pas hier';
+  assert t.exit_confirmed_at is null, 'le prix de sortie envoyé reste provisoire';
   assert t.current_price = 15 and t.performance_percentage = 50.0000,
     format('perf réalisée attendue +50 %%, obtenue %s', t.performance_percentage);
   assert t.edited_at is null, 'clôturer n’est pas corriger';
-  raise notice 'ok · tickers : une clôture fige la perf réalisée (+50 %%)';
+  raise notice 'ok · tickers : une clôture fige la perf réalisée (+50 %%), datée par la base';
 
   -- Un nouveau cours (refresh-prices) ne fait plus bouger une position close.
   reset role;
@@ -168,14 +170,40 @@ begin
   assert t.current_price = 15, 'le cours d’une position close ne bouge plus';
   set local role authenticated;
 
-  -- Corriger la sortie est daté, sans changer l'instant de clôture.
-  update public.tickers set exit_price = 14 where id = 'dddddddd-0000-4000-8000-000000000002';
-  select * into t from public.tickers where id = 'dddddddd-0000-4000-8000-000000000002';
-  assert t.edited_at = now() and t.closed_at = now() and t.current_price = 14,
-    'une sortie corrigée est datée';
-  raise notice 'ok · tickers : une sortie corrigée est datée, le cours reste figé';
+  -- v1.01 : une clôture est définitive pour un membre.
+  failed := false;
+  begin
+    update public.tickers set exit_price = 18 where id = 'dddddddd-0000-4000-8000-000000000002';
+  exception when check_violation then failed := true;
+  end;
+  assert failed, 'un membre ne corrige plus sa sortie';
+  failed := false;
+  begin
+    update public.tickers set exit_price = null, exit_btc_price = null, closed_on = null
+     where id = 'dddddddd-0000-4000-8000-000000000002';
+  exception when check_violation then failed := true;
+  end;
+  assert failed, 'un membre ne rouvre plus un call';
+  failed := false;
+  begin
+    update public.tickers set exit_confirmed_at = now() where id = 'dddddddd-0000-4000-8000-000000000002';
+  exception when check_violation then failed := true;
+  end;
+  assert failed, 'un membre ne confirme pas lui-même sa sortie';
+  raise notice 'ok · tickers : une clôture est définitive (ni correction, ni réouverture)';
 
-  -- Une sortie avant l'entrée, ou dans le futur : refusées.
+  -- Le relevé des prix confirme la sortie au cours du serveur, sans « modifié ».
+  reset role;
+  update public.tickers
+     set exit_price = 15.5, exit_btc_price = 66100, exit_confirmed_at = now()
+   where id = 'dddddddd-0000-4000-8000-000000000002';
+  select * into t from public.tickers where id = 'dddddddd-0000-4000-8000-000000000002';
+  assert t.exit_price = 15.5 and t.current_price = 15.5 and t.exit_confirmed_at = now(),
+    'sortie confirmée au cours du serveur';
+  assert t.edited_at is null, 'une confirmation n’est pas une modification';
+  raise notice 'ok · tickers : le serveur confirme le prix de sortie';
+
+  -- Les garde-fous de la sortie tiennent aussi pour l'administration.
   failed := false;
   begin
     update public.tickers set closed_on = current_date - 31
@@ -190,8 +218,6 @@ begin
   exception when check_violation then failed := true;
   end;
   assert failed, 'une sortie n’est pas dans le futur';
-
-  -- Un prix sans jour n'est pas une clôture.
   failed := false;
   begin
     update public.tickers set closed_on = null
@@ -201,12 +227,7 @@ begin
   assert failed, 'un prix de sortie sans jour est refusé';
   raise notice 'ok · tickers : une sortie incohérente est refusée';
 
-  -- Rouvrir efface la sortie et se voit.
-  update public.tickers set exit_price = null, exit_btc_price = null, closed_on = null
-   where id = 'dddddddd-0000-4000-8000-000000000002';
-  select * into t from public.tickers where id = 'dddddddd-0000-4000-8000-000000000002';
-  assert t.closed_at is null and t.exit_price is null, 'rouvert';
-  raise notice 'ok · tickers : un call se rouvre';
+  set local role authenticated;
 
   -- Un call se publie ouvert.
   failed := false;

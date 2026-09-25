@@ -118,6 +118,12 @@ export const CallCard = memo(function CallCard({
           </Micro>
           <Text style={{ fontFamily: f.labelMed, fontSize: 11, color: c.bone }}>
             {`SORTIE ${call.exitPrice === null ? '—' : formatPrice(call.exitPrice)}`}
+            {/* Prix relu par le serveur au relevé suivant (v1.01). */}
+            {call.exitConfirmedAt ? null : (
+              <Text style={{ fontSize: 8.5, letterSpacing: 1.2, color: c.goldMuted }}>
+                {'  À CONFIRMER'}
+              </Text>
+            )}
           </Text>
         </View>
       ) : null}
@@ -295,17 +301,14 @@ export const CallCard = memo(function CallCard({
         ) : null}
       </View>
 
-      {onEdit || onDelete || onCloseCall ? (
+      {onEdit || onDelete || (onCloseCall && !call.closed) ? (
         <View
           className="flex-row justify-end border-t border-hairline"
           style={{ marginTop: 14, paddingTop: 12, gap: 22 }}
         >
-          {onCloseCall ? (
-            <CardAction
-              label={call.closed ? 'SORTIE' : 'CLÔTURER'}
-              onPress={() => onCloseCall(call)}
-              accent={!call.closed}
-            />
+          {/* Une clôture est définitive (v1.01) : rien à rouvrir ni corriger. */}
+          {onCloseCall && !call.closed ? (
+            <CardAction label="CLÔTURER" onPress={() => onCloseCall(call)} accent />
           ) : null}
           {onEdit ? <CardAction label="MODIFIER" onPress={() => onEdit(call)} /> : null}
           {onDelete ? (

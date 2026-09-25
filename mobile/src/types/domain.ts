@@ -120,6 +120,11 @@ export interface Ticker {
    * l'app affichait à la publication.
    */
   entryConfirmedAt: string | null;
+  /**
+   * Quand le serveur a confirmé le prix de sortie au cours du marché (v1.01).
+   * `null` sur un call clôturé : prix encore provisoire.
+   */
+  exitConfirmedAt: string | null;
 }
 
 /** Un vote sur un call, avec sa raison. */

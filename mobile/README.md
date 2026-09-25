@@ -13,7 +13,7 @@ le logo. Ce qu'elle apporte :
   code à chaque ouverture ;
 - l'Oracle parie à 2 semaines et à 1 mois ; 5 et 10 ans ont disparu, et une
   pastille marque les horizons où l'on a un pari à faire ;
-- un call se publie au cours live, confirmé par le serveur ;
+- un call se publie et se clôture au cours live, confirmé par le serveur ;
 - le clavier ne cache plus le champ où l'on écrit ;
 - une soirée se modifie, se supprime, et son lieu peut changer par un vote du
   club ;
@@ -119,7 +119,7 @@ qu'on n'a pas déposé le nouveau tracé.
 
 ## Ce qui a été vérifié
 
-- `npm run typecheck`, `npm run lint`, `npm test` — propres (575 tests).
+- `npm run typecheck`, `npm run lint`, `npm test` — propres (580 tests).
 - **Règles pures** : bornes et inversibilité du repère, monotonie du tracé,
   écart à la courbe réelle, espaces insécables du formatage français, perf vs ₿
   comme ratio et non soustraction, seuils et tri des deux classements.
@@ -633,6 +633,14 @@ Désormais, **un call se publie au cours du marché, maintenant** :
 Les calls publiés avant la v1.01 gardent leur prix : la migration les marque
 confirmés, une fois pour toutes.
 
+**La sortie suit la même règle** (`20261007090000_live_exit_price`). La feuille
+« Clôturer le call » n'a plus de champ : on sort maintenant, au cours live
+qu'elle affiche et que la clôture relit. La base pose le jour de sortie
+(Nouméa), et `refresh-prices` remplace le prix provisoire par le cours qu'il lit,
+avec le bitcoin du même instant (`exit_confirmed_at`). D'ici là, la carte
+affiche **À CONFIRMER** à côté du prix de sortie. Les calls clôturés avant la
+v1.01 gardent leur sortie.
+
 ---
 
 ## `HORS LIGNE` sur un onglet, la variation sur l'autre
@@ -911,14 +919,15 @@ celui de l'onglet ouvert derrière.
 
 Une position vendue restait « en cours » : son cours continuait de bouger, ou
 il fallait supprimer le call — qui disparaissait des classements. L'auteur peut
-maintenant le **clôturer** : un prix et un jour de sortie. La perf devient
-**réalisée** et ne bouge plus ; la perf vs ₿ s'arrête le même jour, sur le
-cours du bitcoin de ce jour-là, cherché comme celui de l'entrée.
+maintenant le **clôturer**, au cours du marché (v1.01, voir plus bas). La perf
+devient **réalisée** et ne bouge plus ; la perf vs ₿ s'arrête le même jour, sur
+le cours du bitcoin du moment.
 
 L'onglet Calls se partage en **En cours** et **Clôturés** ; les classements
 prennent les deux, puisqu'une perf réalisée compte autant qu'une perf latente.
-Une sortie se corrige (« SORTIE » sur la carte), ou s'annule (« ROUVRIR LE
-CALL ») : dans les deux cas, la carte affiche « modifié ».
+Depuis la v1.01, une clôture est **définitive** : ni correction, ni
+réouverture. Sinon, rouvrir après un rebond et reclôturer plus haut referait la
+faille par un autre chemin.
 
 La base garde la main (migration `20260926090000_closed_calls`) : elle date la
 clôture (`closed_at`), refuse une sortie avant l'entrée ou dans le futur, fige

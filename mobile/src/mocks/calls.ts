@@ -30,11 +30,14 @@ const ago = (ms: number) => new Date(Date.now() - ms).toISOString();
 const clubDay = (ms: number) => new Date(ms + 11 * HOUR).toISOString().slice(0, 10);
 
 /** La fenêtre de vote que poserait la base : publication + 72 h. */
-function withWindows(rows: Omit<Ticker, 'votesCloseAt' | 'entryConfirmedAt'>[]): Ticker[] {
+function withWindows(
+  rows: Omit<Ticker, 'votesCloseAt' | 'entryConfirmedAt' | 'exitConfirmedAt'>[],
+): Ticker[] {
   return rows.map((row) => ({
     ...row,
     votesCloseAt: new Date(Date.parse(row.createdAt) + 72 * HOUR).toISOString(),
     entryConfirmedAt: row.createdAt,
+    exitConfirmedAt: row.closedAt,
   }));
 }
 

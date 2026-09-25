@@ -31,19 +31,8 @@ type BagView = 'bag' | 'closed' | 'rekt';
 export default function BagScreen() {
   const { userId } = useSession();
   const { byId } = useMembers();
-  const {
-    calls,
-    loading,
-    error,
-    vote,
-    voting,
-    publish,
-    edit,
-    remove,
-    close,
-    reopen,
-    publishing,
-  } = useCalls(userId, byId);
+  const { calls, loading, error, vote, voting, publish, edit, remove, close, publishing } =
+    useCalls(userId, byId);
 
   const [view, setView] = useState<BagView>('bag');
   const [composerOpen, setComposerOpen] = useState(false);
@@ -54,7 +43,6 @@ export default function BagScreen() {
   /** Le call qu'on clôture, ou dont on corrige la sortie. */
   const [closing, setClosing] = useState<CallView | null>(null);
   /** Le call dont on demande la réouverture. */
-  const [reopening, setReopening] = useState<CallView | null>(null);
 
   // Stables : `CallCard` est mémoïsée, et une fonction neuve à chaque rendu
   // redessinerait toutes les cartes.
@@ -179,21 +167,13 @@ export default function BagScreen() {
         busy={publishing}
         error={error}
         onClose={() => setClosing(null)}
-        onSubmit={async (input) => {
+        onSubmit={async () => {
           const target = closing;
           if (!target) return false;
-          const done = await close(target.id, input);
+          const done = await close(target.id);
           if (done) setClosing(null);
           return done;
         }}
-        onReopen={
-          closing?.closed
-            ? () => {
-                setReopening(closing);
-                setClosing(null);
-              }
-            : undefined
-        }
       />
 
       <VoteSheet
@@ -225,19 +205,6 @@ export default function BagScreen() {
           const done = await vote(target.call.id, null);
           if (done) setVoteTarget(null);
           return done;
-        }}
-      />
-
-      <ConfirmDialog
-        visible={reopening !== null}
-        title="Rouvrir ce call ?"
-        message={`La sortie de ${reopening?.symbol ?? ''} est effacée : la perf repart avec le cours du moment, et la carte indiquera « modifié ».`}
-        confirmLabel="ROUVRIR"
-        onCancel={() => setReopening(null)}
-        onConfirm={() => {
-          const target = reopening;
-          setReopening(null);
-          if (target) void reopen(target.id);
         }}
       />
 

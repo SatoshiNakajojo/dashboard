@@ -126,6 +126,8 @@ interface Row {
   votes_close_at: string | null;
   /** Absent avant la migration `20261002090000_live_entry_price`. */
   entry_confirmed_at?: string | null;
+  /** Absent avant la migration `20261007090000_live_exit_price`. */
+  exit_confirmed_at?: string | null;
 }
 
 /** `numeric` revient en chaîne depuis PostgREST : on ne suppose jamais un nombre. */
@@ -163,6 +165,8 @@ function fromRow(row: Row): Ticker {
     // pour confirmé, comme la migration le fera.
     entryConfirmedAt:
       row.entry_confirmed_at === undefined ? row.created_at : row.entry_confirmed_at,
+    exitConfirmedAt:
+      row.exit_confirmed_at === undefined ? row.closed_at : row.exit_confirmed_at,
   };
 }
 
@@ -384,6 +388,7 @@ function createMockSource(): CallsSource {
         votesCloseAt: votesCloseFor(new Date().toISOString()),
         // Démo : pas de serveur pour relire le cours, il est tenu pour confirmé.
         entryConfirmedAt: new Date().toISOString(),
+        exitConfirmedAt: null,
       };
       tickers.unshift(ticker);
       return { ...ticker };
@@ -417,16 +422,18 @@ function createMockSource(): CallsSource {
       if (index === -1) throw new Error('Call introuvable');
       const before = tickers[index]!;
       const now = new Date().toISOString();
-      // Les mêmes règles que `tickers_freeze_call` : clôturer n'est pas
-      // corriger ; corriger une sortie ou rouvrir, si.
+      // Les mêmes règles que la base : clôturer n'est pas corriger, et une
+      // clôture est définitive (v1.01). Démo : la sortie est tenue pour
+      // confirmée, faute de serveur pour relire le cours.
+      if (exit && before.closedOn) throw new Error('Une clôture est définitive.');
       const next: Ticker = exit
         ? {
             ...before,
             ...exit,
             exitBtcPrice: before.assetClass === 'BTC' ? exit.exitPrice : exit.exitBtcPrice,
             currentPrice: exit.exitPrice,
-            closedAt: before.closedAt ?? now,
-            editedAt: before.closedOn ? now : before.editedAt,
+            closedAt: now,
+            exitConfirmedAt: now,
           }
         : {
             ...before,

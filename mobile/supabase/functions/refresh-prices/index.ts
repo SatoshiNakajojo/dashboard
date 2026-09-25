@@ -18,7 +18,9 @@ import { createClient } from 'jsr:@supabase/supabase-js@2';
 
 import {
   chunk,
+  isTracked,
   planConfirmations,
+  planExitConfirmations,
   planUpdates,
   quoteRequests,
   type PricedTicker,
@@ -176,14 +178,14 @@ Deno.serve(async (request) => {
     // `20261002090000_live_entry_price` ; la nommer ferait échouer le relevé
     // sur une base qui ne l'a pas encore.
     .select('*')
-    .or('coingecko_id.not.is.null,yahoo_symbol.not.is.null')
-    // Une position close a un prix de sortie, pas un cours (la base le
-    // garantit aussi : `tickers_freeze_call`).
-    .is('closed_on', null);
+    .or('coingecko_id.not.is.null,yahoo_symbol.not.is.null');
 
   if (error) return Response.json({ error: error.message }, { status: 500 });
 
-  const rows = (data ?? []) as PricedTicker[];
+  // Les calls en cours, et les calls clôturés dont la sortie attend sa
+  // confirmation (v1.01). Filtré ici plutôt que dans la requête : nommer
+  // `exit_confirmed_at` ferait échouer le relevé sur une base qui ne l'a pas.
+  const rows = ((data ?? []) as PricedTicker[]).filter(isTracked);
   if (rows.length === 0) {
     return Response.json({ updated: 0, skipped: 0, note: 'aucun actif coté' });
   }
@@ -253,6 +255,27 @@ Deno.serve(async (request) => {
   }
   const confirmedIds = new Set(confirmations.map((entry) => entry.id));
 
+  // v1.01 : les sorties aussi, au cours lu ici.
+  let exits = 0;
+  for (const exit of planExitConfirmations(rows, {
+    coingecko: coingeckoPrices,
+    yahoo: yahooResult.prices,
+  })) {
+    const { error: writeError } = await client
+      .from('tickers')
+      .update({
+        exit_price: exit.exitPrice,
+        exit_btc_price: exit.exitBtcPrice,
+        price_updated_at: now,
+        exit_confirmed_at: now,
+      })
+      .eq('id', exit.id)
+      .is('exit_confirmed_at', null);
+
+    if (writeError) failures.push(exit.id);
+    else exits += 1;
+  }
+
   for (const update of updates) {
     // Déjà écrit avec sa confirmation d'entrée.
     if (confirmedIds.has(update.id)) continue;
@@ -273,6 +296,7 @@ Deno.serve(async (request) => {
     {
       updated,
       confirmed,
+      exits,
       skipped,
       failures,
       problems,
