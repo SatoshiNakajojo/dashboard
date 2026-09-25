@@ -270,6 +270,13 @@ begin
    where ticker_id = call and user_id = john;
   select * into v from public.ticker_votes where ticker_id = call and user_id = john;
   assert v.side = 'bear', 'on change d’avis dans la fenêtre';
+
+  -- Le chemin de l'app : un upsert (PostgREST, `onConflict: 'ticker_id,user_id'`).
+  insert into public.ticker_votes (ticker_id, user_id, side, reason)
+  values (call, john, 'bull', 'Je reviens bull.')
+  on conflict (ticker_id, user_id) do update set side = excluded.side, reason = excluded.reason;
+  select * into v from public.ticker_votes where ticker_id = call and user_id = john;
+  assert v.side = 'bull' and v.reason = 'Je reviens bull.', 'l’upsert de l’app change d’avis';
   raise notice 'ok · votes : une phrase obligatoire, un avis qui peut changer dans la fenêtre';
 
   -- Voter sur son propre call : refusé.
@@ -305,6 +312,14 @@ begin
   exception when check_violation then failed := true;
   end;
   assert failed, 'on ne change pas de camp après la fenêtre';
+  failed := false;
+  begin
+    insert into public.ticker_votes (ticker_id, user_id, side, reason)
+    values (call, john, 'bear', 'Trop tard.')
+    on conflict (ticker_id, user_id) do update set side = excluded.side, reason = excluded.reason;
+  exception when check_violation then failed := true;
+  end;
+  assert failed, 'l’upsert de l’app est refusé après la fenêtre : le vote est verrouillé';
   reset role;
   raise notice 'ok · votes : fenêtre fermée, votes figés';
 

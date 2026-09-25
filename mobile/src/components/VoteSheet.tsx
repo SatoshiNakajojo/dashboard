@@ -4,13 +4,17 @@ import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 
 import { Micro } from '@/components/ui/Micro';
+import {
+  REASON_MAX,
+  REASON_MIN,
+  canSubmit as canSubmitVote,
+  initialReason,
+  reasonAfterSwitch,
+  submitLabel,
+} from '@/features/bag/voteEdit';
 import { formatLeft } from '@/lib/format';
 import { a, c, f, goldButtonGradient, radius } from '@/theme/tokens';
 import type { CallView, Vote } from '@/types/domain';
-
-/** La même limite que la contrainte `ticker_votes_reason_length`. */
-const REASON_MAX = 140;
-const REASON_MIN = 3;
 
 export interface VoteSheetProps {
   /** Le call et le camp choisi au toucher. `null` : feuille fermée. */
@@ -31,6 +35,10 @@ export interface VoteSheetProps {
  * est obligatoire — la base la refuse vide — et c'est elle qu'on lira sous la
  * carte : un vote sans raison n'apprend rien au club.
  *
+ * Avec un vote existant, c'est « Modifier mon vote » : on change de camp —
+ * avec une nouvelle phrase — ou seulement de phrase, tant que la fenêtre de
+ * 72 h est ouverte (`features/bag/voteEdit.ts`).
+ *
  * L'état s'initialise à partir du vote existant : le parent remonte la feuille
  * avec une `key` par call.
  */
@@ -44,12 +52,18 @@ export function VoteSheet({
   onRemove,
 }: VoteSheetProps) {
   const [side, setSide] = useState<Vote>(target?.side ?? 'bull');
-  const [reason, setReason] = useState(current?.reason ?? '');
+  const [reason, setReason] = useState(() => initialReason(current, target?.side ?? 'bull'));
   const [tried, setTried] = useState(false);
 
   const call = target?.call ?? null;
   const trimmed = reason.trim();
-  const canSubmit = trimmed.length >= REASON_MIN && !busy;
+  const canSubmit = canSubmitVote(current, side, reason) && !busy;
+  const switching = current !== null && current.side !== side;
+
+  const choose = (next: Vote) => {
+    setReason((typed) => reasonAfterSwitch(current, side, next, typed));
+    setSide(next);
+  };
   const shownError = tried && !busy ? error : null;
   const left = call?.votesLeftMs ?? 0;
 
@@ -98,7 +112,7 @@ export function VoteSheet({
 
           <View className="flex-row items-baseline justify-between">
             <Text style={{ fontFamily: f.serif, fontSize: 22, color: c.ivory }}>
-              {call ? `Voter sur ${call.symbol}` : 'Voter'}
+              {call ? `${current ? 'Modifier mon vote' : 'Voter'} · ${call.symbol}` : 'Voter'}
             </Text>
             <Pressable accessibilityRole="button" onPress={onClose}>
               <Text
@@ -128,6 +142,37 @@ export function VoteSheet({
             </Text>
           ) : null}
 
+          {current ? (
+            <View
+              style={{
+                gap: 4,
+                paddingLeft: 10,
+                borderLeftWidth: 2,
+                borderLeftColor: current.side === 'bull' ? c.sage : c.oxblood,
+              }}
+            >
+              <Micro size={8.5} tracking={1.6} style={{ color: c.sepiaMuted }}>
+                {'VOTRE VOTE ACTUEL · '}
+                <Text style={{ color: current.side === 'bull' ? c.sage : c.oxblood }}>
+                  {current.side.toUpperCase()}
+                </Text>
+              </Micro>
+              {current.reason ? (
+                <Text
+                  numberOfLines={2}
+                  style={{
+                    fontFamily: f.serifItalic,
+                    fontSize: 13,
+                    lineHeight: 18,
+                    color: c.sepia,
+                  }}
+                >
+                  {`«\u00a0${current.reason}\u00a0»`}
+                </Text>
+              ) : null}
+            </View>
+          ) : null}
+
           <View className="flex-row" style={{ gap: 10 }}>
             {(['bull', 'bear'] as const).map((option) => {
               const on = side === option;
@@ -137,7 +182,7 @@ export function VoteSheet({
                   key={option}
                   accessibilityRole="radio"
                   aria-checked={on}
-                  onPress={() => setSide(option)}
+                  onPress={() => choose(option)}
                   style={{
                     flex: 1,
                     alignItems: 'center',
@@ -173,9 +218,11 @@ export function VoteSheet({
               multiline
               accessibilityLabel="Pourquoi ce vote"
               placeholder={
-                side === 'bull'
-                  ? 'En une phrase : pourquoi vous y croyez.'
-                  : 'En une phrase : pourquoi vous n’y croyez pas.'
+                switching
+                  ? 'En une phrase : pourquoi vous changez d’avis.'
+                  : side === 'bull'
+                    ? 'En une phrase : pourquoi vous y croyez.'
+                    : 'En une phrase : pourquoi vous n’y croyez pas.'
               }
               placeholderTextColor={c.sepiaFaint}
               style={{
@@ -194,7 +241,11 @@ export function VoteSheet({
             style={{ fontFamily: f.sans, fontSize: 11, lineHeight: 17, color: c.sepiaMuted }}
           >
             {`Un votant prend la moitié des points de l’auteur : le bull gagne si le call monte et perd s’il baisse, le bear l’inverse. Barème complet dans l’onglet Classement. ${
-              left > 0 ? `Votes ouverts encore ${formatLeft(left)}.` : 'Votes clos.'
+              left <= 0
+                ? 'Votes clos.'
+                : current
+                  ? `Vous pouvez changer d’avis encore ${formatLeft(left)} ; ensuite, votre vote est verrouillé.`
+                  : `Votes ouverts encore ${formatLeft(left)} — et votre vote reste modifiable jusque-là.`
             }`}
           </Text>
 
@@ -219,7 +270,7 @@ export function VoteSheet({
                   color: c.onGold,
                 }}
               >
-                {busy ? 'ENREGISTREMENT…' : side === 'bull' ? 'VOTER BULL' : 'VOTER BEAR'}
+                {busy ? 'ENREGISTREMENT…' : submitLabel(current, side)}
               </Text>
             </LinearGradient>
           </Pressable>

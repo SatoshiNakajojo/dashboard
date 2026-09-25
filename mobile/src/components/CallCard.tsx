@@ -6,6 +6,7 @@ import { MemberAvatar } from '@/components/MemberAvatar';
 import { Micro } from '@/components/ui/Micro';
 import { isoToClubDate } from '@/lib/btcAtDate';
 import { callStakes } from '@/features/bag/callPoints';
+import { myVoteStatus } from '@/features/bag/voteEdit';
 import {
   formatLeft,
   formatPercent,
@@ -44,6 +45,8 @@ export const CallCard = memo(function CallCard({
   const cls = assetClassStyle[call.assetClass];
   const [showReasons, setShowReasons] = useState(false);
   const stakes = callStakes(call);
+  const myVote = call.myVote;
+  const voteStatus = myVoteStatus(myVote, call.votesOpen);
 
   return (
     <LinearGradient
@@ -177,6 +180,35 @@ export const CallCard = memo(function CallCard({
           </Text>
         )}
       </View>
+
+      {/* Mon vote, et s'il se modifie encore : pendant les 72 h, on peut
+          changer d'avis ; ensuite, il est verrouillé. */}
+      {myVote && voteStatus ? (
+        <View className="flex-row items-center justify-between" style={{ marginTop: 10 }}>
+          <Micro size={8} tracking={1.4} style={{ color: c.sepiaMuted }}>
+            {'VOTRE VOTE : '}
+            <Text style={{ color: myVote === 'bull' ? c.sage : c.oxblood }}>
+              {myVote.toUpperCase()}
+            </Text>
+          </Micro>
+          {voteStatus.editable && onVote ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Modifier mon vote"
+              onPress={() => onVote(call, myVote)}
+              hitSlop={8}
+            >
+              <Micro size={8.5} tracking={1.5} style={{ color: c.gold }}>
+                MODIFIER
+              </Micro>
+            </Pressable>
+          ) : (
+            <Micro size={8} tracking={1.3} style={{ color: c.sepiaFaint }}>
+              VERROUILLÉ
+            </Micro>
+          )}
+        </View>
+      ) : null}
 
       <View style={{ marginTop: 10 }}>
         <View className="flex-row items-center justify-between">

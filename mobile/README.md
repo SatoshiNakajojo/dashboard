@@ -105,7 +105,7 @@ qu'on n'a pas déposé le nouveau tracé.
 
 ## Ce qui a été vérifié
 
-- `npm run typecheck`, `npm run lint`, `npm test` — propres (526 tests).
+- `npm run typecheck`, `npm run lint`, `npm test` — propres (538 tests).
 - **Règles pures** : bornes et inversibilité du repère, monotonie du tracé,
   écart à la courbe réelle, espaces insécables du formatage français, perf vs ₿
   comme ratio et non soustraction, seuils et tri des deux classements.
@@ -749,7 +749,12 @@ Trois règles, tenues par la base (`ticker_votes_guard`, migration
 
 - **une fenêtre de 72 h** après la publication — sans elle, on voterait bull
   sur un call déjà à +50 % pour ramasser des points sans avoir rien prédit.
-  Hors fenêtre, un vote ne se change ni ne se retire ;
+  Pendant la fenêtre, un vote **se modifie** : « VOTRE VOTE : BULL · MODIFIER »
+  sur la carte ouvre « Modifier mon vote », où l'on change de camp (« PASSER
+  BEAR ») ou seulement de phrase (« METTRE À JOUR »). Changer de camp demande
+  une nouvelle phrase — la raison d'un bull ne justifie pas un bear —, revenir
+  à son camp rend la phrase d'origine (`src/features/bag/voteEdit.ts`). Hors
+  fenêtre, le vote est **verrouillé** : ni changé, ni retiré ;
 - **pas de vote sur son propre call** ;
 - **un call clôturé ne se vote plus**.
 
