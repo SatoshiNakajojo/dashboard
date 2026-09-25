@@ -843,9 +843,14 @@ perdant.
 **L'onglet Classement** additionne ces points et ceux de l'Oracle, sur l'année
 ou depuis toujours (`app/(tabs)/classement.tsx`) :
 
-- **un podium** — le deuxième à gauche, le premier au centre, le troisième à
-  droite. Tant que tout le monde est à égalité (en début d'année, sept membres
-  à zéro), pas de podium : on ne monte pas sur une marche à l'ordre
+- **un podium à cinq marches**, une par titre du club. De gauche à droite : le
+  quatrième, le deuxième, le premier au centre et plus haut, le troisième, le
+  cinquième. Chaque marche descend d'un cran et porte le médaillon et le nom de
+  son titre ; la toucher ouvre l'affiche. La hauteur suit le rang, donc deux ex
+  æquo sont à la même hauteur. Vérifié de 320 à 390 px de large : aucun titre
+  coupé, pas de défilement horizontal. Sous 350 px, le nom du titre passe un
+  cran plus petit. Tant que tout le monde est à égalité (en début d'année, sept
+  membres à zéro), pas de podium : on ne monte pas sur une marche à l'ordre
   alphabétique ;
 - **le classement complet**, avec les titres du club :
 
