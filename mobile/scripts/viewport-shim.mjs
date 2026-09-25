@@ -3,60 +3,79 @@
  *
  * En mode autonome (« Sur l'écran d'accueil ») avec une barre d'état
  * `black-translucent`, iOS dessine la page sur **tout** l'écran — elle passe
- * sous l'heure, c'est voulu — mais calcule sa zone de mise en page comme si la
- * barre d'état n'était pas superposée : `innerHeight` et `height: 100%` valent
- * la hauteur de l'écran **moins** celle de la barre d'état (47 pt sur un
- * iPhone 12 à 14). L'app s'arrêtait donc 47 pt au-dessus du bord, et la bande
- * restait vide, de la couleur du fond.
+ * sous l'heure, c'est voulu — mais lui donne une zone de mise en page plus
+ * courte de la hauteur de la barre d'état : 852 pt sur un écran de 896
+ * (iPhone 11), 797 sur 844 (iPhone 12 à 14). L'app s'arrêtait donc au-dessus
+ * du bord, et la bande restait vide.
  *
- * Deux corrections précédentes l'avaient prise pour une marge trop généreuse
- * sous la barre d'onglets (`src/lib/insets.ts`) : elles ont resserré la barre,
- * mais la bande, elle, n'était pas à nous.
+ * Trois essais, trois leçons, relevées sur l'iPhone d'un membre grâce à la
+ * ligne de mesures du panneau « À propos » :
  *
- * La bande fait partie de la page : on la récupère en étirant le document de
- * l'écart mesuré entre l'écran et la zone de mise en page. Sur tout ce qui ne
- * présente pas le défaut — Android, ordinateur, onglet Safari, iPad en fenêtre
- * — l'écart mesuré est nul et rien ne change.
+ *   1. allonger la page de l'écart `écran − innerHeight`, mesuré dans `<head>`
+ *      et au retour au premier plan : trop tôt au lancement, iOS n'avait pas
+ *      encore raccourci la page ;
+ *   2. suivre la hauteur en continu (sonde + `ResizeObserver`) : **boucle**.
+ *      Dès que la page est allongée, iOS annonce la hauteur de l'écran ; on
+ *      conclut qu'il n'y a plus d'écart, on retire l'allongement, iOS
+ *      raccourcit de nouveau… à chaque image : le bas de l'app clignotait ;
+ *   3. mesurer à intervalles, avec un coupe-circuit : plus de clignotement,
+ *      mais la même bascule, figée du mauvais côté (« 4 BASCULES · FIGÉ »).
  *
- * Deuxième leçon, sur le terrain : **au lancement**, la première mesure ne
- * suffit pas. L'app s'ouvrait avec la bande, et la perdait après un passage en
- * arrière-plan — seul moment où l'on remesurait. iOS n'a pas fini de fixer ses
- * dimensions quand le `<head>` se lit, et `innerHeight` peut ne pas refléter la
- * zone réellement donnée à la page. D'où :
+ * La leçon : **toute règle qui décide d'après `innerHeight` décide d'après sa
+ * propre correction.** La page reçoit donc désormais une hauteur qui ne
+ * dépend pas de ce qu'iOS annonce : celle de l'écran (`screen.height`, dans
+ * l'orientation courante). C'est un point fixe — allongée ou non, la page
+ * mesure l'écran — et elle l'est dès le `<head>`, avant que iOS ne se décide.
+ * `innerHeight` ne sert plus qu'à reconnaître les situations où il ne faut
+ * rien toucher (clavier ouvert, fenêtre réduite) : on garde alors l'état.
  *
- *   • on remesure à la fin du chargement, puis à intervalles — jamais en
- *     continu : une mesure suivie en permanence (une sonde observée par
- *     `ResizeObserver`) réagissait à sa propre correction, et faisait
- *     clignoter le bas de l'app à chaque image. Un coupe-circuit
- *     (`MAX_TOGGLES`) fige l'état si la page bascule trop souvent ;
- *   • chaque mesure est notée dans `window.__clubViewport`, que le panneau
- *     « À propos » de l'app installée affiche : on ne corrige plus à l'aveugle.
+ * Sur tout ce qui n'est pas l'app installée sur iOS — Android, ordinateur,
+ * onglet Safari —, rien ne change.
  */
 
-/** Au-delà, ce n'est plus une barre d'état : un clavier, une fenêtre réduite. */
+/** Écart au-delà duquel ce n'est plus une barre d'état : un clavier, une fenêtre réduite. */
 export const MAX_SHIM = 100;
 
+/** `pageHeight` : ne rien toucher cette fois-ci, garder l'état courant. */
+export const HOLD = -1;
+
 /**
- * L'écart à combler sous la zone de mise en page, en points CSS.
+ * La hauteur à donner à la page, en points CSS.
  *
- * `layoutHeight` est la hauteur que la page reçoit pour sa mise en page.
+ *   • `0` — pas l'app installée sur iOS (`navigator.standalone` n'existe que
+ *     là), fenêtre qui ne prend pas toute la largeur (iPad en Split View ou
+ *     Stage Manager), ou mesure incohérente : on ne touche à rien ;
+ *   • `HOLD` (−1) — situation transitoire, un clavier ouvert par exemple :
+ *     on garde ce qui est posé ;
+ *   • sinon la hauteur de l'écran dans l'orientation courante — **quel que
+ *     soit** l'écart annoncé, zéro compris : c'est ce qui rend la règle
+ *     insensible à sa propre correction.
  *
- * Nul hors de l'app installée sur iOS (`navigator.standalone` n'existe que
- * là), hors plein écran en largeur (iPad en Split View ou Stage Manager), et
- * pour toute mesure incohérente : dans le doute, on ne touche à rien.
+ * `orientation` : `'portrait'`, `'landscape'`, ou vide si l'appareil ne la
+ * donne pas (on la déduit alors des proportions de la fenêtre).
  *
  * Sans dépendance ni référence extérieure : son texte est recopié tel quel
  * dans la page, et tourne avant le bundle.
  */
-export function bottomShim(standalone, screenWidth, screenHeight, innerWidth, layoutHeight) {
+export function pageHeight(
+  standalone,
+  screenWidth,
+  screenHeight,
+  innerWidth,
+  innerHeight,
+  orientation,
+) {
   if (standalone !== true) return 0;
-  const sizes = [screenWidth, screenHeight, innerWidth, layoutHeight];
+  const sizes = [screenWidth, screenHeight, innerWidth, innerHeight];
   for (let i = 0; i < sizes.length; i++) {
     if (typeof sizes[i] !== 'number' || !isFinite(sizes[i]) || sizes[i] <= 0) return 0;
   }
   // iOS donne les dimensions de l'écran en portrait, quelle que soit
-  // l'orientation : on les remet dans le sens de la fenêtre.
-  const landscape = innerWidth > layoutHeight;
+  // l'orientation : on les remet dans le bon sens. L'orientation vient de
+  // l'écran quand il la donne — pas des proportions de la fenêtre, qu'un
+  // clavier ouvert rend plus large que haute en plein portrait.
+  const landscape =
+    orientation === 'landscape' || (orientation !== 'portrait' && innerWidth > innerHeight);
   const fullWidth = landscape
     ? Math.max(screenWidth, screenHeight)
     : Math.min(screenWidth, screenHeight);
@@ -64,63 +83,60 @@ export function bottomShim(standalone, screenWidth, screenHeight, innerWidth, la
     ? Math.min(screenWidth, screenHeight)
     : Math.max(screenWidth, screenHeight);
   if (Math.abs(fullWidth - innerWidth) > 1) return 0;
-  const gap = Math.round(fullHeight - layoutHeight);
-  return gap > 0 && gap <= 100 ? gap : 0;
+  const gap = fullHeight - innerHeight;
+  if (gap < -1 || gap > 100) return -1;
+  return Math.round(fullHeight);
 }
 
 /**
- * Le style : le document s'allonge de l'écart, et avec lui tout ce qui s'y
- * accroche en pourcentage — `body`, `#root`, donc l'app entière.
+ * Le style : la page prend la hauteur de l'écran, et avec elle tout ce qui
+ * s'y accroche en pourcentage — `body`, `#root`, donc l'app entière.
  *
  *   • `overflow: visible` sur `html` et `body` : un `overflow: hidden` sur
- *     `body` se propage à la fenêtre, qui rognerait alors la bande qu'on vient
- *     de gagner ;
+ *     `body` se propage à la fenêtre, qui rognerait la bande qu'on vient de
+ *     gagner ;
  *   • les feuilles et fenêtres (`Modal` de react-native-web) sont en
  *     `position: fixed`, donc ancrées à la zone de mise en page, trop courte :
- *     on les prolonge d'autant, sinon le bas de la barre d'onglets dépasserait
- *     sous une feuille ouverte. Elles vivent dans un `div` sans attribut
- *     accroché à `body`.
+ *     elles prennent la même hauteur que la page. Elles vivent dans un `div`
+ *     sans attribut accroché à `body`.
  */
 export const SHIM_STYLE = `
-      html.club-shim { height: calc(100% + var(--club-shim, 0px)); overscroll-behavior: none; }
+      html.club-shim { height: var(--club-height) !important; overscroll-behavior: none; }
       html.club-shim, html.club-shim body { overflow: visible; }
       html.club-shim body > div:not([id]):not([style]) > div {
-        bottom: calc(-1 * var(--club-shim, 0px)) !important;
+        bottom: auto !important;
+        height: var(--club-height) !important;
       }`;
 
-/** Remesures après le chargement : iOS peut fixer ses dimensions tard. */
+/** Remesures après le chargement — pour le diagnostic, et la rotation. */
 export const SETTLE_DELAYS_MS = [150, 600, 1500, 3000];
 
 /**
- * Le coupe-circuit : au-delà de ce nombre de bascules (bande ajoutée, puis
- * retirée…), on fige l'état courant jusqu'au prochain retour au premier plan.
- *
- * Leçon du terrain : une mesure qui réagit à sa propre correction entre en
- * boucle — on allonge la page, iOS change la hauteur mesurée, on raccourcit,
- * il la rechange… La sonde suivie par `ResizeObserver` faisait exactement
- * cela, à chaque image : le bas de l'app clignotait. Quoi que fasse iOS, la
- * page ne peut plus basculer que quelques fois.
+ * Le coupe-circuit, gardé par précaution : au-delà de ce nombre de
+ * changements de hauteur, on fige l'état jusqu'au prochain retour au premier
+ * plan. Avec une hauteur tirée de l'écran, il ne devrait plus jamais servir —
+ * seule une rotation la fait changer.
  */
 export const MAX_TOGGLES = 4;
 
 /**
- * Le script : mesure, pose la variable, et remesure — fin de chargement,
- * délais, rotation, retour au premier plan, clavier. Jamais en continu.
+ * Le script : pose la hauteur de l'écran, et la repose si l'orientation
+ * change. Jamais de mesure continue.
  *
- * La décision repose sur `innerHeight`, qui ne réagit pas à l'allongement du
- * document. La sonde (`position: fixed; height: 100%`) n'est plus qu'un
- * témoin, relevé pour le diagnostic : elle, elle y réagit sur iPhone.
+ * Il relève aussi, pour la ligne de diagnostic du panneau « À propos », ce
+ * qu'iOS annonce : `innerHeight`, et la hauteur d'une sonde `fixed` à 100 %.
  *
- * Le document étant plus haut que la zone visible d'après iOS, la page
+ * Le document pouvant être plus haut que la zone visible d'après iOS, la page
  * pourrait défiler de la hauteur de la bande : on la ramène en haut.
  */
 export const SHIM_SCRIPT = `
       (function () {
-        var bottomShim = ${bottomShim.toString()};
+        var pageHeight = ${pageHeight.toString()};
         var root = document.documentElement;
         var probe = null;
         var fits = 0;
         var toggles = 0;
+        var frozen = false;
         function probeHeight() {
           if (!probe && document.body) {
             probe = document.createElement('div');
@@ -131,23 +147,38 @@ export const SHIM_SCRIPT = `
           }
           return probe ? Math.round(probe.getBoundingClientRect().height) : null;
         }
+        function orientation() {
+          var type = screen.orientation && screen.orientation.type;
+          if (type) return type.indexOf('landscape') === 0 ? 'landscape' : 'portrait';
+          if (typeof window.orientation === 'number') return Math.abs(window.orientation) === 90 ? 'landscape' : 'portrait';
+          return '';
+        }
         function fit() {
-          var gap = bottomShim(navigator.standalone, screen.width, screen.height, innerWidth, innerHeight);
-          var wanted = gap + 'px';
-          var changed = root.style.getPropertyValue('--club-shim') !== wanted;
-          var frozen = changed && toggles >= ${MAX_TOGGLES};
-          if (changed && !frozen) {
-            toggles += 1;
-            root.style.setProperty('--club-shim', wanted);
-            if (gap > 0) root.classList.add('club-shim');
-            else root.classList.remove('club-shim');
+          var height = pageHeight(navigator.standalone, screen.width, screen.height, innerWidth, innerHeight, orientation());
+          if (height !== ${HOLD}) {
+            var wanted = height > 0 ? height + 'px' : '';
+            if (root.style.getPropertyValue('--club-height') !== wanted) {
+              if (toggles >= ${MAX_TOGGLES}) {
+                frozen = true;
+              } else {
+                toggles += 1;
+                if (height > 0) {
+                  root.style.setProperty('--club-height', wanted);
+                  root.classList.add('club-shim');
+                } else {
+                  root.style.removeProperty('--club-height');
+                  root.classList.remove('club-shim');
+                }
+              }
+            }
           }
           fits += 1;
+          var applied = parseInt(root.style.getPropertyValue('--club-height'), 10) || 0;
           window.__clubViewport = {
             standalone: navigator.standalone === true,
             screen: screen.height, inner: innerHeight, layout: probeHeight(),
-            gap: parseInt(root.style.getPropertyValue('--club-shim'), 10) || 0,
-            fits: fits, toggles: toggles, frozen: frozen
+            gap: applied ? Math.max(0, applied - innerHeight) : 0,
+            height: applied, fits: fits, toggles: toggles, frozen: frozen
           };
           if (root.classList.contains('club-shim') && window.scrollY !== 0) window.scrollTo(0, 0);
         }
@@ -161,8 +192,7 @@ export const SHIM_SCRIPT = `
         addEventListener('pageshow', fit);
         addEventListener('orientationchange', function () { setTimeout(fit, 300); });
         document.addEventListener('visibilitychange', function () {
-          // Retour au premier plan : iOS a pu tout recalculer, on réarme.
-          if (document.visibilityState === 'visible') toggles = 0;
+          if (document.visibilityState === 'visible') { toggles = 0; frozen = false; }
           fit();
         });
         addEventListener('scroll', function () {

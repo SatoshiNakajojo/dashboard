@@ -17,8 +17,10 @@ export interface ViewportInfo {
   inner: number;
   /** Témoin : une sonde `fixed` à 100 % — `null` avant que la page existe. */
   layout: number | null;
-  /** Ce que le correctif ajoute sous la page. */
+  /** Ce que la page gagne sur ce qu'iOS annonce. */
   gap: number;
+  /** Hauteur donnée à la page — celle de l'écran, ou 0 si l'on n'y touche pas. */
+  height: number;
   /** Nombre de mesures prises depuis l'ouverture. */
   fits: number;
   /** Nombre de fois où la bande a été posée ou retirée. */
@@ -33,12 +35,13 @@ export function viewportInfo(): ViewportInfo | null {
   return info ?? null;
 }
 
-/** `ÉCRAN 844 · INNER 797 · PAGE 797 · CALE 47 · 6 MESURES · 1 BASCULE`. */
+/** `ÉCRAN 896 · INNER 852 · PAGE 852 · HAUTEUR 896 · CALE 44 · 6 MESURES · 1 BASCULE`. */
 export function describeViewport(info: ViewportInfo): string {
   return [
     `ÉCRAN ${info.screen}`,
     `INNER ${info.inner}`,
     `PAGE ${info.layout ?? '—'}`,
+    `HAUTEUR ${info.height || '—'}`,
     `CALE ${info.gap}`,
     `${info.fits} ${info.fits > 1 ? 'MESURES' : 'MESURE'}`,
     `${info.toggles} ${info.toggles > 1 ? 'BASCULES' : 'BASCULE'}`,

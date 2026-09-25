@@ -1,9 +1,11 @@
 /**
  * La bande vide sous l'app installée sur iPhone.
  *
- * Le défaut ne se voit que sur un vrai iPhone, en mode autonome : la
- * machine de développement ne le montre jamais. D'où ces cas mesurés, et le
- * contrôle que le correctif ne touche à rien ailleurs.
+ * Le défaut ne se voit que sur un vrai iPhone, en mode autonome : la machine
+ * de développement ne le montre jamais. Ces cas rejouent ce qu'on a relevé
+ * sur l'iPhone d'un membre — « ÉCRAN 896 · INNER 852 », puis 896 dès que la
+ * page est allongée — et contrôlent que le correctif ne touche à rien
+ * ailleurs.
  */
 
 import assert from 'node:assert/strict';
@@ -13,69 +15,77 @@ import vm from 'node:vm';
 import { decorate } from '../decorate-web.mjs';
 import { missingTags } from '../pwa-head.mjs';
 import {
+  HOLD,
   MAX_SHIM,
   MAX_TOGGLES,
   SETTLE_DELAYS_MS,
   SHIM_SCRIPT,
   SHIM_STYLE,
   VIEWPORT_SHIM,
-  bottomShim,
+  pageHeight,
 } from '../viewport-shim.mjs';
 
-describe('écart à combler', () => {
-  it('rend la barre d’état d’un iPhone 12 à 14', () => {
-    // Écran 390 × 844, zone de mise en page 390 × 797 : 47 pt de bande.
-    assert.equal(bottomShim(true, 390, 844, 390, 797), 47);
+describe('hauteur de la page', () => {
+  it('prend l’écran entier sur l’iPhone du club', () => {
+    // Relevé : écran 896, iOS n'en donne que 852 (la barre d'état, 44 pt).
+    assert.equal(pageHeight(true, 414, 896, 414, 852, 'portrait'), 896);
+    // iPhone 12 à 14 : 844, dont 47 de barre d'état.
+    assert.equal(pageHeight(true, 390, 844, 390, 797, 'portrait'), 844);
   });
 
-  it('ne fait rien quand la page couvre déjà l’écran', () => {
-    assert.equal(bottomShim(true, 390, 844, 390, 844), 0);
+  it('reste la même quand iOS annonce l’écran entier — sa propre correction', () => {
+    // C'est le point fixe qui manquait : allongée, la page fait annoncer 896
+    // à iOS ; la règle doit répondre la même chose qu'avant, pas « rien ».
+    assert.equal(pageHeight(true, 414, 896, 414, 896, 'portrait'), 896);
   });
 
   it('ne fait rien hors de l’app installée sur iOS', () => {
     // Onglet Safari (la barre d'outils mange légitimement le bas), Android,
     // ordinateur : `navigator.standalone` y vaut `false` ou n'existe pas.
-    assert.equal(bottomShim(false, 390, 844, 390, 664), 0);
-    assert.equal(bottomShim(undefined, 412, 915, 412, 843), 0);
+    assert.equal(pageHeight(false, 390, 844, 390, 664, 'portrait'), 0);
+    assert.equal(pageHeight(undefined, 412, 915, 412, 843, 'portrait'), 0);
   });
 
-  it('suit l’orientation', () => {
+  it('suit l’orientation de l’écran', () => {
     // iOS donne l'écran en portrait même en paysage.
-    assert.equal(bottomShim(true, 390, 844, 844, 390), 0);
-    assert.equal(bottomShim(true, 390, 844, 844, 370), 20);
+    assert.equal(pageHeight(true, 414, 896, 896, 414, 'landscape'), 414);
+    assert.equal(pageHeight(true, 414, 896, 896, 394, 'landscape'), 414);
+  });
+
+  it('ne se laisse pas tromper par le clavier', () => {
+    // Clavier ouvert en portrait : la fenêtre devient plus large que haute.
+    // L'orientation vient de l'écran — on garde l'état, on ne l'enlève pas.
+    assert.equal(pageHeight(true, 414, 896, 414, 380, 'portrait'), HOLD);
+    assert.equal(pageHeight(true, 414, 896, 414, 896 - MAX_SHIM - 1, 'portrait'), HOLD);
+    assert.equal(pageHeight(true, 414, 896, 414, 896 - MAX_SHIM, 'portrait'), 896);
   });
 
   it('laisse tranquille un iPad en fenêtre', () => {
-    // Split View ou Stage Manager : la fenêtre ne prend pas toute la largeur,
-    // l'écart de hauteur n'est pas une barre d'état.
-    assert.equal(bottomShim(true, 820, 1180, 500, 1156), 0);
-  });
-
-  it('ignore un écart qui n’est pas une barre d’état', () => {
-    // Clavier ouvert : des centaines de points.
-    assert.equal(bottomShim(true, 390, 844, 390, 844 - MAX_SHIM), MAX_SHIM);
-    assert.equal(bottomShim(true, 390, 844, 390, 844 - MAX_SHIM - 1), 0);
-    assert.equal(bottomShim(true, 390, 844, 390, 500), 0);
+    assert.equal(pageHeight(true, 820, 1180, 500, 1156, 'portrait'), 0);
   });
 
   it('ne se fie pas à une mesure absurde', () => {
-    assert.equal(bottomShim(true, 0, 844, 390, 797), 0);
-    assert.equal(bottomShim(true, 390, Number.NaN, 390, 797), 0);
-    assert.equal(bottomShim(true, 390, 844, 390, -1), 0);
-    assert.equal(bottomShim(true, 390, 844, 390, 900), 0, 'une page plus haute que l’écran');
+    assert.equal(pageHeight(true, 0, 896, 414, 852, 'portrait'), 0);
+    assert.equal(pageHeight(true, 414, Number.NaN, 414, 852, 'portrait'), 0);
+    assert.equal(pageHeight(true, 414, 896, 414, -1, 'portrait'), 0);
+    assert.equal(
+      pageHeight(true, 414, 896, 414, 950, 'portrait'),
+      HOLD,
+      'plus haute que l’écran',
+    );
   });
 });
 
 describe('injection', () => {
   it('porte une fonction autonome, sans référence extérieure', () => {
     // Son texte est recopié dans la page : elle ne doit rien attendre du
-    // module — ni `MAX_SHIM`, ni import.
-    const standalone = new Function(`return ${bottomShim.toString()}`)();
-    assert.equal(standalone(true, 390, 844, 390, 797), 47);
-    assert.ok(SHIM_SCRIPT.includes('function bottomShim'));
+    // module — ni constante, ni import.
+    const standalone = new Function(`return ${pageHeight.toString()}`)();
+    assert.equal(standalone(true, 414, 896, 414, 852, 'portrait'), 896);
+    assert.ok(SHIM_SCRIPT.includes('function pageHeight'));
   });
 
-  it('s’ajoute au document publié, avant le bundle', () => {
+  it('s’ajoute au document publié, dans <head>', () => {
     const page =
       '<!doctype html><html><head><title>x</title>' +
       '<script src="/_expo/static/js/web/entry.js" defer></script></head>' +
@@ -86,19 +96,7 @@ describe('injection', () => {
     assert.deepEqual(missingTags(html), []);
     // Un script en ligne dans `<head>` s'exécute pendant la lecture du
     // document : avant le corps, et avant le bundle, qui est différé.
-    assert.ok(
-      html.indexOf('function bottomShim') < html.indexOf('</head>'),
-      'la page doit être à la bonne hauteur avant le premier rendu',
-    );
-  });
-
-  it('remesure après le lancement, pas seulement au retour de l’arrière-plan', () => {
-    // Sur le terrain : l'app s'ouvrait avec la bande, et ne la perdait qu'au
-    // retour de l'arrière-plan — seul moment où l'on remesurait.
-    assert.ok(SHIM_SCRIPT.includes("addEventListener('load'"));
-    assert.ok(SHIM_SCRIPT.includes('DOMContentLoaded'));
-    for (const ms of SETTLE_DELAYS_MS) assert.ok(SHIM_SCRIPT.includes(String(ms)));
-    assert.ok(SHIM_SCRIPT.includes('__clubViewport'), 'les mesures restent lisibles');
+    assert.ok(html.indexOf('function pageHeight') < html.indexOf('</head>'));
   });
 
   it('ne mesure jamais en continu', () => {
@@ -106,25 +104,24 @@ describe('injection', () => {
     // le bas de l'app clignotait à chaque image.
     assert.ok(!SHIM_SCRIPT.includes('new ResizeObserver'));
     assert.ok(!SHIM_SCRIPT.includes('requestAnimationFrame'));
+    for (const ms of SETTLE_DELAYS_MS) assert.ok(SHIM_SCRIPT.includes(String(ms)));
   });
 
-  it('ne prolonge pas la sonde comme une feuille', () => {
-    // Elle porte un id : le sélecteur des feuilles l'exclut.
-    assert.ok(SHIM_SCRIPT.includes("probe.id = 'club-viewport-probe'"));
-    assert.ok(SHIM_STYLE.includes('body > div:not([id])'));
+  it('donne aux feuilles la hauteur de la page, pas celle d’iOS', () => {
+    assert.ok(SHIM_STYLE.includes('height: var(--club-height)'));
+    assert.ok(SHIM_STYLE.includes('body > div:not([id])'), 'la sonde, qui a un id, est exclue');
   });
 
   it('fait échouer le déploiement d’un document qui ne l’a pas', () => {
-    const bare = '<html><head></head><body></body></html>';
-    assert.ok(missingTags(bare).includes('club-shim'));
+    assert.ok(missingTags('<html><head></head><body></body></html>').includes('club-shim'));
   });
 });
 
 /**
  * Une page simulée, juste ce que le script touche : de quoi le faire tourner
- * dans Node, et reproduire le clignotement vu sur iPhone.
+ * dans Node et rejouer l'iPhone du club.
  */
-function fakePage({ innerHeight }) {
+function fakePage({ innerHeight, screen = { width: 414, height: 896 } }) {
   const handlers = {};
   const props = new Map();
   const classes = new Set();
@@ -134,6 +131,7 @@ function fakePage({ innerHeight }) {
   const root = {
     style: {
       setProperty: (k, v) => props.set(k, v),
+      removeProperty: (k) => props.delete(k),
       getPropertyValue: (k) => props.get(k) ?? '',
     },
     classList: {
@@ -144,8 +142,8 @@ function fakePage({ innerHeight }) {
   };
   const window = {
     navigator: { standalone: true },
-    screen: { width: 390, height: 844 },
-    innerWidth: 390,
+    screen: { ...screen, orientation: { type: 'portrait-primary' } },
+    innerWidth: screen.width,
     scrollY: 0,
     scrollTo() {},
     setTimeout() {},
@@ -162,39 +160,56 @@ function fakePage({ innerHeight }) {
   vm.createContext(window);
   vm.runInContext(SHIM_SCRIPT, window);
   const fire = (key) => (handlers[key] ?? []).forEach((fn) => fn());
-  return { window, classes, fire };
+  return { window, classes, props, fire };
 }
 
-describe('coupe-circuit', () => {
-  it('pose la bande au lancement sur l’iPhone du club', () => {
-    const page = fakePage({ innerHeight: () => 797 });
+describe('sur l’iPhone du club', () => {
+  it('prend l’écran entier dès le lancement', () => {
+    const page = fakePage({ innerHeight: () => 852 });
     assert.ok(page.classes.has('club-shim'));
-    assert.equal(page.window.__clubViewport.gap, 47);
+    assert.equal(page.props.get('--club-height'), '896px');
   });
 
-  it('ne laisse pas la page clignoter, même si iOS réagit à chaque correction', () => {
-    // Le pire cas : dès qu'on allonge la page, iOS annonce la bonne hauteur ;
-    // dès qu'on la raccourcit, il annonce de nouveau la hauteur tronquée.
-    let flips = 0;
-    let last = null;
-    const page = fakePage({ innerHeight: (classes) => (classes.has('club-shim') ? 844 : 797) });
-    for (let i = 0; i < 500; i++) {
-      page.fire('window:resize');
-      const now = page.classes.has('club-shim');
-      if (last !== null && now !== last) flips += 1;
-      last = now;
-    }
-    assert.ok(flips < MAX_TOGGLES, `${flips} bascules après le lancement`);
-    assert.equal(page.window.__clubViewport.frozen, true);
+  it('ne bascule plus, même si iOS réagit à la correction', () => {
+    // Exactement le relevé : 852 sans correction, 896 avec.
+    const page = fakePage({ innerHeight: (classes) => (classes.has('club-shim') ? 896 : 852) });
+    for (let i = 0; i < 500; i++) page.fire('window:resize');
+    const info = page.window.__clubViewport;
+    assert.equal(info.toggles, 1, 'posée une fois, jamais retirée');
+    assert.equal(info.frozen, false);
+    assert.equal(info.height, 896);
+    assert.ok(page.classes.has('club-shim'));
   });
 
-  it('se réarme au retour au premier plan, sans boucler pour autant', () => {
-    let height = 844;
+  it('est déjà à la bonne hauteur si iOS ne raccourcit la page qu’après le lancement', () => {
+    let height = 896;
     const page = fakePage({ innerHeight: () => height });
-    assert.ok(!page.classes.has('club-shim'));
-    height = 797;
-    page.fire('document:visibilitychange');
-    assert.ok(page.classes.has('club-shim'), 'la bande apparue plus tard est prise en compte');
-    assert.equal(page.window.__clubViewport.frozen, false);
+    assert.equal(page.props.get('--club-height'), '896px');
+    height = 852; // plus tard, sans le moindre événement
+    assert.equal(page.props.get('--club-height'), '896px');
+  });
+
+  it('garde sa hauteur quand le clavier s’ouvre', () => {
+    let height = 852;
+    const page = fakePage({ innerHeight: () => height });
+    height = 380;
+    page.fire('window:resize');
+    assert.equal(page.props.get('--club-height'), '896px');
+    assert.equal(page.window.__clubViewport.toggles, 1);
+  });
+
+  it('garde un coupe-circuit, au cas où', () => {
+    // Un iOS qui ferait tourner l'écran sans arrêt : la hauteur changerait à
+    // chaque fois. Au-delà de MAX_TOGGLES, on fige.
+    let landscape = false;
+    const page = fakePage({ innerHeight: () => (landscape ? 394 : 852) });
+    for (let i = 0; i < 20; i++) {
+      landscape = i % 2 === 0;
+      page.window.screen.orientation.type = i % 2 ? 'portrait-primary' : 'landscape-primary';
+      page.window.innerWidth = i % 2 ? 414 : 896;
+      page.fire('window:resize');
+    }
+    assert.ok(page.window.__clubViewport.toggles <= MAX_TOGGLES);
+    assert.equal(page.window.__clubViewport.frozen, true);
   });
 });
