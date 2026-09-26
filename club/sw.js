@@ -86,6 +86,30 @@ self.addEventListener('fetch', function (event) {
     return;
   }
 
+  // Une navigation dans l'app — recharger `…/club/oracle`, rouvrir sur
+  // `…/club/bag` : c'est toujours la coquille qu'il faut servir. L'app est une
+  // SPA, et GitHub Pages ne connaît que `index.html` : il répondait par sa page
+  // 404 à toute autre adresse. Le routeur lit ensuite l'adresse et affiche
+  // l'onglet.
+  if (request.mode === 'navigate') {
+    const shell = new Request(self.registration.scope);
+    event.respondWith(
+      fetch(shell)
+        .then(function (response) {
+          if (response.ok) return put(shell, response);
+          return caches.match(shell).then(function (hit) {
+            return hit || response;
+          });
+        })
+        .catch(function () {
+          return caches.match(shell).then(function (hit) {
+            return hit || caches.match('./');
+          });
+        }),
+    );
+    return;
+  }
+
   // Coquille d'app : réseau d'abord, cache en secours.
   event.respondWith(
     fetch(request)
@@ -173,7 +197,9 @@ self.addEventListener('notificationclick', function (event) {
         const open = list.find(function (client) {
           return client.url.indexOf(self.registration.scope) === 0;
         });
-        if (!open) return self.clients.openWindow(target);
+        // On ouvre toujours l'accueil de l'app, que GitHub Pages sait servir ;
+        // l'app lit ensuite la notification gardée et va à son écran.
+        if (!open) return self.clients.openWindow(self.registration.scope);
         // L'app était en veille : elle relit ses données et va à l'écran dit,
         // même si la navigation ci-dessous est refusée.
         try {
@@ -189,7 +215,7 @@ self.addEventListener('notificationclick', function (event) {
           })
           .then(function (client) {
             return client && 'navigate' in client
-              ? client.navigate(target).catch(function () {
+              ? client.navigate(self.registration.scope).catch(function () {
                   return client;
                 })
               : client;
