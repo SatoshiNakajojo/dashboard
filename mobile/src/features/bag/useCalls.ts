@@ -11,7 +11,7 @@ import { entryBtcFor, liveBtc, mergeQuotes } from './quoteRefresh';
 import { useLiveQuotes } from './useLiveQuotes';
 import { describeError, supabase } from '@/lib/supabase';
 import type { CallView, Member, Ticker, Vote, VoteView } from '@/types/domain';
-import { getCallsSource, type CallDraftInput, type VoteRow } from './source';
+import { getCallsSource, type CallDraftInput, type EntryWaiver, type VoteRow } from './source';
 
 export interface PublishInput {
   assetClass: CallDraftInput['assetClass'];
@@ -27,6 +27,11 @@ export interface PublishInput {
   exchange?: string | null;
   /** Jeton choisi dans le composer ; à défaut, on résout le ticker nous-mêmes. */
   coingeckoId?: string | null;
+  /**
+   * Le prix et le jour d'entrée saisis — seulement avec une exception du club
+   * sur ce titre (`waiverFor`). Sans elle, ignorés : cours live, aujourd'hui.
+   */
+  manualEntry?: { price: number; date: string } | null;
 }
 
 /**
@@ -60,6 +65,11 @@ export interface CallsState {
   close: (tickerId: string) => Promise<boolean>;
   /** Publication en cours — le bouton du composer s'en sert. */
   publishing: boolean;
+  /**
+   * Mon exception au cours live sur ce titre, s'il y en a une : le club m'y
+   * autorise à publier au prix et au jour où je suis entré (v1.01).
+   */
+  waiverFor: (symbol: string) => EntryWaiver | null;
 }
 
 const UNKNOWN_MEMBER: Omit<Member, 'id'> = {
@@ -90,6 +100,8 @@ export function useCalls(
   const [votes, setVotes] = useState<VoteRow[]>([]);
   /** Les calls où j'ai retiré mon vote — définitif. */
   const [withdrawn, setWithdrawn] = useState<ReadonlySet<string>>(() => new Set());
+  /** Mes exceptions au cours live, encore ouvertes. */
+  const [waivers, setWaivers] = useState<EntryWaiver[]>([]);
   const [loaded, setLoaded] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [publishing, setPublishing] = useState(false);
@@ -110,12 +122,16 @@ export function useCalls(
       currentUserId
         ? source.listMyWithdrawals(currentUserId, controller.signal)
         : Promise.resolve([]),
+      currentUserId
+        ? source.listMyWaivers(currentUserId, controller.signal)
+        : Promise.resolve([]),
     ])
-      .then(([rows, voteRows, withdrawals]) => {
+      .then(([rows, voteRows, withdrawals, myWaivers]) => {
         if (!active || controller.signal.aborted) return;
         setTickers(rows);
         setVotes(voteRows);
         setWithdrawn(new Set(withdrawals));
+        setWaivers(myWaivers);
         setError(null);
         setLoaded(true);
         loadedOnce.current = true;
@@ -220,6 +236,13 @@ export function useCalls(
     [spot],
   );
 
+  const waiverFor = useCallback(
+    (symbol: string) =>
+      waivers.find((waiver) => waiver.symbol.toUpperCase() === symbol.trim().toUpperCase()) ??
+      null,
+    [waivers],
+  );
+
   const publish = useCallback(
     async (input: PublishInput): Promise<boolean> => {
       if (!currentUserId || publishing) return false;
@@ -243,21 +266,34 @@ export function useCalls(
           ? null
           : (input.coingeckoId ?? (await resolveCoingeckoId(input.symbol)));
 
-        // Le prix d'entrée est le cours de cet instant — jamais une saisie.
-        // Un call BTC a déjà son cours : le spot que l'app tient à jour.
-        const entryPrice =
-          (input.assetClass === 'BTC' ? liveBtc(spot) : null) ??
-          (await fetchLivePrice({ assetClass: input.assetClass, yahooSymbol, coingeckoId })) ??
-          usablePrice(input.entryPrice);
+        // Une exception du club sur ce titre : le prix et le jour saisis. La
+        // base les garde, les confirme d'office, et consomme l'exception.
+        const waiver = input.manualEntry ? waiverFor(input.symbol) : null;
+        const manual = waiver ? input.manualEntry! : null;
+
+        // Sinon, le prix d'entrée est le cours de cet instant — jamais une
+        // saisie. Un call BTC a déjà son cours : le spot que l'app tient à jour.
+        const entryPrice = manual
+          ? usablePrice(manual.price)
+          : ((input.assetClass === 'BTC' ? liveBtc(spot) : null) ??
+            (await fetchLivePrice({
+              assetClass: input.assetClass,
+              yahooSymbol,
+              coingeckoId,
+            })) ??
+            usablePrice(input.entryPrice));
         if (entryPrice === null) {
           setError(
-            `Cours live de ${input.symbol} introuvable : un call se publie au prix du marché. Réessayez dans un moment.`,
+            manual
+              ? 'Le prix d’entrée : un nombre, en dollars.'
+              : `Cours live de ${input.symbol} introuvable : un call se publie au prix du marché. Réessayez dans un moment.`,
           );
           return false;
         }
 
-        // Aujourd'hui, maintenant : la base impose de toute façon le jour.
-        const entry = await resolveEntry(input.assetClass, entryPrice, '');
+        // Aujourd'hui, maintenant — la base l'impose de toute façon —, ou le
+        // jour saisi avec l'exception, et le bitcoin de ce jour-là.
+        const entry = await resolveEntry(input.assetClass, entryPrice, manual?.date ?? '');
         if ('problem' in entry) {
           setError(entry.problem);
           return false;
@@ -276,6 +312,10 @@ export function useCalls(
         );
 
         setTickers((rows) => [ticker, ...rows]);
+        // Publier sur ce titre consomme l'exception, dans la base comme ici.
+        setWaivers((current) =>
+          current.filter((one) => one.symbol.toUpperCase() !== input.symbol.toUpperCase()),
+        );
         setError(null);
         return true;
       } catch (cause) {
@@ -285,7 +325,7 @@ export function useCalls(
         setPublishing(false);
       }
     },
-    [currentUserId, publishing, source, resolveEntry, spot],
+    [currentUserId, publishing, source, resolveEntry, spot, waiverFor],
   );
 
   /**
@@ -464,5 +504,6 @@ export function useCalls(
     remove,
     close,
     publishing,
+    waiverFor,
   };
 }

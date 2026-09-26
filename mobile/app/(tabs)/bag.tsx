@@ -31,8 +31,19 @@ type BagView = 'bag' | 'closed' | 'rekt';
 export default function BagScreen() {
   const { userId } = useSession();
   const { byId } = useMembers();
-  const { calls, loading, error, vote, voting, publish, edit, remove, close, publishing } =
-    useCalls(userId, byId);
+  const {
+    calls,
+    loading,
+    error,
+    vote,
+    voting,
+    publish,
+    edit,
+    remove,
+    close,
+    publishing,
+    waiverFor,
+  } = useCalls(userId, byId);
 
   const [view, setView] = useState<BagView>('bag');
   const [composerOpen, setComposerOpen] = useState(false);
@@ -159,6 +170,8 @@ export default function BagScreen() {
         error={error}
         onClose={closeSheet}
         onPublish={handlePublish}
+        // Une exception du club sur un ticker : son prix et son jour se saisissent.
+        waiverFor={waiverFor}
       />
 
       <CloseCallSheet

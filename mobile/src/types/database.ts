@@ -53,6 +53,18 @@ export type PotluckItemRow = {
   updated_at: string;
 };
 
+/** Exception au cours live, accordée par le club (migration `20261009090000_entry_waivers`). */
+export type EntryWaiverRow = {
+  id: string;
+  user_id: string;
+  symbol: string;
+  reason: string;
+  max_days_back: number;
+  granted_at: string;
+  used_at: string | null;
+  ticker_id: string | null;
+};
+
 /** Contre-proposition de lieu (migration `20261003090000_event_proposals`). */
 export type EventProposalRow = {
   id: string;
@@ -187,6 +199,7 @@ export type Database = {
       tickers: Table<TickerRow, Omit<Partial<TickerRow>, 'performance_percentage'>>;
       ticker_votes: Table<TickerVoteRow>;
       ticker_vote_withdrawals: Table<TickerVoteWithdrawalRow>;
+      entry_waivers: Table<EntryWaiverRow>;
       predictions: Table<PredictionRow>;
       push_subscriptions: Table<PushSubscriptionRow>;
       notification_prefs: Table<NotificationPrefsRow>;

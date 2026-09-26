@@ -83,7 +83,7 @@ export function DateTimeFields({
           year={view.year}
           month={view.month}
           selected={selected}
-          today={today}
+          disabled={(key) => key < today && key !== selected}
           onShiftMonth={(delta) =>
             setView((current) => shiftMonth(current.year, current.month, delta))
           }
@@ -100,6 +100,65 @@ export function DateTimeFields({
           onPick={(value) => {
             onTimeChange(value);
             setOpen(null);
+          }}
+        />
+      ) : null}
+    </View>
+  );
+}
+
+/**
+ * Un jour seul, entre deux bornes — le jour d'entrée d'un call publié avec une
+ * exception du club. Même calendrier, mêmes gestes.
+ */
+export function DateField({
+  label,
+  date,
+  onDateChange,
+  minKey,
+  maxKey,
+}: {
+  label: string;
+  /** `03/10/2026`. */
+  date: string;
+  onDateChange: (date: string) => void;
+  /** Premier et dernier jour choisissables, `2026-09-19` et `2026-09-26`. */
+  minKey: string;
+  maxKey: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const selected = keyFromFieldDate(date);
+  const [view, setView] = useState(() => monthOfKey(selected ?? maxKey));
+
+  return (
+    <View>
+      <View
+        className="flex-row"
+        style={{ borderTopWidth: 1, borderBottomWidth: 1, borderColor: c.hairline }}
+      >
+        <FieldButton
+          label={label}
+          value={selected ? shortDateLabel(selected) : 'Choisir'}
+          accessibilityLabel={`${label} : ${selected ? longDateLabel(selected) : 'à choisir'}`}
+          active={open}
+          onPress={() => {
+            if (!open) setView(monthOfKey(selected ?? maxKey));
+            setOpen((current) => !current);
+          }}
+        />
+      </View>
+      {open ? (
+        <DatePanel
+          year={view.year}
+          month={view.month}
+          selected={selected}
+          disabled={(key) => key < minKey || key > maxKey}
+          onShiftMonth={(delta) =>
+            setView((current) => shiftMonth(current.year, current.month, delta))
+          }
+          onPick={(key) => {
+            onDateChange(fieldDateFromKey(key));
+            setOpen(false);
           }}
         />
       ) : null}
@@ -186,14 +245,15 @@ function DatePanel({
   year,
   month,
   selected,
-  today,
+  disabled,
   onShiftMonth,
   onPick,
 }: {
   year: number;
   month: number;
   selected: string | null;
-  today: string;
+  /** Les jours qu'on ne peut pas choisir, grisés. */
+  disabled: (key: string) => boolean;
   onShiftMonth: (delta: number) => void;
   onPick: (key: string) => void;
 }) {
@@ -233,7 +293,7 @@ function DatePanel({
         <View key={row} className="flex-row">
           {week.map((day) => {
             const isSelected = day.key === selected;
-            const past = day.key < today && !isSelected;
+            const past = disabled(day.key);
             return (
               <Pressable
                 key={day.key}

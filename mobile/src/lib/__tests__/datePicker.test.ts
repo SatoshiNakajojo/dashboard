@@ -6,6 +6,7 @@ import {
   keyFromFieldDate,
   longDateLabel,
   monthOfKey,
+  shiftDayKey,
   shortDateLabel,
   timeOptions,
 } from '@/lib/datePicker';
@@ -22,6 +23,12 @@ describe('choisir une date au calendrier', () => {
     assert.equal(keyFromFieldDate('3/10/2026'), null);
     assert.equal(keyFromFieldDate(''), null);
     assert.equal(fieldDateFromKey('pas une clé'), '');
+  });
+
+  it('compte les jours, en passant les mois', () => {
+    assert.equal(shiftDayKey('2026-09-26', -7), '2026-09-19');
+    assert.equal(shiftDayKey('2026-10-03', -7), '2026-09-26');
+    assert.equal(shiftDayKey('2026-12-31', 1), '2027-01-01');
   });
 
   it('ouvre le calendrier sur le mois du jour choisi', () => {

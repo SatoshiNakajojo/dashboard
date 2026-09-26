@@ -62,6 +62,16 @@ export function fieldDateFromKey(key: string): string {
   return `${d}/${m}/${y}`;
 }
 
+/** Le jour `delta` jours plus tard (ou plus tôt) : `2026-09-26`, −7 → `2026-09-19`. */
+export function shiftDayKey(key: string, delta: number): string {
+  const match = KEY_RE.exec(key);
+  if (!match) return key;
+  const day = new Date(
+    Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]) + delta),
+  );
+  return `${day.getUTCFullYear()}-${pad(day.getUTCMonth() + 1)}-${pad(day.getUTCDate())}`;
+}
+
 /** Le mois d'un jour, pour ouvrir le calendrier dessus. */
 export function monthOfKey(key: string): { year: number; month: number } {
   const match = KEY_RE.exec(key);

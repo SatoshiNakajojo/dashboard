@@ -3,11 +3,15 @@ import { Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-nativ
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 
+import { DateField } from '@/components/DateTimeFields';
 import { Micro } from '@/components/ui/Micro';
+import type { EntryWaiver } from '@/features/bag/source';
 import { useCoinSearch } from '@/features/bag/useCoinSearch';
 import { useSuggestedPrice } from '@/features/bag/useSuggestedPrice';
 import { useKeyboardFrame } from '@/hooks/useKeyboardFrame';
 import { entryDayOf } from '@/lib/btcAtDate';
+import { todayInClub } from '@/lib/clubTime';
+import { keyFromFieldDate, shiftDayKey } from '@/lib/datePicker';
 import { formatUsd } from '@/lib/format';
 import { normalizeTicker, type CoinMatch } from '@/lib/coinSearch';
 import { DEFAULT_EXCHANGE, EXCHANGES, providerFor, type ExchangeKey } from '@/lib/quotes';
@@ -37,6 +41,17 @@ export interface CallDraft {
    * laisse la publication résoudre le ticker elle-même.
    */
   coingeckoId: string | null;
+  /**
+   * Prix et jour d'entrée saisis, avec une exception du club sur ce titre
+   * (`waiverFor`) ; `null` sinon.
+   */
+  manualEntry: { price: number; date: string } | null;
+}
+
+/** `12,5` ou `12.5` → 12.5 ; autre chose → `null`. */
+function parsePrice(text: string): number | null {
+  const value = Number(text.replace(/\s/g, '').replace(',', '.'));
+  return Number.isFinite(value) && value > 0 ? value : null;
 }
 
 export interface ComposerSheetProps {
@@ -60,6 +75,11 @@ export interface ComposerSheetProps {
    * valeurs dans un effet.
    */
   editing?: CallView | null;
+  /**
+   * Mon exception au cours live sur ce ticker, s'il y en a une : le club m'y
+   * autorise à publier au prix et au jour où je suis entré, une fois.
+   */
+  waiverFor?: (symbol: string) => EntryWaiver | null;
 }
 
 /** Limite dure de la thèse — la même que la contrainte `tickers.thesis`. */
@@ -73,12 +93,16 @@ export function ComposerSheet({
   onClose,
   onPublish,
   editing = null,
+  waiverFor,
 }: ComposerSheetProps) {
   const [assetClass, setAssetClass] = useState<AssetClass>(editing?.assetClass ?? 'BTC');
   const [symbol, setSymbol] = useState(editing?.symbol ?? '$BTC');
   const [thesis, setThesis] = useState(editing?.thesis ?? '');
   const [exchange, setExchange] = useState<ExchangeKey>(DEFAULT_EXCHANGE);
   const [picked, setPicked] = useState<CoinMatch | null>(null);
+  /** Avec une exception : le prix et le jour d'entrée, saisis. */
+  const [manualPrice, setManualPrice] = useState('');
+  const [manualDate, setManualDate] = useState(() => todayInClub());
 
   /** Seuls les titres ont une place de cotation ; un jeton se négocie partout. */
   const isStock = providerFor(assetClass) === 'yahoo';
@@ -109,7 +133,12 @@ export function ComposerSheet({
    * relevé suivant et le confirme.
    */
   const suggested = useSuggestedPrice(assetClass, symbol, exchange, coin?.id ?? null);
-  const entryPrice = suggested.price ?? 0;
+
+  /** Une exception du club sur ce ticker : le prix et le jour se saisissent. */
+  const waiver = editing ? null : (waiverFor?.(symbol) ?? null);
+  const todayKey = keyFromFieldDate(todayInClub())!;
+  const typedPrice = parsePrice(manualPrice);
+  const entryPrice = waiver ? (typedPrice ?? 0) : (suggested.price ?? 0);
 
   const reset = () => {
     setAssetClass('BTC');
@@ -117,6 +146,8 @@ export function ComposerSheet({
     setThesis('');
     setExchange(DEFAULT_EXCHANGE);
     setPicked(null);
+    setManualPrice('');
+    setManualDate(todayInClub());
   };
 
   const submit = async () => {
@@ -127,6 +158,7 @@ export function ComposerSheet({
       thesis: thesis.trim(),
       exchange,
       coingeckoId: coin?.id ?? null,
+      manualEntry: waiver && typedPrice ? { price: typedPrice, date: manualDate } : null,
     });
     // Sur échec, on garde la saisie : le membre ne doit pas réécrire sa thèse.
     if (sent) reset();
@@ -151,15 +183,17 @@ export function ComposerSheet({
         : null
     : !symbolValid
       ? 'Un ticker comme « $BTC », lettres et chiffres.'
-      : entryPrice <= 0
-        ? suggested.loading || search.loading
-          ? 'Recherche du cours live…'
-          : isCoin && search.empty
-            ? 'Aucun jeton connu sous ce ticker : sans cours de marché, pas de call.'
-            : 'Cours live introuvable pour ce ticker : un call se publie au prix du marché.'
-        : thesis.trim().length === 0
-          ? 'Une thèse, même courte.'
-          : null;
+      : waiver && typedPrice === null
+        ? 'Votre prix d’entrée, en dollars.'
+        : entryPrice <= 0
+          ? suggested.loading || search.loading
+            ? 'Recherche du cours live…'
+            : isCoin && search.empty
+              ? 'Aucun jeton connu sous ce ticker : sans cours de marché, pas de call.'
+              : 'Cours live introuvable pour ce ticker : un call se publie au prix du marché.'
+          : thesis.trim().length === 0
+            ? 'Une thèse, même courte.'
+            : null;
 
   const canPublish = blockedReason === null && !publishing;
   const keyboard = useKeyboardFrame();
@@ -309,43 +343,82 @@ export function ComposerSheet({
                   borderLeftColor: c.hairline,
                 }}
               >
-                <Micro size={8.5} tracking={1.7} style={{ color: c.sepiaMuted }}>
-                  {editing ? 'PRIX D’ENTRÉE' : 'PRIX D’ENTRÉE · LIVE'}
-                </Micro>
-                <Text
-                  accessibilityLabel="Prix d’entrée, cours live"
-                  style={{
-                    fontFamily: f.labelMed,
-                    fontSize: 14,
-                    color: (editing ? editing.entryPrice : suggested.price)
-                      ? c.ivory
-                      : c.sepiaFaint,
-                    marginTop: 8,
-                  }}
-                >
-                  {editing
-                    ? formatUsd(editing.entryPrice)
-                    : suggested.price !== null
-                      ? formatUsd(suggested.price)
-                      : suggested.loading || search.loading
-                        ? '…'
-                        : 'introuvable'}
-                </Text>
+                {waiver ? (
+                  <>
+                    <Micro size={8.5} tracking={1.7} style={{ color: c.gold }}>
+                      PRIX D’ENTRÉE · EXCEPTION
+                    </Micro>
+                    <TextInput
+                      value={manualPrice}
+                      onChangeText={setManualPrice}
+                      keyboardType="decimal-pad"
+                      accessibilityLabel="Votre prix d’entrée, en dollars"
+                      placeholder={
+                        suggested.price !== null ? `live ${formatUsd(suggested.price)}` : '0,00'
+                      }
+                      placeholderTextColor={c.sepiaFaint}
+                      style={{
+                        fontFamily: f.labelMed,
+                        fontSize: 15,
+                        color: typedPrice === null && manualPrice ? c.oxblood : c.ivory,
+                        marginTop: 6,
+                        padding: 0,
+                      }}
+                    />
+                  </>
+                ) : (
+                  <>
+                    <Micro size={8.5} tracking={1.7} style={{ color: c.sepiaMuted }}>
+                      {editing ? 'PRIX D’ENTRÉE' : 'PRIX D’ENTRÉE · LIVE'}
+                    </Micro>
+                    <Text
+                      accessibilityLabel="Prix d’entrée, cours live"
+                      style={{
+                        fontFamily: f.labelMed,
+                        fontSize: 14,
+                        color: (editing ? editing.entryPrice : suggested.price)
+                          ? c.ivory
+                          : c.sepiaFaint,
+                        marginTop: 8,
+                      }}
+                    >
+                      {editing
+                        ? formatUsd(editing.entryPrice)
+                        : suggested.price !== null
+                          ? formatUsd(suggested.price)
+                          : suggested.loading || search.loading
+                            ? '…'
+                            : 'introuvable'}
+                    </Text>
+                  </>
+                )}
               </View>
             </View>
+
+            {waiver ? (
+              <DateField
+                label="JOUR D’ENTRÉE"
+                date={manualDate}
+                onDateChange={setManualDate}
+                minKey={shiftDayKey(todayKey, -waiver.maxDaysBack)}
+                maxKey={todayKey}
+              />
+            ) : null}
 
             <Text
               style={{
                 fontFamily: f.sans,
                 fontSize: 10,
                 lineHeight: 16,
-                color: c.sepiaFaint,
+                color: waiver ? c.gold : c.sepiaFaint,
                 marginTop: -8,
               }}
             >
-              {editing
-                ? `Entrée au marché le ${entryDayOf(editing)}. Le prix et le jour d’entrée ne se modifient pas ; la thèse, si.`
-                : 'Un call se publie au cours du marché, maintenant : ni saisie, ni date passée. Le serveur relit ce cours dans le quart d’heure et le confirme.'}
+              {waiver
+                ? `Exception accordée par le club pour ${waiver.symbol} : votre prix et votre jour d’entrée (${waiver.maxDaysBack} jours en arrière au plus), une seule fois. Le bitcoin de référence est celui de ce jour-là.`
+                : editing
+                  ? `Entrée au marché le ${entryDayOf(editing)}. Le prix et le jour d’entrée ne se modifient pas ; la thèse, si.`
+                  : 'Un call se publie au cours du marché, maintenant : ni saisie, ni date passée. Le serveur relit ce cours dans le quart d’heure et le confirme.'}
             </Text>
 
             {isStock && !editing && (

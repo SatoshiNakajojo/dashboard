@@ -8,6 +8,7 @@
 
 import { supabase } from '@/lib/supabase';
 import { MOCK_TICKERS, MOCK_VOTE_ROWS } from '@/mocks/calls';
+import { MOCK_CURRENT_USER_ID } from '@/mocks/members';
 import type { AssetClass } from '@/theme/tokens';
 import type { Ticker, Vote } from '@/types/domain';
 
@@ -64,8 +65,20 @@ export interface VoteRow {
   changedAt: string | null;
 }
 
+/**
+ * Une exception au cours live, accordée par le club (migration
+ * `20261009090000_entry_waivers`) : ce membre publie **un** call sur ce titre
+ * au prix et au jour où il est entré, au plus `maxDaysBack` jours en arrière.
+ */
+export interface EntryWaiver {
+  symbol: string;
+  maxDaysBack: number;
+}
+
 export interface CallsSource {
   list(signal?: AbortSignal): Promise<Ticker[]>;
+  /** Mes exceptions encore ouvertes. */
+  listMyWaivers(userId: string, signal?: AbortSignal): Promise<EntryWaiver[]>;
   listVotes(signal?: AbortSignal): Promise<VoteRow[]>;
   /**
    * Les calls sur lesquels ce membre a retiré son vote — c'est définitif.
@@ -228,6 +241,22 @@ function createSupabaseSource(client: NonNullable<typeof supabase>): CallsSource
       return (data ?? []).map((row) => voteFromRow(row as Parameters<typeof voteFromRow>[0]));
     },
 
+    async listMyWaivers(userId, signal) {
+      let query = client
+        .from('entry_waivers')
+        .select('symbol, max_days_back')
+        .eq('user_id', userId)
+        .is('used_at', null);
+      if (signal) query = query.abortSignal(signal);
+      const { data, error } = await query;
+      // Avant la migration, la table n'existe pas : aucune exception.
+      if (error) return [];
+      return (data ?? []).map((row) => ({
+        symbol: String(row.symbol),
+        maxDaysBack: Number(row.max_days_back),
+      }));
+    },
+
     async listMyWithdrawals(userId, signal) {
       let query = client
         .from('ticker_vote_withdrawals')
@@ -345,6 +374,10 @@ function createMockSource(): CallsSource {
   const votes: VoteRow[] = MOCK_VOTE_ROWS.map((v) => ({ ...v }));
   /** Les retraits, `tickerId:userId` — définitifs, comme dans la base. */
   const withdrawals = new Set<string>();
+  /** Démo : une exception sur $VIAV, pour voir la feuille qui l'accueille. */
+  const waivers = new Map<string, EntryWaiver[]>([
+    [MOCK_CURRENT_USER_ID, [{ symbol: '$VIAV', maxDaysBack: 7 }]],
+  ]);
 
   return {
     async list() {
@@ -355,6 +388,10 @@ function createMockSource(): CallsSource {
     async listVotes() {
       await delay(MOCK_LATENCY_MS);
       return votes.map((v) => ({ ...v }));
+    },
+
+    async listMyWaivers(userId) {
+      return (waivers.get(userId) ?? []).map((waiver) => ({ ...waiver }));
     },
 
     async listMyWithdrawals(userId) {
@@ -391,6 +428,14 @@ function createMockSource(): CallsSource {
         exitConfirmedAt: null,
       };
       tickers.unshift(ticker);
+      // Comme la base : publier sur ce titre consomme l'exception.
+      const mine = waivers.get(userId);
+      if (mine) {
+        waivers.set(
+          userId,
+          mine.filter((waiver) => waiver.symbol.toUpperCase() !== draft.symbol.toUpperCase()),
+        );
+      }
       return { ...ticker };
     },
 

@@ -1308,6 +1308,84 @@ begin
   delete from public.profiles where id = zoe;
 end $$;
 
+-- --- Exception au cours live, accordée par le club (v1.01) ------------------
+do $$
+declare
+  john   constant uuid := 'aaaaaaaa-0000-4000-8000-000000000001';
+  alex   constant uuid := 'aaaaaaaa-0000-4000-8000-000000000002';
+  today  date := (now() at time zone 'Pacific/Noumea')::date;
+  t      public.tickers%rowtype;
+  w      public.entry_waivers%rowtype;
+  n      integer;
+  failed boolean;
+begin
+  insert into public.entry_waivers (user_id, symbol, reason) values (alex, '$VIAV', 'test');
+
+  set local role authenticated;
+
+  -- Un membre ne lit que ses exceptions.
+  perform set_config('test.uid', john::text, true);
+  select count(*) into n from public.entry_waivers;
+  assert n = 0, 'on ne lit pas les exceptions des autres';
+
+  -- Sans exception : cours live, aujourd'hui, quoi qu'envoie l'app.
+  insert into public.tickers (user_id, symbol, asset_class, entry_price, current_price, thesis, entered_on, yahoo_symbol)
+  values (john, '$VIAV', 'ACTION', 9, 12, 'Sans exception.', today - 1, 'VIAV')
+  returning * into t;
+  assert t.entered_on = today and t.entry_confirmed_at is null, 'sans exception, le jour est imposé';
+
+  -- Consommer une exception sans publier : refusé.
+  perform set_config('test.uid', alex::text, true);
+  failed := false;
+  begin
+    perform public.consume_entry_waiver('$VIAV', gen_random_uuid());
+  exception when insufficient_privilege then failed := true;
+  end;
+  assert failed, 'une exception ne se consomme qu''en publiant';
+
+  -- Avec l'exception : le prix et le jour d'Alex, confirmés, et l'exception consommée.
+  insert into public.tickers (user_id, symbol, asset_class, entry_price, current_price, entry_btc_price, thesis, entered_on, yahoo_symbol)
+  values (alex, '$VIAV', 'ACTION', 9.5, 12, 84500, 'Entré hier, l''app était en panne.', today - 1, 'VIAV')
+  returning * into t;
+  assert t.entered_on = today - 1 and t.entry_price = 9.5 and t.entry_btc_price = 84500,
+    'l''exception garde le prix et le jour du membre';
+  assert t.entry_confirmed_at is not null, 'le prix est confirmé d''office';
+  reset role;
+  select * into w from public.entry_waivers where user_id = alex and symbol = '$VIAV';
+  assert w.used_at is not null and w.ticker_id = t.id, 'l''exception est consommée par ce call';
+  raise notice 'ok · exception : un membre publie ce call-là au prix et au jour où il est entré';
+
+  -- Une seule fois : le call suivant reprend la règle.
+  set local role authenticated;
+  perform set_config('test.uid', alex::text, true);
+  insert into public.tickers (user_id, symbol, asset_class, entry_price, current_price, thesis, entered_on, yahoo_symbol)
+  values (alex, '$VIAV', 'ACTION', 9.5, 12, 'Une deuxième fois.', today - 1, 'VIAV')
+  returning * into t;
+  assert t.entered_on = today and t.entry_confirmed_at is null, 'une exception ne sert qu''une fois';
+  raise notice 'ok · exception : une seule fois, et pas pour les autres membres';
+
+  -- Pas plus loin que ce que l'exception permet.
+  reset role;
+  insert into public.entry_waivers (user_id, symbol, reason, max_days_back) values (alex, '$ABC', 'test', 7);
+  set local role authenticated;
+  perform set_config('test.uid', alex::text, true);
+  failed := false;
+  begin
+    insert into public.tickers (user_id, symbol, asset_class, entry_price, current_price, thesis, entered_on, yahoo_symbol)
+    values (alex, '$ABC', 'ACTION', 5, 5, 'Trop loin.', today - 10, 'ABC');
+  exception when check_violation then failed := true;
+  end;
+  assert failed, 'une entrée plus ancienne que l''exception est refusée';
+  reset role;
+  select used_at into w.used_at from public.entry_waivers where user_id = alex and symbol = '$ABC';
+  assert w.used_at is null, 'un refus ne consomme pas l''exception';
+  raise notice 'ok · exception : bornée dans le temps, et intacte après un refus';
+
+  perform set_config('test.uid', '', true);
+  delete from public.tickers where symbol = '$VIAV';
+  delete from public.entry_waivers where user_id = alex;
+end $$;
+
 rollback;
 
 \echo 'Tous les tests de schéma sont passés.'

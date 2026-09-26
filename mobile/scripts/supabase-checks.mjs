@@ -53,6 +53,11 @@ export const COLUMNS = [
     column: 'added_by',
     migration: '20261008090000_potluck_member_lines.sql',
   },
+  {
+    table: 'entry_waivers',
+    column: 'max_days_back',
+    migration: '20261009090000_entry_waivers.sql',
+  },
 ];
 
 const ok = (label, detail) => ({ level: 'ok', label, detail });

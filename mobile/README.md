@@ -124,7 +124,7 @@ qu'on n'a pas déposé le nouveau tracé.
 
 ## Ce qui a été vérifié
 
-- `npm run typecheck`, `npm run lint`, `npm test` — propres (603 tests).
+- `npm run typecheck`, `npm run lint`, `npm test` — propres (604 tests).
 - **Règles pures** : bornes et inversibilité du repère, monotonie du tracé,
   écart à la courbe réelle, espaces insécables du formatage français, perf vs ₿
   comme ratio et non soustraction, seuils et tri des deux classements.
@@ -700,16 +700,25 @@ affiche **À CONFIRMER** à côté du prix de sortie. Les calls clôturés avant
 v1.01 gardent leur sortie.
 
 **Exception, décidée par le club.** L'app était en panne le jour où Tim
-voulait publier son call ; le club l'autorise, pour ce call seulement, à le
-publier au prix où il est entré. L'app ne l'accepte pas, et c'est voulu. Cela
-passe donc par l'administrateur, avec `supabase/admin/call-exception.sql`. Le
-membre publie son call normalement, puis on lance ce script dans Supabase →
-SQL Editor, avec le membre, le titre, le prix d'achat, le cours du bitcoin au
-même moment et le jour d'entrée. Le script ne touche qu'un call ouvert de ce
-membre sur ce titre et s'arrête s'il en trouve zéro ou plusieurs. Le call
-reste confirmé (le relevé des prix ne remplacera pas l'entrée) et n'est pas
-marqué « modifié ». Vérifié sur la base de test, avant et après la
-confirmation par le relevé.
+voulait publier son call sur `$VIAV` ; le club l'autorise, pour ce call
+seulement, à le publier au prix et au jour où il est entré
+(migration `20261009090000_entry_waivers`) :
+
+- une exception = un membre, un titre, une publication (`entry_waivers`). La
+  migration accorde celle de Tim sur `$VIAV`, et seul l'administrateur en
+  accorde d'autres (SQL Editor). Un membre ne lit que les siennes ;
+- dans « Poster un call », quand le ticker a une exception, le prix live cède
+  la place à **PRIX D'ENTRÉE · EXCEPTION** (saisi) et à **JOUR D'ENTRÉE**
+  (calendrier, 7 jours en arrière au plus). Le bitcoin de référence est celui
+  de ce jour-là ;
+- la base garde ce prix et ce jour, les marque confirmés (le relevé ne les
+  remplacera pas) et consomme l'exception. Le call suivant reprend la règle,
+  et pour les autres membres rien ne change. Une entrée plus ancienne que
+  l'exception est refusée, et ce refus ne la consomme pas.
+
+Vérifié en base (3 blocs) et dans Chromium : la démo accorde la même exception
+à « Toi » sur `$VIAV`. Pour corriger un call **déjà publié**, il reste
+`supabase/admin/call-exception.sql`, à lancer dans le SQL Editor.
 
 ---
 
