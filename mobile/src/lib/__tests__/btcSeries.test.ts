@@ -6,7 +6,11 @@ import {
   DAILY_DAYS,
   HOURLY_DAYS,
   binanceRequests,
+  describeHistory,
+  edgeSeriesPath,
+  failureReason,
   mergePages,
+  parseEdgeSeries,
   parseBinanceKlines,
   seriesFor,
   seriesKey,
@@ -102,6 +106,44 @@ describe('Binance, en secours', () => {
     assert.deepEqual(
       mergePages([b, a]).map((p) => p.timestamp),
       [1, 2, 3],
+    );
+  });
+});
+
+describe('Supabase (Yahoo), en secours', () => {
+  it('demande la bonne série à la fonction quote', () => {
+    assert.equal(
+      edgeSeriesPath({ daily: false, days: HOURLY_DAYS }),
+      'quote?symbol=BTC-USD&series=1h',
+    );
+    assert.equal(
+      edgeSeriesPath({ daily: true, days: DAILY_DAYS }),
+      'quote?symbol=BTC-USD&series=1d',
+    );
+  });
+
+  it('lit sa réponse, et rien d’une ancienne version qui rend un cours', () => {
+    assert.deepEqual(
+      parseEdgeSeries({
+        points: [
+          [1000, 84_000],
+          [2000, -1],
+          ['x', 3],
+        ],
+      }),
+      [{ timestamp: 1000, price: 84_000 }],
+    );
+    assert.deepEqual(parseEdgeSeries({ symbol: 'BTC-USD', price: 84_000 }), []);
+    assert.deepEqual(parseEdgeSeries(null), []);
+  });
+
+  it('dit, pour « À propos », quelle source a répondu', () => {
+    assert.equal(failureReason({ status: 429 }), '429');
+    assert.equal(failureReason(new TypeError('Failed to fetch')), 'RÉSEAU');
+    assert.equal(failureReason(new Error('vide')), 'VIDE');
+    assert.equal(
+      describeHistory({ coingecko: '429', supabase: 'OK' }),
+      'COURS BTC · COINGECKO 429 · SUPABASE OK · BINANCE —',
     );
   });
 });

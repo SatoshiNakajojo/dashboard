@@ -16,16 +16,22 @@ import {
 import {
   binanceRequests,
   DAILY_DAYS,
+  edgeSeriesPath,
+  failureReason,
   mergePages,
+  parseEdgeSeries,
   parseBinanceKlines,
   seriesFor,
   seriesKey,
   sinceOrigin,
+  type HistoryProbe,
   type RawPoint,
   type SeriesSpec,
+  type SourceName,
 } from './btcSeries';
 import { AbortError, getJson } from './http';
 import { pruneCache, withCache } from './cache';
+import { supabase } from './supabase';
 import {
   bestCoin,
   normalizeTicker,
@@ -166,11 +172,30 @@ export async function fetchBtcSince(
   const ttl = spec.daily ? HISTORY_TTL_MS : SPOT_TTL_MS * 30;
 
   const shared = withCache(seriesKey(spec), ttl, async () => {
-    try {
-      return await coingeckoSeries(spec);
-    } catch {
-      return await binanceSeries(spec);
+    // CoinGecko d'abord ; s'il refuse (quota de l'API publique, par téléphone),
+    // notre fonction Supabase, qui lit Yahoo côté serveur ; puis Binance.
+    const sources: [SourceName, (spec: SeriesSpec) => Promise<RawPoint[]>][] = [
+      ['coingecko', coingeckoSeries],
+      ['supabase', edgeSeries],
+      ['binance', binanceSeries],
+    ];
+    const probe: HistoryProbe = {};
+    let lastError: unknown = null;
+    for (const [name, load] of sources) {
+      try {
+        const points = await load(spec);
+        probe[name] = 'OK';
+        historyProbe = probe;
+        return points;
+      } catch (cause) {
+        probe[name] = failureReason(cause);
+        lastError = cause;
+      }
     }
+    historyProbe = probe;
+    throw lastError instanceof Error
+      ? lastError
+      : new Error('Historique du bitcoin indisponible');
   });
   const result = await untilAborted(shared, signal);
   return { points: sinceOrigin(result.value, originMs), stale: result.stale };
@@ -193,6 +218,32 @@ async function coingeckoSeries(spec: SeriesSpec): Promise<RawPoint[]> {
     throw new Error('Réponse CoinGecko inexploitable : historique vide');
   }
   return prices.map(([timestamp, price]) => ({ timestamp, price }));
+}
+
+async function edgeSeries(spec: SeriesSpec): Promise<RawPoint[]> {
+  const client = supabase;
+  if (!client) throw new Error('Sans backend');
+  const { data, error } = await client.functions.invoke<unknown>(edgeSeriesPath(spec), {
+    method: 'GET',
+  });
+  if (error) {
+    // Le statut HTTP est dans la réponse jointe : c'est lui qu'« À propos » affiche.
+    const status = (error as { context?: { status?: unknown } }).context?.status;
+    throw Object.assign(new Error(error.message), {
+      status: typeof status === 'number' ? status : undefined,
+    });
+  }
+  const points = parseEdgeSeries(data);
+  // Une fonction pas encore redéployée répond par un cours, pas une série.
+  if (points.length === 0) throw new Error('Réponse Supabase inexploitable : historique vide');
+  return points;
+}
+
+/** Ce qu'ont répondu les sources au dernier chargement de l'historique. */
+let historyProbe: HistoryProbe | null = null;
+
+export function lastHistoryProbe(): HistoryProbe | null {
+  return historyProbe;
 }
 
 async function binanceSeries(spec: SeriesSpec): Promise<RawPoint[]> {

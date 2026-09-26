@@ -159,10 +159,67 @@ export async function refreshApp(): Promise<boolean> {
   refreshAppData();
   if (!hasDom()) return false;
   if (await newVersionOnline()) {
-    window.location.reload();
+    await reloadOnNewVersion();
     return true;
   }
   return false;
+}
+
+/** L'écran à rouvrir après un rechargement, et quand on l'a quitté. */
+const RESUME_KEY = 'club.resume';
+/** Au-delà, ce n'est plus le rechargement qu'on vient de demander. */
+export const RESUME_TTL_MS = 60_000;
+
+/** L'écran gardé, s'il date du rechargement qu'on vient de faire. */
+export function resumeRoute(saved: string | null, now: number): string | null {
+  if (!saved) return null;
+  try {
+    const { route, at } = JSON.parse(saved) as { route?: unknown; at?: unknown };
+    if (typeof route !== 'string' || !route.startsWith('/') || typeof at !== 'number')
+      return null;
+    return now - at >= 0 && now - at <= RESUME_TTL_MS ? route : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Passer à la nouvelle version.
+ *
+ * Recharger l'adresse courante (`…/club/oracle`) donnait la page 404 de
+ * GitHub Pages, qui ne connaît que `index.html`. On recharge donc l'accueil
+ * de l'app, en gardant l'écran pour y revenir aussitôt. Le nouveau service
+ * worker, s'il attend, prend la main tout de suite.
+ */
+async function reloadOnNewVersion(): Promise<void> {
+  const script = runningScript();
+  const base = script ? appBaseOf(script) : null;
+  const route = base ? routeForNotification(window.location.href, base) : null;
+  try {
+    if (route)
+      window.sessionStorage.setItem(RESUME_KEY, JSON.stringify({ route, at: Date.now() }));
+  } catch {
+    // Sans stockage, on rouvre sur l'accueil : c'est tout.
+  }
+  try {
+    const registration = await navigator.serviceWorker?.getRegistration();
+    await registration?.update();
+    registration?.waiting?.postMessage('SKIP_WAITING');
+  } catch {
+    // Le service worker suivra à la prochaine ouverture.
+  }
+  window.location.replace(base ?? window.location.href);
+}
+
+/** Lit — et efface — l'écran gardé avant un rechargement. */
+function consumeResumeRoute(): string | null {
+  try {
+    const saved = window.sessionStorage.getItem(RESUME_KEY);
+    window.sessionStorage.removeItem(RESUME_KEY);
+    return resumeRoute(saved, Date.now());
+  } catch {
+    return null;
+  }
 }
 
 /** Même clé que `PENDING_OPEN` dans `public/sw.js`. */
@@ -230,7 +287,9 @@ export function installAppRefresh(open: (route: string) => void): void {
     followPendingOpen();
   });
 
-  // Ouverte par une notification alors qu'elle était fermée : l'écran y est
-  // déjà, on efface seulement l'entrée.
+  // Rechargée par le bouton ↻ sur une nouvelle version : on revient à l'écran
+  // qu'on avait. Ouverte par une notification : on va au sien.
+  const resumed = consumeResumeRoute();
+  if (resumed && resumed !== '/') open(resumed);
   followPendingOpen();
 }

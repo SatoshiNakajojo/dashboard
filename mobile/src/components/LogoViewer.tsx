@@ -5,6 +5,8 @@ import { ClubChannels } from '@/components/ClubChannels';
 import { Micro } from '@/components/ui/Micro';
 import { keyboardProbe } from '@/hooks/useKeyboardFrame';
 import { describeJournal, readJournal } from '@/lib/authJournal';
+import { describeHistory } from '@/lib/btcSeries';
+import { lastHistoryProbe } from '@/lib/coingecko';
 import { describeKeyboard } from '@/lib/keyboardFrame';
 import { isSupabaseConfigured } from '@/lib/supabase';
 import { describeViewport, viewportInfo } from '@/lib/viewportInfo';
@@ -106,6 +108,7 @@ function About() {
       />
       <ViewportLine />
       <KeyboardLine />
+      <HistoryLine />
       <SessionLine />
     </View>
   );
@@ -164,6 +167,21 @@ function KeyboardLine() {
   return (
     <Micro tracking={1.2} size={7} style={{ color: c.sepiaFaint, textAlign: 'center' }}>
       {describeKeyboard(probe)}
+    </Micro>
+  );
+}
+
+/**
+ * Ce qu'ont répondu les sources du cours du bitcoin au dernier chargement du
+ * graphique de l'Oracle (`src/lib/btcSeries.ts`) : si la courbe manque, une
+ * capture de ce panneau dit laquelle a refusé, et pourquoi.
+ */
+function HistoryLine() {
+  const probe = lastHistoryProbe();
+  if (!probe) return null;
+  return (
+    <Micro tracking={1.2} size={7} style={{ color: c.sepiaFaint, textAlign: 'center' }}>
+      {describeHistory(probe)}
     </Micro>
   );
 }

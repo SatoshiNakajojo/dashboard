@@ -108,3 +108,55 @@ export function mergePages(pages: readonly RawPoint[][]): RawPoint[] {
   for (const page of pages) for (const point of page) byTime.set(point.timestamp, point);
   return [...byTime.values()].sort((a, b) => a.timestamp - b.timestamp);
 }
+
+// ---------------------------------------------------------------------------
+// Supabase (Yahoo Finance), en secours
+// ---------------------------------------------------------------------------
+
+/** La série demandée à la fonction `quote` : `BTC-USD`, horaire ou journalière. */
+export function edgeSeriesPath(spec: SeriesSpec): string {
+  return `quote?symbol=BTC-USD&series=${spec.daily ? '1d' : '1h'}`;
+}
+
+/** La réponse de la fonction → points. Illisible (ancienne version) : liste vide. */
+export function parseEdgeSeries(payload: unknown): RawPoint[] {
+  const points = (payload as { points?: unknown } | null)?.points;
+  if (!Array.isArray(points)) return [];
+  const out: RawPoint[] = [];
+  for (const point of points) {
+    if (!Array.isArray(point)) continue;
+    const [timestamp, price] = point as unknown[];
+    if (typeof timestamp === 'number' && typeof price === 'number' && price > 0) {
+      out.push({ timestamp, price });
+    }
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------------------
+// Ce qu'ont répondu les sources — pour le panneau « À propos »
+// ---------------------------------------------------------------------------
+
+export type SourceName = 'coingecko' | 'supabase' | 'binance';
+
+/** `OK`, un statut HTTP (`429`), `RÉSEAU`, `VIDE`, ou absent si pas interrogée. */
+export type HistoryProbe = Partial<Record<SourceName, string>>;
+
+/** La raison courte d'un échec : un statut, ou le réseau. */
+export function failureReason(cause: unknown): string {
+  const status = (cause as { status?: unknown } | null)?.status;
+  if (typeof status === 'number') return String(status);
+  if (cause instanceof TypeError) return 'RÉSEAU';
+  return 'VIDE';
+}
+
+/** `COURS BTC · COINGECKO 429 · SUPABASE OK · BINANCE —`. */
+export function describeHistory(probe: HistoryProbe): string {
+  const label = (name: SourceName, title: string) => `${title} ${probe[name] ?? '—'}`;
+  return [
+    'COURS BTC',
+    label('coingecko', 'COINGECKO'),
+    label('supabase', 'SUPABASE'),
+    label('binance', 'BINANCE'),
+  ].join(' · ');
+}

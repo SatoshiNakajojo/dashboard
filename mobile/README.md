@@ -124,7 +124,7 @@ qu'on n'a pas déposé le nouveau tracé.
 
 ## Ce qui a été vérifié
 
-- `npm run typecheck`, `npm run lint`, `npm test` — propres (604 tests).
+- `npm run typecheck`, `npm run lint`, `npm test` — propres (610 tests).
 - **Règles pures** : bornes et inversibilité du repère, monotonie du tracé,
   écart à la courbe réelle, espaces insécables du formatage français, perf vs ₿
   comme ratio et non soustraction, seuils et tri des deux classements.
@@ -466,9 +466,12 @@ effacée, qui remplissait peu à peu le stockage de l'app. Désormais
 - **deux séries seulement**, communes à tous les écrans : horaire sur 90 jours
   (dont la série fine qui juge les paris) et journalière sur un an. Chaque
   écran y découpe ce qui le concerne, et leurs clés de cache sont fixes ;
-- CoinGecko d'abord ; s'il refuse, **Binance** (`data-api.binance.vision`,
-  BTC/USDT, clôtures horaires ou journalières) ; si les deux se taisent, la
-  **dernière série connue** ;
+- CoinGecko d'abord ; s'il refuse, **notre fonction Supabase `quote`**, qui lit
+  Yahoo Finance (`BTC-USD`) côté serveur : elle ne subit pas le quota de
+  CoinGecko, qui compte par téléphone, ni la politique CORS d'un site tiers.
+  Ensuite **Binance** (`data-api.binance.vision`, BTC/USDT), puis la
+  **dernière série connue**. « À propos » affiche ce qu'a répondu chaque
+  source (`COURS BTC · COINGECKO 429 · SUPABASE OK · BINANCE —`) ;
 - le chargement est partagé et va à son terme. Un écran qui s'en va cesse
   d'attendre sans l'annuler pour les autres, alors qu'avant, l'annulation d'un
   écran vidait la courbe de son voisin ;
@@ -1192,6 +1195,23 @@ part :
   touchée (`__club-open`, dans son cache) et l'annonce à l'app ouverte
   (`club:open`). L'app va à l'écran dont elle parle, même quand iOS refuse la
   navigation du service worker. Une entrée de plus de 2 minutes est ignorée.
+
+**La page 404 de GitHub.** GitHub Pages ne sert une page 404 personnalisée
+qu'à la racine du site, qui est celle du dashboard JCGI. Recharger
+`…/club/oracle` ou `…/club/bag` donnait donc sa page d'erreur. C'est ce que
+faisaient le bouton ↻ sur une nouvelle version et le toucher d'une
+notification. Désormais :
+
+- le service worker sert la coquille de l'app à **toute navigation** dans
+  `club/`, et le routeur affiche l'onglet d'après l'adresse ;
+- ↻ recharge l'**accueil** de l'app, garde l'écran (`club.resume`, une minute)
+  et y revient. Il passe aussi le nouveau service worker aux commandes s'il
+  attend ;
+- une notification ouvre l'accueil, puis l'app va à l'écran de la
+  notification gardée.
+
+Vérifié contre un serveur qui répond par une vraie 404, comme GitHub, avec et
+sans le nouveau service worker.
 
 Le nouveau service worker prend la main une fois l'app **fermée** (pas de
 `skipWaiting`, voir `public/sw.js`). Le retour au premier plan, lui, marche

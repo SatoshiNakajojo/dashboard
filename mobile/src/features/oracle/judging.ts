@@ -22,7 +22,7 @@
  * qu'une fois par jour, et le cache sert les deux écrans.
  */
 
-import { MAX_HISTORY_DAYS } from '@/lib/coingecko';
+import { DAILY_DAYS as MAX_HISTORY_DAYS } from '@/lib/btcSeries';
 import { DAY_MS, type Bet } from './betting';
 
 /** Profondeur de la série horaire, en jours. */

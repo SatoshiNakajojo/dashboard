@@ -18,6 +18,7 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 
 import { neededRates, parseYahooQuote, toUsd } from '../_shared/yahooParse.ts';
+import { isSeriesInterval, parseYahooSeries, SERIES_RANGES } from '../_shared/yahooSeries.ts';
 
 const YAHOO = 'https://query1.finance.yahoo.com/v8/finance/chart';
 
@@ -37,10 +38,13 @@ const CORS = {
 /** 60 s de cache CDN : un composer ouvert par trois membres ne fait qu'un appel. */
 const CACHE_CONTROL = 'public, max-age=60, s-maxage=60';
 
-function json(body: unknown, status = 200): Response {
+/** Une série bouge moins vite qu'un cours : cinq minutes de cache suffisent. */
+const SERIES_CACHE_CONTROL = 'public, max-age=300, s-maxage=300';
+
+function json(body: unknown, status = 200, cacheControl = CACHE_CONTROL): Response {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { 'content-type': 'application/json', 'cache-control': CACHE_CONTROL, ...CORS },
+    headers: { 'content-type': 'application/json', 'cache-control': cacheControl, ...CORS },
   });
 }
 
@@ -59,7 +63,11 @@ async function fetchChart(symbol: string, range: string) {
 Deno.serve(async (request) => {
   if (request.method === 'OPTIONS') return new Response('ok', { headers: CORS });
 
-  const symbol = new URL(request.url).searchParams.get('symbol')?.trim().toUpperCase() ?? '';
+  const params = new URL(request.url).searchParams;
+  const symbol = params.get('symbol')?.trim().toUpperCase() ?? '';
+  // `series=1h|1d` : la série de clôtures, pour l'historique du bitcoin de
+  // l'Oracle quand CoinGecko refuse l'app (quota de son API publique).
+  const series = params.get('series');
   if (!SYMBOL_RE.test(symbol)) {
     return json({ error: 'Symbole invalide' }, 400);
   }
@@ -88,6 +96,24 @@ Deno.serve(async (request) => {
   });
   const { data } = await client.auth.getUser();
   if (!data.user) return json({ error: 'Réservé aux membres' }, 401);
+
+  if (isSeriesInterval(series)) {
+    try {
+      const response = await fetch(
+        `${YAHOO}/${encodeURIComponent(symbol)}?interval=${series}&range=${SERIES_RANGES[series]}`,
+        {
+          headers: { accept: 'application/json', 'user-agent': UA },
+          signal: AbortSignal.timeout(12_000),
+        },
+      );
+      if (!response.ok) throw new Error(`Yahoo a répondu ${response.status}`);
+      const points = parseYahooSeries(await response.json());
+      if (points.length === 0) throw new Error('Série vide');
+      return json({ symbol, interval: series, points }, 200, SERIES_CACHE_CONTROL);
+    } catch (cause) {
+      return json({ error: cause instanceof Error ? cause.message : String(cause) }, 502);
+    }
+  }
 
   try {
     const quote = await fetchChart(symbol, '5d');
