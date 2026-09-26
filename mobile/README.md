@@ -124,7 +124,7 @@ qu'on n'a pas déposé le nouveau tracé.
 
 ## Ce qui a été vérifié
 
-- `npm run typecheck`, `npm run lint`, `npm test` — propres (594 tests).
+- `npm run typecheck`, `npm run lint`, `npm test` — propres (600 tests).
 - **Règles pures** : bornes et inversibilité du repère, monotonie du tracé,
   écart à la courbe réelle, espaces insécables du formatage français, perf vs ₿
   comme ratio et non soustraction, seuils et tri des deux classements.
@@ -203,6 +203,15 @@ tableau. La feuille
 demande une date, un thème, un lieu, et jusqu'à six lignes de potluck laissées
 libres : c'est aux autres de se les attribuer, et c'est tout l'intérêt de
 l'écran.
+
+**Rien à taper pour la date et l'heure** (`src/components/DateTimeFields.tsx`).
+Écrire `03/10/2026` au clavier d'un téléphone, barres obliques comprises,
+c'était l'erreur assurée. On touche **DATE** : un calendrier s'ouvre sous le
+champ, les jours passés sont grisés, et le jour touché referme le calendrier.
+On touche **HEURE** : un menu déroulant, par quart d'heure, s'ouvre centré sur
+l'heure choisie. Une soirée existante à 19 h 40 garde son heure dans le menu
+(`src/lib/datePicker.ts`). En modification, le jour déjà choisi reste
+sélectionnable même s'il est passé.
 
 **L'heure saisie est toujours celle de Nouméa** (`src/lib/clubTime.ts`). Laisser
 `new Date(y, m, d, h, min)` décider reviendrait à laisser le fuseau de

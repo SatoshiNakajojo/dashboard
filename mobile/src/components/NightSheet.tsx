@@ -3,6 +3,7 @@ import { Modal, Pressable, ScrollView, Text, TextInput, View } from 'react-nativ
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 
+import { DateTimeFields } from '@/components/DateTimeFields';
 import { Micro } from '@/components/ui/Micro';
 import { getPotluckSource } from '@/features/potluck/source';
 import { useKeyboardFrame } from '@/hooks/useKeyboardFrame';
@@ -148,7 +149,7 @@ export function NightSheet({
    */
   const blockedReason =
     startsAt === null
-      ? 'Une date et une heure — 03/10/2026 et 19:30.'
+      ? 'Choisissez une date et une heure.'
       : themes.length === 0
         ? 'Au moins un thème.'
         : title.trim().length === 0
@@ -256,20 +257,13 @@ export function NightSheet({
           </View>
 
           <ScrollView style={{ marginTop: 18 }} keyboardShouldPersistTaps="handled">
-            <View
-              className="flex-row"
-              style={{ borderTopWidth: 1, borderBottomWidth: 1, borderColor: c.hairline }}
-            >
-              <Line label="DATE" value={date} onChangeText={setDate} placeholder="03/10/2026" mono />
-              <Line
-                label="HEURE"
-                value={time}
-                onChangeText={setTime}
-                placeholder="19:30"
-                mono
-                divided
-              />
-            </View>
+            {/* Rien à taper : un calendrier pour la date, un menu pour l'heure. */}
+            <DateTimeFields
+              date={date}
+              time={time}
+              onDateChange={setDate}
+              onTimeChange={setTime}
+            />
 
             <View style={{ marginTop: 22 }}>
               <Micro style={{ marginBottom: 10 }}>THÈMES</Micro>
@@ -544,41 +538,6 @@ function ExistingPotluck({
           );
         })
       )}
-    </View>
-  );
-}
-
-function Line({
-  label,
-  divided,
-  mono,
-  ...rest
-}: React.ComponentProps<typeof TextInput> & { label: string; divided?: boolean; mono?: boolean }) {
-  return (
-    <View
-      style={{
-        flex: 1,
-        paddingVertical: 13,
-        paddingLeft: divided ? 16 : 0,
-        borderLeftWidth: divided ? 1 : 0,
-        borderLeftColor: c.hairline,
-      }}
-    >
-      <Micro size={8.5} tracking={1.7} style={{ color: c.sepiaMuted }}>
-        {label}
-      </Micro>
-      <TextInput
-        autoCorrect={false}
-        placeholderTextColor={c.sepiaFaint}
-        style={{
-          fontFamily: mono ? f.labelMed : f.serif,
-          fontSize: mono ? 15 : 20,
-          color: c.ivory,
-          marginTop: 7,
-          padding: 0,
-        }}
-        {...rest}
-      />
     </View>
   );
 }

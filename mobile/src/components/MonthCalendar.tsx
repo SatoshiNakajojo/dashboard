@@ -149,7 +149,7 @@ export function MonthCalendar({
  * fait reculer là où on croyait avancer. `left` doit donner `<`, donc le trait
  * du haut penche `/` et celui du bas `\` — l'inverse de la rotation naïve.
  */
-function Arrow({
+export function Arrow({
   label,
   direction,
   onPress,
