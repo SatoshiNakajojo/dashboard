@@ -58,6 +58,11 @@ export const COLUMNS = [
     column: 'max_days_back',
     migration: '20261009090000_entry_waivers.sql',
   },
+  {
+    table: 'event_declines',
+    column: 'user_id',
+    migration: '20261010090000_event_declines.sql',
+  },
 ];
 
 const ok = (label, detail) => ({ level: 'ok', label, detail });

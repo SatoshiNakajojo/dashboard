@@ -20,6 +20,8 @@ export interface EventCardProps {
   membersById: Map<string, Member>;
   defaultExpanded?: boolean;
   onToggleRsvp: (eventId: string) => void;
+  /** « Viens pas » — on a vu la soirée, on ne viendra pas. */
+  onToggleDecline?: (eventId: string) => void;
   /** Ouvre la modification — proposée seulement à celui qui a créé la soirée. */
   onEdit?: (eventId: string) => void;
 }
@@ -33,12 +35,26 @@ export function EventCard({
   membersById,
   defaultExpanded = false,
   onToggleRsvp,
+  onToggleDecline,
   onEdit,
 }: EventCardProps) {
   const [expanded, setExpanded] = useState(defaultExpanded);
 
   const { day, month } = splitEventDate(event.startsAt);
   const going = currentUserId !== null && event.attendeeIds.includes(currentUserId);
+  const declined = currentUserId !== null && event.declinedIds.includes(currentUserId);
+  const absents = event.declinedIds.length;
+  /** Ceux qui n'ont dit ni « Je viens » ni « Viens pas » : ont-ils vu la soirée ? */
+  const silent = [...membersById.values()]
+    .filter(
+      (member) =>
+        !event.attendeeIds.includes(member.id) && !event.declinedIds.includes(member.id),
+    )
+    .map((member) => member.displayName)
+    .sort((one, other) => one.localeCompare(other, 'fr'));
+  const declinedNames = event.declinedIds
+    .map((id) => membersById.get(id)?.displayName ?? 'Un membre')
+    .sort((one, other) => one.localeCompare(other, 'fr'));
   const stacked = event.attendeeIds.slice(0, MAX_STACKED_AVATARS);
   const mine = currentUserId !== null && event.createdBy === currentUserId;
   const editedOn = event.editedAt ? clubDateTimeParts(event.editedAt)?.date.slice(0, 5) : null;
@@ -130,7 +146,9 @@ export function EventCard({
               );
             })}
             <Micro tracking={1} style={{ color: c.sepiaMuted, marginLeft: 14 }}>
-              {`${event.attendeeIds.length} / ${CLUB_SIZE} PRÉSENTS`}
+              {`${event.attendeeIds.length} / ${CLUB_SIZE} PRÉSENTS${
+                absents > 0 ? ` · ${absents} ABSENT${absents > 1 ? 'S' : ''}` : ''
+              }`}
             </Micro>
           </View>
 
@@ -142,9 +160,10 @@ export function EventCard({
 
       {expanded ? (
         <View style={{ paddingHorizontal: 16, paddingBottom: 18 }}>
-          <View className="flex-row" style={{ gap: 10, marginBottom: 18 }}>
+          <View className="flex-row" style={{ gap: 10, marginBottom: 12 }}>
             <Pressable
               accessibilityRole="button"
+              accessibilityState={{ selected: going }}
               onPress={() => onToggleRsvp(event.id)}
               style={{
                 flex: 1,
@@ -174,7 +193,64 @@ export function EventCard({
               </View>
             </Pressable>
 
-            {mine && onEdit ? (
+            {/* « Viens pas » : le club sait qu'on a vu la soirée. */}
+            {onToggleDecline ? (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityState={{ selected: declined }}
+                onPress={() => onToggleDecline(event.id)}
+                style={{
+                  flex: 1,
+                  alignItems: 'center',
+                  paddingVertical: 11,
+                  borderRadius: radius.button,
+                  borderWidth: 1,
+                  backgroundColor: declined ? a.rsvpNoBg : 'transparent',
+                  borderColor: declined ? a.rsvpNoBorder : c.borderLift,
+                }}
+              >
+                <View className="flex-row items-center" style={{ gap: 7 }}>
+                  {declined ? <Check color={c.oxblood} /> : null}
+                  <Text
+                    style={{
+                      fontFamily: f.labelMed,
+                      fontSize: 10,
+                      letterSpacing: 1.8,
+                      color: declined ? c.oxblood : c.sepia,
+                    }}
+                  >
+                    VIENS PAS
+                  </Text>
+                </View>
+              </Pressable>
+            ) : null}
+          </View>
+
+          <View style={{ gap: 4, marginBottom: 18 }}>
+            {declinedNames.length > 0 ? (
+              <Text style={{ fontFamily: f.sans, fontSize: 11, lineHeight: 16, color: c.sepia }}>
+                <Text style={{ color: c.oxbloodMuted }}>Ne viennent pas · </Text>
+                {declinedNames.join(', ')}
+              </Text>
+            ) : null}
+            {/* Tant que l'annuaire n'est pas lu, on ne dit rien plutôt que
+                « tout le club a répondu ». */}
+            {membersById.size === 0 ? null : (
+            <Text style={{ fontFamily: f.sans, fontSize: 11, lineHeight: 16, color: c.sepia }}>
+              {silent.length > 0 ? (
+                <>
+                  <Text style={{ color: c.sepiaMuted }}>Pas encore répondu · </Text>
+                  {silent.join(', ')}
+                </>
+              ) : (
+                <Text style={{ color: c.sepiaMuted }}>Tout le club a répondu.</Text>
+              )}
+            </Text>
+            )}
+          </View>
+
+          {mine && onEdit ? (
+            <View style={{ marginBottom: 18 }}>
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel={`Modifier ${event.title}`}
@@ -197,11 +273,11 @@ export function EventCard({
                     color: c.sepia,
                   }}
                 >
-                  MODIFIER
+                  MODIFIER LA SOIRÉE
                 </Text>
               </Pressable>
-            ) : null}
-          </View>
+            </View>
+          ) : null}
 
           <EventProposals
             event={event}

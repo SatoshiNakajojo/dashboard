@@ -81,6 +81,7 @@ describe('les soirées d’un membre', () => {
     createdBy: null,
     editedAt: null,
     attendeeIds,
+    declinedIds: [],
   });
 
   it('compte les présences passées et trouve la prochaine où il vient', () => {

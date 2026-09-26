@@ -1386,6 +1386,52 @@ begin
   delete from public.entry_waivers where user_id = alex;
 end $$;
 
+-- --- « Viens pas » (v1.01) ---------------------------------------------------
+do $$
+declare
+  ev     constant uuid := 'bbbbbbbb-0000-4000-8000-000000000001';
+  john   constant uuid := 'aaaaaaaa-0000-4000-8000-000000000001';
+  alex   constant uuid := 'aaaaaaaa-0000-4000-8000-000000000002';
+  n      integer;
+  failed boolean;
+begin
+  set local role authenticated;
+  perform set_config('test.uid', alex::text, true);
+
+  -- Alex vient, puis ne vient plus : « Viens pas » retire « Je viens ».
+  insert into public.event_attendees (event_id, user_id) values (ev, alex);
+  insert into public.event_declines (event_id, user_id) values (ev, alex);
+  select count(*) into n from public.event_attendees where event_id = ev and user_id = alex;
+  assert n = 0, '« Viens pas » retire « Je viens »';
+
+  -- Puis revient : « Je viens » retire « Viens pas ».
+  insert into public.event_attendees (event_id, user_id) values (ev, alex);
+  select count(*) into n from public.event_declines where event_id = ev and user_id = alex;
+  assert n = 0, '« Je viens » retire « Viens pas »';
+  raise notice 'ok · soirées : « Je viens » et « Viens pas » s''excluent';
+
+  -- On ne répond que pour soi, et tout le club voit les réponses.
+  failed := false;
+  begin
+    insert into public.event_declines (event_id, user_id) values (ev, john);
+  exception when insufficient_privilege or check_violation then failed := true;
+  end;
+  assert failed, 'on ne décline pas pour un autre';
+  insert into public.event_declines (event_id, user_id) values (ev, alex);
+  perform set_config('test.uid', john::text, true);
+  select count(*) into n from public.event_declines where event_id = ev;
+  assert n = 1, 'le club voit qui ne vient pas';
+  delete from public.event_declines where event_id = ev and user_id = alex;
+  get diagnostics n = row_count;
+  assert n = 0, 'on ne retire pas la réponse d''un autre';
+  raise notice 'ok · soirées : on répond pour soi, le club voit les « Viens pas »';
+
+  reset role;
+  perform set_config('test.uid', '', true);
+  delete from public.event_declines where event_id = ev;
+  delete from public.event_attendees where event_id = ev and user_id = alex;
+end $$;
+
 rollback;
 
 \echo 'Tous les tests de schéma sont passés.'

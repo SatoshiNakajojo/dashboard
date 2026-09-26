@@ -50,6 +50,9 @@ export const a = {
   rsvpGoldBorder: 'rgba(232,144,61,.42)',
   rsvpSageBg: 'rgba(110,154,120,.10)',
   rsvpSageBorder: 'rgba(110,154,120,.40)',
+  /** « Viens pas » coché : l'oxblood, en retrait. */
+  rsvpNoBg: 'rgba(179,87,79,.10)',
+  rsvpNoBorder: 'rgba(179,87,79,.42)',
   pressed: 'rgba(232,144,61,.06)',
   btcFillTop: 'rgba(232,144,61,.22)',
   btcFillBottom: 'rgba(232,144,61,0)',

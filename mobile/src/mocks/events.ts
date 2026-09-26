@@ -44,6 +44,11 @@ export const MOCK_ATTENDANCE: Record<string, string[]> = {
   ],
 };
 
+/** « Viens pas » de démo : Marco et Sofia ne viendront pas aux Grillades. */
+export const MOCK_DECLINES: Record<string, string[]> = {
+  [MOCK_EVENTS[1]!.id]: [MEMBERS.marco!.id, MEMBERS.sofia!.id],
+};
+
 let sequence = 0;
 function item(eventId: string, itemName: string, assignedUserId: string | null): PotluckItem {
   sequence += 1;

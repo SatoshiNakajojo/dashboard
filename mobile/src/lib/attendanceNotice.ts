@@ -17,6 +17,8 @@ export interface AttendanceNotice {
   userId: string;
   /** `true` s'il arrive, `false` s'il se décommande. */
   arriving: boolean;
+  /** « Viens pas » : il a vu la soirée et ne viendra pas. */
+  declining?: boolean;
 }
 
 /** Au-delà, l'écran se transforme en journal ; on garde les plus récentes. */
@@ -30,12 +32,13 @@ export const MAX_NOTICES = 3;
  * vient peut-être d'être créée dans la même seconde.
  */
 export function noticeText(
-  notice: Pick<AttendanceNotice, 'arriving'>,
+  notice: Pick<AttendanceNotice, 'arriving' | 'declining'>,
   memberName: string | null | undefined,
   eventTitle: string | null | undefined,
 ): string {
   const who = memberName?.trim() || 'Un membre';
   const what = eventTitle?.trim() || 'une soirée';
+  if (notice.declining) return `${who} ne viendra pas à ${what}`;
   return notice.arriving ? `${who} vient à ${what}` : `${who} ne vient plus à ${what}`;
 }
 

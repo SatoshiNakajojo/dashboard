@@ -86,3 +86,12 @@ describe('pile d’annonces', () => {
     assert.equal(before.length, 1);
   });
 });
+
+describe('« Viens pas »', () => {
+  it('se dit autrement que se décommander', () => {
+    assert.equal(
+      noticeText({ arriving: false, declining: true }, 'Marco', 'Grillades & Halving Talk'),
+      'Marco ne viendra pas à Grillades & Halving Talk',
+    );
+  });
+});

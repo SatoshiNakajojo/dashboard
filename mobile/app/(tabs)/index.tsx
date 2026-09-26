@@ -22,6 +22,7 @@ export default function NightsScreen() {
     loading,
     error,
     toggleRsvp,
+    toggleDecline,
     create,
     creating,
     update,
@@ -146,6 +147,7 @@ export default function NightsScreen() {
                 // La première carte est dépliée par défaut (README §7.1).
                 defaultExpanded={index === 0}
                 onToggleRsvp={toggleRsvp}
+                onToggleDecline={toggleDecline}
                 onEdit={setEditingId}
               />
             ))

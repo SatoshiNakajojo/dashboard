@@ -124,7 +124,7 @@ qu'on n'a pas déposé le nouveau tracé.
 
 ## Ce qui a été vérifié
 
-- `npm run typecheck`, `npm run lint`, `npm test` — propres (610 tests).
+- `npm run typecheck`, `npm run lint`, `npm test` — propres (611 tests).
 - **Règles pures** : bornes et inversibilité du repère, monotonie du tracé,
   écart à la courbe réelle, espaces insécables du formatage français, perf vs ₿
   comme ratio et non soustraction, seuils et tri des deux classements.
@@ -292,6 +292,24 @@ seuls les participants votent, majorité qui suit les présences, accord de
 l'organisateur, rejet, notifications, suppression en cascade) et dans Chromium.
 Dans la démo, Alex propose chez lui pour les Grillades, que vous organisez :
 votre « pour » déplace la soirée.
+
+### « Viens pas », et qui n'a pas répondu (v1.01)
+
+On savait qui venait, pas qui avait vu la soirée. Un membre silencieux ne
+pouvait peut-être pas venir, ou ne l'avait pas vue. Sur la carte dépliée,
+**VIENS PAS** vient à côté de **JE VIENS**. Dessous, deux lignes :
+« Ne viennent pas · Marco, Sofia » et « Pas encore répondu · Rayan ». Ou
+bien « Tout le club a répondu ». L'en-tête d'une carte pliée compte aussi les
+absents (`3 / 7 PRÉSENTS · 2 ABSENTS`), et les autres membres voient en
+direct « Marco ne viendra pas à … ».
+
+La base tient la règle (migration `20261010090000_event_declines`) :
+`event_declines` exclut `event_attendees`, dans un sens comme dans l'autre (le
+déclencheur `event_rsvp_exclusive`). Deux appareils ne peuvent donc pas
+laisser les deux réponses. Passer de « Je viens » à « Viens pas » recompte les
+propositions d'autre lieu ouvertes, puisque les participants changent. On ne
+répond que pour soi, et tout le club voit les réponses. Vérifié en base
+(2 blocs) et dans Chromium.
 
 ### « J'apporte aussi… » (v1.01)
 

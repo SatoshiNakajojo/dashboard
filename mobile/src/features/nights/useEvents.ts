@@ -7,12 +7,14 @@ import { refreshAppData } from '@/lib/appRefresh';
 import { pushNotice, type AttendanceNotice } from '@/lib/attendanceNotice';
 import { normalizeThemes } from '@/lib/nightThemes';
 import { describeError, supabase } from '@/lib/supabase';
-import { MOCK_ATTENDANCE, MOCK_EVENTS } from '@/mocks/events';
+import { MOCK_ATTENDANCE, MOCK_DECLINES, MOCK_EVENTS } from '@/mocks/events';
 import type { EventRow } from '@/types/database';
 import type { ClubEvent } from '@/types/domain';
 
 export interface EventWithAttendance extends ClubEvent {
   attendeeIds: string[];
+  /** « Viens pas » : ils ont vu la soirée et ne viendront pas. */
+  declinedIds: string[];
 }
 
 export interface NightDraft {
@@ -40,6 +42,8 @@ export interface EventsState {
   error: string | null;
   /** Bascule la présence de l'utilisateur courant, en optimiste. */
   toggleRsvp: (eventId: string) => void;
+  /** Bascule son « Viens pas », en optimiste. Exclusif de « Je viens ». */
+  toggleDecline: (eventId: string) => void;
   /** Crée une soirée et sa liste. Résout `false` en cas d'échec. */
   create: (draft: NightDraft) => Promise<boolean>;
   /** Écriture en cours — le bouton s'en sert. */
@@ -69,6 +73,7 @@ const EVENT_COLUMNS = '*';
 export function fromEventRow(
   row: Partial<EventRow>,
   attendeeIds: string[],
+  declinedIds: string[] = [],
 ): EventWithAttendance {
   return {
     id: row.id ?? '',
@@ -79,6 +84,7 @@ export function fromEventRow(
     createdBy: row.created_by ?? null,
     editedAt: row.edited_at ?? null,
     attendeeIds,
+    declinedIds,
   };
 }
 
@@ -94,13 +100,16 @@ export async function loadNights(
   client: NonNullable<typeof supabase>,
   signal: AbortSignal,
 ): Promise<EventWithAttendance[]> {
-  const [eventsResult, attendeesResult] = await Promise.all([
+  const [eventsResult, attendeesResult, declinesResult] = await Promise.all([
     client
       .from('events')
       .select(EVENT_COLUMNS)
       .order('starts_at', { ascending: true })
       .abortSignal(signal),
     client.from('event_attendees').select('event_id, user_id').abortSignal(signal),
+    // Avant la migration `20261010090000_event_declines`, la table n'existe
+    // pas : personne n'a dit « Viens pas », et l'agenda se lit quand même.
+    client.from('event_declines').select('event_id, user_id').abortSignal(signal),
   ]);
 
   if (eventsResult.error) throw eventsResult.error;
@@ -112,8 +121,15 @@ export async function loadNights(
     byEvent.set(row.event_id, list);
   }
 
+  const declined = new Map<string, string[]>();
+  for (const row of declinesResult.error ? [] : (declinesResult.data ?? [])) {
+    const list = declined.get(row.event_id) ?? [];
+    list.push(row.user_id);
+    declined.set(row.event_id, list);
+  }
+
   return ((eventsResult.data ?? []) as Partial<EventRow>[]).map((row) =>
-    fromEventRow(row, byEvent.get(row.id ?? '') ?? []),
+    fromEventRow(row, byEvent.get(row.id ?? '') ?? [], declined.get(row.id ?? '') ?? []),
   );
 }
 
@@ -122,6 +138,7 @@ export function mockNights(): EventWithAttendance[] {
   return MOCK_EVENTS.map((event) => ({
     ...event,
     attendeeIds: MOCK_ATTENDANCE[event.id] ?? [],
+    declinedIds: MOCK_DECLINES[event.id] ?? [],
   }));
 }
 
@@ -202,9 +219,11 @@ export function useEvents(currentUserId: string | null): EventsState {
             return current.filter((event) => event.id !== row.id);
           }
           // Les présences arrivent par leur propre table, déjà en temps réel.
+          const known = current.find((event) => event.id === row.id);
           const incoming = fromEventRow(
             row,
-            current.find((event) => event.id === row.id)?.attendeeIds ?? [],
+            known?.attendeeIds ?? [],
+            known?.declinedIds ?? [],
           );
           const without = current.filter((event) => event.id !== row.id);
           return [...without, incoming].sort(byStart);
@@ -233,9 +252,14 @@ export function useEvents(currentUserId: string | null): EventsState {
 
           // On ne s'annonce pas à soi-même : le bouton vient déjà de passer au
           // vert sous le doigt, une bannière par-dessus serait du bruit.
+          // Passer de « Je viens » à « Viens pas » retire aussi la présence :
+          // l'annonce « ne viendra pas » l'emporte sur « ne vient plus ».
           if (userId !== meRef.current) {
+            const id = `${eventId}:${userId}`;
             setNotices((current) =>
-              pushNotice(current, { id: `${eventId}:${userId}`, eventId, userId, arriving }),
+              !arriving && current.some((notice) => notice.id === id && notice.declining)
+                ? current
+                : pushNotice(current, { id, eventId, userId, arriving }),
             );
           }
 
@@ -249,6 +273,55 @@ export function useEvents(currentUserId: string | null): EventsState {
                 attendeeIds: arriving
                   ? [...event.attendeeIds, userId]
                   : event.attendeeIds.filter((id) => id !== userId),
+                // Venir retire le « Viens pas » (la base fait de même).
+                declinedIds: arriving
+                  ? event.declinedIds.filter((id) => id !== userId)
+                  : event.declinedIds,
+              };
+            }),
+          );
+        },
+      )
+      /**
+       * Les « Viens pas ». C'est ce qui dit qu'un membre a vu la soirée : sans
+       * réponse, on ne savait pas s'il ne pouvait pas venir ou s'il ne l'avait
+       * pas vue.
+       */
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'event_declines' },
+        (payload) => {
+          const row = (payload.new ?? payload.old) as
+            { event_id?: string; user_id?: string } | undefined;
+          if (!row?.event_id || !row.user_id) return;
+          const { event_id: eventId, user_id: userId } = row;
+          const declining = payload.eventType !== 'DELETE';
+
+          if (declining && userId !== meRef.current) {
+            setNotices((current) =>
+              pushNotice(current, {
+                id: `${eventId}:${userId}`,
+                eventId,
+                userId,
+                arriving: false,
+                declining: true,
+              }),
+            );
+          }
+
+          setEvents((current) =>
+            current.map((event) => {
+              if (event.id !== eventId) return event;
+              const listed = event.declinedIds.includes(userId);
+              if (declining === listed) return event;
+              return {
+                ...event,
+                declinedIds: declining
+                  ? [...event.declinedIds, userId]
+                  : event.declinedIds.filter((id) => id !== userId),
+                attendeeIds: declining
+                  ? event.attendeeIds.filter((id) => id !== userId)
+                  : event.attendeeIds,
               };
             }),
           );
@@ -268,8 +341,10 @@ export function useEvents(currentUserId: string | null): EventsState {
       const event = events.find((candidate) => candidate.id === eventId);
       if (!event) return;
       const going = event.attendeeIds.includes(currentUserId);
+      const declined = event.declinedIds.includes(currentUserId);
 
       // Optimiste d'abord : le bouton doit répondre au doigt, pas au réseau.
+      // Venir retire le « Viens pas » ; la base fait de même.
       setEvents((current) =>
         current.map((candidate) =>
           candidate.id !== eventId
@@ -279,6 +354,7 @@ export function useEvents(currentUserId: string | null): EventsState {
                 attendeeIds: going
                   ? candidate.attendeeIds.filter((id) => id !== currentUserId)
                   : [...candidate.attendeeIds, currentUserId],
+                declinedIds: candidate.declinedIds.filter((id) => id !== currentUserId),
               },
         ),
       );
@@ -296,6 +372,12 @@ export function useEvents(currentUserId: string | null): EventsState {
                   attendeeIds: going
                     ? [...candidate.attendeeIds, currentUserId]
                     : candidate.attendeeIds.filter((id) => id !== currentUserId),
+                  declinedIds: declined
+                    ? [
+                        ...candidate.declinedIds.filter((id) => id !== currentUserId),
+                        currentUserId,
+                      ]
+                    : candidate.declinedIds,
                 },
           ),
         );
@@ -312,6 +394,66 @@ export function useEvents(currentUserId: string | null): EventsState {
       void write.then(({ error: cause }) => {
         if (cause) {
           revert();
+          setError(describeError(cause));
+        }
+      });
+    },
+    [currentUserId, events],
+  );
+
+  /**
+   * « Viens pas » — ou le retirer, et ne plus avoir répondu.
+   *
+   * Même mécanique que « Je viens » : optimiste, et défait si la base refuse.
+   * Dire « Viens pas » retire sa présence ; la base fait de même.
+   */
+  const toggleDecline = useCallback(
+    (eventId: string) => {
+      if (!currentUserId) return;
+      const event = events.find((candidate) => candidate.id === eventId);
+      if (!event) return;
+      const declined = event.declinedIds.includes(currentUserId);
+      const going = event.attendeeIds.includes(currentUserId);
+
+      const apply = (declining: boolean, present: boolean) =>
+        setEvents((current) =>
+          current.map((candidate) =>
+            candidate.id !== eventId
+              ? candidate
+              : {
+                  ...candidate,
+                  declinedIds: declining
+                    ? [
+                        ...candidate.declinedIds.filter((id) => id !== currentUserId),
+                        currentUserId,
+                      ]
+                    : candidate.declinedIds.filter((id) => id !== currentUserId),
+                  attendeeIds: present
+                    ? [
+                        ...candidate.attendeeIds.filter((id) => id !== currentUserId),
+                        currentUserId,
+                      ]
+                    : candidate.attendeeIds.filter((id) => id !== currentUserId),
+                },
+          ),
+        );
+
+      apply(!declined, false);
+
+      const client = supabase;
+      if (!client) return;
+
+      const write = declined
+        ? client
+            .from('event_declines')
+            .delete()
+            .eq('event_id', eventId)
+            .eq('user_id', currentUserId)
+        : client.from('event_declines').insert({ event_id: eventId, user_id: currentUserId });
+
+      void write.then(({ error: cause }) => {
+        if (cause) {
+          apply(declined, going);
           setError(describeError(cause));
         }
       });
@@ -426,7 +568,7 @@ export function useEvents(currentUserId: string | null): EventsState {
             setError('Seul le membre qui a proposé cette soirée peut la modifier.');
             return false;
           }
-          after = fromEventRow(row, before.attendeeIds);
+          after = fromEventRow(row, before.attendeeIds, before.declinedIds);
         } else {
           // Démo : la même règle que la base, en mémoire.
           if (before.createdBy !== currentUserId) {
@@ -548,6 +690,7 @@ export function useEvents(currentUserId: string | null): EventsState {
       loading,
       error,
       toggleRsvp,
+      toggleDecline,
       create,
       creating,
       update,
@@ -561,6 +704,7 @@ export function useEvents(currentUserId: string | null): EventsState {
       loading,
       error,
       toggleRsvp,
+      toggleDecline,
       create,
       creating,
       update,

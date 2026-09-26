@@ -53,6 +53,13 @@ export type PotluckItemRow = {
   updated_at: string;
 };
 
+/** « Viens pas » à une soirée (migration `20261010090000_event_declines`). */
+export type EventDeclineRow = {
+  event_id: string;
+  user_id: string;
+  created_at: string;
+};
+
 /** Exception au cours live, accordée par le club (migration `20261009090000_entry_waivers`). */
 export type EntryWaiverRow = {
   id: string;
@@ -200,6 +207,7 @@ export type Database = {
       ticker_votes: Table<TickerVoteRow>;
       ticker_vote_withdrawals: Table<TickerVoteWithdrawalRow>;
       entry_waivers: Table<EntryWaiverRow>;
+      event_declines: Table<EventDeclineRow>;
       predictions: Table<PredictionRow>;
       push_subscriptions: Table<PushSubscriptionRow>;
       notification_prefs: Table<NotificationPrefsRow>;
