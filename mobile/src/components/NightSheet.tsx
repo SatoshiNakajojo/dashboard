@@ -55,6 +55,8 @@ const ITEM_MAX = 60;
 const POTLUCK_SLOTS = 6;
 /** En modification, la liste existe déjà : de quoi la compléter. */
 const EDIT_POTLUCK_SLOTS = 3;
+/** Une ligne vide réapparaît sous la dernière remplie, jusqu'à ce plafond. */
+const POTLUCK_MAX_SLOTS = 20;
 
 const sameThemes = (one: readonly string[], other: readonly string[]) =>
   normalizeThemes([...one]).join('\n').toLocaleLowerCase('fr') ===
@@ -200,8 +202,13 @@ export function NightSheet({
       current.includes(itemId) ? current.filter((id) => id !== itemId) : [...current, itemId],
     );
 
+  /** Toujours une ligne libre en bas : on ajoute autant de choses qu'il faut. */
   const setSlot = (index: number, value: string) =>
-    setPotluck((current) => current.map((item, i) => (i === index ? value : item)));
+    setPotluck((current) => {
+      const next = current.map((item, i) => (i === index ? value : item));
+      const last = next[next.length - 1] ?? '';
+      return last.trim().length > 0 && next.length < POTLUCK_MAX_SLOTS ? [...next, ''] : next;
+    });
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
@@ -357,15 +364,18 @@ export function NightSheet({
                   marginBottom: 8,
                 }}
               >
-                Laissées libres : chacun prendra la sienne dans l’app.
+                {editing
+                  ? 'Touchez une ligne pour écrire ce qui manque, une chose par ligne. Laissées libres : chacun prendra la sienne dans l’app.'
+                  : 'Laissées libres : chacun prendra la sienne dans l’app.'}
               </Text>
               {potluck.map((item, index) => (
                 <TextInput
                   key={index}
                   value={item}
                   onChangeText={(value) => setSlot(index, value)}
-                  placeholder={index === 0 ? 'Glaçons' : '—'}
+                  placeholder={index === 0 ? '+ Ex. : glaçons' : '+ Autre chose…'}
                   placeholderTextColor={c.sepiaFaint}
+                  accessibilityLabel={`Chose à apporter ${index + 1}`}
                   maxLength={ITEM_MAX}
                   style={{
                     fontFamily: f.sans,

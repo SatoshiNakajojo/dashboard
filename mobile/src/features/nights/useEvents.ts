@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { onMockAdoption } from '@/features/nights/proposals';
 import { getPotluckSource } from '@/features/potluck/source';
 import { useAppRefresh } from '@/hooks/useAppRefresh';
+import { refreshAppData } from '@/lib/appRefresh';
 import { pushNotice, type AttendanceNotice } from '@/lib/attendanceNotice';
 import { normalizeThemes } from '@/lib/nightThemes';
 import { describeError, supabase } from '@/lib/supabase';
@@ -469,6 +470,10 @@ export function useEvents(currentUserId: string | null): EventsState {
         } catch (cause) {
           setError(describeError(cause));
         }
+        // La liste de la carte se relit : attendre le temps réel, c'était ne
+        // rien voir quand le canal s'était tu pendant la veille d'iOS — la
+        // ligne ajoutée était enregistrée, mais n'apparaissait pas.
+        if (lines.length > 0 || edit.potluckRemoved.length > 0) refreshAppData();
         return true;
       } finally {
         setSaving(false);
