@@ -3,7 +3,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ClubChannels } from '@/components/ClubChannels';
 import { Micro } from '@/components/ui/Micro';
+import { keyboardProbe } from '@/hooks/useKeyboardFrame';
 import { describeJournal, readJournal } from '@/lib/authJournal';
+import { describeKeyboard } from '@/lib/keyboardFrame';
 import { isSupabaseConfigured } from '@/lib/supabase';
 import { describeViewport, viewportInfo } from '@/lib/viewportInfo';
 import { brand } from '@/theme/brand';
@@ -103,6 +105,7 @@ function About() {
         lines={['J.C. GLOBAL INVESTMENTS', 'SOFTWARE DEPARTMENT, NEW CALEDONIA']}
       />
       <ViewportLine />
+      <KeyboardLine />
       <SessionLine />
     </View>
   );
@@ -146,6 +149,21 @@ function ViewportLine() {
   return (
     <Micro tracking={1.2} size={7} style={{ color: c.sepiaFaint, textAlign: 'center' }}>
       {describeViewport(info)}
+    </Micro>
+  );
+}
+
+/**
+ * Les dernières mesures du clavier (`src/lib/keyboardFrame.ts`) : si un champ
+ * disparaît encore sous le clavier d'un iPhone, une capture de ce panneau dit
+ * ce que l'app a vu. Rien tant qu'aucun clavier ne s'est ouvert.
+ */
+function KeyboardLine() {
+  const probe = keyboardProbe();
+  if (!probe) return null;
+  return (
+    <Micro tracking={1.2} size={7} style={{ color: c.sepiaFaint, textAlign: 'center' }}>
+      {describeKeyboard(probe)}
     </Micro>
   );
 }

@@ -52,3 +52,73 @@ export function keyboardFrameStyles(state: KeyboardState): {
     sheet: { maxHeight: state.height - 2 * GAP },
   };
 }
+
+// ---------------------------------------------------------------------------
+// Référence, défilement, mesures
+// ---------------------------------------------------------------------------
+
+/**
+ * La hauteur de la page sans clavier.
+ *
+ * `innerHeight` ne suffit pas : selon la version d'iOS et le mode (onglet ou
+ * app installée), il suit parfois la zone visible quand le clavier s'ouvre, et
+ * l'écart qui trahit le clavier disparaît. La plus grande zone visible déjà
+ * mesurée dans cette orientation, elle, ne ment pas : un clavier ne fait que
+ * réduire.
+ */
+export function referenceHeight(innerHeight: number, tallestSeen: number | undefined): number {
+  return Math.max(innerHeight, tallestSeen ?? 0);
+}
+
+/** Marge gardée entre le champ et le bord de la zone qui défile. */
+const REVEAL_MARGIN = 16;
+
+/**
+ * Le défilement à donner à la zone qui contient le champ pour qu'il y soit
+ * entier, ou `null` s'il l'est déjà. Les deux rectangles sont mesurés dans le
+ * même repère : ce calcul ne dépend pas de la façon dont iOS fait glisser
+ * l'écran.
+ */
+export function revealScrollTop(
+  container: { top: number; bottom: number; scrollTop: number },
+  field: { top: number; bottom: number },
+  margin: number = REVEAL_MARGIN,
+): number | null {
+  const room = container.bottom - container.top - 2 * margin;
+  if (field.bottom > container.bottom - margin) {
+    // Trop bas. Un champ plus haut que la zone montre au moins son début.
+    const tall = field.bottom - field.top > room;
+    const delta = tall
+      ? field.top - (container.top + margin)
+      : field.bottom - (container.bottom - margin);
+    return Math.max(0, Math.round(container.scrollTop + delta));
+  }
+  if (field.top < container.top + margin) {
+    return Math.max(0, Math.round(container.scrollTop - (container.top + margin - field.top)));
+  }
+  return null;
+}
+
+/** Les dernières mesures du clavier, pour le panneau « À propos ». */
+export interface KeyboardProbe {
+  inner: number;
+  reference: number;
+  visible: number;
+  top: number;
+  open: boolean;
+  /** Le champ actif, dans la page : haut et bas. */
+  field: [number, number] | null;
+}
+
+/** `CLAVIER · INNER 852 · RÉF 852 · VISIBLE 516 · HAUT 0 · OUVERT · CHAMP 300–340`. */
+export function describeKeyboard(probe: KeyboardProbe): string {
+  return [
+    'CLAVIER',
+    `INNER ${probe.inner}`,
+    `RÉF ${probe.reference}`,
+    `VISIBLE ${probe.visible}`,
+    `HAUT ${probe.top}`,
+    probe.open ? 'OUVERT' : 'FERMÉ',
+    ...(probe.field ? [`CHAMP ${probe.field[0]}–${probe.field[1]}`] : []),
+  ].join(' · ');
+}

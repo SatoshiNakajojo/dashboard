@@ -124,7 +124,7 @@ qu'on n'a pas déposé le nouveau tracé.
 
 ## Ce qui a été vérifié
 
-- `npm run typecheck`, `npm run lint`, `npm test` — propres (600 tests).
+- `npm run typecheck`, `npm run lint`, `npm test` — propres (603 tests).
 - **Règles pures** : bornes et inversibilité du repère, monotonie du tracé,
   écart à la courbe réelle, espaces insécables du formatage français, perf vs ₿
   comme ratio et non soustraction, seuils et tri des deux classements.
@@ -781,6 +781,25 @@ calcul est pur et testé (`src/lib/keyboardFrame.ts`).
 Vérifié dans Chromium avec un clavier simulé (iPhone 11, 336 px de clavier) :
 la thèse d'un call, le lieu et la dernière ligne « à apporter » d'une soirée
 restent au-dessus du clavier.
+
+**Deuxième passe, après un retour d'iPhone.** En modifiant une soirée, la ligne
+à ajouter restait sous le clavier. Le test le reproduisait dès qu'on
+simulait la feuille de modification, et trois choses ont changé :
+
+- la zone de la feuille défile **sans animation**. Le défilement « smooth »
+  dans une zone de React Native Web ne partait pas, et le champ restait en bas ;
+- on ne fait défiler que la zone de la feuille, jamais l'écran entier.
+  `scrollIntoView` faisait aussi glisser la page, ce qui déplaçait la feuille,
+  qui se recalait ;
+- le clavier se reconnaît à la zone visible qui rétrécit par rapport à la plus
+  grande déjà mesurée (bornée à l'écran), et non plus à `innerHeight`, qui
+  selon iOS suit parfois la zone visible.
+
+Vérifié dans les deux comportements d'iOS (page fixe et page qui rétrécit) et
+avec un écran glissé : ajouter une chose en modifiant sa soirée, « J'apporte
+aussi », la thèse d'un call, le lieu et la liste d'une nouvelle soirée, la
+raison d'un autre lieu. Si un champ se cache encore, « À propos » affiche une
+ligne `CLAVIER · …` avec les dernières mesures, et une capture suffit.
 
 ---
 
