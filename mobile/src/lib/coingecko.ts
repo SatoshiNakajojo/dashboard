@@ -13,8 +13,19 @@ import {
   parseCoingeckoHistory,
   parseMempoolHistory,
 } from './btcAtDate';
-import { getJson } from './http';
-import { withCache } from './cache';
+import {
+  binanceRequests,
+  DAILY_DAYS,
+  mergePages,
+  parseBinanceKlines,
+  seriesFor,
+  seriesKey,
+  sinceOrigin,
+  type RawPoint,
+  type SeriesSpec,
+} from './btcSeries';
+import { AbortError, getJson } from './http';
+import { pruneCache, withCache } from './cache';
 import {
   bestCoin,
   normalizeTicker,
@@ -128,56 +139,104 @@ export interface BtcHistory {
  * deux ans se juge donc sur sa dernière année — la justesse ne compare que ce
  * qui se recoupe (`meanAbsoluteGap`), elle ne s'invente pas le reste.
  */
-export const MAX_HISTORY_DAYS = 365;
+export const MAX_HISTORY_DAYS = DAILY_DAYS;
 
 /**
  * Le cours du bitcoin depuis un instant donné.
  *
- * Elle était ancrée sur la saison : 90 jours, comptés depuis une époque fixe.
- * Les paris ont désormais chacun leur ouverture, d'une semaine à dix ans ; on
- * demande donc la série **depuis l'origine du repère affiché**, et chaque pari
- * s'y compare dans sa propre base de temps (`seriesForBet`).
+ * Deux séries seulement, communes à tous les écrans (`btcSeries.ts`) : horaire
+ * sur 90 jours, journalière sur un an. Chacun y découpe ce qui le concerne. Un
+ * repère qui glisse d'heure en heure ne relance donc plus de requête, et la
+ * série fine qui juge les paris est la même que celle du tracé.
  *
- * La granularité suit la durée, et c'est voulu : sur une semaine, des points
- * journaliers ne feraient que huit points et une justesse grossière. CoinGecko
- * rend des points horaires jusqu'à 90 jours si on ne force pas `daily`.
+ * CoinGecko d'abord ; s'il refuse (quota de l'API publique), Binance ; si les
+ * deux se taisent, la dernière série connue, marquée `stale`. Ne lève que si
+ * aucune série n'a jamais été vue.
+ *
+ * Le chargement est partagé et va à son terme : un écran qui s'en va (son
+ * `signal`) ne l'annule pas pour les autres, il cesse seulement d'attendre.
  */
-export async function fetchBtcSince(originMs: number, signal?: AbortSignal): Promise<BtcHistory> {
-  const now = Date.now();
-  const elapsed = Math.max(0, now - originMs) / 86_400_000;
-  // Au moins deux jours : en deçà, la réponse est vide ou d'une granularité
-  // de cinq minutes, qui n'apporte rien à un tracé au doigt.
-  const days = Math.min(MAX_HISTORY_DAYS, Math.max(2, Math.ceil(elapsed) + 1));
-  const daily = days > 90;
+export async function fetchBtcSince(
+  originMs: number,
+  signal?: AbortSignal,
+): Promise<BtcHistory> {
+  pruneLegacyHistory();
+  const elapsed = Math.max(0, Date.now() - originMs) / 86_400_000;
+  const spec = seriesFor(Math.ceil(elapsed) + 1);
+  const ttl = spec.daily ? HISTORY_TTL_MS : SPOT_TTL_MS * 30;
 
-  // L'origine est arrondie à l'heure : sans ça, chaque rendu produirait une
-  // clé neuve et le cache ne servirait jamais.
-  const hour = Math.floor(originMs / 3_600_000);
-  const key = `coingecko.btc.since.${hour}.${days}`;
-  const ttl = daily ? HISTORY_TTL_MS : SPOT_TTL_MS * 30;
-
-  const result = await withCache(key, ttl, async () => {
-    const params: Record<string, string> = { vs_currency: 'usd', days: String(days) };
-    if (daily) params.interval = 'daily';
-
-    const payload = await getJson<MarketChartResponse>(
-      url('/coins/bitcoin/market_chart', params),
-      { signal, timeoutMs: 12_000 },
-    );
-
-    const prices = payload.prices ?? [];
-    if (prices.length === 0) {
-      throw new Error('Réponse CoinGecko inexploitable : historique vide');
+  const shared = withCache(seriesKey(spec), ttl, async () => {
+    try {
+      return await coingeckoSeries(spec);
+    } catch {
+      return await binanceSeries(spec);
     }
-    return prices.map(([timestamp, price]) => ({ timestamp, price }));
   });
+  const result = await untilAborted(shared, signal);
+  return { points: sinceOrigin(result.value, originMs), stale: result.stale };
+}
 
-  const points = result.value
-    .map(({ timestamp, price }) => ({ day: (timestamp - originMs) / 86_400_000, price }))
-    .filter((p) => p.day >= 0 && Number.isFinite(p.price) && p.price > 0)
-    .sort((a, b) => a.day - b.day);
+async function coingeckoSeries(spec: SeriesSpec): Promise<RawPoint[]> {
+  const params: Record<string, string> = { vs_currency: 'usd', days: String(spec.days) };
+  if (spec.daily) params.interval = 'daily';
+  // Deux tentatives : un refus pour quota ne se lève pas en une seconde, et
+  // Binance attend derrière.
+  const payload = await getJson<MarketChartResponse>(
+    url('/coins/bitcoin/market_chart', params),
+    {
+      timeoutMs: 12_000,
+      attempts: 2,
+    },
+  );
+  const prices = payload.prices ?? [];
+  if (prices.length === 0) {
+    throw new Error('Réponse CoinGecko inexploitable : historique vide');
+  }
+  return prices.map(([timestamp, price]) => ({ timestamp, price }));
+}
 
-  return { points, stale: result.stale };
+async function binanceSeries(spec: SeriesSpec): Promise<RawPoint[]> {
+  const now = Date.now();
+  const pages = await Promise.all(
+    binanceRequests(spec, now).map(async (request) =>
+      parseBinanceKlines(await getJson<unknown>(request, { timeoutMs: 12_000 }), now),
+    ),
+  );
+  const points = mergePages(pages);
+  if (points.length === 0) throw new Error('Réponse Binance inexploitable : historique vide');
+  return points;
+}
+
+/** Attend `task`, sauf si `signal` s'annule avant : on cesse d'attendre, sans l'arrêter. */
+function untilAborted<T>(task: Promise<T>, signal?: AbortSignal): Promise<T> {
+  if (!signal) return task;
+  if (signal.aborted) return Promise.reject(new AbortError());
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => reject(new AbortError());
+    signal.addEventListener('abort', onAbort, { once: true });
+    task.then(
+      (value) => {
+        signal.removeEventListener('abort', onAbort);
+        resolve(value);
+      },
+      (error: unknown) => {
+        signal.removeEventListener('abort', onAbort);
+        reject(error);
+      },
+    );
+  });
+}
+
+let pruned = false;
+
+/**
+ * Efface les séries de l'ancienne version : une par heure et par horizon,
+ * jamais relues, qui s'entassaient dans le stockage de l'app.
+ */
+function pruneLegacyHistory(): void {
+  if (pruned) return;
+  pruned = true;
+  void pruneCache('coingecko.btc.since.');
 }
 
 /**

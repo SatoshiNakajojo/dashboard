@@ -124,7 +124,7 @@ qu'on n'a pas déposé le nouveau tracé.
 
 ## Ce qui a été vérifié
 
-- `npm run typecheck`, `npm run lint`, `npm test` — propres (588 tests).
+- `npm run typecheck`, `npm run lint`, `npm test` — propres (594 tests).
 - **Règles pures** : bornes et inversibilité du repère, monotonie du tracé,
   écart à la courbe réelle, espaces insécables du formatage français, perf vs ₿
   comme ratio et non soustraction, seuils et tri des deux classements.
@@ -446,10 +446,32 @@ redessiner, par exemple — masquait le tracé enregistré : le pari figé
 s'affichait vide. Une fois verrouillé, c'est toujours le tracé déposé qui
 s'affiche.
 
-**Limite connue :** l'API publique de CoinGecko ne rend pas plus d'un an
-d'historique. Un pari à cinq ans ouvert il y a deux ans se juge donc sur sa
-dernière année : la justesse ne compare que ce qui se recoupe, elle ne
-s'invente pas le reste. Et si CoinGecko ne répond pas, l'écran le dit
+**Le cours du graphique (v1.01).** Chaque écran demandait sa propre série
+depuis l'origine de son repère, une origine qui glisse d'heure en heure. Cela
+faisait une requête CoinGecko neuve par heure et par horizon, que l'API
+publique finissait par refuser (`COURS INDISPONIBLE`, graphique sans courbe
+orange). Cela faisait aussi une entrée de cache neuve à chaque fois, jamais
+effacée, qui remplissait peu à peu le stockage de l'app. Désormais
+(`src/lib/btcSeries.ts`) :
+
+- **deux séries seulement**, communes à tous les écrans : horaire sur 90 jours
+  (dont la série fine qui juge les paris) et journalière sur un an. Chaque
+  écran y découpe ce qui le concerne, et leurs clés de cache sont fixes ;
+- CoinGecko d'abord ; s'il refuse, **Binance** (`data-api.binance.vision`,
+  BTC/USDT, clôtures horaires ou journalières) ; si les deux se taisent, la
+  **dernière série connue** ;
+- le chargement est partagé et va à son terme. Un écran qui s'en va cesse
+  d'attendre sans l'annuler pour les autres, alors qu'avant, l'annulation d'un
+  écran vidait la courbe de son voisin ;
+- les séries de l'ancienne version sont effacées au premier chargement.
+
+Vérifié dans Chromium : CoinGecko en 429, Binance répond, la courbe s'affiche
+sur 1 SEM, 2 SEM, 1 MOIS et 3 MOIS avec deux séries en tout, et les anciennes
+entrées disparaissent du stockage.
+
+**Limite connue :** l'historique s'arrête à un an. Un pari plus long se juge
+donc sur sa dernière année : la justesse ne compare que ce qui se recoupe,
+elle ne s'invente pas le reste. Et si aucune source ne répond, l'écran le dit
 (`COURS INDISPONIBLE`) plutôt que de juger les paris sur une courbe de
 démonstration.
 

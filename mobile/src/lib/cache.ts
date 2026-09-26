@@ -99,6 +99,21 @@ async function resolveCached<T>(
   }
 }
 
+/**
+ * Efface toutes les entrées dont la clé commence par `prefix` — des clés d'une
+ * ancienne version, qui ne seront plus jamais relues.
+ */
+export async function pruneCache(prefix: string): Promise<void> {
+  for (const key of memory.keys()) if (key.startsWith(prefix)) memory.delete(key);
+  try {
+    const keys = await AsyncStorage.getAllKeys();
+    const stale = keys.filter((key) => key.startsWith(diskKey(prefix)));
+    if (stale.length > 0) await AsyncStorage.multiRemove(stale);
+  } catch {
+    // Sans effet : on réessaiera au prochain démarrage.
+  }
+}
+
 /** Vide le cache — utilisé par les tests et le « tirer pour rafraîchir ». */
 export async function invalidate(key: string): Promise<void> {
   memory.delete(key);
