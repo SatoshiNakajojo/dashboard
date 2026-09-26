@@ -699,6 +699,18 @@ avec le bitcoin du même instant (`exit_confirmed_at`). D'ici là, la carte
 affiche **À CONFIRMER** à côté du prix de sortie. Les calls clôturés avant la
 v1.01 gardent leur sortie.
 
+**Exception, décidée par le club.** L'app était en panne le jour où Tim
+voulait publier son call ; le club l'autorise, pour ce call seulement, à le
+publier au prix où il est entré. L'app ne l'accepte pas, et c'est voulu. Cela
+passe donc par l'administrateur, avec `supabase/admin/call-exception.sql`. Le
+membre publie son call normalement, puis on lance ce script dans Supabase →
+SQL Editor, avec le membre, le titre, le prix d'achat, le cours du bitcoin au
+même moment et le jour d'entrée. Le script ne touche qu'un call ouvert de ce
+membre sur ce titre et s'arrête s'il en trouve zéro ou plusieurs. Le call
+reste confirmé (le relevé des prix ne remplacera pas l'entrée) et n'est pas
+marqué « modifié ». Vérifié sur la base de test, avant et après la
+confirmation par le relevé.
+
 ---
 
 ## `HORS LIGNE` sur un onglet, la variation sur l'autre
